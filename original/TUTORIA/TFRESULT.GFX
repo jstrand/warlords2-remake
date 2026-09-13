@@ -1,0 +1,23 @@
+#H
+#C(168,005)|Won a City!|
+#F015
+#L(016,050)|You've won your first city!|
+#F007
+#L(016,075)|Every time you win a city, a screen|
+#L(016,095)|will appear offering you four options.|
+#F015
+#L(016,120)|Occupy:  Does little damage to the city|
+#L(016,140)|and starts you producing immediately.|
+#F007
+#L(016,165)|Pillage:  Earns you a little money but|
+#L(016,185)|does some damage to the city too!|
+#F015
+#L(016,210)|Sack:  Earns much more money than pillaging|
+#L(016,230)|but does much more damage too!|
+#F007
+#L(016,255)|Raze:  Completely destroys the city.|
+#L(016,275)|It can never be rebuilt.|
+#F015
+#L(016,300)|Usually "Occupy" is the best option.|
+#E
+

@@ -1,0 +1,272 @@
+
+			    WARLORDS ][ NOTES (v1.00s)
+			   ---------------------------
+
+
+
+	MEMORY REQUIREMENTS
+	-------------------
+
+	Warlords ][ runs quite comfortably on most machines with 580 Kb
+	of free memory.
+	If you are using a sound blaster card, with digitized sounds and
+	music installed, you may require a little more memory (590 Kb)
+	Naturally though, the more memory the better.  Warlords ][ will
+	run faster on machines with over 600 Kb of free memory.
+
+
+	SWITCHES
+	--------
+
+	The following switches are available when you play Warlords ][
+	To use them, type them after the name "WAR2", 
+	e.g. type "WAR2 S M" to use the alternate-army version on a
+	monochrome screen
+
+		'x' Use extended memory
+		'h' Do not use expanded or extended memory
+		's' Use alternate army names
+		'm' Mono version, for laptop use
+		'v' No talking advisor
+		'n' No startup animation
+
+	Note that it is not necessary to use any of these switches if you
+	do not want to!  These are for unusual options! Warlords ][ will
+	run quite normally if you simply type "WAR2"
+   The alternate army switch changes the following names;
+      'Ghosts'  to 'Shamblers' 
+      'Demons'  to 'Gargoyles' 
+      'Devils'  to 'Imps' 
+      'Archons' to 'Winged Folk'
+
+
+	STOPPING AN ALL-COMPUTER GAME
+	-----------------------------
+
+	If there are no human players left in the game, or if you are
+	simply observing a game of Warlords ][, you may eventually wish
+	to stop the computer players from moving and inspect the game.
+
+	To do this, hold down the ALT key.
+	When a computer player finishes its turn, if this
+	key is down, it will show you the 'Settings Dialog', where
+	you can alter who is human and who is computer.
+
+
+	RAZED CITIES ARE STILL PORTS
+	----------------------------
+
+	Even though you can't own them and build troops in them,
+	razed cities still act as ports.
+
+
+	HISTORY HAS 200 TURN LIMIT
+	--------------------------
+
+	Due to memory considerations, the history graphs now show only
+	up to turn 200 (not 300 as the manual states).  For most games,
+	this should be more than adequate.
+
+		
+
+	TROUBLE-SHOOTING
+	----------------
+
+	1. The Game Will Not Run
+
+		Make sure you have 580 Kb of free memory.  Check this
+	with the MEM command.  Type MEM at the DOS prompt and you will
+	be told "Largest Executable Program Size: XXX K".  If "XXX" is
+	less than 580, you will need to free up some memory (refer to
+	your DOS manual).
+
+		Make sure you have installed the sound for the correct
+	Sound Card.  For example, if you have an Adlib card and you 
+	select PAS sound,  the game will not run.
+		Type INSTALL to re-install your sound,
+
+
+	2. I Don't Get Any Sound!
+
+		Make sure you have installed the sound for the correct
+	Sound Card.  For example, if you have an Adlib card and you 
+	select PAS sound,  the game will not run.
+		Type INSTALL to re-install your sound,
+
+		If you have a Sound Blaster, make sure you have set
+	the correct MEMORY/IRQ/DMA settings.  The install program should
+	automatically detect these values - if in doubt, use this programs's
+	suggestions.
+
+
+	3. The Music On My Sound Blaster Pro Sounds Strange!
+
+		You may have installed the wrong Sound Blaster Pro drivers.
+	Many cards just use the "Sound Blaster Pro II (OPL)" driver,
+	but a card will often use the "Sound Blaster Pro I (Yamaha)"
+	driver instead.  Try both - you'll know which one is right!
+
+
+	4. The Game Runs Too Slowly
+
+		There are a number of ways to speed up Warlords ][.
+	The first and best way is too use a disk-caching program
+	(like SMARTDRV - for instructions see your DOS manual).
+
+		Another solution is to free up more memory.  The
+	game will run faster on machines with 600 Kb free, and faster
+	still on machines with 610 Kb free!  To free up more memory,
+	load TSRs and DRIVERS into high memory (see LOADHIGH and
+	DEVICEHIGH in your DOS manual)  Alternately you can run the
+	MEMMAKER program supplied with MS-DOS 6.0.  As a last resort,
+	you might want to create a bootable floppy disk to set up
+	a clean system for you to play.
+
+		One more good solution is to allocate more EXPANDED
+	memory.  EXPANDED memory is faster than EXTENDED memory, and
+	you will notice a speed increase of up to 200% if you do this!
+	Refer to your MS-DOS manual to see how to make more expanded
+	memory available (you will need to add a line like this to
+	your CONFIG.SYS file:
+		      "DEVICE=C:\DOS\EMM386.EXE RAM 2048"
+	which allocates 2Mb of EXPANDED memory).
+
+
+	5. I've Changed My Sound Card, What Now?
+
+		Run the program INSTALL.EXE (from the WARLORD2 directory,
+	type "INSTALL").  You will now be prompted for your new sound
+	settings
+
+
+	6. I have an ADLIB GOLD and the game won't start (Can't Init Sound)
+
+		This particularly applies to ADLIB GOLD 1000 owners!  If
+	the game fails to start and gives an error message 
+	"Can't Init Sound", then your ADLIB GOLD card is not set up 
+	properly (for a DMA Channel) and you must do the following:
+		a) Put the ADLIB GOLD installation disk in a driver 
+		b) Go to that driver and type SETUP
+		c) Select the option CONTINUE
+		d) Select the option <2 - Configure Card and Drivers>
+		e) Select the option <2 - DMA Channels>
+		f) Select a DMA Channel (e.g. DMA Channel 1) by moving
+		   the highlight (with TAB) and pressing 'O' to select
+		   it
+		g) Keep selecting CONTINUE, and then REBOOT
+		h) That's it!
+
+
+
+	OTHER PEOPLES' SAVED MAPS AND GAMES
+	-----------------------------------
+
+	1. The problems...
+
+		You may, at some stage, wish to take a saved map or game 
+	from a friend and load it into your copy of Warlords ][.  By
+	itself, this is a problem!  Warlords ][ keeps track of the games
+	it has saved on YOUR PC - you cannot just add another game by
+	copying a file. 
+		For this exact purpose, we have provided an IMPORT
+	facility to let you access maps and games which were created on
+	other peoples' machines.
+
+	2. What to do
+
+		Copy the map/game to your Warlords ][ directory.  Let us
+	suppose it is a game and you have called it "newgame.sav".  All  
+	you have to do now is type something like this:
+
+		IMPORT GAME newgame.sav NewGame 1
+
+	This will import the saved game into Warlords ][. It will appear in
+	slot #1 of your saved game list (overwriting whatever was already
+	there) and will have the name "NewGame".
+
+	WARNING!!!  Whatever slot you import the map/game into is
+		    COMPLETELY OVERWRITTEN!  Take care you do not lose
+		    a previously saved map/game that you wish to keep!
+
+	3. The IMPORT command in more depth
+
+		The general form of the IMPORT command (used for importing
+	saved maps and games) is this:
+
+		IMPORT <MAP|GAME> <filename> <listname> <slot>
+
+	<MAP|GAME>      Specifies whether it is a map or a game you are
+			importing
+	<filename>      Is the name of the file containing the map/game
+	<listname>      Is the name that will appear in the saved
+			map/game list, when you are playing Warlords ][.
+			It may contain no spaces, and cannot be longer than
+			14 letters.
+	<slot>          Is a number from 1 to 10.  It specifies which 
+			position on the list will receive this map/game.
+
+
+	MOVING ON A HIDDEN MAP
+	----------------------
+
+      The easiest way to move armies in Warlords II is to just click
+   on your destination. In a hidden map game, this may occasionally
+   cause problems if a portion of the hidden map lies across the path
+   that the computer would otherwise create to the destination. The
+   result may be a strange movement path, as the computer valiantly
+   strives to avoid the impenetrable black parts of the map.
+
+      The soultion is to exercise a little caution when your path
+   could	lie through the hidden parts. Use the arrow keys, or click
+   just short of the hidden part, and then move carefully through it.
+
+
+	QUEST TO RAZE A CITY
+	----------------------------
+
+      If your quest is to raze a city you MUST raze it as soon as the
+   city falls. The default button will be the raze button. The same is
+   true for the sack and pillage quest.
+
+	OBSERVE MODE IN HIDDEN MAPS
+	---------------------------
+
+      In a single human player game with the hidden map option on the
+   map will show the human view the whole time. The computers players
+   will start the game observed but will only be shown on the map when
+   they pass through the exposed human player areas.
+
+
+	COMPUTER ALLIED MOVEMENT
+	------------------------
+
+      When computer players are allied they allow each others stacks to
+   pass through their stacks to attack an enemy on the other side. This
+   results in a 'jump' in the movement as they attack a city or enemy
+   stack on the other side. Human players will have to move around
+   allied stacks to attack enemy armies.
+
+
+	STRATEGIC STUDIES GROUP
+	-----------------------
+
+
+Addresses
+in North America  Strategic Studies Group Inc.                         
+		  P.O.Box 30085,             fax   (904) 469-8885
+		  Pensacola, Fl, 32503-1085  phone (904) 469-8880
+ 
+ 
+Addresses
+elsewhere         Strategic Studies Group Pty. Ltd.                    
+		  PO Box 261                                           
+		  Drummoyne                fax   (02) 819-7737
+		  Australia, 2047.         phone (02) 819-7199
+
+Online Addresses  Compuserve: 72040,34
+		  Applelink:  AUST0161
+		  MCI Mail:   384-8467
+		  GEnie:      SSG       
+
+
+

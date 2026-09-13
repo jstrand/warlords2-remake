@@ -1,0 +1,24 @@
+#H
+#C(168,005)|Searching Ruins|
+#F015
+#G(360,000,040,040)026(016,049)
+#G(384,030,032,030)016(024,053)
+#L(056,050)| For your hero to search this ruin,|
+#L(056,070)| select "Search" from the|
+#L(016,090)| "Hero" menu.|
+#F007
+#L(016,115)|There are four different things to be found|
+#L(016,135)|in ruins: items, gold, allies, and sages.|
+#F015
+#L(016,160)|Some items add to your strength or leadership|
+#L(016,180)|in battle.  Others allow you to travel further|
+#L(016,200)|or to fly.  Some even increase your income.|
+#F007
+#L(016,225)|Allies include dragons, unicorns, wizards and|
+#L(016,245)|the like.  From one to three may decide to|
+#L(016,265)|join you.|
+#F015
+#L(016,290)|Sages can give you information about items or|
+#L(016,310)|other ruins - or maps in the hidden map games!|
+#E
+

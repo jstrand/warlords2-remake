@@ -1,0 +1,22 @@
+#H
+#C(168,005)|End of Turn|
+#G(384,030,032,030)016(016,053)
+#F015
+#L(048,050)|Your army has run out of|
+#L(048,070)|movement!  If you have no other|
+#L(016,090)|armies to move it is the end of your turn.|
+#F007
+#L(016,110)|To end your turn, select "End Turn"|
+#L(016,130)|from the "Turn" menu.|
+#L(016,150)|Your opponent will move, and then it|
+#L(016,170)|will be your turn again.  Any new armies|
+#L(016,190)|will be produced, and your hero will have|
+#L(016,210)|his full movement allowance restored.|
+#F015
+#L(016,235)|This procedure is the same throughout|
+#L(016,255)|the game|
+#L(016,275)|1. Move and fight|
+#L(016,295)|2. End Turn|
+#L(016,315)|3. Opponents move - one by one|
+#E
+

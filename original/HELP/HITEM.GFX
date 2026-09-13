@@ -1,0 +1,22 @@
+#H
+#C(168,005)|Item Bonuses|
+#F015
+#L(016,050)|There are 5 types of item bonuses in the game:|
+#F007
+#L(016,075)|Battle - This adds directly to the strength|
+#L(016,095)|of the hero carrying it.|
+#F015
+#L(016,120)|Command - This adds not only to the hero|
+#L(016,140)|carrying the item, but to every other army|
+#L(016,160)|stacked with him.|
+#F007
+#L(016,185)|Movement - doubles the movement of every unit|
+#L(016,205)|stacked with that hero at the start of turn.|
+#F015
+#L(016,230)|Flying - Turn the hero's stack into a unit of|
+#L(016,250)|flying armies.|
+#F007
+#L(016,275)|Gold - adds an amount of gold to your income|
+#L(016,295)|for each city you own.|
+#E
+
