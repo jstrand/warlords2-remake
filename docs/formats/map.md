@@ -31,26 +31,46 @@ near-identical images — the even rows and the odd rows of the same world. Only
 25.6% of the left/right tile pairs are actually equivalent.
 
 **Lesson for the remaining formats: confirm grid dimensions with a structural
-invariant (here, the parity split), not with a similarity score.**
+invariant (here, the parity split), not with a similarity score.** The same
+applies to sheet layouts — `ROAD.PCK` turned out to use a different stride from
+the terrain sheets, and only a content-run alignment check caught it.
 
 ## `.RD` — road / overlay layer
 
 Exactly **one byte per tile**, same 112×156 grid (17472 bytes).
 
 - `0` — nothing (95%+ of the map)
-- otherwise — an index into `TERRAIN0/ROAD.PCK`, a 16×2 grid of 40×40 cells,
-  colour-keyed on its corner pixel (index 1)
+- otherwise — a **road-piece id**; piece `N` draws `ROAD.PCK` cell `N-1`
 
-Observed values are `0..17`. Rendered on top of the terrain these form
-connected road networks running between cities and routing around mountains,
-which is what confirms the interpretation. `ROAD.PCK`'s first row is road
-pieces (straights, corners, T-junctions, crossings); its second row is site
-graphics (ruins, towers, temples, signposts).
+### ROAD.PCK does not use the terrain grid
 
-Erythea's counts for the two highest values are 16 (`value 16`) and 13
-(`value 17`), which look like site counts rather than road pieces — so the
-overlay layer likely carries ruins/temples as well as roads. Worth confirming
-against `.SPC`.
+This sheet is laid out differently from `SCENERY*.PCK` and it is easy to get
+wrong. Its tiles are 40×40, but on a **48-pixel horizontal stride** — 40 pixels
+of art followed by 8 of padding — **13 tiles per row, 2 rows**.
+
+Reading it on the terrain sheet's 40px grid drifts 8px per column, so roads
+land in the right *places* but draw the wrong *shapes* (wrong rotations, broken
+joins). The giveaway in the data: content runs straddle 40px cell boundaries
+(e.g. x 96–135 and 144–183), but every run fits inside a 48px cell exactly, and
+cell 1's vertical bar lands dead centre at rel x 15–24.
+
+### The ids are an enumeration, not a bitmask
+
+Verified against the actual neighbour connectivity of every road tile in
+Erythea — for each id the observed N/E/S/W neighbour mask is essentially
+unanimous (e.g. id 1 → mask `EW` in 152 of 157 cases):
+
+| id | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cell | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
+| shape | EW | NS | ✚ | ESW | NSW | NEW | NES | SW | NW | NE | ES | W | S | E | N | EW | NS |
+
+Ids 16 and 17 carry the same connectivity as 1 and 2 but different art: they
+are the **bridges** (the "Bridge" terrain in `STRING.DAT` group 128). Erythea
+has 16 and 13 of them.
+
+`ROAD.PCK` cells beyond 16 hold site graphics — ruins, towers, temples,
+signposts — which `.RD` does not appear to reference.
 
 ## The `0x8000` flag
 
@@ -93,8 +113,9 @@ The `.RD` overlay is drawn automatically when the sibling file exists.
 ## Open questions
 
 - What `0x8000` marks.
-- Whether `.RD` values 16/17 are sites, and how they relate to `.SPC` (2728
-  bytes) and `.SGN` (11858 bytes, "signs").
+- How sites (ruins, temples) are placed — `ROAD.PCK` holds the art but `.RD`
+  does not reference those cells, so positions are probably in `.SPC` (2728
+  bytes) or `.SGN` (11858 bytes, "signs").
 - City placement: `.CTY` is plain text descriptions only, so city *positions*
   must live in `.SCN` or `.SPC`. The city icons visible in the render come from
   the terrain tiles themselves, so the map bakes in the city graphic while the

@@ -8,9 +8,18 @@ The width is confirmed by the terrain checkerboard: tiles 9 and 31 are variants
 that alternate strictly by (x + y) parity, which only resolves cleanly at 112.
 
 The sibling .RD file is the road/overlay layer: exactly one byte per tile,
-0 = nothing, otherwise an index into ROAD.PCK (also 40x40 cells, colour-keyed
-on its corner pixel). Rendered on top, these form connected road networks
-running between cities, which is what confirms the interpretation.
+0 = nothing, otherwise a road-piece id. Piece id N draws ROAD.PCK cell N-1.
+
+ROAD.PCK does NOT use the 40px grid the terrain sheets do: its tiles are 40x40
+but laid out on a 48px horizontal STRIDE (40 of art + 8 of padding), 13 per
+row, 2 rows. Using a 40px stride drifts 8px per column and silently draws the
+wrong piece -- roads land in the right places but with the wrong shapes.
+
+The ids are an enumeration, not a bitmask. Verified against the actual
+neighbour connectivity of every road tile in Erythea:
+
+    1 EW   2 NS   3 cross  4 ESW  5 NSW  6 NEW  7 NES  8 SW  9 NW
+    10 NE  11 ES  12 W     13 S   14 E   15 N   16 EW bridge  17 NS bridge
 
 Tiles come from TERRAIN0/SCENERY0.PCK and SCENERY1.PCK, each 640x240 = a 16x6
 grid of 40x40 cells, so 96 tiles per sheet and 192 total:
@@ -29,6 +38,7 @@ from pck import load as load_pck, write_png
 MAP_W, MAP_H = 112, 156
 CELL = 40
 SHEET_COLS, SHEET_TILES = 16, 96
+ROAD_COLS, ROAD_STRIDE = 13, 48      # ROAD.PCK: 40px art on a 48px stride
 TILE_MASK = 0x7FFF
 
 
@@ -78,7 +88,8 @@ def render(map_path, terrain_dir, scale=CELL, roads=True):
         for i in set(rd):
             if not i:
                 continue
-            sx, sy = (i % SHEET_COLS) * CELL, (i // SHEET_COLS) * CELL
+            c = i - 1                      # piece id N -> cell N-1
+            sx, sy = (c % ROAD_COLS) * ROAD_STRIDE, (c // ROAD_COLS) * CELL
             rows = []
             for y in range(0, CELL, step):
                 row = rpx[(sy + y) * rw + sx:(sy + y) * rw + sx + CELL]
