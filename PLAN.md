@@ -18,6 +18,7 @@ Findings from inspecting `original/` (424 files, 5.4 MB):
 | `*.SCN` | Fixed 12-byte name records (side names, army-set names) + scenario params | Easy. |
 | `ARMYTYPE.DAT` | Fixed-stride record table: name + `u16` stat fields (strength, move, upkeep, cost) | **The rules goldmine.** |
 | `DATA/*.DAT` | UI strings, terrain table, quotes, error text | Mostly text. |
+| `WARLORD2.HLP` | **SOLVED.** 388 x 104-byte context-help records; see `docs/formats/hlp.md` | A full UI action list. |
 | `*.XMI` | Miles AIL **XMIDI** (`FORM/XDIR/CAT /XMID`), + `MIDPAK`/`DIGPAK`/`*.ADV` drivers | Solved problem — ScummVM has an XMI parser. |
 | `*.8SN` | Raw **unsigned 8-bit PCM**, ~centered on 0x7E | One-line conversion to WAV. |
 | `SOUND/V*.TXT` | Subtitles for each advisor voice clip | Free localisation hooks. |
@@ -49,7 +50,7 @@ Order, easiest first (each win makes the next easier):
 2. ~~`DATA/STRING.DAT`~~ **Done** — 169 groups / 651 strings, whole UI corpus; see `docs/formats/string.md`. `.CTY` and `SOUND/*.TXT` are plain text.
 3. `.8SN` → WAV (`u8` PCM; sample rate is the unknown — try 11025, confirm by ear against DOSBox).
 4. ~~`.MAP` / `.RD`~~ **Done** — 112×156 u16 tile grid + 1-byte/tile road overlay, rendered via `tools/mapren.py`. Note the 156×112 guess was wrong; see `docs/formats/map.md`.
-5. `.SCN` / `.SGN` / `.SPC` / `.ITM` → scenario metadata. Cross-reference against what the game's scenario-select screen shows.
+5. ~~`.SCN` / `.SGN` / `.SPC`~~ **Mostly done** — sides (incl. starting gold and capitals), cities, sites, items, monsters and signposts all parse and verify against the map and against the running game. Still open: city owner/defence, and the 16-byte per-city block. See `docs/formats/scenario.md`. `.ITM` untouched.
 6. ~~`ARMYTYPE.DAT`~~ **Done** — 29 x 62-byte records; strength/time/upkeep/move/cost solved, 6 of 15 bonus fields still open. See `docs/formats/armytype.md`.
 7. ~~**`.PCK`**~~ **Done** — see `docs/formats/pck.md`. Kept for the record, the original strategy was:
    - Known-plaintext attack: `CURS.PCK` (1274 B for 240×80 = 19200 px) is tiny and heavily compressed → mostly transparent. `BLACK.PCK` in `START/` is probably a solid fill → its byte stream will show the raw run-length primitive.
@@ -69,6 +70,21 @@ Handling the overlays:
 - Overlaid functions are called via `INT 3F` stubs followed by a segment/offset pair — recognise these and you can map the call graph even before resolving the targets.
 - **Easier alternative:** go dynamic. Run in DOSBox-X, use its built-in debugger (`debug` build) to break on interesting code and dump live memory once the relevant overlay is paged in. For combat maths, breakpointing on the RNG call and single-stepping the battle loop is dramatically faster than reading cold disassembly.
 - Highest-value targets, in order: (a) combat resolution, (b) city income/production, (c) movement cost table, (d) AI turn logic, (e) random map generator, (f) hero/quest/item rules.
+
+### Phase 2.5 — Headless loader — **DONE**
+
+`tools/gamestate.py` builds a validated starting game state from any scenario
+and passes every structural check on all six. See `docs/gamestate.md`.
+Remaining gaps before it is a *playable* position: starting garrisons, city
+defence, and the real tile-to-terrain table.
+
+### Phase 2.6 — Playable slice — **DONE**
+
+`love2d/` is a LOVE 11 project that reads the original data files at runtime
+(no bundled assets), draws a scenario at 100% scale, and allows exactly one
+move. Verified running: map, roads, cities and army render correctly, and the
+three implemented rules (no water, no mountains, cities must be attacked) all
+fire. See `love2d/README.md`.
 
 ### Phase 3 — Engine
 Data model → turn loop → rendering → input → AI. Build headless first: load a scenario, run a turn, assert state, *then* draw it.
