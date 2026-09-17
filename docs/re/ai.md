@@ -156,8 +156,8 @@ are cancelled (`563e:066d(group, 0x14)`).
 | term | weight |
 |---|---|
 | random | 1d10 |
-| `j` holds our capital | +20 |
-| our capital city is owned by `j`'s side (checked per side) | +15 |
+| `j` holds our capital city | +20 |
+| we hold `j`'s capital city | +15 |
 | cities we hold that `j` used to own | +4 each |
 | AI data `+0x3bc+2j` | ×4 |
 | AI data `+0x3cc+2j`, `+0x3dc+2j` | ×1 |
