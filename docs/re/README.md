@@ -28,8 +28,6 @@ production and garrisons.
 
 ## Still open
 
-- The AI's pathfinding and stack stepping (`623c:0ae7`, `5ad0:15c3`), which
-  it shares with the human interface.
 - Graphics, sound and UI plumbing — deliberately skipped; the data formats
   are decoded in `docs/formats/`.
 - A handful of small unknowns, listed at the end of `docs/rules.md`.

@@ -271,9 +271,13 @@ byte `+14` and by a minimum movement allowance, then sorted by `623c:14d3`.
 3. Otherwise score the side's own **cities** the same way — `115 − d` inside
    15 tiles, `40 − d` inside 40 — with an assault rally city (role 7) counted
    as 80 tiles closer than it is.
-4. A chosen site becomes order **3** toward that site with flag `0x100` set
-   (`623c:0ae7`), and `5ad0:15c3` carries the party there and searches it. A
-   chosen city more than 2 tiles away becomes order **1**, the ordinary
+4. A chosen site becomes order **3** toward that site with flag `0x100` set.
+   `623c:0ae7` loads the two armies into the shared selected-stack array
+   (`DS:1ede`) and moves them with the same `move_stack_to` the human
+   interface uses. `5ad0:15c3` then searches the site if the party is
+   standing on it and still has movement left — and, on a temple with
+   *Quests* on and no quest running, takes a quest (`quest_assign`).
+   A chosen city more than 2 tiles away becomes order **1**, the ordinary
    vectoring order.
 
 So the hero phases amount to: send each hero, with one companion, to the
