@@ -536,3 +536,9 @@
 4ca7:0a3d  func  ai_wanted_garrison   | int ai_wanted_garrison(int city)
 4ca7:023f  func  ai_city_garrison_check
 47ea:00b5  func  ai_neutral_targets
+3d71:0000  func  random_map_highlands
+3d71:057b  func  random_map_link_nodes
+3d71:06d2  func  random_map_draw_ridges
+3d71:002e  func  random_map_smooth_highlands
+3e47:0000  func  random_map_forests
+3f5f:0044  func  random_map_walk_line  | void random_map_walk_line(int kind)

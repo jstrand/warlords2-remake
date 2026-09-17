@@ -1,7 +1,7 @@
 # Random map generator — structure
 
-How "A Random World" is built in `WARLORD2.EXE`. The overall flow and the
-parameters are decoded; most phases aren't read in detail. Addresses are
+How "A Random World" is built in `WARLORD2.EXE`. The flow, the parameters and
+the terrain phases are decoded; the city economy and the 50% phase aren't. Addresses are
 Ghidra addresses.
 
 ## Entry (`random_map_setup`, `7bab:10e8`)
@@ -45,19 +45,53 @@ tiles around (x, y)").
 
 Progress is reported at each step (the percentage passed to `4bed:01ff`):
 
-| % | function | what's known |
+| % | function | what it does |
 |---|---|---|
-| 0 | `auto_file_x_scn`, `4bed:036b`, `4c49:0000` | load the template scenario, initialise |
-| 10 | `4d71:0000` | uses random map coordinates (`1d112`, `1d156`) |
-| 20 | `4f5f:0000` | random coordinates |
-| 30 | `4eb7:0000` | random coordinates |
-| 40 | `4e47:0000` | random coordinates, `1d100` checks |
-| 50 | `4f5f:06a0` | |
+| 0 | `auto_file_x_scn`, `4bed:036b`, `4c49:0000` | load the template scenario, initialise: the whole map starts as **plain** |
+| 10 | `random_map_highlands`, `4d71:0000` | mountains and hills (below) |
+| 20 | `4f5f:0000` | `+0x40` **erosion** walks and `+0x3e` **pass** walks (below) |
+| 30 | `4eb7:0000` | water: `+0x3a` then `+0x38` runs, each from a random hill or mountain tile to a random water or shore tile — rivers and lakes down from the highlands — then cleanup |
+| 40 | `random_map_forests`, `4e47:0000` | forest, until it covers `land tiles / 100 × param +0x3c` (the Forest slider) |
+| 50 | `4f5f:06a0` | **1d3** runs of `4fc9:010a` |
 | 60 | `513d:0000` | cities: per-city setup below |
 | 70 | `513d:003a` | sites (writes "%03d\|%s is\|inhabited by monsters and\|full of treasure!\|" descriptions) |
 | 80 | `5311:0000` | roads: builds the path grid as pseudo-player 14, using the map-generator cost table `DS:01e0` |
-| 90 | `4fef:0014` | |
+| 90 | `4fef:0014` | finish: city production, signs, save the files |
 | 100 | | done |
+
+The map the generator works on is a plain 112×156 byte grid of terrain type
+ids at `RANDOM.DAT + 0x6120` (`docs/rules.md` › Movement lists the ids); it is
+converted to real tiles at the end.
+
+### Mountains and hills (`4d71:0000`)
+
+1. Place `+0x34` **mountain** seeds (type 6) and `+0x36` **hill** seeds
+   (type 5) on random plain tiles. Each seed becomes a node in a table at
+   `+0x5dd6` (stride 14: x, y, kind, link count, up to 4 links).
+2. Give each node links to its **nearest** other nodes: `1d2−1` for a hill,
+   `1d4−1` for a mountain (`4d71:057b`).
+3. Draw a ridge along every link (`4d71:06d2`) — mountain-to-mountain,
+   mountain-to-hill and hill-to-hill use different routines, and a node with
+   no links gets a blob of its own.
+4. Clean up (`4d71:002e`, `4d71:033a`):
+   - a plain tile whose four orthogonal neighbours are all mountain (or all
+     hill) becomes that type,
+   - a mountain tile next to a **shore** tile reverts to plain,
+   - two mountains touching only diagonally get a third tile filled in on one
+     side (1d10, evens each way), so ridges stay connected.
+
+Both the water phase and the pass phase re-run this cleanup.
+
+### Erosion and passes (`4f5f:0044`)
+
+Each run picks two random points and walks from one to the other along the 8
+neighbour offsets at `+0xbc`:
+
+- **kind 0** (erosion): every **mountain** tile on the walk, plus its two
+  flanking tiles and their extensions, becomes **hill**.
+- **kind 1** (pass): every mountain or hill tile on the walk, and the same
+  flanking tiles, becomes **plain** — this is what cuts passes through a
+  range.
 
 ## Cities (`random_map_cities`, `513d:0ce0`)
 
