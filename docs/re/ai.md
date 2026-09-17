@@ -54,6 +54,28 @@ Each side has a `0x42c`-byte block, held in a memory handle at
 
 A shared `0x4b0`-byte block follows the eight side blocks in a save.
 
+### Assault groups
+
+The side's attack plans live at `+0x24a` (count) and `+0x24c` (entries of
+`0x5c` bytes). Both the `assault` and `vectoring` phases walk them:
+
+| offset in entry | meaning |
+|---|---|
+| `+0x00` | active; also counted up each turn the assault continues |
+| `+0x02` | the target's owning side |
+| `+0x04` | **target city** |
+| `+0x06` … | up to four **member cities** |
+
+### City roles (`+0x56 + city`)
+
+| role | meaning |
+|---|---|
+| 1 | just captured (set when the AI takes a city) |
+| 6 | member of an assault group; vectors production to the group target |
+| 7 | an assault group's target |
+| 8 | stop producing here (set on own role-7 cities at the start of `assault`) |
+| 2–5, 9–13 | set by the `evaluate` phase; meaning not decoded, but each maps to a production purpose (below) |
+
 ## Decisions decoded so far
 
 **Accepting a hero.** The computer **always** hires an offered hero it can
@@ -84,6 +106,13 @@ upkeep. Otherwise the city's **role** byte picks a purpose for
 | 8 | stop producing in this city |
 | 11 | 4 — flying types |
 | anything else | 3 |
+
+**Assault** (`ai_phase_assault`, `563e:0000`). Re-evaluates first
+(`59bf:01b3`), turns its own role-7 cities into role 8, then runs each active
+assault group (`563e:00ca`): give up if the side's capital has fallen and no
+group targets its captor, otherwise gather the group's armies, move them at the
+target and attack (`5ca7:023f`). A group that acts has its turn counter
+incremented.
 
 **Vectoring** (`ai_vectoring`, `5db9:085f`). The AI keeps a list of groups at
 AI data `+0x24a` (count) and `+0x24c` (entries of `0x5c` bytes): a target city

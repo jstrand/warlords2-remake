@@ -515,3 +515,5 @@
 0a8b:0c4f  func  move_stack_step
 0b62:007d  func  armies_at_tile       | int armies_at_tile(int x, int y, int *count)
 0555:18be  func  path_step_costs
+463e:00ca  func  ai_run_assault_group
+463e:0607  func  ai_abandon_assaults
