@@ -526,6 +526,14 @@ byte `0x5e3`.
 Dragons if none qualify). The price is paid first. The code has no chance of
 *no* allies; that surprised me, so it's worth watching for in a real game.
 
+### Death (`hero_drop_items`, Ghidra `67cc:16cd`)
+
+When a hero dies (in battle, or to a ruin guardian), its slot is freed and
+**every item it carried is dropped on the tile where it died** (item status 1,
+at that x, y). If that tile is **Water**, the items are **lost for good**
+(status 0, with a splash sound). If the side's own standard was among them,
+cities vectoring their production to the standard stop doing so.
+
 ### Levels (`hero_check_promotions`, Ghidra `7563:0579`)
 
 The hero's experience byte (`.SCN` `0x5e3 + hero`) holds the **level in its
@@ -697,7 +705,7 @@ temple.
 
   Monster strengths are a `u16` table at `.SCN` `0x1007` (Erythea: Troll 5,
   Giant 7, Wolf 4, Goblin 3, Dragon/Demon/Devil/Wizard 8, Ghost 7). A slain
-  hero is removed (its items go through `67cc:16cd`, not yet read). With no
+  hero is removed and drops its items (see Heroes › Death). With no
   guardian, or after a win, the ruin gives up:
   - **item:** the hero finds it
   - **gold:** **3d500+500** (**3d1000+1000** if rich)

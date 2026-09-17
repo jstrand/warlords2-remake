@@ -458,3 +458,5 @@
 6721:0a46  func  save_game
 523c:0da9  func  save_ai_data
 070b:004e  func  write                | int write(int fd, void *buf, unsigned len)
+57cc:16cd  func  hero_drop_items
+696c:03d9  func  list_carried_items   # fills DS:4c9c with item indices, count DS:486e (08ce)
