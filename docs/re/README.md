@@ -22,13 +22,15 @@ Combat (bonuses, terrain classes, resolution), movement (terrain costs, stack
 modes, bonuses), production and the start-of-turn sequence, city capture,
 starting garrisons, heroes (offers, levels, experience, death), ruins,
 temples and sages, quests (types, targets, completion, rewards), diplomacy,
-game setup and difficulty, end-of-game conditions, the save layout, and the
-structure of the AI and the random map generator.
+game setup and difficulty, end-of-game conditions, the save layout, the
+random map generator's terrain, and the AI's diplomacy, city roles,
+production and garrisons.
 
 ## Still open
 
-- Most individual AI phases (movement, assault, evaluation).
-- The random map generator's terrain phases.
+- The AI's movement phases (explore, rescue, specials) and the details of
+  its assault execution.
+- The random map generator's city economy and its 50% phase.
 - Graphics, sound and UI plumbing — deliberately skipped; the data formats
   are decoded in `docs/formats/`.
 - A handful of small unknowns, listed at the end of `docs/rules.md`.
