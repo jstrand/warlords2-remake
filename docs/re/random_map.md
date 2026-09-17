@@ -1,7 +1,7 @@
 # Random map generator — structure
 
-How "A Random World" is built in `WARLORD2.EXE`. The flow, the parameters and
-every phase is identified and the rules of each are decoded. What is
+How "A Random World" is built in `WARLORD2.EXE`. Every phase is identified,
+and the flow, the parameters and each phase's rules are decoded. What is
 summarised rather than read line by line: the exact shapes the ridge and
 water routines draw (`4d71:0884`…`098c`, `4eb7:005d`) and the road and sign
 phases.
