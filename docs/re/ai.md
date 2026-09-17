@@ -71,9 +71,11 @@ The side's attack plans live at `+0x24a` (count) and `+0x24c` (entries of
 | offset in entry | meaning |
 |---|---|
 | `+0x00` | active; also counted up each turn the assault continues |
-| `+0x02` | the target's owning side |
-| `+0x04` | **target city** |
-| `+0x06` … | up to four **member cities** |
+| `+0x02` | the **side being attacked** |
+| `+0x04` | the group's **rally city**, one of this side's own — given role 7 |
+| `+0x06` … | up to four **member cities** (role 6), which vector production to the rally city |
+| `+0x0e` … | up to six **enemy cities** the plan is aimed at |
+| `+0x46` … | up to six of this side's cities taking part |
 
 ### City roles (`+0x56 + city`)
 
@@ -151,15 +153,26 @@ its six neighbours (`57ea:01f6`), otherwise **role 5**.
 **Assault** (`ai_phase_assault`, `563e:0000`). Re-evaluates first
 (`59bf:01b3`), turns its own role-7 cities into role 8, then runs each active
 assault group (`563e:00ca`): give up if the side's capital has fallen and no
-group targets its captor, otherwise gather the group's armies, move them at the
-target and attack (`5ca7:023f`). A group that acts has its turn counter
-incremented.
+group targets its captor, otherwise it runs the group (`563e:00ca`):
 
-**Vectoring** (`ai_vectoring`, `5db9:085f`). The AI keeps a list of groups at
-AI data `+0x24a` (count) and `+0x24c` (entries of `0x5c` bytes): a target city
-at `+0x250` and up to four member cities at `+0x252`. For an active group whose
-target the side still owns, the target is marked **role 7** and every member
-city with **role 6** has its production vectored to it (`623c:0f10`).
+1. `563e:041c` re-checks the plan, dropping cities that changed hands; if
+   nothing is left the group is cancelled (`563e:066d`, which puts its
+   member cities back on role 8).
+2. The group acts when no other group shares its rally city and the side
+   still owns it, or when `563e:02ed` finds a nearby own city to work from.
+3. `563e:0996` gathers armies — four passes, each calling `563e:1251` to walk
+   the staging list at `+0x3e`.
+4. The rally city's garrison is re-checked (`5ca7:023f`), then `563e:06e9`
+   sends the group's armies at the target city's east tile; if it reports an
+   attack, the garrison is re-checked again.
+5. `563e:16fd` follows up from the participating cities at `+0x46`.
+
+A group that acts has its turn counter incremented.
+
+**Vectoring** (`ai_vectoring`, `5db9:085f`). For every active group whose
+rally city the side still owns, the rally city is marked **role 7** and each
+of the four member cities that is **role 6** has its production vectored to
+it (`623c:0f10`).
 
 **Diplomacy** (`ai_phase_diplomacy`, `558d:0000`). The phase only sets the
 side's **proposals** (bits 2–3 of the diplomacy byte, `docs/rules.md` ›
@@ -176,7 +189,7 @@ With `grudge[j] = 2 × (j proposes peace to us) − 2 × (j proposes war on us)`
 | `swapped[j] ≥ grudge + 4` | intermediate |
 | `threat[j] ≥ grudge + 5`, where `threat = ai[0x3ec+2j] + 4·ai[0x40c+2j] + 2·ai[0x3bc+2j]` | keep, at least intermediate |
 | `j` is the enemy chosen by `ai_pick_enemy` | **war** |
-| `j` owns an active assault group's target | **war** |
+| `j` is the side an active assault group is aimed at | **war** |
 | `j` owns more than a threshold share of all city tiles (50% for a computer, AI data `+0x44` for a human) | **war** on `j`, peace with everyone else |
 | `j` has no unflagged cities (`+0x11e` bit set on all of them) | peace |
 

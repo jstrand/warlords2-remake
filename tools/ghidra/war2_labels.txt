@@ -549,3 +549,7 @@
 4ad0:11a6  func  ai_step_towards
 523c:13b2  func  ai_find_walk_target  | int ai_find_walk_target(int x, int y, void *out)
 4ad0:0c5b  func  ai_send_army_home
+463e:00ca  func  ai_run_assault_group | int ai_run_assault_group(int group)
+463e:041c  func  ai_assault_revalidate
+463e:0996  func  ai_assault_gather
+463e:06e9  func  ai_assault_attack
