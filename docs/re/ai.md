@@ -83,7 +83,7 @@ The side's attack plans live at `+0x24a` (count) and `+0x24c` (entries of
 | 2 | taking a neutral city: armies are on their way to one (`57ea:00b5`) |
 | 3 | has a neutral city among its six neighbours |
 | 4 | garrison below 2 armies, or no neutral neighbours left |
-| 5 | garrison below what `5ca7:0a3d` wants; also set on a city that has just been given a new production type |
+| 5 | garrison below the wanted size (below); also set on a city that has just been given a new production type |
 | 6 | member of an assault group; vectors production to the group target |
 | 7 | an assault group's target |
 | 8 | stop producing here (set on own role-7 cities at the start of `assault`, and when the garrison is full enough) |
@@ -131,6 +131,13 @@ upkeep. Otherwise the city's **role** byte picks a purpose for
 | 8 | stop producing in this city |
 | 11 | 4 — flying types |
 | anything else | 3 |
+
+**Wanted garrison** (`ai_wanted_garrison`, `5ca7:0a3d`). Counts the city's
+six neighbouring cities held by another side: **8** armies if this side is at
+war with any of their owners, otherwise **4** for two or more such
+neighbours, **3** for one, and **2** for none. The garrison check
+(`5ca7:023f`) compares the city's army count with it: fewer than 2 → role 4,
+fewer than wanted → role 5, otherwise role 8 (stop producing).
 
 **Evaluate** (`ai_phase_evaluate`, `59bf:0000`). Housekeeping, not scoring:
 it marks which cities can build fliers (`59bf:09cf`), clears the "not seen

@@ -533,3 +533,6 @@
 49bf:0b55  func  ai_clear_seen_flags
 49bf:0b95  func  ai_city_seen_check
 47ea:01f6  func  ai_neutral_neighbours | int ai_neutral_neighbours(int city, char *out, char *dist)
+4ca7:0a3d  func  ai_wanted_garrison   | int ai_wanted_garrison(int city)
+4ca7:023f  func  ai_city_garrison_check
+47ea:00b5  func  ai_neutral_targets
