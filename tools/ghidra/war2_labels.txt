@@ -487,3 +487,12 @@
 4f19:0000  func  ai_phase_assault_xx
 4ad0:10e3  func  ai_phase_specials
 4ad0:0b4d  func  ai_phase_last_rescue
+
+# Random map (Ghidra 4bed = flat 3bed, 4c49 = 3c49, 513d = 413d, 7bab = 6bab)
+6bab:10e8  func  random_map_setup
+3bed:0000  func  random_map_load_params
+3bed:011c  func  random_map_generate
+3bed:01ff  func  random_map_progress
+3c49:11f5  func  terrain_near         | int terrain_near(int x, int y, int type)
+413d:0ce0  func  random_map_cities
+413d:1104  func  random_city_value    | int random_city_value(int city)
