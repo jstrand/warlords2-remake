@@ -138,7 +138,7 @@ What the code adds to the manual:
   defender is dead. A battle with nobody on one side counts as an attacker win.
 - the 10000 counter is per fight. Past it, every throw is forced to a
   defender hit.
-- **tutorial exception:** in the tutorial scenario (option slot 10,
+- **tutorial exception:** in the tutorial scenario (tutorial flag,
   `.SCN`/`2c04` offset `0x12e`, is 1 only in `TUTORIA.SCN`) defender hits
   are **ignored** when:
   - the attacker's current army is a Hero,
@@ -188,6 +188,50 @@ Pillage and sack recompute the city's defence (fewer types can drop it from
 2 to 1). The **atrocity** score is a `u16` per side at `.SCN` `0x10e3 +
 2·side`; see Diplomacy.
 
+## Game setup — verified in `WARLORD2.EXE`
+
+### Sides
+
+Three `u16` arrays with one entry per side, in the `.SCN` header:
+
+| offset | meaning |
+|---|---|
+| `0x0137` | side is in play |
+| `0x00d0` | controller: **0 = human, 1 = computer** |
+| `0x00c0` | computer level **0–2**; **3 = side not playing** |
+
+When a game starts (`start_game_from_setup`, Ghidra `7bab:0cfe`), a side set to
+level 3 is removed and **its capital becomes neutral**. Human sides are given
+level 2.
+
+### Options
+
+The options dialog stores its ten settings at these `.SCN` offsets (not in
+menu order):
+
+| option (`STRING.DAT` group 4) | offset | option | offset |
+|---|---|---|---|
+| Neutral Cities | `0x11a` | Intense Combat | `0x126` |
+| Diplomacy | `0x11c` | Quick Start | `0x128` |
+| Quests | `0x11e` | View Enemies | `0x12a` |
+| Random Turns | `0x122` | Military Advisor | `0x12c` |
+| Hidden Map | `0x124` | View Production | `0x132` |
+
+`0x12e` is the separate tutorial flag, and `0x130` is cleared on start.
+
+### Difficulty rating (`difficulty_rating`, `7bab:0bab`)
+
+```
+options = min(20, 4·NeutralCities + 4·Diplomacy + 3·Quests + 4·HiddenMap
+                  − ViewEnemies + ViewProduction)
+ai      = 80 × Σ(level+1) / (3 × computer sides)      (80 if there are none, or if the result is ≥ 78)
+rating  = options + ai        shown as "Difficulty Rating %d%%"
+```
+
+Only computer sides that are playing count. Neutral Cities isn't a plain
+on/off: it has several strengths (`STRING.DAT` group 5: Average, Strong,
+Active).
+
 ## Diplomacy — partly verified in `WARLORD2.EXE`
 
 For every ordered pair of sides there's a byte at `.SCN`
@@ -233,7 +277,7 @@ proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
 At game start, `setup_capitals` (Ghidra `79fa:07ca`) gives each side its
 capital; every other city is neutral (owner 15). With **Quick Start** on
-(option 7, `.SCN` `0x128`), all neutral cities are then dealt out round-robin:
+(`.SCN` `0x128`), all neutral cities are then dealt out round-robin:
 each side in turn takes the neutral city nearest its last city (with half
 chance measured from its capital instead) until none are left. Then
 `setup_city_production` (`79fa:0a75`) rebuilds every city's production. **The

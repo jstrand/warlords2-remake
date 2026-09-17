@@ -55,10 +55,9 @@ Globals behind `combat_resolve` (DS-relative, flat DGROUP `3125`):
 | `42c6` | `451b:0366` | far pointers to the attacking armies (type at +4) |
 
 Segment `2c04` (Ghidra `3c04`) **is the `.SCN` file loaded verbatim**, so its
-offsets are file offsets. Option words start at `0x11a`, one `u16` per entry in
-`STRING.DAT` group 4: `011a` Neutral Cities, `011c` Diplomacy, … `0126` Intense
-Combat, … `012c` Random Turns. `012e` is a hidden eleventh setting that's 1 only
-in `TUTORIA.SCN`. `0110` is the current player, `0112` the combat modifier cap
+offsets are file offsets. The game options live at `0x11a`–`0x132`, not in menu
+order (`docs/rules.md` › Game setup). `012e` is a separate tutorial flag that's 1
+only in `TUTORIA.SCN`. `0110` is the current player, `0112` the combat modifier cap
 (5).
 
 ## Inferred from arguments (not yet read)

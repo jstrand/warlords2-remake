@@ -255,8 +255,18 @@
 # (offsets = .SCN file offsets, see docs/formats/scenario.md)
 2c04:0110  data  current_player
 2c04:0112  data  combat_modifier_cap  # 5 in every shipped scenario
-2c04:011a  data  opt_neutral_cities   # u16 per STRING.DAT group 4 entry
+2c04:011a  data  opt_neutral_cities   # options are NOT in menu order
 2c04:011c  data  opt_diplomacy
+2c04:011e  data  opt_quests
+2c04:0122  data  opt_random_turns
+2c04:0124  data  opt_hidden_map
+2c04:0128  data  opt_quick_start
+2c04:012a  data  opt_view_enemies
+2c04:012c  data  opt_military_advisor
+2c04:0132  data  opt_view_production
+2c04:00c0  data  side_ai_level        # u16 per side; 3 = not playing
+2c04:00d0  data  side_is_computer     # u16 per side
+2c04:0137  data  side_in_play         # u16 per side
 2c04:0126  data  opt_intense_combat   # d24 instead of d20
 2c04:012e  data  opt_tutorial         # 1 only in TUTORIA.SCN
 2c04:060b  data  fight_order          # 29 bytes per player, 9 rows (row 8 = neutral)
@@ -419,3 +429,7 @@
 384e:11bd  func  diplomacy_init
 2c04:153b  data  diplomacy_matrix     # [side*8+other]: bits0-1 state (0 peace,2 war), bits2-3 proposal
 3976:1ded  func  quest_check          # (event: -1 turn, 0 battle, 1 pillage/sack, 2 raze, 3 item, 4 occupy, ...)
+
+# Game setup (Ghidra 7bab = flat 6bab)
+6bab:0bab  func  difficulty_rating
+6bab:0cfe  func  start_game_from_setup

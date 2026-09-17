@@ -14,7 +14,8 @@ names:
 |---|---|
 | `0x0110` | current player (0 in files) |
 | `0x0112` | combat modifier cap, 5 in every shipped scenario |
-| `0x011a`…`0x012c` | the ten game options, `u16` each, in `STRING.DAT` group 4 order |
+| `0x00c0`, `0x00d0`, `0x0137` | per side: computer level (3 = not playing), controller (0 human, 1 computer), in play |
+| `0x011a`…`0x0132` | the ten game options, `u16` each, **not** in menu order; see `docs/rules.md` › Game setup |
 | `0x012e` | hidden option, 1 only in `TUTORIA.SCN` (tutorial hero immunity) |
 | `0x0181` | army count |
 | `0x080f` | site count; `0x157b` city count |
