@@ -369,7 +369,7 @@
 5536:12e6  func  create_ally_army
 0b62:0005  func  army_add_strength    # capped at 9
 6563:04f1  func  hero_add_experience  # capped at 60
-56d4:08f4  func  site_item_eligible
+56d4:08f4  func  item_reserved        # 1 = never placed in a ruin or used for a quest
 3125:0c9a  data  ally_types_rich      # u8[4]
 3125:0c9e  data  ally_types_far       # u8[3]
 3125:0ca2  data  ally_types_near      # u8[2]

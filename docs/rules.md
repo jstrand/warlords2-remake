@@ -224,12 +224,17 @@ score = (10 − time)·Wtime + str·Wstr + (move·Wmove)/2
 The highest score wins. Slots are scanned from last to first with a strict
 `>`, so ties go to the later slot.
 
-### Neutral production during play (`neutral_production_turn`, `6bd8:025a`)
+### Neutral production during play — dead code
 
-With *Neutral Cities* set to 2 or higher, a neutral city whose flag at city
-`+0x30` is set keeps building. Its countdown ticks down and produces the
-army at 0. Whenever it isn't building and holds fewer than 4 armies, it starts
-its best purpose-2 type. What sets that flag hasn't been traced.
+`neutral_production_turn` (`6bd8:025a`) runs every turn and would let a neutral
+city keep building (up to 4 armies) when *Neutral Cities* is 2 or higher. It
+only acts on cities whose flag at city `+0x30` is set — and **nothing in the
+game ever sets that flag**: the only writes are the zeroing in the city-init
+routine (`623c:0000`), and the `.SCN` byte lies in the record's zero padding.
+
+So neutral cities never produce during play, and the *Neutral Cities* option
+only affects how strong their starting garrison is. A faithful remake should
+leave this out.
 
 ## Movement
 
@@ -563,7 +568,10 @@ copy this; a "fixed" remake should check `combat_def_type`.
 Scenario files only mark each site as **temple** (content 1) or **ruin**
 (content 2). `setup_random_sites` (Ghidra `66d4:0000`) fills in the rest.
 
-**Magic items** (item records 8 and up; 0–7 are the sides' standards). The
+**Magic items** (item records 8 and up; 0–7 are the sides' standards).
+**Reserved items never go into ruins or quests** (`item_reserved`,
+`66d4:08f4`): flight (type 5), double movement (6), standards (8), and command
+items worth 2 or more. The
 number handed out is `sites/3 + 1d5 − 3`, at most 14. Most go into random
 unassigned ruins. A band of `sites/5 − min(2d3+1, sites/5)` of them is held
 back (status 0), probably for quest rewards; not yet traced.
@@ -651,7 +659,7 @@ If a type finds no valid target, the type is rolled again.
 | type | how the target is picked |
 |---|---|
 | 0 | a random hero belonging to any other side |
-| 1 | a random item lying in a ruin within 50 tiles of the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side. The counting loop wants items in ruins, but the picking loop accepts any item that's in play, so the picked item can differ from the counted set. |
+| 1 | a random non-reserved item lying in a ruin within 50 tiles of the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side. The counting loop wants items in ruins, but the picking loop accepts any item that's in play, so the picked item can differ from the counted set. |
 | 2 | up to 5 tries: a random magical army type (`ARMYTYPE +48`) that some other side has on the map |
 | 3 | a random other side that's still alive (up to 200 tries); **n = 1d12+10** armies |
 | 4 | a random city not owned by the side, within map distance 60 (40 from the second entry point); after 100 failed tries any such city will do |
@@ -788,10 +796,6 @@ out.
   two readings is wrong — recheck in the game (`docs/formats/armytype.md`).
 - **The sage's other offers.** The gem (3d500+500 gold) is decoded; the map of
   hidden locations isn't traced.
-- **What sets a neutral city's "keep producing" flag** (city `+0x30`), which
-  *Neutral Cities* 2+ uses.
-- **`site_item_eligible`** (`56d4:08f4`): which sites may hold a quest item.
-  Its argument is the site record by value; the exact test isn't decoded.
 - **Computer players:** how they use the diplomatic score, and most movement
   and evaluation phases (`docs/re/ai.md`).
 - **Random map generator:** the terrain phases (`docs/re/random_map.md`).
