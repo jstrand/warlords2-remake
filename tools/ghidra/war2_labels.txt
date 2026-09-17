@@ -502,3 +502,5 @@
 3c49:11f5  func  terrain_near         | int terrain_near(int x, int y, int type)
 413d:0ce0  func  random_map_cities
 413d:1104  func  random_city_value    | int random_city_value(int city)
+384e:0039  func  ui_diplomatic_ratings
+384e:0aed  func  diplomatic_rating    # ranks sides by score, fills titles

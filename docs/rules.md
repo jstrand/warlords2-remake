@@ -324,7 +324,7 @@ The per-side flag at `.SCN` `0x00f0` (+2 strength for newly produced armies,
 see Production) is a toggle on the side setup screen (`64d2:0508`); its label
 on screen hasn't been identified.
 
-## Diplomacy — partly verified in `WARLORD2.EXE`
+## Diplomacy — verified in `WARLORD2.EXE` (except computer attitudes)
 
 For every ordered pair of sides there's a byte at `.SCN`
 `0x153b + 8·side + other`:
@@ -359,10 +359,26 @@ the other side's proposal:
 | 0 from 1, or 1 from 2 | 1d2+1 |
 | 0 from 2 | 1d10+10 |
 
-The score most likely feeds the *Diplomatic Rating* titles (`STRING.DAT`
-group 106: Statesman … Running Dog) and the computer players' attitudes. The
-rating code (`484e:0aed`) doesn't decompile cleanly, so that link is
-unconfirmed. Bits 4 and 5 of the side's own diagonal byte flag "has pending
+**Diplomatic Rating** (`diplomatic_rating`, Ghidra `484e:0aed`, verified).
+Ratings are *relative*: the sides in play are sorted by diplomatic score,
+**lowest first** (ties keep side order), and each rank gets a title from
+`STRING.DAT` group 106 (0 Statesman, 1 Diplomat, 2 Pragmatist, 3 Politician,
+4 Deceiver, 5 Scoundrel, 6 Turncoat, 7 Running Dog):
+
+| sides in play | titles by rank, best first |
+|---|---|
+| 1 | Statesman |
+| 2 | Statesman, Running Dog |
+| 3 | Statesman, Politician, Running Dog |
+| 4 | Statesman, Diplomat, Scoundrel, Running Dog |
+| 5 | Statesman, Diplomat, Politician, Scoundrel, Running Dog |
+| 6 | Statesman, Diplomat, Politician, Scoundrel, Turncoat, Running Dog |
+| 7 | Statesman, Diplomat, Politician, Deceiver, Scoundrel, Turncoat, Running Dog |
+| 8 | all eight in order |
+
+So the worst-behaved side is always the Running Dog, however low its score.
+How the computer players use the score in their diplomacy hasn't been decoded.
+Bits 4 and 5 of the side's own diagonal byte flag "has pending
 proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
 ## Production — verified in `WARLORD2.EXE`
