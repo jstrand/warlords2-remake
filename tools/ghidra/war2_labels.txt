@@ -371,3 +371,14 @@
 7065:225b  func  game_turn            # provisional
 2c04:0223  data  hero_names           # 20 bytes x 40
 2c04:0543  data  hero_in_use          # u16 x 40
+
+# Quests (Ghidra 4976 = flat 3976). Ghidra's analysis of this segment is unreliable.
+3976:0d7a  func  quest_assign
+3976:1909  func  quest_choose_reward  # returns 0 item, 1 site, 2 gold, 3 allies
+3976:1c02  func  quest_give_reward
+2c04:1103  data  side_quests          # 12 bytes per side: active, type, hero, target
+3125:00a0  data  quest_type_table     # u16[10]
+3125:5dea  data  side_city_count      # u16 per side
+6563:0579  func  hero_check_promotions
+6563:0672  func  hero_promote
+2c04:0593  data  hero_female          # u16 per hero, 0 = male wording

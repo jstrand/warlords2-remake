@@ -275,8 +275,81 @@ byte `0x5e3`.
 Dragons if none qualify). The price is paid first. The code has no chance of
 *no* allies; that surprised me, so it's worth watching for in a real game.
 
-Hero levels (Hero → Cavalier → Champion → Paladin, `STRING.DAT` groups
-99–103) and quests haven't been read yet.
+### Levels (`hero_check_promotions`, Ghidra `7563:0579`)
+
+The hero's experience byte (`.SCN` `0x5e3 + hero`) holds the **level in its
+low 2 bits** and experience in the upper 6 (max 60). A side's heroes are
+checked for promotion one step at a time:
+
+| promotion | needs experience |
+|---|---|
+| Hero → **Cavalier** | ≥ 15 |
+| Cavalier → **Champion** | ≥ 30 |
+| Champion → **Paladin** | ≥ 60 |
+
+Each promotion gives **+1 strength (max 9)** and **+2 maximum movement**
+(`hero_promote`, `7563:0672`). The announcement uses `STRING.DAT` group
+101/102/103, with the heroine wording when the hero's flag at `.SCN`
+`0x593 + 2·hero` is set.
+
+Experience comes from (all call sites of `hero_add_experience`):
+
+| source | experience |
+|---|---|
+| surviving a battle as **attacker** | +2 if the target was a city, else +1 |
+| surviving a battle as **defender** | +1, **but see the bug below** |
+| ruin search | +3 |
+| sage visit | +3 |
+| temple blessing | +1 |
+| completed quest | +10 |
+
+**Original bug:** after a battle the game only credits a surviving defending
+hero if `combat_atk_type[i]` is a Hero, i.e. it checks the **attacker's**
+army at the same position in the line (`67cc:0c8e`:
+`cmp [si+424c], 1Ch`). In practice a defending hero gains experience only when
+the attacker's line has a hero at the same index. A faithful remake should
+copy this; a "fixed" remake should check `combat_def_type`.
+
+## Quests — partly verified in `WARLORD2.EXE`
+
+Quest state is 12 bytes per side at `.SCN` `0x1103`: active flag, type, hero
+(army index), target.
+
+### Quest type (`quest_assign`, Ghidra `4976:0d7a`)
+
+From a temple, the type comes from the table `DS:00a0` =
+`0 1 2 3 4 5 6 4 5 6` (1d10), so:
+
+| type | quest (`STRING.DAT` group) | chance |
+|---|---|---|
+| 0 | slay an enemy hero (21) | 10% |
+| 1 | retrieve an item (22) | 10% |
+| 2 | slay a unit (23) | 10% |
+| 3 | slaughter *n* armies (24) | 10% |
+| 4 | occupy a city (25) | 20% |
+| 5 | conquer a city (26) | 20% |
+| 6 | pillage gold (27) | 20% |
+
+The second entry point (used without the temple dialog) picks type 5 (1 in 5)
+or 4, then falls back to 3, then 6. The group-to-type mapping is inferred
+from the order of the texts. How targets are chosen, and the exact completion
+conditions (`4976:1ded`), aren't decoded yet: Ghidra mis-disassembles this
+segment.
+
+### Reward (`quest_choose_reward`, `4976:1909`)
+
+Checked in order:
+
+1. The side owns **fewer than 10 cities** and it's past **turn 15** →
+   **1d3+5 allies** (6–8).
+2. The side has **less than 100 gold** → **2d1000+1000 gold**.
+3. An unclaimed magic item exists (the side's own standard also counts) →
+   1 in 3: **that item**, otherwise go to step 5.
+4. No such item, but an unexplored rich site the side hasn't been shown →
+   2 in 3: **the priests reveal the nearest one**, otherwise step 5.
+5. 1 in 2: **1d3+2 allies** (3–5), otherwise **2d1000+1000 gold**.
+
+Completing a quest also gives the hero **+10 experience**.
 
 ## Ruins, temples and sages — verified in `WARLORD2.EXE`
 
@@ -346,7 +419,8 @@ upper 6 bits).
 
 - The manual's 2-MP carry-over and 8-army stack limit (not yet traced in code).
 - What the `2c04:00f0 + 2·side` flag is (+2 strength for newly produced armies).
-- Hero emergence, levels, quests and item effects other than battle/command.
+- Quest target choice and completion; item effects other than
+  battle/command.
   `docs/re/dice_callers.md` lists the likely functions.
 - The Heavy Inf "Move 16/20" in-game readings, which the production code can't
   produce (`docs/formats/armytype.md`).
