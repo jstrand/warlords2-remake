@@ -60,7 +60,12 @@ Three `u16` arrays with one entry per side, in the `.SCN` header:
 |---|---|
 | `0x0137` | side is in play |
 | `0x00d0` | controller: **0 = human, 1 = computer** |
-| `0x00c0` | computer level **0–2**; **3 = side not playing** |
+| `0x00c0` | computer level: **0 Knight, 1 Lord, 2 Warlord**; **3 = side not playing** |
+| `0x00f0` | **Enhanced**: this side's newly produced armies get +2 strength (max 9) |
+| `0x0147` | **Observe**: show this computer side's turn as it plays |
+
+The side setup screen's four columns are Name, Human, Enhanced and Observe
+(`64d2:0137`); human sides show "Human" in place of a level.
 
 When a game starts (`start_game_from_setup`, Ghidra `7bab:0cfe`), a side set to
 level 3 is removed and **its capital becomes neutral**. Human sides are given
@@ -171,8 +176,7 @@ at setup and whenever a type is bought.
 
 **A new army** (`city_produce_army`, `6f8c:0dd7`) takes its move and strength
 from the city slot. Upkeep is half the slot's cost. Strength gets **+2 (max 9)**
-when the owning side's flag at `.SCN` `0x00f0 + 2·side` is set (meaning not
-yet identified).
+when the owning side's **Enhanced** flag (`.SCN` `0x00f0 + 2·side`) is set.
 
 **Buying a type** (`buy_production_type`, `7087:1299` / `7087:0ee3`) copies
 the unmodified `ARMYTYPE.DAT` stats into the slot, with no random nudge, and
@@ -777,13 +781,8 @@ counts the cities that still exist (razed ones excluded):
 Once *game won* is set, quests that need an enemy (types 3–5) aren't handed
 out.
 
-The per-side flag at `.SCN` `0x00f0` (+2 strength for newly produced armies,
-see Production) is a toggle on the side setup screen (`64d2:0508`); its label
-on screen hasn't been identified.
-
 ## Still unknown
 
-- The on-screen name of the per-side `0x00f0` toggle (+2 strength for new armies).
   `docs/re/dice_callers.md` lists the likely functions.
 - The Heavy Inf "Move 16/20" in-game readings, which the production code can't
   produce (`docs/formats/armytype.md`).

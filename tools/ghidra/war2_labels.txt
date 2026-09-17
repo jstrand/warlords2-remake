@@ -441,8 +441,8 @@
 6bab:0bab  func  difficulty_rating
 6bab:0cfe  func  start_game_from_setup
 7065:1aed  func  end_game_check
-54d2:0508  func  toggle_side_bonus
-2c04:00f0  data  side_bonus_toggle    # u16 per side: new armies +2 strength
+54d2:0508  func  toggle_side_enhanced
+2c04:00f0  data  side_enhanced        # u16 per side: new armies +2 strength
 2c04:015b  data  game_won
 2c04:015d  data  surrender_offered
 
@@ -517,3 +517,6 @@
 0555:18be  func  path_step_costs
 463e:00ca  func  ai_run_assault_group
 463e:0607  func  ai_abandon_assaults
+54d2:0137  func  ui_side_setup_list
+54d2:053f  func  toggle_side_observe
+2c04:0147  data  side_observe

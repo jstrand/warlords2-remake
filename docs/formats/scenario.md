@@ -14,7 +14,8 @@ names:
 |---|---|
 | `0x0110` | current player (0 in files) |
 | `0x0112` | combat modifier cap, 5 in every shipped scenario |
-| `0x00c0`, `0x00d0`, `0x0137` | per side: computer level (3 = not playing), controller (0 human, 1 computer), in play |
+| `0x00c0`, `0x00d0`, `0x0137` | per side: computer level (0 Knight, 1 Lord, 2 Warlord, 3 = not playing), controller (0 human, 1 computer), in play |
+| `0x00f0`, `0x0147` | per side: Enhanced (+2 strength for new armies), Observe |
 | `0x011a`…`0x0132` | the ten game options, `u16` each, **not** in menu order; see `docs/rules.md` › Game setup |
 | `0x012e` | hidden option, 1 only in `TUTORIA.SCN` (tutorial hero immunity) |
 | `0x0181` | army count |
