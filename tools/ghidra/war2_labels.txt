@@ -547,7 +547,7 @@
 3f5f:06a0  func  random_map_marshes
 3fc9:010a  func  random_map_one_marsh
 4ad0:11a6  func  ai_step_towards
-523c:13b2  func  ai_find_walk_target  | int ai_find_walk_target(int x, int y, void *out)
+523c:13b2  func  ai_collect_stack     | int ai_collect_stack(int x, int y, int *out, int order_hi, int order_lo, int min_moves)
 4ad0:0c5b  func  ai_send_army_home
 463e:00ca  func  ai_run_assault_group | int ai_run_assault_group(int group)
 463e:041c  func  ai_assault_revalidate

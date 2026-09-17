@@ -183,7 +183,7 @@ group targets its captor, otherwise it runs the group (`563e:00ca`):
 3. `563e:0996` gathers armies — four passes, each calling `563e:1251` to walk
    the staging list at `+0x3e`.
 4. The rally city's garrison is re-checked (`5ca7:023f`), then `563e:06e9`
-   sends the group's armies at the target city's east tile; if it reports an
+   takes the stack east of the target city and sends it in; if it reports an
    attack, the garrison is re-checked again.
 5. `563e:16fd` follows up from the participating cities at `+0x46`.
 
@@ -253,15 +253,17 @@ own cities' worth of assault groups. The highest remaining score wins;
 whoever holds our capital overrides that unless an assault group already
 aims at them. A target with no unflagged cities is dropped.
 
-**Movement phases** (`5ad0:*`). These share one step routine, `5ad0:11a6`,
-which takes a target found by `623c:13b2` ("the nearest thing worth walking
-to from (x, y)") and moves one stack a step towards it; it returns 1 when the
-stack arrived.
+**Movement phases** (`5ad0:*`). These share two routines:
+`ai_collect_stack` (`623c:13b2`) gathers up to **8** of the side's armies
+standing on one tile — filtered by the two halves of the army record's order
+byte `+14` and by a minimum movement allowance, then sorted by `623c:14d3` —
+and `5ad0:11a6` moves that stack one step, returning 1 when it arrives.
 
 - *move Explore* (`5ad0:0458`) moves **heroes only** — an army of type 28
   whose flag `0x100` is set (the flag is cleared as it is picked up). It
-  keeps stepping while the hero has **3 or more** movement points left and
-  is still making progress; it stops as soon as a step arrives or fails.
+  For each such hero it gathers the stack on the hero's tile and keeps
+  stepping it while the hero has **3 or more** movement points left and is
+  still making progress; it stops as soon as a step arrives or fails.
 - *move Search* (`5ad0:0284`) is the same walk restricted to *Hidden Map*
   games.
 - *rescue* (`5ad0:0888`) tidies up armies that still have **all** their
@@ -271,8 +273,8 @@ stack arrived.
   way. An army outside a city with no order at all, and flag `0x20` clear,
   is sent off by `5ad0:0c5b`.
 - *specials* (`5ad0:10e3`) looks at own cities flagged `0x20` in the AI
-  data's per-city byte that aren't an assault target: if a stack can be sent
-  from the tile east of the city and arrives, and the city isn't building
+  data's per-city byte that aren't an assault target: if the stack on the tile east of the
+  city can be sent and arrives, and the city isn't building
   anything, the city becomes an **explorer** (role 13).
 
 **Debug output.** `5db9:0dc9` receives every phase string. It's a 5-byte stub

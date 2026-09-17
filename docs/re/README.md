@@ -28,7 +28,7 @@ production and garrisons.
 
 ## Still open
 
-- How `623c:13b2` picks the tile a stack walks to, and the pathfinding it
+- How `5ad0:11a6` picks the tile a stack steps to, and the pathfinding it
   shares with the human interface.
 - Graphics, sound and UI plumbing — deliberately skipped; the data formats
   are decoded in `docs/formats/`.
