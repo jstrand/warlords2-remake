@@ -156,6 +156,54 @@ always beat one strong army.
 The Military Advisor runs **20 simulated combats** with the real routine and
 reports the success count.
 
+## Starting garrisons and neutral production — verified in `WARLORD2.EXE`
+
+### One army per city (`setup_garrisons`, Ghidra `6bd8:00cc`)
+
+Every city gets **exactly one** starting army:
+
+| city | garrison level |
+|---|---|
+| a side's city (its capital) | 3 |
+| neutral, *Neutral Cities* option = 0 | none; a placeholder **Scouts** army of strength 1 is placed instead |
+| neutral, option *k* > 0 | `min(3, 1d4 + k − 2)` |
+
+The level picks a **purpose** (`DS:0d60` = `1 6 2 3` for levels 0–3). The city
+builds its best production type for that purpose immediately
+(`best_production_for`, `623c:103d`, then `produce_garrison`, `6bd8:0381`). The
+new army has 0 moves left.
+
+### Choosing the best type for a purpose
+
+Used for garrisons and, most likely, by the computer players' production
+decisions. For each of the city's production slots (with that city's
+randomised stats):
+
+```
+str   = min(9, strength + 2 if the side's bonus toggle is on) + 2 if the type has Siege
+time  = time + 1 if str < 3 and purpose ≠ 6, capped at 10
+score = (10 − time)·Wtime + str·Wstr + (move·Wmove)/2
+```
+
+| purpose | Wtime | Wstr | Wmove | note |
+|---|---|---|---|---|
+| 1 | 10 | 4 | 1 | quick and cheap |
+| 2 | 10 | 10 | 1 | balanced |
+| 3 | 5 | 10 | 1 | strongest |
+| 4 | 5 | 10 | 1 | flying types only |
+| 5 | 5 | 10 | 1 | |
+| 6 | 10 | 1 | 10 | fastest |
+
+The highest score wins. Slots are scanned from last to first with a strict
+`>`, so ties go to the later slot.
+
+### Neutral production during play (`neutral_production_turn`, `6bd8:025a`)
+
+With *Neutral Cities* set to 2 or higher, a neutral city whose flag at city
+`+0x30` is set keeps building. Its countdown ticks down and produces the
+army at 0. Whenever it isn't building and holds fewer than 4 armies, it starts
+its best purpose-2 type. What sets that flag hasn't been traced.
+
 ## Capturing a city — verified in `WARLORD2.EXE`
 
 ### Loot (automatic, `67cc:0a6b`)

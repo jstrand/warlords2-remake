@@ -438,3 +438,16 @@
 2c04:00f0  data  side_bonus_toggle    # u16 per side: new armies +2 strength
 2c04:015b  data  game_won
 2c04:015d  data  surrender_offered
+
+# Garrisons (Ghidra 6bd8 = flat 5bd8, 623c = 523c)
+5bd8:0000  func  set_city_tiles       | void set_city_tiles(int* city, int owner)
+5bd8:00cc  func  setup_garrisons
+5bd8:025a  func  neutral_production_turn
+5bd8:0381  func  produce_garrison     | void produce_garrison(int city)
+523c:0e5a  func  set_city_production
+523c:0fd5  func  city_is_building
+523c:103d  func  best_production_for  | int best_production_for(int city, int purpose, int arg, int dry_run)
+3125:0a10  data  purpose_w_time
+3125:0a1e  data  purpose_w_strength
+3125:0a2c  data  purpose_w_move
+3125:0d60  data  garrison_purpose     # u16[4]: 1 6 2 3
