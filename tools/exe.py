@@ -16,6 +16,94 @@ STUB_HDR = 0x20
 STUB_ENTRY = 5          # CD 3F <u16 offset> 00  ->  EA <u16 off> <u16 seg>
 
 
+def _modrm_len(image, i):
+    """Length of a 16-bit-addressing ModRM (+ displacement) starting at i."""
+    m = image[i]
+    mod, rm = m >> 6, m & 7
+    if mod == 0:
+        return 3 if rm == 6 else 1
+    if mod == 1:
+        return 2
+    if mod == 2:
+        return 3
+    return 1
+
+
+def _insn_len(image, i, end):
+    """Length of the 16-bit x86 instruction at i, understanding Borland's
+    emulated-FPU encodings. Returns 1 for anything unrecognised so a sweep
+    through data resynchronises quickly."""
+    j = i
+    opsize = 2
+    while j < end and image[j] in (0x26, 0x2E, 0x36, 0x3E, 0x64, 0x65, 0x66, 0x67,
+                                   0xF0, 0xF2, 0xF3):
+        if image[j] == 0x66:
+            opsize = 4
+        j += 1
+    if j + 1 >= end:
+        return max(1, end - i)
+    op = image[j]
+    k = j + 1
+    try:
+        if op == 0xCD and 0x34 <= image[k] <= 0x3B:          # emulated D8..DF
+            return k + 1 - i + _modrm_len(image, k + 1)
+        if op == 0xCD and image[k] == 0x3C:                   # segment-override FPU
+            return k + 2 - i + _modrm_len(image, k + 2)
+        if op < 0x40:
+            low = op & 7
+            if op in (0x0F,):
+                op2 = image[k]
+                if 0x80 <= op2 <= 0x8F:
+                    return k + 1 - i + opsize
+                if op2 in (0xA0, 0xA1, 0xA8, 0xA9):
+                    return k + 1 - i
+                return k + 1 - i + _modrm_len(image, k + 1)
+            if op in (0x26, 0x2E, 0x36, 0x3E):
+                return 1
+            if low <= 3:
+                return k - i + _modrm_len(image, k)
+            if low == 4:
+                return k - i + 1
+            if low == 5:
+                return k - i + opsize
+            return k - i
+        if op < 0x62 or 0x6C <= op <= 0x6F or 0x90 <= op <= 0x99 or 0x9B <= op <= 0x9F:
+            return k - i
+        if op in (0x62, 0x63) or 0x84 <= op <= 0x8F or 0xD0 <= op <= 0xD3 or \
+                0xD8 <= op <= 0xDF or op in (0xC4, 0xC5, 0xFE, 0xFF):
+            return k - i + _modrm_len(image, k)
+        if op == 0x68:
+            return k - i + opsize
+        if op == 0x69 or op == 0x81 or op == 0xC7:
+            return k - i + _modrm_len(image, k) + opsize
+        if op in (0x6A, 0xA8, 0xCD, 0xD4, 0xD5, 0xE4, 0xE5, 0xE6, 0xE7) or \
+                0x70 <= op <= 0x7F or 0xB0 <= op <= 0xB7 or 0xE0 <= op <= 0xE3 or op == 0xEB:
+            return k - i + 1
+        if op in (0x6B, 0x80, 0x82, 0x83, 0xC0, 0xC1, 0xC6):
+            return k - i + _modrm_len(image, k) + 1
+        if op in (0x9A, 0xEA):
+            return k - i + 2 + opsize
+        if 0xA0 <= op <= 0xA3:
+            return k - i + 2
+        if 0xA4 <= op <= 0xA7 or 0xAA <= op <= 0xAF or op in (0xC3, 0xC9, 0xCB, 0xCC, 0xCE,
+                                                              0xCF, 0xD6, 0xD7, 0xF1, 0xF4, 0xF5) \
+                or 0xEC <= op <= 0xEF or 0xF8 <= op <= 0xFD:
+            return k - i
+        if op == 0xA9 or 0xB8 <= op <= 0xBF or op in (0xE8, 0xE9):
+            return k - i + opsize
+        if op in (0xC2, 0xCA):
+            return k - i + 2
+        if op == 0xC8:
+            return k - i + 3
+        if op in (0xF6, 0xF7):
+            reg = (image[k] >> 3) & 7
+            imm = (1 if op == 0xF6 else opsize) if reg in (0, 1) else 0
+            return k - i + _modrm_len(image, k) + imm
+    except IndexError:
+        pass
+    return 1
+
+
 def decode_fpu_emulation(image, start, end):
     """Rewrite Borland's x87 emulator interrupts back into real FPU opcodes.
 
@@ -23,8 +111,9 @@ def decode_fpu_emulation(image, start, end):
     INT 3Ch xx    -> seg prefix; D8h|xx&7   (xx top bits: 11 = ES)
     INT 3Dh       -> NOP; FWAIT
 
-    This is a byte scan, so an immediate that happens to contain CD 34..3D
-    would be corrupted; the counts are small and worth the readability.
+    Only sites on an instruction boundary are rewritten, found by a linear
+    sweep with `_insn_len` from the start of the code range, so bytes like
+    CD 34 inside `jmp cs:[bx+34CDh]` are left alone.
     """
     n = 0
     i = start
@@ -32,21 +121,23 @@ def decode_fpu_emulation(image, start, end):
         if image[i] == 0xCD:
             v = image[i + 1]
             if 0x34 <= v <= 0x3B:
+                length = _insn_len(image, i, end)
                 image[i:i + 2] = bytes((0x9B, 0xD8 + v - 0x34))
                 n += 1
-                i += 2
+                i += length
                 continue
             if v == 0x3C and image[i + 2] >> 6 == 3:
+                length = _insn_len(image, i, end)
                 image[i:i + 3] = bytes((0x90, 0x26, 0xD8 | image[i + 2] & 7))
                 n += 1
-                i += 3
+                i += length
                 continue
             if v == 0x3D:
                 image[i:i + 2] = b'\x90\x9b'
                 n += 1
                 i += 2
                 continue
-        i += 1
+        i += _insn_len(image, i, end)
     return n
 
 

@@ -73,10 +73,12 @@ offsets into that code. Each names a **segment word**, and the word holds a
 4. **Redirects far pointers**: any relocated `seg:off` that points at a stub
    entry (3220 of them — `CALL FAR` operands and far function pointers in data)
    is rewritten to point at the real function, so xrefs work.
-5. **Decodes Borland's x87 emulation** in code segments (282 sites):
+5. **Decodes Borland's x87 emulation** in code segments (280 sites):
    `INT 34h..3Bh` → `FWAIT; D8h..DFh`, `INT 3Ch xx` → `ES:` + `D8h|xx&7`,
-   `INT 3Dh` → `FWAIT`. This is a byte scan, so an immediate containing
-   `CD 34..3D` would be corrupted. None has been seen yet.
+   `INT 3Dh` → `FWAIT`. Sites are found by a linear instruction-length sweep
+   that understands these encodings, so operand bytes that happen to read
+   `CD 34`–`CD 3D` are left alone. A plain byte scan corrupted two of them:
+   `mov bx, 3BCDh` in the runtime and a `jmp cs:[bx+34CDh]` jump table.
 6. Writes a new MZ header sized for all the relocations.
    `build/war2segs.json` maps each stub to its new code segment.
 
@@ -127,7 +129,7 @@ generator and quests. A call is easy to spot in the bytes:
 ghidraRun    # then File > Open Project > build/ghidra/WAR2.gpr
 ```
 
-About 3 minutes; it finds ~1580 functions. `SetupWar2.java` sets `DS = DGROUP`
+About 3 minutes; it finds ~1570 functions. `SetupWar2.java` sets `DS = DGROUP`
 across the program, so `[xxxx]` operands resolve to named data, and then
 applies `tools/ghidra/war2_labels.txt`. **Record new discoveries in that file**
 and re-run the script (Script Manager, category *War2*) so they survive a

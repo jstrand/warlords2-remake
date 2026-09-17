@@ -53,11 +53,11 @@ The comment on each generated line shows the evidence.
 
 | | functions |
 |---|---|
-| hand-named (`war2_labels.txt`) | 218 |
-| generated (`auto_`) | 128 |
-| still `FUN_` | 1225 |
-| thunks / fragments | 6 |
-| **total** | **1577** |
+| hand-named (`war2_labels.txt`) | 350 |
+| generated (`auto_`) | 145 |
+| still `FUN_` | 1072 |
+| thunks / fragments | 3 |
+| **total** | **1570** |
 
 The rest mostly shows no text and names no files: drawing, map and path
 logic, AI arithmetic. Those need reading (step 3), and the neighbours of

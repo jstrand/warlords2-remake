@@ -227,6 +227,13 @@
 0000:0deb  func  midpak_unload_driver
 0000:0e15  func  midpak_0710
 
+# Game file I/O wrappers (resident segment 070b)
+070b:0006  func  open                 | int open(char *name, int mode)
+070b:003a  func  close                | int close(int fd)
+070b:004e  func  write                | int write(int fd, void *buf, unsigned len)
+070b:006d  func  read                 | int read(int fd, void *buf, unsigned len)
+070b:00a9  func  filelength           | long filelength(int fd)
+
 # Memory handles
 0d28:011f  func  mem_alloc
 0d28:069a  func  mem_lock
@@ -457,7 +464,6 @@
 # Save (Ghidra 7721 = flat 6721)
 6721:0a46  func  save_game
 523c:0da9  func  save_ai_data
-070b:004e  func  write                | int write(int fd, void *buf, unsigned len)
 57cc:16cd  func  hero_drop_items
 696c:03d9  func  list_carried_items   # (2, 0, army): item indices into DS:4bfc, count in DS:482e
 
