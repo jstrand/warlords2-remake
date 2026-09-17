@@ -1,8 +1,10 @@
 # Random map generator — structure
 
 How "A Random World" is built in `WARLORD2.EXE`. The flow, the parameters and
-the terrain phases are decoded, along with the city economy; only the
-conversion to real tiles and the sign text are left.
+every phase is identified and the rules of each are decoded. What is
+summarised rather than read line by line: the exact shapes the ridge and
+water routines draw (`4d71:0884`…`098c`, `4eb7:005d`) and the road and sign
+phases.
 Addresses are Ghidra addresses.
 
 ## Entry (`random_map_setup`, `7bab:10e8`)
