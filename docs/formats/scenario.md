@@ -27,8 +27,7 @@ content (file: 1 temple / 2 ruin; at game start: 2 item, 3 sage, 4 gold,
 type, `+0x1b` `u16` "rich" flag.
 
 **Item record (29 bytes):** `+0` name, `+20` effect type (1 battle, 2 command,
-8 standard; STRING.DAT group 167 also names flight, double movement and gold
-per city), `+21` value, `+22` status (0 out of play, 1 on the ground, 2 in a
+5 flight, 6 double movement, 7 gold per city, 8 standard), `+21` value, `+22` status (0 out of play, 1 on the ground, 2 in a
 ruin, 3 carried), `+23` `u16` holder or site, `+25`/`+27` x, y.
 | `0x0710` | tile id → terrain type table (`0..11`; 10 = city) |
 

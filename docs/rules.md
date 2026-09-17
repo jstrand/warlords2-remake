@@ -239,10 +239,52 @@ hills tiles then cost **2** instead of 4 or 6:
 
 The stack's movement points are the **lowest** of its armies' remaining moves
 (army record `+7`). The manual's "one army lacking MPs stops the group" follows
-from that. The manual's 2-MP carry-over and 8-army stack limit haven't been
-checked in code yet.
+from that. The 2-MP carry-over is confirmed (see Start of a side's turn). The 8-army limit
+shows up as `> 7` checks when placing armies.
 
 A path is stored as up to 200 compass directions (0 = north, clockwise).
+
+## Start of a side's turn — verified in `WARLORD2.EXE`
+
+`start_of_turn` (Ghidra `8cc6:0000`) runs these steps in this order:
+
+1. Reports and diplomacy messages.
+2. **A side with no cities is eliminated** (`8cc6:0952`); nothing below runs.
+3. **Hero offer** (see Heroes), then **hero promotions**.
+4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
+   `8cc6:0827`).
+   - **income** = sum of each owned city's income (city record `+42`)
+     + number of cities × the side's "gold per city" items (item type 7,
+     carried by any of its heroes)
+   - **upkeep** = sum of each army's upkeep byte (`+0xb`, set to half the
+     slot's cost when the army is built). Armies in transit don't pay; an
+     army at sea pays at least 4.
+5. **Production** (`city_production_turn`, `6f8c:0000`). Each producing city's
+   countdown (city `+0x2d`) drops by 1. At 0 the army is built, but **only if
+   the side has more than 0 gold** after step 4. The build itself costs
+   nothing up front; the slot's cost is only its upkeep. A vectored army
+   leaves in transit and arrives **two turns later**. If it can't be placed
+   (destination full at 8 armies, or no longer the side's), it's sent back
+   home, taking another two turns. If it was already heading home, it's
+   **disbanded**.
+6. **Movement reset** (`reset_movement`, `8cc6:05fb`):
+   - new moves = army's maximum + **min(unused moves, 2)**
+   - an army **at sea** gets **20 + min(unused, 2)** instead
+   - a hero carrying a **double movement** item (type 6) adds each army's
+     maximum again for every army on its tile
+   - remaining moves are capped at 99
+7. Quest checks (`4976:1ded`), then the side plays.
+
+### Item types
+
+| type | effect | used by shipped scenarios |
+|---|---|---|
+| 1 | +n battle (hero strength) | yes |
+| 2 | +n command (stack bonus) | yes |
+| 5 | allows flight | no |
+| 6 | doubles movement | no |
+| 7 | +n gold per city | no |
+| 8 | standard: +1 command | yes |
 
 ## Heroes — verified in `WARLORD2.EXE`
 
@@ -417,10 +459,8 @@ upper 6 bits).
 
 ## Still unknown
 
-- The manual's 2-MP carry-over and 8-army stack limit (not yet traced in code).
 - What the `2c04:00f0 + 2·side` flag is (+2 strength for newly produced armies).
-- Quest target choice and completion; item effects other than
-  battle/command.
+- Quest target choice and completion.
   `docs/re/dice_callers.md` lists the likely functions.
 - The Heavy Inf "Move 16/20" in-game readings, which the production code can't
   produce (`docs/formats/armytype.md`).

@@ -382,3 +382,18 @@
 6563:0579  func  hero_check_promotions
 6563:0672  func  hero_promote
 2c04:0593  data  hero_female          # u16 per hero, 0 = male wording
+
+# Turn loop (Ghidra 8cc6 = flat 7cc6, 828e = 728e, 6f8c = 5f8c)
+7cc6:0000  func  start_of_turn        | void start_of_turn(int side)
+7cc6:05fb  func  reset_movement
+7cc6:0827  func  apply_income
+7cc6:0952  func  side_eliminated
+728e:0000  func  refresh_map_owners
+728e:02bf  func  compute_upkeep
+728e:0372  func  compute_income
+5f8c:0000  func  city_production_turn
+56d4:07cf  func  side_gold_per_city   | int side_gold_per_city(int side)
+56d4:0874  func  hero_double_move_items
+56d4:08b4  func  hero_flight_items
+3125:5dca  data  side_income
+3125:5dda  data  side_upkeep
