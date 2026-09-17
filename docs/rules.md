@@ -425,7 +425,7 @@ army at the same position in the line (`67cc:0c8e`:
 the attacker's line has a hero at the same index. A faithful remake should
 copy this; a "fixed" remake should check `combat_def_type`.
 
-## Quests — verified in `WARLORD2.EXE` (except target choice)
+## Quests — verified in `WARLORD2.EXE`
 
 Quest state is 12 bytes per side at `.SCN` `0x1103`: active flag, type, hero
 (army index), target.
@@ -448,8 +448,23 @@ counting quests.
 | 6 | sack and pillage *n* gold (27) | – | 20% |
 
 The second entry point (used without the temple dialog) picks type 5 (1 in 5)
-or 4, then falls back to 3, then 6. How targets and *n* are picked hasn't been
-decoded (Ghidra mis-disassembles the switch).
+or 4, then falls back to 3, then 6.
+
+**Targets** (read from raw disassembly; Ghidra mis-disassembles this switch).
+If a type finds no valid target, the type is rolled again.
+
+| type | how the target is picked |
+|---|---|
+| 0 | a random hero belonging to any other side |
+| 1 | a random item lying in a ruin within 50 tiles of the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side. The counting loop wants items in ruins, but the picking loop accepts any item that's in play, so the picked item can differ from the counted set. |
+| 2 | up to 5 tries: a random magical army type (`ARMYTYPE +48`) that some other side has on the map |
+| 3 | a random other side that's still alive (up to 200 tries); **n = 1d12+10** armies |
+| 4 | a random city not owned by the side, within map distance 60 (40 from the second entry point); after 100 failed tries any such city will do |
+| 5 | as type 4, always within 60 |
+| 6 | **n = 3d300+500** gold |
+
+Types 3, 4 and 5 are skipped when the flag at `.SCN` `0x15b` is set (meaning
+unknown).
 
 ### Completion and failure (`quest_check`, `4976:1ded`)
 
@@ -559,7 +574,6 @@ upper 6 bits).
 ## Still unknown
 
 - What the `2c04:00f0 + 2·side` flag is (+2 strength for newly produced armies).
-- How quest targets and counts are picked.
   `docs/re/dice_callers.md` lists the likely functions.
 - The Heavy Inf "Move 16/20" in-game readings, which the production code can't
   produce (`docs/formats/armytype.md`).
