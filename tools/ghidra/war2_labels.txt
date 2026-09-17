@@ -506,3 +506,12 @@
 384e:0aed  func  diplomatic_rating    # ranks sides by score, fills titles
 523c:0f10  func  vector_city_to       | void vector_city_to(int from_city, int to_city)
 523c:11d5  func  ai_city_flag_check
+
+# Movement execution (Ghidra 1a8b = flat 0a8b, 1b62 = 0b62)
+0a8b:0001  func  move_stack_to
+0a8b:0254  func  enter_or_attack_city
+0a8b:04c8  func  place_stack_at_step
+0a8b:07f9  func  walk_path
+0a8b:0c4f  func  move_stack_step
+0b62:007d  func  armies_at_tile       | int armies_at_tile(int x, int y, int *count)
+0555:18be  func  path_step_costs

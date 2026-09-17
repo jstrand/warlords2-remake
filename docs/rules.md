@@ -30,6 +30,33 @@ game removes Navy from every city at start (see Production). Across Erythea's
 80 cities that gives 34 at defence 1 and 46 at defence 2. It also explains the help file's
 `- Pillage -` → "Reduce defence for gold": pillaging removes production types.
 
+## Moving a stack — verified in `WARLORD2.EXE`
+
+`move_stack_to` (Ghidra `1a8b:0001`) drives both the player's and the
+computer's moves. It repeatedly pathfinds to the destination
+(`docs/rules.md` › Movement) and walks the path (`walk_path`, `1a8b:07f9`)
+until something stops it.
+
+Walking the path, step by step:
+
+- **A city not owned by the mover** stops the walk and starts an attack on it
+  (`attack_tile`). If the city is taken, the walk continues into it.
+- **A tile occupied by another side** stops the walk and attacks, but only if
+  the two sides are **not at peace** (diplomacy state ≠ 0).
+- **The 8-army limit:** the stack may only *stop* on a tile where
+  `armies already there + stack size ≤ 8`. Steps that would breach it are
+  passed over — the walk keeps going and lands on the first later step that
+  fits.
+- **Cost:** when the walk ends, the cumulative cost of the steps taken is
+  subtracted from **every army in the stack**, floored at 0. A multi-army
+  stack spends from its shared pool (the minimum of its armies' moves).
+- **Stopping:** the walk ends when fewer than **2** movement points remain,
+  or when the next step costs more than what's left.
+
+`armies_at_tile` (`1b62:007d`) lists up to 8 armies on a tile and returns the
+one highest in its owner's **fight order**, which is the army the map shows
+for that tile.
+
 ## Combat
 
 **Everything in this section up to "Resolution" is verified in `WARLORD2.EXE`**:
@@ -464,8 +491,8 @@ hills tiles then cost **2** instead of 4 or 6:
 
 The stack's movement points are the **lowest** of its armies' remaining moves
 (army record `+7`). The manual's "one army lacking MPs stops the group" follows
-from that. The 2-MP carry-over is confirmed (see Start of a side's turn). The 8-army limit
-shows up as `> 7` checks when placing armies.
+from that. The 2-MP carry-over is confirmed (see Start of a side's turn) and so is the
+8-army stack limit (see Moving a stack).
 
 A path is stored as up to 200 compass directions (0 = north, clockwise).
 
