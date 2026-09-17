@@ -553,3 +553,5 @@
 463e:041c  func  ai_assault_revalidate
 463e:0996  func  ai_assault_gather
 463e:06e9  func  ai_assault_attack
+4db9:09d7  func  ai_record_battle
+49bf:084d  func  ai_data_init

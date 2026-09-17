@@ -847,5 +847,3 @@ out.
 - **Heavy Infantry "Move 16/20"** read off the production screen in DOSBox.
   The code can't produce it (base 8, at most +4 of variance), so one of the
   two readings is wrong — recheck in the game (`docs/formats/armytype.md`).
-- **Computer players:** the per-side statistics their diplomacy and target
-  scores are built from (`docs/re/ai.md`).

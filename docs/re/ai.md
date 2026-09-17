@@ -63,6 +63,26 @@ Each side has a `0x42c`-byte block, held in a memory handle at
 
 A shared `0x4b0`-byte block follows the eight side blocks in a save.
 
+### Battle statistics (`ai_record_battle`, `5db9:09d7`)
+
+Seven `u16[8]` arrays, indexed by the **other** side, are kept in each side's
+block and updated after every battle on that side's tile — so they record
+what each opponent has done to this side:
+
+| offset | counts, per attacking side |
+|---|---|
+| `+0x3bc` | this side's **heroes** killed |
+| `+0x3cc` | this side's **armies** killed |
+| `+0x3dc` | **battles** fought |
+| `+0x3ec` | battles **lost** (every defender died) |
+| `+0x3fc` | battles fought **in a city** |
+| `+0x40c` | **cities lost** |
+| `+0x41c` | unused by anything read so far |
+
+These are what the diplomacy phase and `ai_pick_enemy` mean by "threat": a
+side that has killed this side's armies and taken its cities scores highest.
+They are zeroed for everyone at game start (`59bf:084d`).
+
 ### Assault groups
 
 The side's attack plans live at `+0x24a` (count) and `+0x24c` (entries of
@@ -187,7 +207,7 @@ With `grudge[j] = 2 × (j proposes peace to us) − 2 × (j proposes war on us)`
 | test | proposal toward `j` |
 |---|---|
 | `swapped[j] ≥ grudge + 4` | intermediate |
-| `threat[j] ≥ grudge + 5`, where `threat = ai[0x3ec+2j] + 4·ai[0x40c+2j] + 2·ai[0x3bc+2j]` | keep, at least intermediate |
+| `threat[j] ≥ grudge + 5`, where `threat = battles lost to j + 4 × cities lost to j + 2 × heroes killed by j` | keep, at least intermediate |
 | `j` is the enemy chosen by `ai_pick_enemy` | **war** |
 | `j` is the side an active assault group is aimed at | **war** |
 | `j` owns more than a threshold share of all city tiles (50% for a computer, AI data `+0x44` for a human) | **war** on `j`, peace with everyone else |
@@ -213,9 +233,9 @@ are cancelled (`563e:066d(group, 0x14)`).
 | `j` holds our capital city | +20 |
 | we hold `j`'s capital city | +15 |
 | cities we hold that `j` used to own | +4 each |
-| AI data `+0x3bc+2j` | ×4 |
-| AI data `+0x3cc+2j`, `+0x3dc+2j` | ×1 |
-| AI data `+0x3ec+2j`, `+0x3fc+2j`, `+0x40c+2j` | ×2 |
+| heroes `j` has killed | ×4 |
+| armies `j` has killed, battles fought with `j` | ×1 |
+| battles lost to `j`, city battles with `j`, cities lost to `j` | ×2 |
 | a constant for our own controller: human `+0x18`, else level 0 `+0x1c`, 1 `+0x1a`, 2 `+0x1e` | +1 |
 | **&#124;our diplomatic score − `j`'s&#124; / 8** | +1 |
 | &#124;our city count − `j`'s&#124; / 4 | +1 |
@@ -227,7 +247,7 @@ and that slot is zeroed before the pick.
 A side's score is then zeroed if `558d:0a6e` vetoes it, if we already propose
 war on somebody and have no proposal toward it, if there are no assault
 groups and it has no unflagged cities, before **turn 8** (turn 4 with *Quick
-Start*) unless `ai[0x3dc] + ai[0x3fc]` is non-zero, or if more than one other
+Start*) unless this side has already fought it, or if more than one other
 side is in play and it is already the target of more than a quarter of its
 own cities' worth of assault groups. The highest remaining score wins;
 whoever holds our capital overrides that unless an assault group already
