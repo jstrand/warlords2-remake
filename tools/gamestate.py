@@ -17,10 +17,16 @@ What it builds
     items     standards and magic items
     armies    the 29 army types with strength / time / cost
     tiles     terrain grid + road overlay, with the game's own terrain types
+    armies    one garrison per city, from the start-of-game setup rules
 
 Two values are DERIVED, not stored (see docs/rules.md):
   * ownership -- at scenario start each side owns exactly its capital
   * defence   -- 1 if a city produces fewer than 3 army types, else 2
+
+`apply_game_start()` then rolls what the game rolls when a scenario starts:
+Navy dropped from production, per-city production stats copied from
+ARMYTYPE.DAT and randomly nudged, slots sorted, defence derived, and one
+garrison army placed per city. Pass a seed for a reproducible position.
 
 Terrain comes from the tile -> terrain-type table stored in every .SCN at
 0x710 (the same table WARLORD2.EXE reads), with the movement costs and combat
@@ -28,6 +34,7 @@ classes the executable uses for each type (docs/rules.md > Movement, Combat).
 """
 import collections
 import os
+import random
 import struct
 import sys
 
@@ -40,6 +47,14 @@ import string_dat
 MAP_W, MAP_H = mapren.MAP_W, mapren.MAP_H
 NEUTRAL = None
 NAVY = 5   # army type id removed from all production lists at game start
+
+# Production purpose weights (time, strength, move) and the purpose each
+# garrison level uses -- see docs/rules.md > Starting garrisons.
+PURPOSE_WEIGHTS = {1: (10, 4, 1), 2: (10, 10, 1), 3: (5, 10, 1),
+                   4: (5, 10, 1), 5: (5, 10, 1), 6: (10, 1, 10)}
+GARRISON_PURPOSE = [1, 6, 2, 3]
+SCOUTS = 11        # placeholder garrison when Neutral Cities is off
+SIEGE_ABILITY = 1  # ARMYTYPE +52
 
 # terrain type ids 0..11 as used by WARLORD2.EXE (STRING.DAT group 128 names 0..9)
 TERRAIN_TYPES = ['road', 'bridge', 'water', 'shore', 'forest', 'hills',
@@ -57,6 +72,78 @@ def load_terrain_table(scn_path):
     with open(scn_path, 'rb') as f:
         f.seek(TERRAIN_TABLE_OFFSET)
         return list(f.read(255))   # 0x80f is the site count
+
+
+def city_slots(city, by_id, rng):
+    """The city's production slots as the game sets them up: stats copied from
+    ARMYTYPE.DAT, randomly nudged, then sorted by purchase price."""
+    slots = []
+    for t in city['produce_ids']:
+        a = by_id[t]
+        strength, time = a['strength'], a['production_turns']
+        cost, move = a['upkeep'], a['movement']
+        if rng.randrange(100) < 10:                       # strength
+            strength = min(9, strength + 1) if rng.randrange(100) < 60 else max(1, strength - 1)
+        if rng.randrange(100) < 20:                       # move
+            r = rng.randrange(100)
+            move += 4 if r < 10 else 2 if r < 60 else -2 if r < 95 else -4
+            move = max(2, move)
+        move = max(6, move)
+        if rng.randrange(100) < 10:                       # cost
+            cost += -(cost // 4) if rng.randrange(100) < 60 else cost // 4
+        if rng.randrange(100) < 10:                       # time
+            time = max(1, time - 1) if rng.randrange(100) < 60 else time + 1
+        slots.append(dict(type=t, name=a['name'], strength=strength, time=time,
+                          cost=cost, move=move, price=abs(a['cost'])))
+    slots.sort(key=lambda s: s['price'])
+    return slots
+
+
+def best_slot(slots, purpose, by_id, side_bonus=False):
+    """The slot the game would build for a purpose (docs/rules.md)."""
+    w_time, w_str, w_move = PURPOSE_WEIGHTS[purpose]
+    best, best_score = None, 0
+    for slot in reversed(slots):                           # ties go to the later slot
+        if purpose == 4 and not by_id[slot['type']]['bonuses'][54]:
+            continue                                       # purpose 4 wants fliers
+        strength = min(9, slot['strength'] + (2 if side_bonus else 0))
+        if by_id[slot['type']]['bonuses'][52] == SIEGE_ABILITY:
+            strength += 2
+        time = slot['time'] + (1 if strength < 3 and purpose != 6 else 0)
+        score = (10 - min(10, time)) * w_time + strength * w_str + slot['move'] * w_move // 2
+        if score > best_score:
+            best, best_score = slot, score
+    return best
+
+
+def apply_game_start(g, seed=0, neutral_cities=1):
+    """Roll the start-of-game setup: per-city production stats, defence and one
+    garrison army per city. See docs/rules.md > Production, Starting garrisons.
+    `neutral_cities` is the option value (0 = off)."""
+    rng = random.Random(seed)
+    by_id = {a['sprite']: a for a in g['armies']}
+    armies = []
+    for c in g['cities']:
+        c['slots'] = city_slots(c, by_id, rng)
+        c['defence'] = 2 if len(c['slots']) >= 3 else 1
+        if c['owner'] is not None:
+            level = 3
+        elif neutral_cities <= 0:
+            level = None
+        else:
+            level = min(3, rng.randrange(1, 5) + neutral_cities - 2)
+        slot = None
+        if level is not None and c['slots']:
+            slot = best_slot(c['slots'], GARRISON_PURPOSE[max(0, level)], by_id)
+        if slot is None:
+            armies.append(dict(x=c['x'], y=c['y'], type=SCOUTS, name=by_id[SCOUTS]['name'],
+                               owner=NEUTRAL, strength=1, moves=0, upkeep=0, city=c['index']))
+        else:
+            armies.append(dict(x=c['x'], y=c['y'], type=slot['type'], name=slot['name'],
+                               owner=c['owner'], strength=slot['strength'], moves=0,
+                               upkeep=slot['cost'] // 2, city=c['index']))
+    g['armies_placed'] = armies
+    return g
 
 
 def load_game(scenario_dir, terrain_dir='original/TERRAIN0', data_dir='original/DATA'):
@@ -155,6 +242,16 @@ def validate(g):
     bad = [c for c in g['cities'] for t in c['produce_ids'] if t not in ids]
     out.append((not bad, "every city production slot names a real army type"))
 
+    if 'armies_placed' in g:
+        placed = g['armies_placed']
+        out.append((len(placed) == len(g['cities']),
+                    f"{len(placed)} garrison armies placed, one per city"))
+        ids = {a['sprite'] for a in g['armies']}
+        out.append((all(a['type'] in ids for a in placed),
+                    "every garrison army has a real army type"))
+        at = collections.Counter((a['x'], a['y']) for a in placed)
+        out.append((max(at.values()) <= 8, "no tile holds more than 8 armies"))
+
     bad = {t & 0xff for t in g['tiles'] if g['terrain_table'][t & 0xff] >= len(TERRAIN_TYPES)}
     out.append((not bad, f"every used tile has a terrain type ({len({t & 0xff for t in g['tiles']})} tiles used)"))
     return out
@@ -189,6 +286,16 @@ def report(g):
         print(f"  {k:<10} {v:>6}  {v * 100 / total:>5.1f}%")
     print(f"  roads/overlay {sum(1 for b in g['roads'] if b):>5} tiles")
 
+    if 'armies_placed' in g:
+        own = collections.Counter(
+            'neutral' if a['owner'] is None else g['sides'][a['owner']]['name']
+            for a in g['armies_placed'])
+        print("\ngarrisons: " + ", ".join(f"{k}={v}" for k, v in own.most_common(4))
+              + (" ..." if len(own) > 4 else ""))
+        for a in g['armies_placed'][:4]:
+            print(f"  ({a['x']:>3},{a['y']:>3}) {a['name']:<12} str={a['strength']} "
+                  f"upkeep={a['upkeep']}")
+
     print("\nvalidation:")
     ok = True
     for good, msg in validate(g):
@@ -203,9 +310,9 @@ if __name__ == '__main__':
         import glob
         allok = True
         for p in sorted(glob.glob('original/*/*.SCN')):
-            g = load_game(os.path.dirname(p))
+            g = apply_game_start(load_game(os.path.dirname(p)))
             allok &= report(g)
             print()
         sys.exit(0 if allok else 1)
-    g = load_game(args[0] if args else 'original/ERYTHEA')
+    g = apply_game_start(load_game(args[0] if args else 'original/ERYTHEA'))
     sys.exit(0 if report(g) else 1)

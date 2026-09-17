@@ -69,9 +69,19 @@ palette-colour heuristic is gone. `gamestate.py` also carries the executable's
 movement cost and combat class for each type. Roads exist only in the `.RD`
 overlay, and terrain type 9 ("tower") is exactly the signpost tiles.
 
-## What it does not do
+## Start-of-game setup
 
-It builds the map, the economy and the production plan, but places no armies
-yet. The starting garrisons, the random per-city production stats and the ruin
-contents are all rolled at game start; the rules are in `docs/rules.md`
-(Production, Starting garrisons, Ruins).
+`apply_game_start(g, seed=0, neutral_cities=1)` applies what the game applies
+when a scenario starts, following `docs/rules.md`:
+
+- Navy is dropped from every city's production list.
+- Each slot's stats (strength, time, cost, move) are copied from
+  `ARMYTYPE.DAT` and randomly nudged, then the slots are sorted by purchase
+  price.
+- City defence is derived from the remaining slot count.
+- Each city gets **one garrison army**: capitals at purpose 3, neutral cities
+  at a purpose rolled from the *Neutral Cities* option, or a placeholder
+  Scouts when the option is off.
+
+The seed makes a position reproducible. What it still doesn't do: ruin
+contents, hero offers, and the turn loop itself.
