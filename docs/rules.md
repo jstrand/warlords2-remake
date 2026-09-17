@@ -425,31 +425,57 @@ army at the same position in the line (`67cc:0c8e`:
 the attacker's line has a hero at the same index. A faithful remake should
 copy this; a "fixed" remake should check `combat_def_type`.
 
-## Quests — partly verified in `WARLORD2.EXE`
+## Quests — verified in `WARLORD2.EXE` (except target choice)
 
 Quest state is 12 bytes per side at `.SCN` `0x1103`: active flag, type, hero
 (army index), target.
 
-### Quest type (`quest_assign`, Ghidra `4976:0d7a`)
+### Quest types (`quest_assign`, Ghidra `4976:0d7a`)
 
 From a temple, the type comes from the table `DS:00a0` =
-`0 1 2 3 4 5 6 4 5 6` (1d10), so:
+`0 1 2 3 4 5 6 4 5 6` (1d10). The quest record's target field means
+different things per type; `+8`/`+10` are "required" and "done so far" for the
+counting quests.
 
-| type | quest (`STRING.DAT` group) | chance |
-|---|---|---|
-| 0 | slay an enemy hero (21) | 10% |
-| 1 | retrieve an item (22) | 10% |
-| 2 | slay a unit (23) | 10% |
-| 3 | slaughter *n* armies (24) | 10% |
-| 4 | occupy a city (25) | 20% |
-| 5 | conquer a city (26) | 20% |
-| 6 | pillage gold (27) | 20% |
+| type | quest (`STRING.DAT`) | target | chance |
+|---|---|---|---|
+| 0 | slay the enemy hero (21) | an army index | 10% |
+| 1 | retrieve an item (22) | an item index | 10% |
+| 2 | slay a unit of an enemy army type (23) | an army type | 10% |
+| 3 | slaughter *n* armies of a side (24) | a side | 10% |
+| 4 | force a city into submission and **occupy** it (25) | a city | 20% |
+| 5 | conquer a city and **raze** it (26) | a city | 20% |
+| 6 | sack and pillage *n* gold (27) | – | 20% |
 
 The second entry point (used without the temple dialog) picks type 5 (1 in 5)
-or 4, then falls back to 3, then 6. The group-to-type mapping is inferred
-from the order of the texts. How targets are chosen, and the exact completion
-conditions (`4976:1ded`), aren't decoded yet: Ghidra mis-disassembles this
-segment.
+or 4, then falls back to 3, then 6. How targets and *n* are picked hasn't been
+decoded (Ghidra mis-disassembles the switch).
+
+### Completion and failure (`quest_check`, `4976:1ded`)
+
+The game calls the checker with an event code. "With the hero" means the quest
+hero was in the stack that did it.
+
+| event | quest | result |
+|---|---|---|
+| battle won | 0 slay hero | **done** if the target hero died, with the hero |
+| battle won | 2 slay unit | **done** if a dead defender was of the target type, with the hero |
+| battle won | 3 slaughter | dead defenders of the target side add to the count, with the hero; **done** at *n* |
+| item picked up | 1 retrieve | **done** if the quest hero now carries the item; **the item is taken away** |
+| pillage / sack | 6 pillage gold | the gold adds to the count, with the hero; **done** at *n* |
+| pillage / sack | 4 occupy, 5 raze | invalid if it's the target city ("was not to pillage", group 36) |
+| occupy | 4 occupy | **done** with the hero; otherwise invalid (group 34) |
+| occupy | 5 raze | invalid ("quest was to raze", group 35) |
+| raze | 5 raze | **done** if the hero's stack razed the target; otherwise invalid (group 37) |
+| raze | 4 occupy | invalid ("quest was to keep", group 38) |
+| start of turn | any | cancelled if the hero is dead or changed hands (group 32) |
+| start of turn | 4 occupy, 5 raze | impossible if the city was razed (33); invalid if the side now owns it without the hero (42) |
+| start of turn | 0 slay hero | invalid if the target is no longer a hero (41) |
+| start of turn | 3 slaughter | invalid if the target side is gone (39) |
+| start of turn | 1 retrieve | invalid if the item is out of play (40) |
+
+On completion the quest is cleared, a reward is chosen and given (below), and
+the hero gains 10 experience.
 
 ### Reward (`quest_choose_reward`, `4976:1909`)
 
@@ -533,7 +559,7 @@ upper 6 bits).
 ## Still unknown
 
 - What the `2c04:00f0 + 2·side` flag is (+2 strength for newly produced armies).
-- Quest target choice and completion.
+- How quest targets and counts are picked.
   `docs/re/dice_callers.md` lists the likely functions.
 - The Heavy Inf "Move 16/20" in-game readings, which the production code can't
   produce (`docs/formats/armytype.md`).

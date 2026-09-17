@@ -418,3 +418,4 @@
 384e:1063  func  diplomacy_score_update
 384e:11bd  func  diplomacy_init
 2c04:153b  data  diplomacy_matrix     # [side*8+other]: bits0-1 state (0 peace,2 war), bits2-3 proposal
+3976:1ded  func  quest_check          # (event: -1 turn, 0 battle, 1 pillage/sack, 2 raze, 3 item, 4 occupy, ...)
