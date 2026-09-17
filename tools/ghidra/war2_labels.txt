@@ -542,3 +542,5 @@
 3d71:002e  func  random_map_smooth_highlands
 3e47:0000  func  random_map_forests
 3f5f:0044  func  random_map_walk_line  | void random_map_walk_line(int kind)
+413d:1171  func  random_map_city_economy | void random_map_city_economy(int city, int value)
+413d:161d  func  random_map_city_production | void random_map_city_production(int city, int value)

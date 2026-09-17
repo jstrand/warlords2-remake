@@ -105,7 +105,33 @@ neutral: 1d4 − 1, +4 next to shore, +2 next to road,
          −1 next to forest, −2 next to marsh, clamped to 0..9
 ```
 
-The value drives the city's economy and production (`513d:1171`,
-`513d:161d`; not decoded). With "Cities can produce allies" on, 2d3 cities also
-get a magical army type added to production (`random_add_production`,
-`513d:1b3f`). `513d:1c1d` finishes up.
+### Income and description (`513d:1171`)
+
+```
+income = value * 2 + 1d8 + 14
+```
+
+Everything else in that routine is flavour text: the city's name and its
+`.CTY` description are assembled from word tables inside `RANDOM.DAT` (ten
+16-byte entries per table), with the adjective table chosen by two rolls of
+`1d3 + value − 2` clamped to 0–9, so richer cities get grander descriptions.
+
+### Production (`513d:161d`)
+
+```
+slots = clamp(value / 2 + 1d4 − 1 + (touches forest) + (touches hills), 0, 4)
+```
+
+The candidates are a 29-entry table of 16-byte records in `RANDOM.DAT` at
+`+0x1d82` — army type id, a 1d10 chance, a region class and a terrain class —
+walked in order until the city has its slots. A type is taken when its chance
+roll passes **and** it is either generic (class 7), matches a flag the city
+has (forest, hills or shore), or matches the **region** class: the map is cut
+into 8 regions, `(x·4)/112 + ((y·2)/156)·4`, each with a preferred class in
+the table at `+0x1d72`. A shore type is refused unless the city touches
+shore. Each accepted slot copies the type's strength, time, upkeep and
+movement from `ARMYTYPE.DAT` into the city record.
+
+Unless "Cities can produce allies" is on, army types flagged as allies
+(`DS:0668 + 6·type`) are skipped here; instead 2d3 cities get one added
+afterwards (`random_add_production`, `513d:1b3f`). `513d:1c1d` finishes up.
