@@ -45,9 +45,7 @@ is the tile index. The code uses the **high byte** for state:
 | `+10` | hero slot (heroes only) |
 | `+11` | upkeep |
 | `+12` | `u16` flags: `0x02`/`0x04`/`0x08`/`0x10` blessed at temple 1–4, `0x1000` at sea |
-| `+14`, `+16` | vector destination x, y |
-| `+15` | in-transit destination city (upper 7 bits) |
-| `+16` (byte) | transit state (`0x65`, `0x66`) |
-
-Offsets `+14..+16` are used in two ways depending on whether the army is in
-transit; see `city_production_turn` in `docs/rules.md` › Start of a side's turn.
+| `+14` | byte: low nibble is the standing order used by the computer players (e.g. 3); upper nibble unidentified |
+| `+15` | byte: upper 7 bits = destination city while in transit, bit 0 unidentified |
+| `+16` | byte: transit state — `0x65` just left, `0x66` arriving next turn, `0xff` none |
+| `+18`, `+20` | `u16` move target x, y (`-1` = none); cleared when reached |
