@@ -154,8 +154,25 @@ What the code adds to the manual:
 Because the die is d20 and strength caps at 15, a group of weak armies can
 always beat one strong army.
 
-The Military Advisor runs **20 simulated combats** with the real routine and
-reports the success count.
+**Military Advisor** (`military_advisor`, Ghidra `67cc:1f19`, verified). Only
+available when the *Military Advisor* option (`.SCN` `0x12c`) is on. It runs
+**19** simulated battles through the real combat code (the manual says 20),
+counts the wins, and shows `STRING.DAT` group 126 entry **wins ÷ 2**:
+
+| wins | verdict |
+|---|---|
+| 0–1 | complete and utter suicide! |
+| 2–3 | sheerest folly! Thou shouldst not attack! |
+| 4–5 | a foolish decision! |
+| 6–7 | a brave choice! I leave it to thee! |
+| 8–9 | difficult but not impossible to win! |
+| 10–11 | very evenly matched! |
+| 12–13 | a hard-fought victory! But we shall win! |
+| 14–15 | a comfortable victory! |
+| 16–17 | an easy victory! We cannot lose! |
+| 18–19 | as simple as butchering sleeping cattle! |
+
+The greeting (group 124) and lead-in (group 125) are picked at random.
 
 ## Starting garrisons and neutral production — verified in `WARLORD2.EXE`
 

@@ -451,3 +451,5 @@
 3125:0a1e  data  purpose_w_strength
 3125:0a2c  data  purpose_w_move
 3125:0d60  data  garrison_purpose     # u16[4]: 1 6 2 3
+57cc:1f19  func  military_advisor
+57cc:2065  func  advisor_simulate_wins # 19 simulations, returns wins / 2
