@@ -124,17 +124,29 @@ generator and quests. A call is easy to spot in the bytes:
 ## Ghidra project
 
 ```sh
-/opt/homebrew/opt/ghidra/libexec/support/analyzeHeadless build/ghidra WAR2 \
-    -import build/WAR2FLAT.EXE -scriptPath tools/ghidra -preScript SetupWar2.java
+G=/opt/homebrew/opt/ghidra/libexec/support/analyzeHeadless
+$G build/ghidra WAR2 -import build/WAR2FLAT.EXE -scriptPath tools/ghidra \
+   -preScript SetupWar2.java -postScript FixJumpTables.java -postScript SetupWar2.java
 ghidraRun    # then File > Open Project > build/ghidra/WAR2.gpr
 ```
 
-About 3 minutes; it finds ~1570 functions. `SetupWar2.java` sets `DS = DGROUP`
-across the program, so `[xxxx]` operands resolve to named data, and then
-applies `tools/ghidra/war2_labels.txt`. **Record new discoveries in that file**
-and re-run the script (Script Manager, category *War2*) so they survive a
-re-import. `CheckWar2.java` is a smoke test that prints the function count and
-`dice` callers and decompiles a couple of functions.
+About 4 minutes; it finds ~1580 functions.
+
+- `SetupWar2.java` sets `DS = DGROUP` across the program, so `[xxxx]`
+  operands resolve to named data, and applies `tools/ghidra/war2_labels.txt`
+  (plus the generated `war2_auto_labels.txt`). **Record new discoveries in the
+  labels file** and re-run the script (Script Manager, category *War2*) so they
+  survive a re-import.
+- `FixJumpTables.java` is **required**. Ghidra evaluates
+  `jmp cs:[bx+table]` against a normalised segment (e.g. `4000:` instead of
+  `484e:`), reads garbage targets and corrupts every function with a switch
+  ("bad instruction data", overlapping instructions). The script reads each
+  table from the function's real segment, sized by the `cmp bx, n` bounds
+  check, and stores a switch override. It fixes 40 tables and makes about 80
+  more text lookups visible to analysis.
+- `CheckWar2.java` is a smoke test. `Decompile.java`, `DumpCallers.java`,
+  `DumpFunctions.java`, `DumpDisasm.java` and `CollectEvidence.java` are the
+  export tools used throughout `docs/re/`.
 
 **Ghidra loads the image at segment `1000`**, so add `0x1000` to every segment
 in this document: `dice` `6ECB:02BF` is `7ECB:02BF` in Ghidra, and DGROUP is

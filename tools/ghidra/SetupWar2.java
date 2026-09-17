@@ -134,13 +134,23 @@ public class SetupWar2 extends GhidraScript {
 
     // Borland large model: every far function keeps DS = DGROUP. Telling
     // Ghidra lets [xxxx] operands resolve to DGROUP data.
+    //
+    // CS is set to each block's own segment. Without it Ghidra evaluates
+    // CS-relative jump tables (`jmp cs:[bx+table]`) against a normalised
+    // segment, reads garbage targets and produces overlapping "bad
+    // instruction data" code in the functions that use switches.
     private void setDataSegment() throws Exception {
         Register ds = currentProgram.getRegister("ds");
+        Register cs = currentProgram.getRegister("cs");
         BigInteger value = BigInteger.valueOf(DGROUP + LOAD_SEG);
         for (MemoryBlock b : currentProgram.getMemory().getBlocks()) {
-            if (b.isInitialized() && b.getStart().getAddressSpace().equals(
+            if (!b.isInitialized() || !b.getStart().getAddressSpace().equals(
                     currentProgram.getAddressFactory().getDefaultAddressSpace()))
-                currentProgram.getProgramContext().setValue(ds, b.getStart(), b.getEnd(), value);
+                continue;
+            currentProgram.getProgramContext().setValue(ds, b.getStart(), b.getEnd(), value);
+            if (b.getStart() instanceof ghidra.program.model.address.SegmentedAddress sa)
+                currentProgram.getProgramContext().setValue(cs, b.getStart(), b.getEnd(),
+                        BigInteger.valueOf(sa.getSegment()));
         }
     }
 }

@@ -26,6 +26,9 @@ $G build/ghidra WAR2 -process WAR2FLAT.EXE -noanalysis \
    -scriptPath tools/ghidra -postScript SetupWar2.java
 ```
 
+For a fresh import use the command in `docs/formats/exe.md` (it includes
+`FixJumpTables.java`, without which switch-heavy functions don't analyse).
+
 ## How `auto_` names are chosen
 
 `CollectEvidence.java` records, per function:
@@ -54,16 +57,13 @@ The comment on each generated line shows the evidence.
 | | functions |
 |---|---|
 | hand-named (`war2_labels.txt`) | 350 |
-| generated (`auto_`) | 145 |
-| still `FUN_` | 1072 |
+| generated (`auto_`) | 147 |
+| still `FUN_` | 1079 |
 | thunks / fragments | 3 |
-| **total** | **1570** |
+| **total** | **1579** |
 
 The rest mostly shows no text and names no files: drawing, map and path
-logic, AI arithmetic. Those need reading (step 3), and the neighbours of
-named functions are the natural place to start. Known gaps in the evidence:
-
-- a byte scan finds 377 `get_string` calls but Ghidra only has 294 as
-  references. The rest sit in code the auto-analysis didn't disassemble.
-- 27 `push bp; mov bp,sp` prologues after a return aren't functions in
-  Ghidra yet.
+logic, AI arithmetic. Those need reading, and the neighbours of named
+functions are the natural place to start. After `FixJumpTables`, 370 of the
+377 `get_string` call sites a byte scan finds are visible to analysis (15 of
+them in code not yet assigned to a function).

@@ -10,7 +10,6 @@
 0b62:0405  func  auto_tutorial_hook                       # FILE.DAT group 25 (tutorial pages)
 0b62:06bf  func  auto_str_it_contains_heroes              # 'It contains heroes'
 0b62:0ea0  func  auto_ui_armies_sunk                      # STRING.DAT 168×2
-0c8c:0197  func  auto_str_move_mouse_to_drag              # 'Move mouse to drag the screen'
 0c8c:01fd  func  auto_tutorial_hook_2                     # FILE.DAT group 25 (tutorial pages)
 0ecc:0166  func  auto_str_palloc_no_hdr                   # 'palloc: no hdr'
 0ecc:02b3  func  auto_str_palloc_out_of_hdrs              # 'palloc: out of hdrs'
@@ -24,7 +23,8 @@
 384e:0382  func  auto_ui_diplomacy_state                  # STRING.DAT 110×7, 108×1
 3976:0000  func  auto_ui_temple                           # STRING.DAT 19×3
 3976:0167  func  auto_ui_no_quest                         # STRING.DAT 20×1
-3976:160e  func  auto_ui_quest_completed                  # STRING.DAT 28×2
+3976:0320  func  auto_ui_quest_pillage_gold               # STRING.DAT 27×6, 26×5, 21×4, 24×4, 25×4, 22×3, 23×3
+3976:160e  func  auto_ui_quest_reward_allies              # STRING.DAT 31×5, 28×2, 29×2, 30×2
 3fef:027c  func  auto_file_random_map                     # RANDOM\\RANDOM.MAP, RANDOM\\RANDOM.RD, RANDOM\\RANDOM.CTY, RANDOM\\RANDOM.SPC
 3fef:1001  func  auto_file_x_scn                          # %s\%s.scn
 3fef:10cf  func  auto_file_random_scn                     # RANDOM\\RANDOM.SCN
@@ -72,13 +72,13 @@
 5d51:0a21  func  auto_ui_triumphs                         # STRING.DAT 80×1
 5d51:0d60  func  auto_file_current_hst                    # CURRENT.HST
 5d51:1009  func  auto_file_current_hst_2                  # CURRENT.HST
-5d51:1516  func  auto_ui_history_events                   # STRING.DAT 94×1
-5ef3:0030  func  auto_ui_reports_menu                     # STRING.DAT 73×1, 74×1
+5d51:1516  func  auto_ui_history_events                   # STRING.DAT 94×3
+5ef3:0030  func  auto_ui_reports_menu                     # STRING.DAT 73×1, 74×1, 75×1, 79×1
 6087:0638  func  auto_ui_vector_help                      # STRING.DAT 155×3, 156×3
 6087:09da  func  auto_ui_build_production                 # STRING.DAT 112×4
 6204:0000  func  auto_tutorial_hook_3                     # FILE.DAT group 25 (tutorial pages)
 6204:02e1  func  auto_tutorial_hook_4                     # FILE.DAT group 25 (tutorial pages)
-6204:1a9b  func  auto_ui_city_info                        # STRING.DAT 116×4, 119×2, 120×2, 121×2
+6204:06de  func  auto_ui_city_info                        # STRING.DAT 116×4, 154×4, 117×3, 113×1, 114×1, 115×1
 6204:2013  func  auto_str_this_city                       # 'this city'
 640d:0fd7  func  auto_str_blessings_quests                # 'Blessings & Quests!'
 6563:0d5c  func  auto_ui_hero_emerges                     # STRING.DAT 97×15, 98×2, 95×1
@@ -120,10 +120,9 @@
 6dda:01a9  func  auto_sound_dramatic_8sn                  # SOUND\\dramatic.8SN
 6dda:0206  func  auto_sound_war_8sn                       # SOUND\\war.8SN
 6dda:023d  func  auto_sound_splash_8sn                    # SOUND\\splash.8SN
-6dda:026f  func  auto_sound_vmess00_txt                   # SOUND\\vmess00.TXT
+6dda:026f  func  auto_sound_vmess00_txt                   # SOUND\\vmess00.TXT, SOUND\\vgreet0.TXT, SOUND\\vmoment.8SN, SOUND\\vbegin.8SN, SOUND\\vgreet0.8SN, S
 6dda:0b93  func  auto_sound_turn_8sn                      # SOUND\\turn.8SN
 6dda:0bc5  func  auto_file_options_snd_2                  # DATA\\OPTIONS.SND
-6ecb:06de  func  auto_ui_quit_game                        # STRING.DAT 44×5
 6f77:02bf  func  auto_ui_random_world                     # STRING.DAT 0×1
 6f77:0332  func  auto_ui_random_map_terrain               # STRING.DAT 2×1, 3×1
 6f77:06c8  func  auto_file_scenario_dat                   # DATA\\SCENARIO.DAT
