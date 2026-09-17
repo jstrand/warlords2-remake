@@ -48,9 +48,18 @@ Each side has a `0x42c`-byte block, held in a memory handle at
 `DS:40ca + 4·side` and saved as block 10 of a save file
 (`docs/formats/save.md`). Fields seen so far:
 
-- `+0x56 + city`: a per-city **role** byte, 2–13; drives production purpose
+- `+0x02`, `+0x04`, `+0x06`, `+0x08`: cities owned by this side, by an enemy,
+  neutral, and enemy-or-neutral but **known** — recounted by *evaluate*
+- `+0x56 + city`: a per-city **role** byte, 1–13; drives production purpose
   and vectoring (below)
-- `+0x02`, `+0x0a`, `+0x0e`, `+0x10`, `+0x12`: used by *rebuilding*, below
+- `+0xba + city`: turns this side has held the city
+- `+0x11e + city`: per-city flags — **bit 0** "not seen yet" (cleared by
+  *evaluate* once any tile within the city's 4×4 neighbourhood is explored,
+  and only ever set with *Hidden Map* on), **bit 1** "produces a flier",
+  **bit 2** cleared for own cities at the start of the turn
+- `+0x0a`, `+0x0e`, `+0x10`, `+0x12`: used by *rebuilding*, below
+- `+0x46`: the city the side is currently working from (skipped as a
+  neighbour candidate)
 
 A shared `0x4b0`-byte block follows the eight side blocks in a save.
 
@@ -70,11 +79,16 @@ The side's attack plans live at `+0x24a` (count) and `+0x24c` (entries of
 
 | role | meaning |
 |---|---|
-| 1 | just captured (set when the AI takes a city) |
+| 1 | just captured (set when the AI takes a city, and by *evaluate* for any own city with no role yet) |
 | 6 | member of an assault group; vectors production to the group target |
 | 7 | an assault group's target |
 | 8 | stop producing here (set on own role-7 cities at the start of `assault`) |
-| 2–5, 9–13 | set by the `evaluate` phase; meaning not decoded, but each maps to a production purpose (below) |
+| 11, 13 | explorer: set on every own city on turn 1 (13) and turn 2 (11) when *Quick Start* and *Hidden Map* are both on, and on a role-8 city when enemy cities are known, fewer than 5 assault groups are running and the city can build a flier |
+| 2–5, 9, 10, 12 | set by the `evaluate` phase; each maps to a production purpose (below) |
+
+Roles 11 and 13 are temporary: at the start of the side's turn
+(`ai_turn_setup`, `5db9:0386`) they fall back to **4** before turn 5 and to
+**8** from turn 5 on.
 
 ## Decisions decoded so far
 
@@ -106,6 +120,15 @@ upkeep. Otherwise the city's **role** byte picks a purpose for
 | 8 | stop producing in this city |
 | 11 | 4 — flying types |
 | anything else | 3 |
+
+**Evaluate** (`ai_phase_evaluate`, `59bf:0000`). Housekeeping, not scoring:
+it marks which cities can build fliers (`59bf:09cf`), clears the "not seen
+yet" flag for cities whose surroundings are explored (`59bf:0b55`, only with
+*Hidden Map* on), then walks every city to recount the four city totals
+above, bump `+0xba` for its own cities and clear the role and counter of
+cities it no longer owns. Cities it owns with no role yet get role 1, and
+role-1 cities are resolved: **role 3** if the city has a neutral city among
+its six neighbours (`57ea:01f6`), otherwise **role 5**.
 
 **Assault** (`ai_phase_assault`, `563e:0000`). Re-evaluates first
 (`59bf:01b3`), turns its own role-7 cities into role 8, then runs each active

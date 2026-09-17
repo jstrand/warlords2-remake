@@ -529,3 +529,7 @@
 4e97:0080  func  ai_sage_visit        | void ai_sage_visit(int site)
 4f19:0e04  func  ai_pick_enemy        | int ai_pick_enemy(void)
 2c04:0116  data  opt_all_computer     # demo mode: every side computer, level 2
+49bf:09cf  func  ai_mark_flier_cities
+49bf:0b55  func  ai_clear_seen_flags
+49bf:0b95  func  ai_city_seen_check
+47ea:01f6  func  ai_neutral_neighbours | int ai_neutral_neighbours(int city, char *out, char *dist)
