@@ -783,6 +783,15 @@ out.
 
 ## Still unknown
 
-  `docs/re/dice_callers.md` lists the likely functions.
-- The Heavy Inf "Move 16/20" in-game readings, which the production code can't
-  produce (`docs/formats/armytype.md`).
+- **Heavy Infantry "Move 16/20"** read off the production screen in DOSBox.
+  The code can't produce it (base 8, at most +4 of variance), so one of the
+  two readings is wrong — recheck in the game (`docs/formats/armytype.md`).
+- **The sage's other offers.** The gem (3d500+500 gold) is decoded; the map of
+  hidden locations isn't traced.
+- **What sets a neutral city's "keep producing" flag** (city `+0x30`), which
+  *Neutral Cities* 2+ uses.
+- **`site_item_eligible`** (`56d4:08f4`): which sites may hold a quest item.
+  Its argument is the site record by value; the exact test isn't decoded.
+- **Computer players:** how they use the diplomatic score, and most movement
+  and evaluation phases (`docs/re/ai.md`).
+- **Random map generator:** the terrain phases (`docs/re/random_map.md`).
