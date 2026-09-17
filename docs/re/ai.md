@@ -1,10 +1,8 @@
 # Computer players — structure
 
-What's known about the AI in `WARLORD2.EXE`. The individual phases aren't
-decoded. Several of them (production in particular) sit in code Ghidra
-mis-disassembles, so reading them means working from raw disassembly as was
-done for quests. A remake can reasonably write its own AI; this page is for
-matching the original's behaviour where that matters.
+What's known about the AI in `WARLORD2.EXE`. Most individual phases aren't
+decoded; the economic ones are. A remake can reasonably write its own AI; this
+page is for matching the original's behaviour where that matters.
 
 Addresses are Ghidra addresses.
 
@@ -40,8 +38,8 @@ The phases always run in this order:
 | 15 | `specials` | `5ad0:10e3` | |
 | 16 | `rebuilding` | `5db9:0af2` | buys new production types, below |
 | 17 | `last rescue` | `5ad0:0b4d` | |
-| 18 | `production` | `5db9:06d4` | |
-| 19 | `vectoring` | `5db9:085f` | |
+| 18 | `production` | `5db9:06d4` | picks a production purpose per city role, below |
+| 19 | `vectoring` | `5db9:085f` | vectors member cities to group targets, below |
 | – | | `diplomacy_score_update` | see `docs/rules.md` › Diplomacy |
 
 ## AI data
@@ -50,7 +48,8 @@ Each side has a `0x42c`-byte block, held in a memory handle at
 `DS:40ca + 4·side` and saved as block 10 of a save file
 (`docs/formats/save.md`). Fields seen so far:
 
-- `+0x56 + city`: a per-city **role** byte (values 2, 3, 7 seen)
+- `+0x56 + city`: a per-city **role** byte, 2–13; drives production purpose
+  and vectoring (below)
 - `+0x02`, `+0x0a`, `+0x0e`, `+0x10`, `+0x12`: used by *rebuilding*, below
 
 A shared `0x4b0`-byte block follows the eight side blocks in a save.
@@ -70,9 +69,27 @@ least 500 gold**. It wants type `data[+0x10]` (or `data[+0x12]` once it has
 more than 2000 gold), finds a city for it (`5db9:0c83`) and buys it there
 (`5db9:0bd1`), provided it still has 500 gold.
 
-**Production choice.** Probably uses `best_production_for` with purposes
-1–6 (`docs/rules.md` › Starting garrisons); not confirmed, because
-`5db9:06d4` doesn't disassemble cleanly in Ghidra.
+**Production** (`ai_production`, `5db9:06d4`). Per owned city, in reverse
+order: clear its vectoring, skip it if it's already building, and **stop the
+whole phase** if the side has less than 40 gold *and* its income is below its
+upkeep. Otherwise the city's **role** byte picks a purpose for
+`best_production_for` (`docs/rules.md` › Starting garrisons):
+
+| role | purpose |
+|---|---|
+| 2, 13 | 4 — flying types (after a per-city flag check at AI data `+0x11e`) |
+| 3 | 2 if *Neutral Cities* is on, else 1 |
+| 4 | 2 — balanced |
+| 5, 6, 7, 9, 10, 12 | 3 — strongest |
+| 8 | stop producing in this city |
+| 11 | 4 — flying types |
+| anything else | 3 |
+
+**Vectoring** (`ai_vectoring`, `5db9:085f`). The AI keeps a list of groups at
+AI data `+0x24a` (count) and `+0x24c` (entries of `0x5c` bytes): a target city
+at `+0x250` and up to four member cities at `+0x252`. For an active group whose
+target the side still owns, the target is marked **role 7** and every member
+city with **role 6** has its production vectored to it (`623c:0f10`).
 
 **Debug output.** `5db9:0dc9` receives every phase string. It's a 5-byte stub
 in the shipped game, so the debug log is compiled out. The `auto_str_*` AI

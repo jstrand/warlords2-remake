@@ -504,3 +504,5 @@
 413d:1104  func  random_city_value    | int random_city_value(int city)
 384e:0039  func  ui_diplomatic_ratings
 384e:0aed  func  diplomatic_rating    # ranks sides by score, fills titles
+523c:0f10  func  vector_city_to       | void vector_city_to(int from_city, int to_city)
+523c:11d5  func  ai_city_flag_check
