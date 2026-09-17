@@ -28,8 +28,9 @@ production and garrisons.
 
 ## Still open
 
-- The AI's movement phases (explore, rescue, specials) and the details of
-  its assault execution.
+- The AI's remaining arithmetic: the per-side statistics at AI data
+  `+0x3bc`…`+0x40c` that drive its diplomacy and target scores, and how
+  `623c:13b2` chooses what a stack walks to.
 - Graphics, sound and UI plumbing — deliberately skipped; the data formats
   are decoded in `docs/formats/`.
 - A handful of small unknowns, listed at the end of `docs/rules.md`.
