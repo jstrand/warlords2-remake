@@ -65,19 +65,19 @@ Deliverable: every asset in `original/` round-trips to PNG/WAV/JSON, plus a `doc
 ### Phase 2 — Targeted disassembly
 Only for rules you can't observe or infer. Keep a running `docs/rules.md`.
 
-**Status: overlays solved.** `tools/exe.py flatten` rebuilds `WARLORD2.EXE` as a
-flat MZ: all 69 overlays are inlined and relocated, calls through the thunks go
-straight to the real functions, and the x87 emulation interrupts are decoded
-back to FPU opcodes. It loads directly in rizin/Ghidra. The game's single RNG
-entry point is `dice(n, sides, bonus)` at `6ECB:02BF`, with 254 call sites that
-together index every random rule. See `docs/formats/exe.md`. The Ghidra/INT 3F
-notes below are superseded.
+**Status: the rules are decoded.** `tools/exe.py flatten` rebuilds
+`WARLORD2.EXE` as a flat MZ (all 69 overlays inlined, thunks redirected, x87
+emulation decoded), and `tools/ghidra/` imports it with labels and a fix for
+the CS-relative jump tables Ghidra gets wrong. Roughly 500 functions are named.
 
-Handling the overlays:
-- Load `WARLORD2.EXE` into Ghidra as 16-bit real-mode x86. The root segment analyses fine.
-- Overlaid functions are called via `INT 3F` stubs followed by a segment/offset pair — recognise these and you can map the call graph even before resolving the targets.
-- **Easier alternative:** go dynamic. Run in DOSBox-X, use its built-in debugger (`debug` build) to break on interesting code and dump live memory once the relevant overlay is paged in. For combat maths, breakpointing on the RNG call and single-stepping the battle loop is dramatically faster than reading cold disassembly.
-- Highest-value targets, in order: (a) combat resolution, (b) city income/production, (c) movement cost table, (d) AI turn logic, (e) random map generator, (f) hero/quest/item rules.
+Decoded and written up in `docs/rules.md`: combat, movement, production, the
+turn loop, city capture, garrisons, heroes, ruins/temples/sages, quests,
+diplomacy, setup and difficulty, and end-of-game. `docs/formats/save.md` has
+the save layout; `docs/re/` documents the method, the AI structure and the
+random map generator. Start at `docs/re/README.md`.
+
+Still open: most individual AI phases, the random map terrain phases, and
+graphics/sound/UI plumbing (deliberately skipped).
 
 ### Phase 2.5 — Headless loader — **DONE**
 
