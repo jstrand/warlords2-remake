@@ -138,10 +138,14 @@ Active).
 |---|---|---|
 | 1 | +n battle (hero strength) | yes |
 | 2 | +n command (stack bonus) | yes |
-| 5 | allows flight | no |
-| 6 | doubles movement | no |
-| 7 | +n gold per city | no |
+| 5 | allows flight | via `.ITM` |
+| 6 | doubles movement | via `.ITM` |
+| 7 | +n gold per city | via `.ITM` |
 | 8 | standard: +1 command | yes |
+
+Types 5, 6 and 7 don't appear in the `.SCN` files but **are** handed out in
+play: the item pool comes from the scenario's `.ITM` file
+(`docs/formats/itm.md`), which has all of them.
 
 ## Production
 
@@ -568,20 +572,30 @@ copy this; a "fixed" remake should check `combat_def_type`.
 Scenario files only mark each site as **temple** (content 1) or **ruin**
 (content 2). `setup_random_sites` (Ghidra `66d4:0000`) fills in the rest.
 
-**Magic items** (item records 8 and up; 0–7 are the sides' standards).
-**Reserved items never go into ruins or quests** (`item_reserved`,
-`66d4:08f4`): flight (type 5), double movement (6), standards (8), and command
-items worth 2 or more. The
-number handed out is `sites/3 + 1d5 − 3`, at most 14. Most go into random
-unassigned ruins. A band of `sites/5 − min(2d3+1, sites/5)` of them is held
-back (status 0), probably for quest rewards; not yet traced.
+**Rich ruins.** First, `mark_rich_sites` (`66d4:091e`) picks
+`sites × 3 / 10` non-temple sites at random and marks them **rich** (site
+`+0x1b`); every site's "revealed to" mask (`+0x1d`) starts full, and with the
+*Quests* option on the rich ones are cleared so they can be offered as quest
+rewards.
+
+**Magic items.** The pool comes from the scenario's `.ITM` text file
+(`docs/formats/itm.md`), not from the `.SCN`: item records 8–21 are refilled
+with 14 random entries from it. The first `sites × 2 / 10` of those get
+**reserved** items (flight, double movement, standards, command items worth
+2+ — `item_reserved`, `66d4:08f4`), the rest ordinary ones.
+
+The number of items hidden in ruins is `sites/3 + 1d5 − 3`, at most 14.
+A reserved item can only be hidden in a **rich** ruin, an ordinary item only
+in an ordinary one. Items in the band that isn't placed (indices
+`8 + min(2d3+1, sites/5)` up to `8 + sites/5`) stay out of play, probably for
+quest rewards.
 
 **Every other ruin** rolls its content from a small table (3 = sage, 4 =
 gold, 5 = allies):
 
 | ruin | sage | gold | allies |
 |---|---|---|---|
-| "rich" flag set (site `+0x1b`) | – | 1/3 | 2/3 |
+| rich | – | 1/3 | 2/3 |
 | no capital within 15 tiles | 2/5 | 2/5 | 1/5 |
 | a capital within 15 tiles | 1/3 | 1/3 | 1/3 |
 
