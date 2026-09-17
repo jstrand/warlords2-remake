@@ -25,8 +25,9 @@ halved when the city being attacked is neutral
 ```
 
 Verified against the running game: Mirea (4 types) → 2, Axbridge (4) → 2,
-Largash (3) → 2, all displaying `Defence: 2`. Across Erythea's 80 cities this
-gives 26 at defence 1 and 54 at defence 2. It also explains the help file's
+Largash (3) → 2, all displaying `Defence: 2`. The count is taken **after** the
+game removes Navy from every city at start (see Production). Across Erythea's
+80 cities that gives 34 at defence 1 and 46 at defence 2. It also explains the help file's
 `- Pillage -` → "Reduce defence for gold": pillaging removes production types.
 
 ## Combat

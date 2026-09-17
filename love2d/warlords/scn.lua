@@ -51,7 +51,8 @@ function scn.load(dir, name)
     local produces = {}
     for k = 0, 3 do
       local t = s:byte(o + 22 + k + 1)
-      if t ~= 255 then produces[#produces + 1] = t end
+      -- the game removes Navy (type 5) from every city at start
+      if t ~= 255 and t ~= 5 then produces[#produces + 1] = t end
     end
     local c = {
       index = i,

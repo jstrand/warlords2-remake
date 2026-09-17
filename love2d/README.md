@@ -38,7 +38,7 @@ in this folder is derived from SSG's content.
 Only the ones needed for a single step, all from `docs/rules.md`:
 
 - **Ownership is derived** — a side starts owning only its capital.
-- **Defence is derived** — 1 if a city produces fewer than 3 army types, else 2.
+- **Defence is derived** — 1 if a city produces fewer than 3 army types, else 2, counted after the game removes Navy from every city.
   (Shown in the status bar; nothing fights yet.)
 - **Illegal moves** — off the map; into water or mountains, which land armies
   cannot enter; into a city, which must be attacked rather than entered.
