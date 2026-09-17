@@ -1,15 +1,34 @@
 # Game rules
 
-Sourced from the *Warlords II Deluxe* manual (Appendix C, "Combat Mechanics",
-and chapter 8, "Movement"), cross-checked against the shipped data files and the
-original game running in DOSBox. Deluxe was a later release with balance tweaks,
-so treat exact constants as "very likely" rather than certain for Warlords II
-proper — but every rule below that could be checked against the original's data
-or UI **did** check out.
+Everything here is read out of `WARLORD2.EXE` unless a section says otherwise;
+the manual (*Warlords II Deluxe*, Appendix C and chapter 8) was the starting
+point and agrees with the code except where noted. Function names and
+addresses are Ghidra addresses in the project built by `tools/exe.py` and
+`tools/ghidra/` — see `docs/re/README.md`. Offsets like `.SCN 0x110` are both
+file offsets and live memory addresses, because the scenario file *is* the
+game state (`docs/formats/scenario.md`).
 
-## Two values that are derived, not stored
+| section | |
+|---|---|
+| [Derived values: ownership and city defence](#derived-values-ownership-and-city-defence) | ownership, city defence |
+| [Game setup](#game-setup) | sides, options, difficulty |
+| [Start of a side's turn](#start-of-a-sides-turn) | income, upkeep, production, movement reset |
+| [Production](#production) | what a city builds and its stats |
+| [Starting garrisons and neutral production](#starting-garrisons-and-neutral-production) | first army per city, neutral cities |
+| [Movement](#movement) | terrain costs, stack modes, bonuses |
+| [Moving a stack](#moving-a-stack) | stacking limit, costs, what stops a move |
+| [Combat](#combat) | bonuses, terrain classes, resolution |
+| [Capturing a city](#capturing-a-city) | loot, occupy, pillage, sack, raze |
+| [Heroes](#heroes) | offers, allies, levels, experience, death |
+| [Ruins, temples and sages](#ruins-temples-and-sages) | contents, guardians, rewards |
+| [Quests](#quests) | types, targets, completion, rewards |
+| [Diplomacy (computer attitudes not decoded)](#diplomacy-computer-attitudes-not-decoded) | states, proposals, ratings |
+| [End of the game](#end-of-the-game) | victory, elimination, surrender |
+| [Still unknown](#still-unknown) |  |
 
-This is why neither could be found in the scenario file.
+## Derived values: ownership and city defence
+
+Neither is stored in the scenario file; both are computed at game start.
 
 **City ownership at scenario start.** Each side owns exactly its capital; every
 other city is neutral. See `docs/formats/scenario.md`.
@@ -27,10 +46,235 @@ halved when the city being attacked is neutral
 Verified against the running game: Mirea (4 types) → 2, Axbridge (4) → 2,
 Largash (3) → 2, all displaying `Defence: 2`. The count is taken **after** the
 game removes Navy from every city at start (see Production). Across Erythea's
-80 cities that gives 34 at defence 1 and 46 at defence 2. It also explains the help file's
+80 cities that gives 34 at defence 1 and 46 at defence 2. It also explains the
+help file's
 `- Pillage -` → "Reduce defence for gold": pillaging removes production types.
 
-## Moving a stack — verified in `WARLORD2.EXE`
+## Game setup
+
+### Sides
+
+Three `u16` arrays with one entry per side, in the `.SCN` header:
+
+| offset | meaning |
+|---|---|
+| `0x0137` | side is in play |
+| `0x00d0` | controller: **0 = human, 1 = computer** |
+| `0x00c0` | computer level **0–2**; **3 = side not playing** |
+
+When a game starts (`start_game_from_setup`, Ghidra `7bab:0cfe`), a side set to
+level 3 is removed and **its capital becomes neutral**. Human sides are given
+level 2.
+
+### Options
+
+The options dialog stores its ten settings at these `.SCN` offsets (not in
+menu order):
+
+| option (`STRING.DAT` group 4) | offset | option | offset |
+|---|---|---|---|
+| Neutral Cities | `0x11a` | Intense Combat | `0x126` |
+| Diplomacy | `0x11c` | Quick Start | `0x128` |
+| Quests | `0x11e` | View Enemies | `0x12a` |
+| Random Turns | `0x122` | Military Advisor | `0x12c` |
+| Hidden Map | `0x124` | View Production | `0x132` |
+
+`0x12e` is the separate tutorial flag, and `0x130` is cleared on start.
+
+### Difficulty rating (`difficulty_rating`, `7bab:0bab`)
+
+```
+options = min(20, 4·NeutralCities + 4·Diplomacy + 3·Quests + 4·HiddenMap
+                  − ViewEnemies + ViewProduction)
+ai      = 80 × Σ(level+1) / (3 × computer sides)      (80 if there are none, or if the result is ≥ 78)
+rating  = options + ai        shown as "Difficulty Rating %d%%"
+```
+
+Only computer sides that are playing count. Neutral Cities isn't a plain
+on/off: it has several strengths (`STRING.DAT` group 5: Average, Strong,
+Active).
+
+## Start of a side's turn
+
+`start_of_turn` (Ghidra `8cc6:0000`) runs these steps in this order:
+
+1. Reports and diplomacy messages.
+2. **A side with no cities is eliminated** (`8cc6:0952`); nothing below runs.
+3. **Hero offer** (see Heroes), then **hero promotions**.
+4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
+   `8cc6:0827`).
+   - **income** = sum of each owned city's income (city record `+42`)
+     + number of cities × the side's "gold per city" items (item type 7,
+     carried by any of its heroes)
+   - **upkeep** = sum of each army's upkeep byte (`+0xb`, set to half the
+     slot's cost when the army is built). Armies in transit don't pay; an
+     army at sea pays at least 4.
+5. **Production** (`city_production_turn`, `6f8c:0000`). Each producing city's
+   countdown (city `+0x2d`) drops by 1. At 0 the army is built, but **only if
+   the side has more than 0 gold** after step 4. The build itself costs
+   nothing up front; the slot's cost is only its upkeep. A vectored army
+   leaves in transit and arrives **two turns later**. If it can't be placed
+   (destination full at 8 armies, or no longer the side's), it's sent back
+   home, taking another two turns. If it was already heading home, it's
+   **disbanded**. Vectoring itself is free and has no range limit
+   (`vector_city_to`, `623c:0f10`); it only sticks while the city is building.
+   A destination of `-2` means the side's standard rather than a city.
+6. **Movement reset** (`reset_movement`, `8cc6:05fb`):
+   - new moves = army's maximum + **min(unused moves, 2)**
+   - an army **at sea** gets **20 + min(unused, 2)** instead
+   - a hero carrying a **double movement** item (type 6) adds each army's
+     maximum again for every army on its tile
+   - remaining moves are capped at 99
+7. Quest checks (`4976:1ded`), then the side plays.
+
+### Item types
+
+| type | effect | used by shipped scenarios |
+|---|---|---|
+| 1 | +n battle (hero strength) | yes |
+| 2 | +n command (stack bonus) | yes |
+| 5 | allows flight | no |
+| 6 | doubles movement | no |
+| 7 | +n gold per city | no |
+| 8 | standard: +1 command | yes |
+
+## Production
+
+At game start, `setup_capitals` (Ghidra `79fa:07ca`) gives each side its
+capital; every other city is neutral (owner 15). With **Quick Start** on
+(`.SCN` `0x128`), all neutral cities are then dealt out round-robin:
+each side in turn takes the neutral city nearest its last city (with half
+chance measured from its capital instead) until none are left. Then
+`setup_city_production` (`79fa:0a75`) rebuilds every city's production. **The
+per-slot values stored in the `.SCN` file are ignored.**
+
+1. **Navy (type 5) is removed** from every city's production list. The list
+   closes up, leaving an empty slot at the end.
+2. Each slot's stats are copied from `ARMYTYPE.DAT`: strength `+22`, time
+   `+24`, cost `+26`, **move `+28`**.
+3. Slots are sorted by the type's purchase price (`+30`), cheapest first.
+4. Each slot's stats then get a random nudge:
+
+| stat | chance | effect |
+|---|---|---|
+| strength | 10% | 60%: +1 (max 9), else −1 (min 1) |
+| move | 20% | 1d100 < 10: +4 · < 60: +2 · < 95: −2 · else −4 (never below 2), **then at least 6** |
+| cost | 10% | 60%: −¼ of cost, else +¼ |
+| time | 10% | 60%: −1 (min 1), else +1 |
+
+So the same army type can have different stats in different cities, which is
+why the production screen's numbers differ per city.
+
+**City defence** (`city_compute_defence`, `7087:0930`) is stored in city record
+`+20`: **1 with fewer than 3 production types, otherwise 2**. It's recomputed
+at setup and whenever a type is bought.
+
+**A new army** (`city_produce_army`, `6f8c:0dd7`) takes its move and strength
+from the city slot. Upkeep is half the slot's cost. Strength gets **+2 (max 9)**
+when the owning side's flag at `.SCN` `0x00f0 + 2·side` is set (meaning not
+yet identified).
+
+**Buying a type** (`buy_production_type`, `7087:1299` / `7087:0ee3`) copies
+the unmodified `ARMYTYPE.DAT` stats into the slot, with no random nudge, and
+subtracts the purchase price (`+30`) from the side's gold (`.SCN`
+`0x185 + 20·side`).
+
+## Starting garrisons and neutral production
+
+### One army per city (`setup_garrisons`, Ghidra `6bd8:00cc`)
+
+Every city gets **exactly one** starting army:
+
+| city | garrison level |
+|---|---|
+| a side's city (its capital) | 3 |
+| neutral, *Neutral Cities* option = 0 | none; a placeholder **Scouts** army of strength 1 is placed instead |
+| neutral, option *k* > 0 | `min(3, 1d4 + k − 2)` |
+
+The level picks a **purpose** (`DS:0d60` = `1 6 2 3` for levels 0–3). The city
+builds its best production type for that purpose immediately
+(`best_production_for`, `623c:103d`, then `produce_garrison`, `6bd8:0381`). The
+new army has 0 moves left.
+
+### Choosing the best type for a purpose
+
+Used for garrisons and, most likely, by the computer players' production
+decisions. For each of the city's production slots (with that city's
+randomised stats):
+
+```
+str   = min(9, strength + 2 if the side's bonus toggle is on) + 2 if the type has Siege
+time  = time + 1 if str < 3 and purpose ≠ 6, capped at 10
+score = (10 − time)·Wtime + str·Wstr + (move·Wmove)/2
+```
+
+| purpose | Wtime | Wstr | Wmove | note |
+|---|---|---|---|---|
+| 1 | 10 | 4 | 1 | quick and cheap |
+| 2 | 10 | 10 | 1 | balanced |
+| 3 | 5 | 10 | 1 | strongest |
+| 4 | 5 | 10 | 1 | flying types only |
+| 5 | 5 | 10 | 1 | |
+| 6 | 10 | 1 | 10 | fastest |
+
+The highest score wins. Slots are scanned from last to first with a strict
+`>`, so ties go to the later slot.
+
+### Neutral production during play (`neutral_production_turn`, `6bd8:025a`)
+
+With *Neutral Cities* set to 2 or higher, a neutral city whose flag at city
+`+0x30` is set keeps building. Its countdown ticks down and produces the
+army at 0. Whenever it isn't building and holds fewer than 4 armies, it starts
+its best purpose-2 type. What sets that flag hasn't been traced.
+
+## Movement
+
+The pathfinder lives in resident segment `0555` (Ghidra `1555`). It builds a
+112×156 grid with one byte per tile, then runs a wavefront search from the
+destination. Each grid byte holds a **cost in the low 3 bits** plus flags:
+`0x08` water, `0x10` crossing (bridge, city, some tiles), `0x20` hills,
+`0x40` forest.
+
+### Terrain costs (`DS:1274`, static)
+
+| Road | Bridge | Water | Shore | Forest | Hills | Mountains | Plain | Marsh | Tower | City |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | 1 | 2 | 4 | 6 | **impassable** | 2 | 5 | 2 | 1 |
+
+(Terrain type 11 costs 2.) **Any tile with a road on it costs 1**, whatever
+its terrain.
+
+A second table at `DS:01e0` (Water 3, Shore 3, Mountains 7, …) is only used
+when the random map generator routes with pseudo-player 14, probably to lay
+roads.
+
+### How a stack moves (`stack_movement_mode`, Ghidra `1c8c:0529`)
+
+The stack's mode comes from its armies (`ARMYTYPE` fields via the per-type
+flag table built by `build_army_move_flags`, Ghidra `7715:0000`):
+
+| mode | when | movement |
+|---|---|---|
+| **at sea** | any army is already on water | land rules, sea flag set |
+| **boat** | any army is a boat (`+60`) | water, shore, bridges and cities only; pays the table cost |
+| **flying** | every army flies (`+54`), *or* every non-hero flies and at least one army does, *or* a hero carries a flight item | **2 per tile** (water and mountains included); 1 where the tile costs 1 |
+| **land** | otherwise | table costs; mountains impassable; can only cross between land and water at a crossing tile (`0x10`), and entering water costs an extra 10 (20 if the destination is water) |
+
+A land stack gets a **move bonus** if **any** army in it has one. Forest or
+hills tiles then cost **2** instead of 4 or 6:
+
+- **`ARMYTYPE +56` = woods move bonus**: Scouts, Orcish Mob, Archers
+- **`ARMYTYPE +58` = hills move bonus**: Scouts, Orcish Mob, Dwarves, Giants.
+  It doesn't cover mountains, which stay impassable on land.
+
+The stack's movement points are the **lowest** of its armies' remaining moves
+(army record `+7`). The manual's "one army lacking MPs stops the group" follows
+from that. The 2-MP carry-over is confirmed (see Start of a side's turn) and so is the
+8-army stack limit (see Moving a stack).
+
+A path is stored as up to 200 compass directions (0 = north, clockwise).
+
+## Moving a stack
 
 `move_stack_to` (Ghidra `1a8b:0001`) drives both the player's and the
 computer's moves. It repeatedly pathfinds to the destination
@@ -59,10 +303,9 @@ for that tile.
 
 ## Combat
 
-**Everything in this section up to "Resolution" is verified in `WARLORD2.EXE`**:
 `combat_setup` (Ghidra `6a89:008b`) builds both lines, `combat_terrain_class`
 (`6a89:0000`) classifies the tile, and `combat_resolve` (`67cc:08a6`) fights.
-Where the code and the Deluxe manual disagree, the code wins, and the
+Where the code and the Deluxe manual disagree the code wins, and the
 difference is called out.
 
 ### The two lines
@@ -201,55 +444,7 @@ counts the wins, and shows `STRING.DAT` group 126 entry **wins ÷ 2**:
 
 The greeting (group 124) and lead-in (group 125) are picked at random.
 
-## Starting garrisons and neutral production — verified in `WARLORD2.EXE`
-
-### One army per city (`setup_garrisons`, Ghidra `6bd8:00cc`)
-
-Every city gets **exactly one** starting army:
-
-| city | garrison level |
-|---|---|
-| a side's city (its capital) | 3 |
-| neutral, *Neutral Cities* option = 0 | none; a placeholder **Scouts** army of strength 1 is placed instead |
-| neutral, option *k* > 0 | `min(3, 1d4 + k − 2)` |
-
-The level picks a **purpose** (`DS:0d60` = `1 6 2 3` for levels 0–3). The city
-builds its best production type for that purpose immediately
-(`best_production_for`, `623c:103d`, then `produce_garrison`, `6bd8:0381`). The
-new army has 0 moves left.
-
-### Choosing the best type for a purpose
-
-Used for garrisons and, most likely, by the computer players' production
-decisions. For each of the city's production slots (with that city's
-randomised stats):
-
-```
-str   = min(9, strength + 2 if the side's bonus toggle is on) + 2 if the type has Siege
-time  = time + 1 if str < 3 and purpose ≠ 6, capped at 10
-score = (10 − time)·Wtime + str·Wstr + (move·Wmove)/2
-```
-
-| purpose | Wtime | Wstr | Wmove | note |
-|---|---|---|---|---|
-| 1 | 10 | 4 | 1 | quick and cheap |
-| 2 | 10 | 10 | 1 | balanced |
-| 3 | 5 | 10 | 1 | strongest |
-| 4 | 5 | 10 | 1 | flying types only |
-| 5 | 5 | 10 | 1 | |
-| 6 | 10 | 1 | 10 | fastest |
-
-The highest score wins. Slots are scanned from last to first with a strict
-`>`, so ties go to the later slot.
-
-### Neutral production during play (`neutral_production_turn`, `6bd8:025a`)
-
-With *Neutral Cities* set to 2 or higher, a neutral city whose flag at city
-`+0x30` is set keeps building. Its countdown ticks down and produces the
-army at 0. Whenever it isn't building and holds fewer than 4 armies, it starts
-its best purpose-2 type. What sets that flag hasn't been traced.
-
-## Capturing a city — verified in `WARLORD2.EXE`
+## Capturing a city
 
 ### Loot (automatic, `67cc:0a6b`)
 
@@ -281,266 +476,7 @@ Pillage and sack recompute the city's defence (fewer types can drop it from
 2 to 1). The **atrocity** score is a `u16` per side at `.SCN` `0x10e3 +
 2·side`; see Diplomacy.
 
-## Game setup — verified in `WARLORD2.EXE`
-
-### Sides
-
-Three `u16` arrays with one entry per side, in the `.SCN` header:
-
-| offset | meaning |
-|---|---|
-| `0x0137` | side is in play |
-| `0x00d0` | controller: **0 = human, 1 = computer** |
-| `0x00c0` | computer level **0–2**; **3 = side not playing** |
-
-When a game starts (`start_game_from_setup`, Ghidra `7bab:0cfe`), a side set to
-level 3 is removed and **its capital becomes neutral**. Human sides are given
-level 2.
-
-### Options
-
-The options dialog stores its ten settings at these `.SCN` offsets (not in
-menu order):
-
-| option (`STRING.DAT` group 4) | offset | option | offset |
-|---|---|---|---|
-| Neutral Cities | `0x11a` | Intense Combat | `0x126` |
-| Diplomacy | `0x11c` | Quick Start | `0x128` |
-| Quests | `0x11e` | View Enemies | `0x12a` |
-| Random Turns | `0x122` | Military Advisor | `0x12c` |
-| Hidden Map | `0x124` | View Production | `0x132` |
-
-`0x12e` is the separate tutorial flag, and `0x130` is cleared on start.
-
-### Difficulty rating (`difficulty_rating`, `7bab:0bab`)
-
-```
-options = min(20, 4·NeutralCities + 4·Diplomacy + 3·Quests + 4·HiddenMap
-                  − ViewEnemies + ViewProduction)
-ai      = 80 × Σ(level+1) / (3 × computer sides)      (80 if there are none, or if the result is ≥ 78)
-rating  = options + ai        shown as "Difficulty Rating %d%%"
-```
-
-Only computer sides that are playing count. Neutral Cities isn't a plain
-on/off: it has several strengths (`STRING.DAT` group 5: Average, Strong,
-Active).
-
-## End of the game — verified in `WARLORD2.EXE`
-
-`end_game_check` (Ghidra `8065:1aed`) counts sides in play by controller, and
-counts the cities that still exist (razed ones excluded):
-
-- **No side left in play** → "Alas! No more players are left!" (group 12)
-  and the game ends.
-- **All human sides gone** (and there were some) → "No further human resistance
-  is possible! But the battle will continue!" (group 13). The computers play on.
-- **One human side, no computer sides**, and it owns **more than half** of the
-  existing cities → **victory**. The *game won* flag (`.SCN` `0x15b`) is set.
-- **No human sides, one computer side left** → that side has triumphed
-  (group 15). It's switched to human control so the game can be inspected,
-  and the *game won* flag is set.
-- **One human side with computer sides still playing**: if it owns more than
-  half of all cities *and* more than the largest computer side + cities/8,
-  the *surrender offered* flag (`.SCN` `0x15d`) is set. That leads to the
-  "Surrender!" message (group 17).
-
-Once *game won* is set, quests that need an enemy (types 3–5) aren't handed
-out.
-
-The per-side flag at `.SCN` `0x00f0` (+2 strength for newly produced armies,
-see Production) is a toggle on the side setup screen (`64d2:0508`); its label
-on screen hasn't been identified.
-
-## Diplomacy — verified in `WARLORD2.EXE` (except computer attitudes)
-
-For every ordered pair of sides there's a byte at `.SCN`
-`0x153b + 8·side + other`:
-
-- **bits 0–1:** current state, **0 = peace, 1 = intermediate, 2 = war**
-- **bits 2–3:** this side's **proposal** (the state it wants)
-
-At game start (`diplomacy_init`, Ghidra `484e:11bd`) every pair is at **war**
-if the *Diplomacy* option is off, and at **peace** if it's on.
-
-**Attacking** a side you're at peace with (state 0) is refused with
-`STRING.DAT` group 140 ("Milord! Thou art attacking without first having
-declared war"); state 1 is refused in some cases too (`attack_tile`).
-
-**Proposals are applied at the start of the proposing side's turn**
-(`diplomacy_apply`, `484e:0db3`):
-
-- **Escalating** (proposal more hostile than the current state) takes effect
-  **at once, for both sides**. The other side's proposal is raised to match,
-  and a move to war announces "War declared with %s!".
-- **De-escalating** only takes effect when the **other side's proposal is no
-  more hostile** than this one; then both move to it and "Peace negotiated
-  with %s!" is shown.
-
-**Diplomatic score** (the same `u16` per side at `.SCN` `0x10e3` that
-pillage/sack/raze raise; see Capturing a city). `484e:1063` also adds to it
-for each side whose proposal is more peaceful than both the current state and
-the other side's proposal:
-
-| proposal → from current | added |
-|---|---|
-| 0 from 1, or 1 from 2 | 1d2+1 |
-| 0 from 2 | 1d10+10 |
-
-**Diplomatic Rating** (`diplomatic_rating`, Ghidra `484e:0aed`, verified).
-Ratings are *relative*: the sides in play are sorted by diplomatic score,
-**lowest first** (ties keep side order), and each rank gets a title from
-`STRING.DAT` group 106 (0 Statesman, 1 Diplomat, 2 Pragmatist, 3 Politician,
-4 Deceiver, 5 Scoundrel, 6 Turncoat, 7 Running Dog):
-
-| sides in play | titles by rank, best first |
-|---|---|
-| 1 | Statesman |
-| 2 | Statesman, Running Dog |
-| 3 | Statesman, Politician, Running Dog |
-| 4 | Statesman, Diplomat, Scoundrel, Running Dog |
-| 5 | Statesman, Diplomat, Politician, Scoundrel, Running Dog |
-| 6 | Statesman, Diplomat, Politician, Scoundrel, Turncoat, Running Dog |
-| 7 | Statesman, Diplomat, Politician, Deceiver, Scoundrel, Turncoat, Running Dog |
-| 8 | all eight in order |
-
-So the worst-behaved side is always the Running Dog, however low its score.
-How the computer players use the score in their diplomacy hasn't been decoded.
-Bits 4 and 5 of the side's own diagonal byte flag "has pending
-proposals" and "has only de-escalation offers" (`484e:0cc7`).
-
-## Production — verified in `WARLORD2.EXE`
-
-At game start, `setup_capitals` (Ghidra `79fa:07ca`) gives each side its
-capital; every other city is neutral (owner 15). With **Quick Start** on
-(`.SCN` `0x128`), all neutral cities are then dealt out round-robin:
-each side in turn takes the neutral city nearest its last city (with half
-chance measured from its capital instead) until none are left. Then
-`setup_city_production` (`79fa:0a75`) rebuilds every city's production. **The
-per-slot values stored in the `.SCN` file are ignored.**
-
-1. **Navy (type 5) is removed** from every city's production list. The list
-   closes up, leaving an empty slot at the end.
-2. Each slot's stats are copied from `ARMYTYPE.DAT`: strength `+22`, time
-   `+24`, cost `+26`, **move `+28`**.
-3. Slots are sorted by the type's purchase price (`+30`), cheapest first.
-4. Each slot's stats then get a random nudge:
-
-| stat | chance | effect |
-|---|---|---|
-| strength | 10% | 60%: +1 (max 9), else −1 (min 1) |
-| move | 20% | 1d100 < 10: +4 · < 60: +2 · < 95: −2 · else −4 (never below 2), **then at least 6** |
-| cost | 10% | 60%: −¼ of cost, else +¼ |
-| time | 10% | 60%: −1 (min 1), else +1 |
-
-So the same army type can have different stats in different cities, which is
-why the production screen's numbers differ per city.
-
-**City defence** (`city_compute_defence`, `7087:0930`) is stored in city record
-`+20`: **1 with fewer than 3 production types, otherwise 2**. It's recomputed
-at setup and whenever a type is bought.
-
-**A new army** (`city_produce_army`, `6f8c:0dd7`) takes its move and strength
-from the city slot. Upkeep is half the slot's cost. Strength gets **+2 (max 9)**
-when the owning side's flag at `.SCN` `0x00f0 + 2·side` is set (meaning not
-yet identified).
-
-**Buying a type** (`buy_production_type`, `7087:1299` / `7087:0ee3`) copies
-the unmodified `ARMYTYPE.DAT` stats into the slot, with no random nudge, and
-subtracts the purchase price (`+30`) from the side's gold (`.SCN`
-`0x185 + 20·side`).
-
-## Movement — verified in `WARLORD2.EXE`
-
-The pathfinder lives in resident segment `0555` (Ghidra `1555`). It builds a
-112×156 grid with one byte per tile, then runs a wavefront search from the
-destination. Each grid byte holds a **cost in the low 3 bits** plus flags:
-`0x08` water, `0x10` crossing (bridge, city, some tiles), `0x20` hills,
-`0x40` forest.
-
-### Terrain costs (`DS:1274`, static)
-
-| Road | Bridge | Water | Shore | Forest | Hills | Mountains | Plain | Marsh | Tower | City |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 1 | 1 | 2 | 4 | 6 | **impassable** | 2 | 5 | 2 | 1 |
-
-(Terrain type 11 costs 2.) **Any tile with a road on it costs 1**, whatever
-its terrain.
-
-A second table at `DS:01e0` (Water 3, Shore 3, Mountains 7, …) is only used
-when the random map generator routes with pseudo-player 14, probably to lay
-roads.
-
-### How a stack moves (`stack_movement_mode`, Ghidra `1c8c:0529`)
-
-The stack's mode comes from its armies (`ARMYTYPE` fields via the per-type
-flag table built by `build_army_move_flags`, Ghidra `7715:0000`):
-
-| mode | when | movement |
-|---|---|---|
-| **at sea** | any army is already on water | land rules, sea flag set |
-| **boat** | any army is a boat (`+60`) | water, shore, bridges and cities only; pays the table cost |
-| **flying** | every army flies (`+54`), *or* every non-hero flies and at least one army does, *or* a hero carries a flight item | **2 per tile** (water and mountains included); 1 where the tile costs 1 |
-| **land** | otherwise | table costs; mountains impassable; can only cross between land and water at a crossing tile (`0x10`), and entering water costs an extra 10 (20 if the destination is water) |
-
-A land stack gets a **move bonus** if **any** army in it has one. Forest or
-hills tiles then cost **2** instead of 4 or 6:
-
-- **`ARMYTYPE +56` = woods move bonus**: Scouts, Orcish Mob, Archers
-- **`ARMYTYPE +58` = hills move bonus**: Scouts, Orcish Mob, Dwarves, Giants.
-  It doesn't cover mountains, which stay impassable on land.
-
-The stack's movement points are the **lowest** of its armies' remaining moves
-(army record `+7`). The manual's "one army lacking MPs stops the group" follows
-from that. The 2-MP carry-over is confirmed (see Start of a side's turn) and so is the
-8-army stack limit (see Moving a stack).
-
-A path is stored as up to 200 compass directions (0 = north, clockwise).
-
-## Start of a side's turn — verified in `WARLORD2.EXE`
-
-`start_of_turn` (Ghidra `8cc6:0000`) runs these steps in this order:
-
-1. Reports and diplomacy messages.
-2. **A side with no cities is eliminated** (`8cc6:0952`); nothing below runs.
-3. **Hero offer** (see Heroes), then **hero promotions**.
-4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
-   `8cc6:0827`).
-   - **income** = sum of each owned city's income (city record `+42`)
-     + number of cities × the side's "gold per city" items (item type 7,
-     carried by any of its heroes)
-   - **upkeep** = sum of each army's upkeep byte (`+0xb`, set to half the
-     slot's cost when the army is built). Armies in transit don't pay; an
-     army at sea pays at least 4.
-5. **Production** (`city_production_turn`, `6f8c:0000`). Each producing city's
-   countdown (city `+0x2d`) drops by 1. At 0 the army is built, but **only if
-   the side has more than 0 gold** after step 4. The build itself costs
-   nothing up front; the slot's cost is only its upkeep. A vectored army
-   leaves in transit and arrives **two turns later**. If it can't be placed
-   (destination full at 8 armies, or no longer the side's), it's sent back
-   home, taking another two turns. If it was already heading home, it's
-   **disbanded**. Vectoring itself is free and has no range limit
-   (`vector_city_to`, `623c:0f10`); it only sticks while the city is building.
-   A destination of `-2` means the side's standard rather than a city.
-6. **Movement reset** (`reset_movement`, `8cc6:05fb`):
-   - new moves = army's maximum + **min(unused moves, 2)**
-   - an army **at sea** gets **20 + min(unused, 2)** instead
-   - a hero carrying a **double movement** item (type 6) adds each army's
-     maximum again for every army on its tile
-   - remaining moves are capped at 99
-7. Quest checks (`4976:1ded`), then the side plays.
-
-### Item types
-
-| type | effect | used by shipped scenarios |
-|---|---|---|
-| 1 | +n battle (hero strength) | yes |
-| 2 | +n command (stack bonus) | yes |
-| 5 | allows flight | no |
-| 6 | doubles movement | no |
-| 7 | +n gold per city | no |
-| 8 | standard: +1 command | yes |
-
-## Heroes — verified in `WARLORD2.EXE`
+## Heroes
 
 ### When a hero offers to join (`hero_offer_check`, Ghidra `7563:0000`)
 
@@ -616,7 +552,71 @@ army at the same position in the line (`67cc:0c8e`:
 the attacker's line has a hero at the same index. A faithful remake should
 copy this; a "fixed" remake should check `combat_def_type`.
 
-## Quests — verified in `WARLORD2.EXE`
+## Ruins, temples and sages
+
+### What each site holds (rolled at game start)
+
+Scenario files only mark each site as **temple** (content 1) or **ruin**
+(content 2). `setup_random_sites` (Ghidra `66d4:0000`) fills in the rest.
+
+**Magic items** (item records 8 and up; 0–7 are the sides' standards). The
+number handed out is `sites/3 + 1d5 − 3`, at most 14. Most go into random
+unassigned ruins. A band of `sites/5 − min(2d3+1, sites/5)` of them is held
+back (status 0), probably for quest rewards; not yet traced.
+
+**Every other ruin** rolls its content from a small table (3 = sage, 4 =
+gold, 5 = allies):
+
+| ruin | sage | gold | allies |
+|---|---|---|---|
+| "rich" flag set (site `+0x1b`) | – | 1/3 | 2/3 |
+| no capital within 15 tiles | 2/5 | 2/5 | 1/5 |
+| a capital within 15 tiles | 1/3 | 1/3 | 1/3 |
+
+**Guardians:** a monster from the scenario's monster table (1d9; temples
+have none). Ally ruins store the ally *type* instead:
+
+| ruin | ally type (equal odds) |
+|---|---|
+| rich | Dragons, Wizards, Devils, Archons |
+| far from capitals | Ghosts, Giant Worms, Demons |
+| near a capital | Elementals, Giant Worms |
+
+### Searching (`site_search`, Ghidra `6536:0000`)
+
+A searched site is marked explored (tile flag `0x40`) and can't be searched
+again. Only a stack **with a hero** can search a ruin. Any stack can visit a
+temple.
+
+- **Temple:** each army in the stack gets **+1 strength (max 9)**, once per
+  temple per army. Only the first four temples in the site list can bless,
+  one flag bit each. A blessed hero also gains 1 experience. A human player
+  whose stack includes a hero gets the temple dialog instead (blessing or
+  quest).
+- **Sage:** no fight. The hero gains 3 experience and gets the sage dialog.
+  Its gem is worth **3d500+500 gold**; the other options (a map of hidden
+  locations) haven't been traced.
+- **Ruin:** the hero gains 3 experience. If there's a guardian, it fights
+  once:
+
+  ```
+  hero survives if 1d100 <= 90 + 5 * (hero strength + battle items − monster strength)
+                               + 3 * (armies on the hero's tile, hero included)
+  ```
+
+  Monster strengths are a `u16` table at `.SCN` `0x1007` (Erythea: Troll 5,
+  Giant 7, Wolf 4, Goblin 3, Dragon/Demon/Devil/Wizard 8, Ghost 7). A slain
+  hero is removed and drops its items (see Heroes › Death). With no
+  guardian, or after a win, the ruin gives up:
+  - **item:** the hero finds it
+  - **gold:** **3d500+500** (**3d1000+1000** if rich)
+  - **allies:** **1d2** armies of the stored type (**3–4** if rich) join on
+    the spot, placed within ±1 tile if the site is full
+
+Hero experience is capped at 60 (hero record byte `.SCN` `0x5e3 + hero`,
+upper 6 bits).
+
+## Quests
 
 Quest state is 12 bytes per side at `.SCN` `0x1103`: active flag, type, hero
 (army index), target.
@@ -698,69 +698,88 @@ Checked in order:
 
 Completing a quest also gives the hero **+10 experience**.
 
-## Ruins, temples and sages — verified in `WARLORD2.EXE`
+## Diplomacy (computer attitudes not decoded)
 
-### What each site holds (rolled at game start)
+For every ordered pair of sides there's a byte at `.SCN`
+`0x153b + 8·side + other`:
 
-Scenario files only mark each site as **temple** (content 1) or **ruin**
-(content 2). `setup_random_sites` (Ghidra `66d4:0000`) fills in the rest.
+- **bits 0–1:** current state, **0 = peace, 1 = intermediate, 2 = war**
+- **bits 2–3:** this side's **proposal** (the state it wants)
 
-**Magic items** (item records 8 and up; 0–7 are the sides' standards). The
-number handed out is `sites/3 + 1d5 − 3`, at most 14. Most go into random
-unassigned ruins. A band of `sites/5 − min(2d3+1, sites/5)` of them is held
-back (status 0), probably for quest rewards; not yet traced.
+At game start (`diplomacy_init`, Ghidra `484e:11bd`) every pair is at **war**
+if the *Diplomacy* option is off, and at **peace** if it's on.
 
-**Every other ruin** rolls its content from a small table (3 = sage, 4 =
-gold, 5 = allies):
+**Attacking** a side you're at peace with (state 0) is refused with
+`STRING.DAT` group 140 ("Milord! Thou art attacking without first having
+declared war"); state 1 is refused in some cases too (`attack_tile`).
 
-| ruin | sage | gold | allies |
-|---|---|---|---|
-| "rich" flag set (site `+0x1b`) | – | 1/3 | 2/3 |
-| no capital within 15 tiles | 2/5 | 2/5 | 1/5 |
-| a capital within 15 tiles | 1/3 | 1/3 | 1/3 |
+**Proposals are applied at the start of the proposing side's turn**
+(`diplomacy_apply`, `484e:0db3`):
 
-**Guardians:** a monster from the scenario's monster table (1d9; temples
-have none). Ally ruins store the ally *type* instead:
+- **Escalating** (proposal more hostile than the current state) takes effect
+  **at once, for both sides**. The other side's proposal is raised to match,
+  and a move to war announces "War declared with %s!".
+- **De-escalating** only takes effect when the **other side's proposal is no
+  more hostile** than this one; then both move to it and "Peace negotiated
+  with %s!" is shown.
 
-| ruin | ally type (equal odds) |
+**Diplomatic score** (the same `u16` per side at `.SCN` `0x10e3` that
+pillage/sack/raze raise; see Capturing a city). `484e:1063` also adds to it
+for each side whose proposal is more peaceful than both the current state and
+the other side's proposal:
+
+| proposal → from current | added |
 |---|---|
-| rich | Dragons, Wizards, Devils, Archons |
-| far from capitals | Ghosts, Giant Worms, Demons |
-| near a capital | Elementals, Giant Worms |
+| 0 from 1, or 1 from 2 | 1d2+1 |
+| 0 from 2 | 1d10+10 |
 
-### Searching (`site_search`, Ghidra `6536:0000`)
+**Diplomatic Rating** (`diplomatic_rating`, Ghidra `484e:0aed`, verified).
+Ratings are *relative*: the sides in play are sorted by diplomatic score,
+**lowest first** (ties keep side order), and each rank gets a title from
+`STRING.DAT` group 106 (0 Statesman, 1 Diplomat, 2 Pragmatist, 3 Politician,
+4 Deceiver, 5 Scoundrel, 6 Turncoat, 7 Running Dog):
 
-A searched site is marked explored (tile flag `0x40`) and can't be searched
-again. Only a stack **with a hero** can search a ruin. Any stack can visit a
-temple.
+| sides in play | titles by rank, best first |
+|---|---|
+| 1 | Statesman |
+| 2 | Statesman, Running Dog |
+| 3 | Statesman, Politician, Running Dog |
+| 4 | Statesman, Diplomat, Scoundrel, Running Dog |
+| 5 | Statesman, Diplomat, Politician, Scoundrel, Running Dog |
+| 6 | Statesman, Diplomat, Politician, Scoundrel, Turncoat, Running Dog |
+| 7 | Statesman, Diplomat, Politician, Deceiver, Scoundrel, Turncoat, Running Dog |
+| 8 | all eight in order |
 
-- **Temple:** each army in the stack gets **+1 strength (max 9)**, once per
-  temple per army. Only the first four temples in the site list can bless,
-  one flag bit each. A blessed hero also gains 1 experience. A human player
-  whose stack includes a hero gets the temple dialog instead (blessing or
-  quest).
-- **Sage:** no fight. The hero gains 3 experience and gets the sage dialog.
-  Its gem is worth **3d500+500 gold**; the other options (a map of hidden
-  locations) haven't been traced.
-- **Ruin:** the hero gains 3 experience. If there's a guardian, it fights
-  once:
+So the worst-behaved side is always the Running Dog, however low its score.
+How the computer players use the score in their diplomacy hasn't been decoded.
+Bits 4 and 5 of the side's own diagonal byte flag "has pending
+proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
-  ```
-  hero survives if 1d100 <= 90 + 5 * (hero strength + battle items − monster strength)
-                               + 3 * (armies on the hero's tile, hero included)
-  ```
+## End of the game
 
-  Monster strengths are a `u16` table at `.SCN` `0x1007` (Erythea: Troll 5,
-  Giant 7, Wolf 4, Goblin 3, Dragon/Demon/Devil/Wizard 8, Ghost 7). A slain
-  hero is removed and drops its items (see Heroes › Death). With no
-  guardian, or after a win, the ruin gives up:
-  - **item:** the hero finds it
-  - **gold:** **3d500+500** (**3d1000+1000** if rich)
-  - **allies:** **1d2** armies of the stored type (**3–4** if rich) join on
-    the spot, placed within ±1 tile if the site is full
+`end_game_check` (Ghidra `8065:1aed`) counts sides in play by controller, and
+counts the cities that still exist (razed ones excluded):
 
-Hero experience is capped at 60 (hero record byte `.SCN` `0x5e3 + hero`,
-upper 6 bits).
+- **No side left in play** → "Alas! No more players are left!" (group 12)
+  and the game ends.
+- **All human sides gone** (and there were some) → "No further human resistance
+  is possible! But the battle will continue!" (group 13). The computers play on.
+- **One human side, no computer sides**, and it owns **more than half** of the
+  existing cities → **victory**. The *game won* flag (`.SCN` `0x15b`) is set.
+- **No human sides, one computer side left** → that side has triumphed
+  (group 15). It's switched to human control so the game can be inspected,
+  and the *game won* flag is set.
+- **One human side with computer sides still playing**: if it owns more than
+  half of all cities *and* more than the largest computer side + cities/8,
+  the *surrender offered* flag (`.SCN` `0x15d`) is set. That leads to the
+  "Surrender!" message (group 17).
+
+Once *game won* is set, quests that need an enemy (types 3–5) aren't handed
+out.
+
+The per-side flag at `.SCN` `0x00f0` (+2 strength for newly produced armies,
+see Production) is a toggle on the side setup screen (`64d2:0508`); its label
+on screen hasn't been identified.
 
 ## Still unknown
 
