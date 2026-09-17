@@ -397,3 +397,17 @@
 56d4:08b4  func  hero_flight_items
 3125:5dca  data  side_income
 3125:5dda  data  side_upkeep
+
+# City capture (Ghidra 63fa = flat 53fa, 649c = 549c)
+53fa:0000  func  city_capture_dialog
+53fa:029f  func  city_raze
+53fa:035e  func  city_sack
+53fa:03fe  func  city_occupy
+53fa:046b  func  city_pillage
+53fa:07d0  func  city_sack_value      | int city_sack_value(int city)
+53fa:0834  func  city_pillage_value   | int city_pillage_value(int city)
+53fa:0886  func  city_apply_pillage   | void city_apply_pillage(int city)
+53fa:0941  func  city_apply_sack      | void city_apply_sack(int city)
+549c:016b  func  city_make_ruins      | int city_make_ruins(int x, int y)
+57cc:0a6b  func  after_battle         # loot, experience, ownership change
+2c04:10e3  data  side_atrocity

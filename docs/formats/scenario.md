@@ -20,6 +20,11 @@ names:
 | `0x080f` | site count; `0x157b` city count |
 | `0x05e3` | hero experience, one byte per hero (upper 6 bits, max 60) |
 | `0x1007` | `u16[10]` monster strengths, one per monster record |
+| `0x10e3` | `u16` per side: atrocity score (raze/sack/pillage) |
+
+**City record, runtime fields** (after `+42` income, all zero in the files):
+`+0x2c` type in production, `+0x2d` turns left, `+0x2f` previous owner
+(15 after razing), `+0x31` vectoring on, `+0x33`/`+0x35` vector target x, y.
 
 **Site record (31 bytes), fields the code uses:** `+0` x, `+2` y, `+0x18`
 content (file: 1 temple / 2 ruin; at game start: 2 item, 3 sage, 4 gold,

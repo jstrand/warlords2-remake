@@ -156,6 +156,38 @@ always beat one strong army.
 The Military Advisor runs **20 simulated combats** with the real routine and
 reports the success count.
 
+## Capturing a city — verified in `WARLORD2.EXE`
+
+### Loot (automatic, `67cc:0a6b`)
+
+Winning a city from another side (not a neutral one):
+
+```
+loot = (loser's gold / loser's city count) / 2      (all its gold / 2 if it had 1 city)
+attacker gold += loot
+loser gold    -= 2 * loot                            (clamped to 0 at the loser's next income step)
+```
+
+The city's previous owner is recorded in city `+0x2f` (set to neutral if the
+side retakes its own city). The production countdown is cleared.
+
+### What to do with it (`63fa:0000` dialog)
+
+Production types are sorted by purchase price, cheapest first (see
+Production), and "value" means **half a type's purchase price**
+(`ARMYTYPE +30`).
+
+| choice | needs | effect | gold | atrocity |
+|---|---|---|---|---|
+| **Occupy** | – | nothing | – | – |
+| **Pillage** | ≥ 1 type | remove the **most expensive** type | its value | +1d5 |
+| **Sack** | ≥ 2 types | remove **all but the cheapest** type | sum of their values | +1d10+5 |
+| **Raze** | – | city becomes ruins: owner neutral, city `+0x2f` = 15, map tiles replaced, vectoring to it cancelled | – | +1d15+10 |
+
+Pillage and sack recompute the city's defence (fewer types can drop it from
+2 to 1). The **atrocity** score is a `u16` per side at `.SCN` `0x10e3 +
+2·side`; the computer players' diplomacy code reads it (not yet decoded).
+
 ## Production — verified in `WARLORD2.EXE`
 
 At game start, `setup_capitals` (Ghidra `79fa:07ca`) gives each side its
