@@ -30,7 +30,6 @@ production and garrisons.
 
 - The AI's movement phases (explore, rescue, specials) and the details of
   its assault execution.
-- The random map generator's city economy and its 50% phase.
 - Graphics, sound and UI plumbing — deliberately skipped; the data formats
   are decoded in `docs/formats/`.
 - A handful of small unknowns, listed at the end of `docs/rules.md`.

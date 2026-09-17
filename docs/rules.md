@@ -849,5 +849,3 @@ out.
   two readings is wrong — recheck in the game (`docs/formats/armytype.md`).
 - **Computer players:** the movement phases — explore, rescue, specials — and
   how an assault actually moves its armies (`docs/re/ai.md`).
-- **Random map generator:** how a city's value becomes its income and
-  production, and the 50% phase (`docs/re/random_map.md`).
