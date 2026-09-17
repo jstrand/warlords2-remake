@@ -433,3 +433,8 @@
 # Game setup (Ghidra 7bab = flat 6bab)
 6bab:0bab  func  difficulty_rating
 6bab:0cfe  func  start_game_from_setup
+7065:1aed  func  end_game_check
+54d2:0508  func  toggle_side_bonus
+2c04:00f0  data  side_bonus_toggle    # u16 per side: new armies +2 strength
+2c04:015b  data  game_won
+2c04:015d  data  surrender_offered

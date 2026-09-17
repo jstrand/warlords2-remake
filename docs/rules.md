@@ -232,6 +232,32 @@ Only computer sides that are playing count. Neutral Cities isn't a plain
 on/off: it has several strengths (`STRING.DAT` group 5: Average, Strong,
 Active).
 
+## End of the game — verified in `WARLORD2.EXE`
+
+`end_game_check` (Ghidra `8065:1aed`) counts sides in play by controller, and
+counts the cities that still exist (razed ones excluded):
+
+- **No side left in play** → "Alas! No more players are left!" (group 12)
+  and the game ends.
+- **All human sides gone** (and there were some) → "No further human resistance
+  is possible! But the battle will continue!" (group 13). The computers play on.
+- **One human side, no computer sides**, and it owns **more than half** of the
+  existing cities → **victory**. The *game won* flag (`.SCN` `0x15b`) is set.
+- **No human sides, one computer side left** → that side has triumphed
+  (group 15). It's switched to human control so the game can be inspected,
+  and the *game won* flag is set.
+- **One human side with computer sides still playing**: if it owns more than
+  half of all cities *and* more than the largest computer side + cities/8,
+  the *surrender offered* flag (`.SCN` `0x15d`) is set. That leads to the
+  "Surrender!" message (group 17).
+
+Once *game won* is set, quests that need an enemy (types 3–5) aren't handed
+out.
+
+The per-side flag at `.SCN` `0x00f0` (+2 strength for newly produced armies,
+see Production) is a toggle on the side setup screen (`64d2:0508`); its label
+on screen hasn't been identified.
+
 ## Diplomacy — partly verified in `WARLORD2.EXE`
 
 For every ordered pair of sides there's a byte at `.SCN`
@@ -507,8 +533,8 @@ If a type finds no valid target, the type is rolled again.
 | 5 | as type 4, always within 60 |
 | 6 | **n = 3d300+500** gold |
 
-Types 3, 4 and 5 are skipped when the flag at `.SCN` `0x15b` is set (meaning
-unknown).
+Types 3, 4 and 5 are skipped once the game has been won (`.SCN` `0x15b`, see
+End of the game).
 
 ### Completion and failure (`quest_check`, `4976:1ded`)
 
@@ -617,7 +643,7 @@ upper 6 bits).
 
 ## Still unknown
 
-- What the `2c04:00f0 + 2·side` flag is (+2 strength for newly produced armies).
+- The on-screen name of the per-side `0x00f0` toggle (+2 strength for new armies).
   `docs/re/dice_callers.md` lists the likely functions.
 - The Heavy Inf "Move 16/20" in-game readings, which the production code can't
   produce (`docs/formats/armytype.md`).
