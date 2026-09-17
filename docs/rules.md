@@ -518,7 +518,9 @@ A path is stored as up to 200 compass directions (0 = north, clockwise).
    leaves in transit and arrives **two turns later**. If it can't be placed
    (destination full at 8 armies, or no longer the side's), it's sent back
    home, taking another two turns. If it was already heading home, it's
-   **disbanded**.
+   **disbanded**. Vectoring itself is free and has no range limit
+   (`vector_city_to`, `623c:0f10`); it only sticks while the city is building.
+   A destination of `-2` means the side's standard rather than a city.
 6. **Movement reset** (`reset_movement`, `8cc6:05fb`):
    - new moves = army's maximum + **min(unused moves, 2)**
    - an army **at sea** gets **20 + min(unused, 2)** instead
@@ -566,8 +568,10 @@ byte `0x5e3`.
 
 **Allies:** every hero hired after turn 1 arrives with **1–3 allies** (1d100:
 <70 → 1, <95 → 2, else 3) of one random **magical** type (`ARMYTYPE +48`,
-Dragons if none qualify). The price is paid first. The code has no chance of
-*no* allies; that surprised me, so it's worth watching for in a real game.
+Dragons if none qualify). The price is paid first. `hero_brings_allies`
+(`7563:01fc`) does have a "do allies come?" flag, but it is **hard-coded to 1**
+and the test is dead code, so allies always arrive. Worth watching for in a
+real game.
 
 ### Death (`hero_drop_items`, Ghidra `67cc:16cd`)
 
