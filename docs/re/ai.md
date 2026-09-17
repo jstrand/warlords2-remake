@@ -220,6 +220,28 @@ own cities' worth of assault groups. The highest remaining score wins;
 whoever holds our capital overrides that unless an assault group already
 aims at them. A target with no unflagged cities is dropped.
 
+**Movement phases** (`5ad0:*`). These share one step routine, `5ad0:11a6`,
+which takes a target found by `623c:13b2` ("the nearest thing worth walking
+to from (x, y)") and moves one stack a step towards it; it returns 1 when the
+stack arrived.
+
+- *move Explore* (`5ad0:0458`) moves **heroes only** — an army of type 28
+  whose flag `0x100` is set (the flag is cleared as it is picked up). It
+  keeps stepping while the hero has **3 or more** movement points left and
+  is still making progress; it stops as soon as a step arrives or fails.
+- *move Search* (`5ad0:0284`) is the same walk restricted to *Hidden Map*
+  games.
+- *rescue* (`5ad0:0888`) tidies up armies that still have **all** their
+  movement. An army sitting outside a city with a vectoring order (order
+  nibble 1) whose destination is no longer a city has that order cleared —
+  for itself and every army of the side stacked with it heading the same
+  way. An army outside a city with no order at all, and flag `0x20` clear,
+  is sent off by `5ad0:0c5b`.
+- *specials* (`5ad0:10e3`) looks at own cities flagged `0x20` in the AI
+  data's per-city byte that aren't an assault target: if a stack can be sent
+  from the tile east of the city and arrives, and the city isn't building
+  anything, the city becomes an **explorer** (role 13).
+
 **Debug output.** `5db9:0dc9` receives every phase string. It's a 5-byte stub
 in the shipped game, so the debug log is compiled out. The `auto_str_*` AI
 functions (`Scan dist …`, `Quest city … GOING !!`, `Legal site …`,
