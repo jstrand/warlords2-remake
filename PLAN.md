@@ -58,7 +58,7 @@ Order, easiest first (each win makes the next easier):
    - If pattern-matching fails, fall back to Phase 2: breakpoint the decompressor in the DOSBox-X debugger and read it, which is ~200 lines of 16-bit asm at worst.
    - Note `PCK` files hold *sprite sheets*; you'll separately need the frame/tile subdivision, likely a fixed grid derivable from the declared width/height.
 8. ~~`.GFX`~~ **Done** — not an image format at all: plain-text screen-layout markup for the credits/help/tutorial screens. See `docs/formats/gfx.md`.
-9. `SAVE/` format — **defer**. Save compatibility is a nice-to-have, not a v1 goal.
+9. `SAVE/` format — layout decoded from the executable (`docs/formats/save.md`), not yet checked against a real save.
 
 Deliverable: every asset in `original/` round-trips to PNG/WAV/JSON, plus a `docs/formats/` spec per format.
 

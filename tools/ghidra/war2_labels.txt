@@ -453,3 +453,8 @@
 3125:0d60  data  garrison_purpose     # u16[4]: 1 6 2 3
 57cc:1f19  func  military_advisor
 57cc:2065  func  advisor_simulate_wins # 19 simulations, returns wins / 2
+
+# Save (Ghidra 7721 = flat 6721)
+6721:0a46  func  save_game
+523c:0da9  func  save_ai_data
+070b:004e  func  write                | int write(int fd, void *buf, unsigned len)
