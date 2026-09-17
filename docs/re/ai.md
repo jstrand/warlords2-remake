@@ -80,16 +80,16 @@ The side's attack plans live at `+0x24a` (count) and `+0x24c` (entries of
 | role | meaning |
 |---|---|
 | 1 | just captured (set when the AI takes a city, and by *evaluate* for any own city with no role yet) |
-| 6 | member of an assault group; vectors production to the group target |
-| 7 | an assault group's target |
-| 8 | stop producing here (set on own role-7 cities at the start of `assault`) |
 | 2 | taking a neutral city: armies are on their way to one (`57ea:00b5`) |
 | 3 | has a neutral city among its six neighbours |
 | 4 | garrison below 2 armies, or no neutral neighbours left |
 | 5 | garrison below what `5ca7:0a3d` wants; also set on a city that has just been given a new production type |
-| 14 | nothing left to vector to (`5db9:0c83`) |
-| 11, 13 | explorer: set on every own city on turn 1 (13) and turn 2 (11) when *Quick Start* and *Hidden Map* are both on, and on a role-8 city when enemy cities are known, fewer than 5 assault groups are running and the city can build a flier |
+| 6 | member of an assault group; vectors production to the group target |
+| 7 | an assault group's target |
+| 8 | stop producing here (set on own role-7 cities at the start of `assault`, and when the garrison is full enough) |
 | 9, 10, 12 | **never assigned** — the production switch has rows for them, but nothing writes these values |
+| 11, 13 | explorer: set on every own city on turn 1 (13) and turn 2 (11) when *Quick Start* and *Hidden Map* are both on, and on a role-8 city when enemy cities are known, fewer than 5 assault groups are running and the city can build a flier |
+| 14 | nothing left to vector to (`5db9:0c83`) |
 
 Roles are set all over the AI, not only by *evaluate*: the `neutral` phase
 assigns 2, 3 and 4 by whether the city still has neutral neighbours to take
