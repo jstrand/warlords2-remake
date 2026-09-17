@@ -847,6 +847,7 @@ out.
 - **Heavy Infantry "Move 16/20"** read off the production screen in DOSBox.
   The code can't produce it (base 8, at most +4 of variance), so one of the
   two readings is wrong — recheck in the game (`docs/formats/armytype.md`).
-- **Computer players:** how they use the diplomatic score, and most movement
-  and evaluation phases (`docs/re/ai.md`).
-- **Random map generator:** the terrain phases (`docs/re/random_map.md`).
+- **Computer players:** the movement phases — explore, rescue, specials — and
+  how an assault actually moves its armies (`docs/re/ai.md`).
+- **Random map generator:** how a city's value becomes its income and
+  production, and the 50% phase (`docs/re/random_map.md`).
