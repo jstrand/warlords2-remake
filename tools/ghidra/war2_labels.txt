@@ -522,3 +522,8 @@
 2c04:0147  data  side_observe
 56d4:04ef  func  load_item_pool       | void load_item_pool(int reserved_count)
 56d4:091e  func  mark_rich_sites
+5536:0c50  func  sage_offer_map       | void sage_offer_map(void)
+5536:0cd6  func  reveal_map_area      | void reveal_map_area(int x, int y)
+5536:0e85  func  sage_offer_knowledge | void sage_offer_knowledge(int choice)
+5536:1610  func  sage_build_offer_list
+4e97:0080  func  ai_sage_visit        | void ai_sage_visit(int site)

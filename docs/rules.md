@@ -575,8 +575,8 @@ Scenario files only mark each site as **temple** (content 1) or **ruin**
 **Rich ruins.** First, `mark_rich_sites` (`66d4:091e`) picks
 `sites × 3 / 10` non-temple sites at random and marks them **rich** (site
 `+0x1b`); every site's "revealed to" mask (`+0x1d`) starts full, and with the
-*Quests* option on the rich ones are cleared so they can be offered as quest
-rewards.
+*Quests* option on the rich ones are cleared so they can be pointed out — by
+a quest, or by a sage (below).
 
 **Magic items.** The pool comes from the scenario's `.ITM` text file
 (`docs/formats/itm.md`), not from the `.SCN`: item records 8–21 are refilled
@@ -619,9 +619,8 @@ temple.
   one flag bit each. A blessed hero also gains 1 experience. A human player
   whose stack includes a hero gets the temple dialog instead (blessing or
   quest).
-- **Sage:** no fight. The hero gains 3 experience and gets the sage dialog.
-  Its gem is worth **3d500+500 gold**; the other options (a map of hidden
-  locations) haven't been traced.
+- **Sage:** no fight. The hero gains 3 experience and gets the sage dialog
+  (below).
 - **Ruin:** the hero gains 3 experience. If there's a guardian, it fights
   once:
 
@@ -641,6 +640,41 @@ temple.
 
 Hero experience is capped at 60 (hero record byte `.SCN` `0x5e3 + hero`,
 upper 6 bits).
+
+### The sage (`sage_visit`, Ghidra `6536:0aa0`)
+
+The sage offers three things, and the visit ends after one choice:
+
+**Knowledge** (`sage_offer_knowledge`, `6536:0e85`), offered only if the
+list below is non-empty. `6536:1610` builds it from every site that is
+**rich**, not yet revealed to this side (reveal mask `+0x1d`) and **within 35
+tiles** of the sage:
+
+- one entry per rich **item** ruin, named after the item,
+- one entry "A huge pile of treasure" if any rich **gold** ruin qualifies,
+- one entry "Powerful allies" if any rich **allies** ruin qualifies.
+
+Because `mark_rich_sites` fills every site's reveal mask with `0xff` and
+only clears it for rich sites **when *Quests* is on**, this option is dead
+with *Quests* off: the list is always empty and the button is greyed out.
+
+Picking an entry names the nearest qualifying site ("*The Firesword* can be
+found at *<site>*!"), reveals it on the map and sets the side's bit in that
+site's reveal mask, so each side can be told about a site only once.
+
+**A gem** (`sage_gem`, `6536:0b1a`): **3d500+500 gold**, no conditions.
+
+**A map** (`sage_offer_map`, `6536:0c50`), offered only with *Hidden Map*
+on: the player points at the map and `6536:0cd6` uncovers a rectangle whose
+top-left corner is `(x − 1d5 − 8, y − 1d5 − 8)` and whose size is
+`(1d10+15) × (1d10+15)`, clipped to the map.
+
+**The computer** (`5e97:0080`) takes the map if *Hidden Map* is on and it can
+find a target, otherwise the gem. Its target is the neutral city with the
+most other neutral cities within 20 tiles (at least 4 of them), ties going to
+the one furthest from its own cities; it then reveals the area around that
+city, jittered by `1d11−6` on each axis. It never asks for knowledge.
+
 
 ## Quests
 
@@ -808,8 +842,6 @@ out.
 - **Heavy Infantry "Move 16/20"** read off the production screen in DOSBox.
   The code can't produce it (base 8, at most +4 of variance), so one of the
   two readings is wrong — recheck in the game (`docs/formats/armytype.md`).
-- **The sage's other offers.** The gem (3d500+500 gold) is decoded; the map of
-  hidden locations isn't traced.
 - **Computer players:** how they use the diplomatic score, and most movement
   and evaluation phases (`docs/re/ai.md`).
 - **Random map generator:** the terrain phases (`docs/re/random_map.md`).
