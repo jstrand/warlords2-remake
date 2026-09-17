@@ -253,17 +253,36 @@ own cities' worth of assault groups. The highest remaining score wins;
 whoever holds our capital overrides that unless an assault group already
 aims at them. A target with no unflagged cities is dropped.
 
-**Movement phases** (`5ad0:*`). These share two routines:
+**Movement phases** (`5ad0:*`). Two routines do the work.
 `ai_collect_stack` (`623c:13b2`) gathers up to **8** of the side's armies
 standing on one tile — filtered by the two halves of the army record's order
-byte `+14` and by a minimum movement allowance, then sorted by `623c:14d3` —
-and `5ad0:11a6` moves that stack one step, returning 1 when it arrives.
+byte `+14` and by a minimum movement allowance, then sorted by `623c:14d3`.
+`ai_send_hero_party` (`5ad0:11a6`) then picks where that stack should go:
 
-- *move Explore* (`5ad0:0458`) moves **heroes only** — an army of type 28
-  whose flag `0x100` is set (the flag is cleared as it is picked up). It
-  For each such hero it gathers the stack on the hero's tile and keeps
-  stepping it while the hero has **3 or more** movement points left and is
-  still making progress; it stops as soon as a step arrives or fails.
+1. Find the **hero** in the stack and the first army with the special flag
+   `DS:0668 + 6·type`; with a hero but no companion it gives up (returns 1).
+   The stack is cut down to exactly those two, and both armies' orders are
+   cleared.
+2. Score every **site**: it must be reachable (`623c:16ae`), stand on a site
+   tile, not be a temple, not already be explored (tile flag `0x40`), and not
+   already be some other hero's destination. With `d` the distance,
+   `score = 215 − d` for `d < 15` and `90 − d` for `d < 40`; anything further
+   is ignored. The best site wins.
+3. Otherwise score the side's own **cities** the same way — `115 − d` inside
+   15 tiles, `40 − d` inside 40 — with an assault rally city (role 7) counted
+   as 80 tiles closer than it is.
+4. A chosen site becomes order **3** toward that site with flag `0x100` set
+   (`623c:0ae7`), and `5ad0:15c3` carries the party there and searches it. A
+   chosen city more than 2 tiles away becomes order **1**, the ordinary
+   vectoring order.
+
+So the hero phases amount to: send each hero, with one companion, to the
+nearest unexplored ruin, and home to a city when there is none.
+
+- *move Explore* (`5ad0:0458`) drives this for **heroes only** — an army of
+  type 28 whose flag `0x100` is set (the flag is cleared as it is picked
+  up) — while the hero has **3 or more** movement points left and is still
+  making progress.
 - *move Search* (`5ad0:0284`) is the same walk restricted to *Hidden Map*
   games.
 - *rescue* (`5ad0:0888`) tidies up armies that still have **all** their
@@ -273,8 +292,8 @@ and `5ad0:11a6` moves that stack one step, returning 1 when it arrives.
   way. An army outside a city with no order at all, and flag `0x20` clear,
   is sent off by `5ad0:0c5b`.
 - *specials* (`5ad0:10e3`) looks at own cities flagged `0x20` in the AI
-  data's per-city byte that aren't an assault target: if the stack on the tile east of the
-  city can be sent and arrives, and the city isn't building
+  data's per-city byte that aren't an assault target: if the stack on the
+  tile east of the city can be sent and arrives, and the city isn't building
   anything, the city becomes an **explorer** (role 13).
 
 **Debug output.** `5db9:0dc9` receives every phase string. It's a 5-byte stub
