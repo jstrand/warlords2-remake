@@ -23,8 +23,8 @@ modes, bonuses), production and the start-of-turn sequence, city capture,
 starting garrisons, heroes (offers, levels, experience, death), ruins,
 temples and sages, quests (types, targets, completion, rewards), diplomacy,
 game setup and difficulty, end-of-game conditions, the save layout, the
-random map generator's terrain, and the AI's diplomacy, city roles,
-production and garrisons.
+random map generator in full, and the computer players — their turn phases,
+diplomacy, city roles, production, garrisons, hero expeditions and assaults.
 
 ## Still open
 

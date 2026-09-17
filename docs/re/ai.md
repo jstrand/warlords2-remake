@@ -1,7 +1,9 @@
 # Computer players — structure
 
-What's known about the AI in `WARLORD2.EXE`. Most individual phases aren't
-decoded; the economic ones are. A remake can reasonably write its own AI; this
+What's known about the AI in `WARLORD2.EXE`. Every turn phase is identified,
+and the rules behind its diplomacy, production, garrisons, city roles, hero
+expeditions and assaults are decoded; what is left is the ordering inside the
+assault and move routines. A remake can reasonably write its own AI; this
 page is for matching the original's behaviour where that matters.
 
 Addresses are Ghidra addresses.
