@@ -82,6 +82,41 @@ def load_terrain_table(scn_path):
         return list(f.read(255))   # 0x80f is the site count
 
 
+def load_item_pool(path):
+    """The scenario's .ITM magic item pool (docs/formats/itm.md)."""
+    with open(path, 'rb') as f:
+        lines = f.read().split(b'\r\n')
+    pool = []
+    for line in lines[1:1 + int(lines[0])]:
+        name = line[:20].decode('latin1').replace('_', ' ').strip()
+        pool.append(dict(name=name, type=int(line[21:22]), value=int(line[23:24])))
+    return pool
+
+
+def item_reserved(item):
+    """Items that can only be hidden in a rich ruin (item_reserved, 66d4:08f4)."""
+    return item['type'] in (5, 6, 8) or (item['type'] == 2 and item['value'] >= 2)
+
+
+def fill_item_pool(items, pool, reserved_count, rng):
+    """Refill item records 8..21 from the pool, as load_item_pool does: the
+    first `reserved_count` slots take reserved items, the rest ordinary ones."""
+    used = set()
+    by_index = {it['index']: it for it in items}
+    for idx in range(8, 22):
+        if idx not in by_index:
+            continue
+        want = idx < 8 + reserved_count
+        choices = [i for i in range(len(pool)) if i not in used
+                   and item_reserved(pool[i]) == want]
+        if not choices:          # the game would spin here; the pool never runs out
+            continue
+        pick = rng.choice(choices)
+        used.add(pick)
+        by_index[idx].update(pool[pick])
+    return items
+
+
 def city_slots(city, by_id, rng):
     """The city's production slots as the game sets them up: stats copied from
     ARMYTYPE.DAT, randomly nudged, then sorted by purchase price."""
@@ -133,22 +168,38 @@ def apply_site_setup(g, rng):
     for s in sites:
         s['content'] = 1 if s['type'] == 1 else 0
         s['item'] = s['guardian'] = None
+        s['rich'] = False
+
+    # mark_rich_sites (66d4:091e): 30% of the non-temple sites
+    ruins = [s for s in sites if s['type'] != 1]
+    for s in rng.sample(ruins, min(len(ruins), len(sites) * 3 // 10)):
+        s['rich'] = True
+
+    for s in sites:
         near = any(max(abs(s['x'] - cx), abs(s['y'] - cy)) < CAPITAL_RANGE for cx, cy in caps)
-        s['band'] = 'rich' if s.get('rich') else ('near' if near else 'far')
+        s['band'] = 'rich' if s['rich'] else ('near' if near else 'far')
 
     band_hi = len(sites) * 2 // 10
     band_lo = min(rng.randrange(1, 4) + rng.randrange(1, 4) + 1, band_hi)
     last = min(22, len(sites) // 3 + rng.randrange(1, 6) - 3 + 8)
+    items = {it['index']: it for it in g['items']}
     for item in g['items']:
         item['status'] = 0
     free = [s for s in sites if s['content'] == 0]
     rng.shuffle(free)
     for idx in range(8, last):
-        if 8 + band_lo <= idx < 8 + band_hi or not free:
+        if 8 + band_lo <= idx < 8 + band_hi:
             continue                       # held back, probably for quest rewards
-        site = free.pop()
+        # a reserved item needs a rich ruin, an ordinary one an ordinary ruin
+        if idx not in items:
+            continue
+        want = item_reserved(items[idx])
+        site = next((s for s in free if s['rich'] == want), None)
+        if site is None:
+            continue
+        free.remove(site)
         site['content'], site['item'] = 2, idx
-        g['items'][idx]['status'] = 2      # in a ruin
+        items[idx]['status'] = 2           # in a ruin
 
     for s in sites:
         if s['content'] == 0:
@@ -190,6 +241,8 @@ def apply_game_start(g, seed=0, neutral_cities=1):
                                owner=c['owner'], strength=slot['strength'], moves=0,
                                upkeep=slot['cost'] // 2, city=c['index']))
     g['armies_placed'] = armies
+    if g.get('item_pool'):
+        fill_item_pool(g['items'], g['item_pool'], len(g['sites']) * 2 // 10, rng)
     apply_site_setup(g, rng)
     return g
 
@@ -245,9 +298,10 @@ def load_game(scenario_dir, terrain_dir='original/TERRAIN0', data_dir='original/
         ))
 
     sites = [dict(s, description=site_text.get(s['index'], [])) for s in scn['sites']]
+    item_pool = load_item_pool(base + '.ITM')
 
     return dict(name=name, sides=sides, cities=cities, sites=sites, signs=signs,
-                items=scn['items'], monsters=scn['monsters'], armies=armies,
+                items=scn['items'], item_pool=item_pool, monsters=scn['monsters'], armies=armies,
                 tiles=tiles, roads=roads, terrain=terrain, terrain_table=terrain_table,
                 strings=strings,
                 width=MAP_W, height=MAP_H)

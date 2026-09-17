@@ -27,7 +27,9 @@ SITE record (31 bytes)
 
 ITEM record (29 bytes) -- no coordinates; items are carried or hidden in ruins
      +0  char[20] name
-    +20  u16     type / effect id (cf. STRING.DAT group 167)
+    +20  u8      type / effect id (cf. STRING.DAT group 167)
+    +21  u8      value (strength of the effect)
+    Records 8..21 are overwritten at game start from the scenario's .ITM file.
 
 MONSTER record (16 bytes)
      +0  char[12] name
@@ -113,8 +115,7 @@ def load_scn(path):
         o = ITEMS + ITEM_STRIDE * i
         name = _s(d[o:o + 20])
         if name:
-            items.append(dict(index=i, name=name,
-                              type=struct.unpack_from('<H', d, o + 20)[0]))
+            items.append(dict(index=i, name=name, type=d[o + 20], value=d[o + 21]))
 
     monsters = []
     for i in range(N_MONSTERS):
