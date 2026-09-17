@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 Warlords 2 Deluxe MANUAL.pdf
 *.pdf
+build/

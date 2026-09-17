@@ -3,6 +3,35 @@
 Status: **structure and placement solved; per-city and per-side stats not yet decoded.**
 Parser: `tools/scenario.py`.
 
+**The game loads the whole file verbatim into one segment** (flat `2c04`, Ghidra
+`3c04`) and uses it as live game state, so every offset in this document is
+also a memory address in `WARLORD2.EXE`. Confirmed by the code's table
+addresses matching the file layout: sites `0x811`, items `0xce9`, cities
+`0x157d`, fight order `0x60b`. Offsets in the unknown region that the code
+names:
+
+| offset | meaning |
+|---|---|
+| `0x0110` | current player (0 in files) |
+| `0x0112` | combat modifier cap, 5 in every shipped scenario |
+| `0x011a`…`0x012c` | the ten game options, `u16` each, in `STRING.DAT` group 4 order |
+| `0x012e` | hidden option, 1 only in `TUTORIA.SCN` (tutorial hero immunity) |
+| `0x0181` | army count |
+| `0x080f` | site count; `0x157b` city count |
+| `0x05e3` | hero experience, one byte per hero (upper 6 bits, max 60) |
+| `0x1007` | `u16[10]` monster strengths, one per monster record |
+
+**Site record (31 bytes), fields the code uses:** `+0` x, `+2` y, `+0x18`
+content (file: 1 temple / 2 ruin; at game start: 2 item, 3 sage, 4 gold,
+5 allies), `+0x19` item index, `+0x1a` guardian monster index or ally army
+type, `+0x1b` `u16` "rich" flag.
+
+**Item record (29 bytes):** `+0` name, `+20` effect type (1 battle, 2 command,
+8 standard; STRING.DAT group 167 also names flight, double movement and gold
+per city), `+21` value, `+22` status (0 out of play, 1 on the ground, 2 in a
+ruin, 3 carried), `+23` `u16` holder or site, `+25`/`+27` x, y.
+| `0x0710` | tile id → terrain type table (`0..11`; 10 = city) |
+
 Every shipped `.SCN` is **exactly 12001 bytes** — a fixed layout with fixed-size
 arrays, so unused slots are simply zero. That fixed size across all six
 scenarios is what makes the layout easy to walk.
@@ -84,8 +113,9 @@ Demon, Devil, Wizard, Ghost — the ruin guardians.
 +0   u16      x
 +2   u16      y
 +4   char[16] name
-+20  u8       unknown, range 0..8; correlates strongly with income
-+21  u8       constant 15 in every city of every scenario
++20  u8       file: unknown, 0..8. In memory the game overwrites it with the
+              city DEFENCE (1 or 2) at setup -- see docs/rules.md > Production
++21  u8       OWNER; 15 = neutral in every file, capitals assigned at game start
 +22  u8[4]    PRODUCTION SLOTS: army type ids, 255 = empty
 +26  u8[16]   four more per-slot arrays -- partially decoded, see below
 +42  u8       INCOME in gold (confirmed: Mirea 38, Axbridge 27)
@@ -111,7 +141,18 @@ produce!"*. Reading the ids as ARMYTYPE *record* indices instead gives
 Two independent readings: Mirea shows `Income: 38 gold` and holds 38; Axbridge
 shows `Income: 27 gold` and holds 27.
 
-### Per-slot arrays (`+26..+41`) — these are NOT the production stats
+### Per-slot arrays (`+26..+41`) — the production stats, rebuilt at game start
+
+**Solved in `WARLORD2.EXE`.** The four arrays are, per slot, **time `+26`,
+strength `+30`, move `+34`, cost `+38`**, and the production screen really
+does display them. The values stored in the `.SCN` file are **overwritten at
+game start**: `setup_city_production` copies each type's stats from
+`ARMYTYPE.DAT` and then applies small random variations (`docs/rules.md` ›
+Production). That's why the file contents never matched the screen. The
+analysis below is kept for the record; its conclusion ("not the production
+stats") was wrong about the fields and right about the file values.
+
+### Original analysis
 
 Sixteen bytes that look like four arrays of four. Ground truth rules out the
 obvious reading:

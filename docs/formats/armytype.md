@@ -15,7 +15,7 @@ Status: **stats solved, bonus fields partially solved.** Parser: `tools/armytype
 | `+22` | `u16` | **strength**, 1–9 |
 | `+24` | `u16` | **production time** in turns, 1–4 |
 | `+26` | `u16` | **cost** — the per-turn gold cost shown on the production screen (confirmed: Heavy Cav = 8) |
-| `+28` | `u16` | **disputed.** Was read as movement, but the game shows Heavy Cav Move 20 where this field holds 16. See note below. |
+| `+28` | `u16` | **base movement**, confirmed in `WARLORD2.EXE`: copied into every city's production slot at game start, then randomly nudged per city (±2 or ±4, minimum 6). See `docs/rules.md` › Production. |
 | `+30` | `i16` | **purchase price** — what 'Build Prod → Buy new army types to produce!' charges to add this type to a city; **negative ⇒ can never be bought** |
 | `+32`…`+60` | `15 × u16` | combat bonuses (below) |
 
@@ -40,7 +40,15 @@ cell 15 is a bat (Giant Bats), 12 a spider (Spiders), 8 and 21 white horses
 `tools/export_png.py` plus the snippet in this repo's history will cut named
 sprites into `preview/armies/`.
 
-### Time, cost and strength confirmed; **Move is NOT in this file**
+### Move — resolved by the code, one observation still unexplained
+
+`WARLORD2.EXE` copies `+28` into the city's move slot and then randomises it:
+a 20% chance of +4, +2, −2 or −4, with a minimum of 6. That explains Heavy Cav
+16 → 20 and Catapults 16 → 16. **It can't explain Heavy Inf 8 → 16/20**: the
+most the code allows is 12. Recheck that reading in DOSBox; the notes below
+predate the code evidence.
+
+#### Earlier notes (superseded)
 
 Three in-game production screens pin `+24`, `+26` and `+22` exactly:
 
@@ -119,8 +127,12 @@ The game's own wording is in `DATA/STRING.DAT` group 163 (see
  8  '+%d stack in hills'
 ```
 
-The record's fields run in **reverse order** against that list. The ends are
-nailed down by five independent anchors; the middle is not.
+The record's fields run in **reverse order** against that list.
+**`+32`…`+52` are now confirmed in `WARLORD2.EXE`**, by the combat strength code
+(`combat_setup`, Ghidra `6a89:008b`, see `docs/rules.md` › Combat). It copies
+this record by type id and reads `+32..+38` and `+40..+46` indexed by terrain
+class (city, open, woods, hills), `+50` as a stack minimum, and `+52` as the
+ability enum. It does not read `+48`, `+54`…`+60`.
 
 | Offset | Meaning | Confirmed by |
 |---|---|---|
@@ -136,13 +148,13 @@ nailed down by five independent anchors; the middle is not.
 | `+50` | **MAX SUBTRACT** (−n to every enemy army) | Manual: "MAX SUBTRACT: Elephant (−1 to all enemy armies)" — Elephants are the only −1 |
 | `+52` | **ability enum**: 1 = Siege, 2 = Negate Hero, 3 = Negate Non-Hero | Manual: "SIEGE: Catapult / NEGATE HERO: Archon / NEGATE NON HERO: Devil" — and the file holds Catapults 1, Archons 2, Devils 3 |
 | `+54` | **FLYING** | `STRING.DAT` group 105 tags exactly these five `fly` |
-| `+56` | unresolved | Scouts, Orcish Mob, Archers |
-| `+58` | unresolved | Scouts, Orcish Mob, Dwarves, Giants |
+| `+56` | **woods move bonus**: forest costs 2 for the whole stack (code: `build_army_move_flags`, pathfinder flag `0x40`) | Scouts, Orcish Mob, Archers |
+| `+58` | **hills move bonus**: hills cost 2 for the whole stack (pathfinder flag `0x20`); not mountains | Scouts, Orcish Mob, Dwarves, Giants |
 | `+60` | **Boat strength of 4** | Navy only; Manual: boats attacking boats/fliers fight at strength 4 or natural, whichever is lower |
 
 Both bonus groups run in the order **CITY, OPEN, WOODS, HILLS** — the reverse of
 `STRING.DAT` group 163's listing, which is why the reverse-order inference was
-right. Only `+56` and `+58` remain unidentified.
+right. `+56` and `+58` are movement bonuses, confirmed in code (`docs/rules.md` › Movement).
 
 Pegasi, Unicorns and the magical units carry `+1` in all four *stack* slots
 (Dragons `+2`), i.e. a flat stack bonus everywhere — which matches how those
@@ -165,8 +177,7 @@ fliers happen to carry — or the movement table may live elsewhere entirely.
 
 ## Open questions
 
-- Where per-terrain **movement costs** are stored. `STRING.DAT` group 128 names
-  ten terrain types (Road, Bridge, Water, Shore, Forest, Hills, Mountains,
-  Plain, Marsh, Tower) but no 10-entry table appears in this record.
+- ~~Where per-terrain movement costs are stored~~: in `WARLORD2.EXE`,
+  `DS:1274`. See `docs/rules.md` › Movement.
 - Whether `+18`/`+20` are reserved, or fields only non-zero in custom army sets.
 - Whether the negative costs double as ally/hire prices.

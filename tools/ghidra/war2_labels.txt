@@ -1,0 +1,373 @@
+# Known addresses in build/WAR2FLAT.EXE, in the seg:off form used by rizin and
+# docs/formats/exe.md. Ghidra loads the image at segment 1000, so
+# SetupWar2.java adds 0x1000 to each segment.
+#
+# kind: func (disassemble + create function) | data (label only)
+# A func line may end in `| <C prototype>`; the calling convention is
+# always __cdecl16far (Borland large model).
+
+# Segment 0: Borland C++ 3.1 runtime, SSG's assembly helpers, and the
+# MIDPAK/DIGPAK sound-driver wrappers. Identified by hand from disassembly;
+# see docs/re/runtime.md. Names in __double_underscore are Borland internals.
+
+# -- startup / exit
+0000:0000  func  _start
+0000:0157  func  _cleanup
+0000:016a  func  _checknull
+0000:016b  func  _terminate           # INT 21h/4Ch
+0000:017d  func  __save_vectors
+0000:01c0  func  _restorezero
+0000:01ed  func  __run_startup_procs
+0000:0231  func  __run_exit_procs
+0000:0272  func  __error_display      # write to stderr
+0000:027a  func  abort                | void abort(void)
+0000:0e4d  func  __ovr_error          # "Runtime overlay error", exit 4
+0000:1b83  func  atexit
+0000:1c70  func  __exit
+0000:1cc7  func  exit                 | void exit(int status)
+0000:1cd6  func  _exit                | void _exit(int status)
+0a4c:000b  func  main
+
+# -- compiler helpers
+0000:1b57  func  __ftol               # x87 ST0 -> long
+0000:1d02  func  __F_SCOPY            # struct copy, count in CX
+0000:1d44  func  __F_LDIV
+0000:1d53  func  __F_LMOD
+0000:1d61  func  __long_divmod
+0000:1df2  func  __F_LXLSH
+0000:1e13  func  __F_PADD             # huge pointer add / sub
+0000:1e79  func  __F_SPUSH            # push struct by value
+0000:1fc1  func  __N_LXMUL
+0000:1fd8  func  __N_PCMP             # huge pointer compare
+
+# -- errors, files, stdio
+0000:1e9a  func  __IOerror
+0000:1ed3  func  __DOSerror
+0000:1ee5  func  isatty
+0000:1f98  func  lseek                | long lseek(int handle, long offset, int whence)
+0000:3f58  func  fflush
+0000:4025  func  flushall
+0000:4067  func  fprintf
+0000:4083  func  __ftell_adjust
+0000:4105  func  fseek
+0000:4185  func  ftell
+0000:43ac  func  printf               | int printf(char *fmt, ...)
+0000:43c7  func  _fputc
+0000:43e3  func  fputc
+0000:4578  func  putchar
+0000:458c  func  __fputn
+0000:478f  func  puts                 | int puts(char *s)
+0000:47e7  func  setvbuf
+0000:50e4  func  write
+0000:5235  func  _write
+0000:5271  func  __xfflush
+
+# -- printf / scanf engines
+0000:28fd  func  __vprinter
+0000:2961  func  __vprinter_body
+0000:28e5  func  __put_hex_word
+0000:28ec  func  __put_hex_byte
+0000:28f5  func  __put_hex_digit
+0000:2917  func  __vp_strlen
+0000:2924  func  __vp_putc
+0000:292d  func  __vp_flush
+0000:4904  func  __strputn
+0000:4944  func  sprintf              | int sprintf(char *buf, char *fmt, ...)
+0000:4966  func  vsprintf
+0000:2030  func  __scanner
+0000:2044  func  __scan_next_arg
+0000:205f  func  __scanner_body
+0000:2524  func  __scan_digit
+0000:254f  func  __scantol
+0000:4987  func  __sgetc
+0000:49af  func  __sungetc
+0000:49ba  func  sscanf               | int sscanf(char *buf, char *fmt, ...)
+0000:49dd  func  vsscanf
+
+# -- floating point formatting and maths
+0000:10c3  func  __fpu_limit
+0000:115d  func  __trim_zeros
+0000:1180  func  __realcvt
+0000:131a  func  __scantod
+0000:1625  func  __scanpop
+0000:162d  func  __scanrslt
+0000:16af  func  __xcvt
+0000:18bb  func  __fpe_handler
+0000:196c  func  __pow10_near
+0000:1a35  func  __pow10
+0000:1a40  func  matherr
+0000:1a6a  func  sqrt
+0000:1aae  func  __matherr_raise
+
+# -- strings, memory, conversion
+0000:1ef6  func  __longtoa
+0000:288d  func  tolower              | int tolower(int c)
+0000:28b9  func  toupper              | int toupper(int c)
+0000:3ed2  func  atol                 | long atol(char *s)
+0000:3f47  func  atoi                 | int atoi(char *s)
+0000:42d5  func  itoa                 | char* itoa(int value, char *buf, int radix)
+0000:4300  func  ultoa
+0000:431d  func  ltoa
+0000:4345  func  memcpy               | void* memcpy(void *dst, void *src, unsigned n)
+0000:4369  func  setmem               | void setmem(void *dst, unsigned n, char c)
+0000:438d  func  memset               | void* memset(void *dst, int c, unsigned n)
+0000:4a01  func  strcat               | char* strcat(char *dst, char *src)
+0000:4a40  func  strcmp               | int strcmp(char *a, char *b)
+0000:4a70  func  strcpy               | char* strcpy(char *dst, char *src)
+0000:4a99  func  strlen               | unsigned strlen(char *s)
+0000:4ab8  func  strncpy              | char* strncpy(char *dst, char *src, unsigned n)
+0000:4265  func  getenv               | char* getenv(char *name)
+
+# -- far heap
+0000:31a2  func  __heap_release_last
+0000:3205  func  __heap_join_free
+0000:3276  func  __heap_unlink
+0000:329f  func  __heap_link
+0000:32d6  func  free                 | void free(void *p)
+0000:32ff  func  __heap_create
+0000:3363  func  __heap_extend
+0000:33bd  func  __heap_split
+0000:33e0  func  malloc               | void* malloc(unsigned size)
+0000:33ea  func  farmalloc            | void* farmalloc(unsigned long size)
+0000:3467  func  __heap_grow_copy
+0000:34e3  func  __heap_shrink
+0000:3547  func  realloc
+0000:35c8  func  __brk
+0000:363e  func  brk
+0000:367d  func  __sbrk
+0000:3e32  func  setblock
+
+# -- time
+0000:1bb6  func  biostime
+0000:1bcf  func  _bios_timeofday
+0000:1bf0  func  clock
+0000:1c39  func  getdate
+0000:1c54  func  gettime
+0000:1d1e  func  __getdate_raw
+0000:1d31  func  __gettime_raw
+0000:2711  func  setdate
+0000:2726  func  settime
+0000:27f5  func  stime
+0000:2835  func  time
+0000:4ae9  func  dostounix
+0000:4c13  func  unixtodos
+0000:4e17  func  tzset
+0000:5005  func  __isDST
+0000:1ff9  func  srand                | void srand(unsigned seed)
+0000:200a  func  rand                 | int rand(void)
+
+# -- conio / BIOS
+0000:26f1  func  segread
+0000:3812  func  int86
+0000:3843  func  int86x
+0000:2dc0  func  __screen_offset
+0000:2de5  func  __vram_copy          # CGA snow-safe
+0000:2e5f  func  bioskey              | int bioskey(int cmd)
+0000:2e84  func  __cputn
+0000:2fd2  func  __rom_strcmp
+0000:2fff  func  __ega_installed
+0000:300d  func  __video_int
+0000:30b5  func  __crtinit
+0000:3708  func  getch                | int getch(void)
+0000:3766  func  gettext
+0000:37bc  func  puttext
+0000:38dc  func  kbhit                | int kbhit(void)
+0000:38ee  func  movetext
+0000:398b  func  putch
+0000:39b2  func  __screen_rowcol
+0000:39ea  func  __advance_cursor
+0000:3a1e  func  __bios_text_write
+0000:3ae8  func  __text_write
+0000:3b24  func  __window_check
+0000:3b79  func  __blank_cells
+0000:3b9b  func  __scroll
+0000:3ea6  func  __wherexy
+
+# -- SSG assembly helpers (not Borland)
+0000:0543  func  dos_close            | int dos_close(int handle)
+0000:055b  func  dos_tell             | long dos_tell(int handle)
+0000:056d  func  dos_seek             | long dos_seek(int handle, long pos)
+0000:058c  func  dos_read_huge        | int dos_read_huge(void *buf, long count, int handle)
+0000:05f6  func  dos_write_huge       | int dos_write_huge(void *buf, long count, int handle)
+0000:0660  func  dos_load_file        | void* dos_load_file(char *name, long *size)
+0000:06f7  func  dos_load_driver      # like dos_load_file, 16 bytes headroom, aligned
+0000:07f0  func  asm_strcat
+0000:0811  func  dos_alloc            | void* dos_alloc(long bytes)
+0000:0845  func  dos_free             | int dos_free(void *block)
+0000:085d  func  bios_puts            | void bios_puts(char *s)
+0000:0894  func  set_timer_isr        # installs INT 08h handler + PIT divisor
+0000:08c2  func  dos_delete           | int dos_delete(char *name)
+0000:08de  func  asm_strlen
+0000:08f8  func  strupr               | char* strupr(char *s)
+0000:0930  func  asm_strcmp
+0000:095e  func  file_exists          | int file_exists(char *name)
+0000:0a43  func  text_fill_attr       # writes attributes into B800
+0000:0a72  func  bios_set_cursor      | void bios_set_cursor(int col, int row)
+0000:0a87  func  asm_memcpy           | void asm_memcpy(void *dst, void *src, unsigned n)
+0000:0a9f  func  huge_add
+0000:0ade  func  get_cwd              | int get_cwd(char *buf)
+0000:0b16  func  get_exe_dir          | int get_exe_dir(char *buf)
+0000:0b94  func  change_dir           | int change_dir(char *path)
+
+# -- sound drivers (INT 66h). Function numbers from the DIGPAK/MIDPAK API.
+0000:02b5  func  digpak_sound_status  # AX=0689h
+0000:02bb  func  digpak_massage_audio # AX=068Ah
+0000:02ce  func  digpak_play2         # AX=068Bh
+0000:02e1  func  digpak_0694
+0000:0391  func  sound_driver_present # checks INT 66h owner for "MIDI"/"KERN"
+0000:03f5  func  digpak_load_driver   # file must carry "DIGPAK" signature
+0000:04a5  func  digpak_unload_driver
+0000:0c4e  func  midpak_play_sequence # AX=0702h
+0000:0c5d  func  midpak_segue_sequence # AX=0703h
+0000:0c6f  func  midpak_register_xmidi # AX=0704h
+0000:0c8b  func  midpak_stop          # AX=0705h
+0000:0cfd  func  midpak_070c
+0000:0d1b  func  midpak_070d          # probably SetRelativeVolume
+0000:0d3b  func  midpak_load_driver   # file must carry "MIDPAK" signature
+0000:0deb  func  midpak_unload_driver
+0000:0e15  func  midpak_0710
+
+# Memory handles
+0d28:011f  func  mem_alloc
+0d28:069a  func  mem_lock
+0d28:07a9  func  mem_unlock
+
+# Game code (overlays)
+6ecb:02bf  func  dice                 | int dice(int n, int sides, int bonus)
+6ecb:0356  func  dice_seed            # srand(time(0))
+6ecb:03a0  func  load_string_files    # DATA\STRING.DAT, ERROR.DAT, FILE.DAT
+6bab:0323  func  load_scenario_map    # sprintf "%s\%s.map"
+5087:0efc  func  ai_choose_target     # 4 candidates, 100 - dist + 1d20
+
+# DGROUP (DS = 3125)
+3125:2678  data  dice_seeded
+3125:3d84  data  rand_seed
+3125:5c34  data  h_string_dat
+3125:5c2c  data  h_error_dat
+3125:5c30  data  h_file_dat
+
+# Combat (Ghidra 67cc = flat 57cc)
+57cc:0000  func  attack_tile          | void attack_tile(int x, int y)
+57cc:08a6  func  combat_resolve       | int combat_resolve(void)
+56d4:0000  func  setup_random_sites   # rolls ruin contents, guardians, item placement
+
+# Game state: segment 2c04 is the .SCN file image, byte for byte
+# (offsets = .SCN file offsets, see docs/formats/scenario.md)
+2c04:0110  data  current_player
+2c04:0112  data  combat_modifier_cap  # 5 in every shipped scenario
+2c04:011a  data  opt_neutral_cities   # u16 per STRING.DAT group 4 entry
+2c04:011c  data  opt_diplomacy
+2c04:0126  data  opt_intense_combat   # d24 instead of d20
+2c04:012e  data  opt_tutorial         # 1 only in TUTORIA.SCN
+2c04:060b  data  fight_order          # 29 bytes per player, 9 rows (row 8 = neutral)
+2c04:080f  data  site_count
+2c04:0811  data  sites                # 31-byte records
+2c04:0ce9  data  items                # 29-byte records; type at +20, value at +21
+2c04:157b  data  city_count
+2c04:157d  data  cities               # 65-byte records; defence at +0x14
+
+# Combat state (DGROUP)
+3125:41b4  data  combat_log_len
+3125:41b5  data  combat_log           # 0 = defender died, 1 = attacker died
+3125:4224  data  combat_atk_alive
+3125:422c  data  combat_def_alive
+3125:424c  data  combat_atk_type
+3125:4274  data  combat_atk_hits
+3125:427c  data  combat_def_hits
+3125:429c  data  combat_atk_str
+3125:42a4  data  combat_def_str
+3125:42c4  data  combat_atk_count
+3125:42c5  data  combat_def_count
+3125:42c6  data  combat_atk_armies
+
+# Text lookup (tables: 0 STRING.DAT, 1 FILE.DAT, 2 ERROR.DAT). index < 0 picks
+# a random string of the group; results go to an 8-slot ring of 80-byte buffers.
+6ecb:04f0  func  get_string           | char* get_string(int group, int index)
+6ecb:0505  func  get_file_string      | char* get_file_string(int group, int index)
+6ecb:051a  func  get_error_string     | char* get_error_string(int group, int index)
+6ecb:052f  func  string_lookup        | char* string_lookup(int table, int group, int index)
+
+# Combat setup (Ghidra 6a89 = flat 5a89)
+5a89:0000  func  combat_terrain_class | int combat_terrain_class(int x, int y)
+5a89:008b  func  combat_setup         | void combat_setup(int x, int y)
+5a89:0d1a  func  hero_battle_items    # sum of item type 1 values carried
+5a89:0d71  func  hero_command_items   # sum of item type 2 values, +1 per type 8
+6087:14ac  func  armytype_lookup      # copies the 62-byte ARMYTYPE record for a type id
+
+# Combat tables
+3125:0ce4  data  hero_bonus_table     # u16[10]: 0 0 0 0 1 1 1 2 2 3
+2c04:0710  data  tile_terrain_type    # tile id -> terrain type (0..11)
+1e1d:0000  data  map_tiles            # u16 per tile: [y*112 + x]; low byte tile id, high byte flags (low nibble owner, bit 5 tower)
+1e1d:8880  data  armies               # 22-byte records: x, y, type +4, owner +5, strength +8, flags +0xc
+2c04:0181  data  army_count
+3125:4254  data  combat_def_type
+3125:42c6  data  combat_atk_armies
+3125:42e6  data  combat_def_armies
+
+# Production (Ghidra 7087 = flat 6087, 79fa = 69fa, 6f8c = 5f8c, 740d = 640d)
+69fa:07ca  func  setup_capitals
+69fa:0a75  func  setup_city_production
+6087:0930  func  city_compute_defence | int city_compute_defence(int city)
+6087:094f  func  city_production_count
+6087:1128  func  armytype_lock
+6087:11e2  func  armytype_unlock
+6087:1299  func  buy_production_type  | void buy_production_type(int city, int slot, int record)
+6087:0ee3  func  ui_buy_production_type
+6087:138f  func  armytype_get_stats_price
+6087:142c  func  armytype_get_stats
+6087:1544  func  sort_city_production | void sort_city_production(int city)
+5f8c:0dd7  func  city_produce_army
+640d:032a  func  ui_army_type_info    # Strength / Movement / Time / Cost box
+640d:0626  func  ui_army_info         # Strength / Movement / Remain / Upkeep box
+413d:1b3f  func  random_add_production # random map: adds 2d3 production types
+3125:447c  data  armytype_table       # far pointer to the loaded ARMYTYPE records
+
+# Movement / pathfinding (Ghidra 1555 = flat 0555)
+0555:000a  func  pathfind             # request: from, to, bonus flags, mode, far ptr to 200 directions
+0555:020e  func  path_single_step
+0555:02f2  func  path_init
+0555:0350  func  path_cache_reset_all
+0555:0373  func  path_wavefront
+0555:08bf  func  path_prepare_grid
+0555:0bde  func  path_mark_cities
+0555:0d9e  func  path_build_cost_grid | void path_build_cost_grid(int player, int force)
+0555:117b  func  path_trace
+0555:146c  func  path_cache_reset
+0a8b:0acc  func  map_distance         | int map_distance(int x1, int y1, int x2, int y2)
+0a8b:0ae4  func  direction_between    | int direction_between(int x1, int y1, int x2, int y2)
+0c8c:0529  func  stack_movement_mode
+6715:0000  func  build_army_move_flags
+3125:01e0  data  terrain_cost_mapgen  # u16[12]
+3125:1274  data  terrain_move_cost    # u16[12]: 1 1 1 2 4 6 0 2 5 2 1 2
+3125:3f76  data  path_cost_grid       # far ptr, 112*156 bytes
+3125:45c4  data  army_move_flags      # 6 bytes per type: fly, woods, hills, boat, +48, ability
+
+# Sites: ruins, temples, sages (Ghidra 6536 = flat 5536, 66d4 = 56d4)
+5536:0000  func  site_search
+5536:01ab  func  ruin_search
+5536:07ad  func  guardian_fight_hero_dies # true = hero slain
+5536:08a1  func  temple_bless
+5536:0aa0  func  sage_visit
+5536:0b1a  func  sage_gem
+5536:12e6  func  create_ally_army
+0b62:0005  func  army_add_strength    # capped at 9
+6563:04f1  func  hero_add_experience  # capped at 60
+56d4:08f4  func  site_item_eligible
+3125:0c9a  data  ally_types_rich      # u8[4]
+3125:0c9e  data  ally_types_far       # u8[3]
+3125:0ca2  data  ally_types_near      # u8[2]
+3125:0ca4  data  ruin_content_rich    # u8[3]
+3125:0ca7  data  ruin_content_far     # u8[5]
+3125:0cac  data  ruin_content_near    # u8[3]
+2c04:05e3  data  hero_experience
+2c04:1007  data  monster_strength
+
+# Heroes (Ghidra 7563 = flat 6563)
+6563:0000  func  hero_offer_check     # returns 1 if a hero offers this turn
+6563:01fc  func  hero_brings_allies
+6563:031b  func  hero_recruit
+6563:0c67  func  load_hero_name       # TERRAIN%d\HERONAM<side>.DAT
+6563:1a9b  func  random_magical_type
+7065:225b  func  game_turn            # provisional
+2c04:0223  data  hero_names           # 20 bytes x 40
+2c04:0543  data  hero_in_use          # u16 x 40

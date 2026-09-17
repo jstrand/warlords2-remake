@@ -65,6 +65,14 @@ Deliverable: every asset in `original/` round-trips to PNG/WAV/JSON, plus a `doc
 ### Phase 2 — Targeted disassembly
 Only for rules you can't observe or infer. Keep a running `docs/rules.md`.
 
+**Status: overlays solved.** `tools/exe.py flatten` rebuilds `WARLORD2.EXE` as a
+flat MZ: all 69 overlays are inlined and relocated, calls through the thunks go
+straight to the real functions, and the x87 emulation interrupts are decoded
+back to FPU opcodes. It loads directly in rizin/Ghidra. The game's single RNG
+entry point is `dice(n, sides, bonus)` at `6ECB:02BF`, with 254 call sites that
+together index every random rule. See `docs/formats/exe.md`. The Ghidra/INT 3F
+notes below are superseded.
+
 Handling the overlays:
 - Load `WARLORD2.EXE` into Ghidra as 16-bit real-mode x86. The root segment analyses fine.
 - Overlaid functions are called via `INT 3F` stubs followed by a segment/offset pair — recognise these and you can map the call graph even before resolving the targets.
