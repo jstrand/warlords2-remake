@@ -16,17 +16,15 @@ What it builds
     signs     signpost positions and text
     items     standards and magic items
     armies    the 29 army types with strength / time / cost
-    tiles     terrain grid + road overlay, with a derived terrain class
+    tiles     terrain grid + road overlay, with the game's own terrain types
 
 Two values are DERIVED, not stored (see docs/rules.md):
   * ownership -- at scenario start each side owns exactly its capital
   * defence   -- 1 if a city produces fewer than 3 army types, else 2
 
-Terrain classes are also derived -- by the dominant palette colour of each tile
-in SCENERY0/1.PCK, plus the four tiles whose meaning is pinned by the scenario
-data (signpost / temple / ruins / city). The game's own tile-to-terrain table
-has not been located; `MAPCOLOR.DAT` is referenced by FILE.DAT but ships with
-no copy. Treat `terrain_class` as a convenience, not as authority.
+Terrain comes from the tile -> terrain-type table stored in every .SCN at
+0x710 (the same table WARLORD2.EXE reads), with the movement costs and combat
+classes the executable uses for each type (docs/rules.md > Movement, Combat).
 """
 import collections
 import os
@@ -38,39 +36,27 @@ import armytype
 import mapren
 import scenario
 import string_dat
-from pal import load as load_pal
-from pck import load as load_pck
 
 MAP_W, MAP_H = mapren.MAP_W, mapren.MAP_H
 NEUTRAL = None
+NAVY = 5   # army type id removed from all production lists at game start
 
-# tiles whose meaning is fixed by scenario data (verified 1:1 against record counts)
-SPECIAL_TILES = {0: 'signpost', 10: 'temple', 12: 'ruins', 96: 'city'}
+# terrain type ids 0..11 as used by WARLORD2.EXE (STRING.DAT group 128 names 0..9)
+TERRAIN_TYPES = ['road', 'bridge', 'water', 'shore', 'forest', 'hills',
+                 'mountains', 'plain', 'marsh', 'tower', 'city', 'site']
+# DS:1274 in WARLORD2.EXE; 0 = impassable on land. A road overlay makes any tile cost 1.
+MOVE_COST = [1, 1, 1, 2, 4, 6, 0, 2, 5, 2, 1, 2]
+# combat_terrain_class: bonus fields in ARMYTYPE.DAT run city, open, woods, hills
+COMBAT_CLASS = ['open', 'open', 'open', 'open', 'woods', 'hills',
+                'hills', 'open', 'open', 'open', 'city', 'city']
+TERRAIN_TABLE_OFFSET = 0x710
 
-# dominant palette index -> terrain class (WAR2.PAL)
-COLOUR_CLASS = {
-    5: 'water', 6: 'water',
-    11: 'plain', 10: 'plain', 43: 'plain',
-    12: 'forest',
-    1: 'mountain', 2: 'mountain', 3: 'mountain', 4: 'mountain',
-}
 
-
-def classify_terrain(terrain_dir):
-    """tile index -> terrain class, by dominant palette colour. Heuristic."""
-    sheets = [load_pck(os.path.join(terrain_dir, f'SCENERY{i}.PCK')) for i in (0, 1)]
-    out = {}
-    for t in range(192):
-        if t in SPECIAL_TILES:
-            out[t] = SPECIAL_TILES[t]
-            continue
-        sw, sh, spx = sheets[t // 96]
-        c = t % 96
-        sx, sy = (c % 16) * mapren.CELL, (c // 16) * mapren.CELL
-        hist = collections.Counter(
-            spx[(sy + y) * sw + sx + x] for y in range(mapren.CELL) for x in range(mapren.CELL))
-        out[t] = COLOUR_CLASS.get(hist.most_common(1)[0][0], 'other')
-    return out
+def load_terrain_table(scn_path):
+    """tile index (low byte of the map word) -> terrain type id, from the .SCN (255 entries)."""
+    with open(scn_path, 'rb') as f:
+        f.seek(TERRAIN_TABLE_OFFSET)
+        return list(f.read(255))   # 0x80f is the site count
 
 
 def load_game(scenario_dir, terrain_dir='original/TERRAIN0', data_dir='original/DATA'):
@@ -87,7 +73,8 @@ def load_game(scenario_dir, terrain_dir='original/TERRAIN0', data_dir='original/
     tiles = mapren.load_map(base + '.MAP')
     with open(base + '.RD', 'rb') as f:
         roads = f.read()
-    terrain = classify_terrain(terrain_dir)
+    terrain_table = load_terrain_table(base + '.SCN')
+    terrain = {t: TERRAIN_TYPES[v] for t, v in enumerate(terrain_table)}
 
     by_id = {a['sprite']: a for a in armies}
 
@@ -108,12 +95,14 @@ def load_game(scenario_dir, terrain_dir='original/TERRAIN0', data_dir='original/
     cities = []
     for c in scn['cities']:
         owner = owner_of.get((c['x'], c['y']), NEUTRAL)
+        # the game drops Navy from every city at start, then derives defence
+        ids = [t for t in c['data'][2:6] if t not in (255, NAVY)]
         cities.append(dict(
             index=c['index'], name=c['name'], x=c['x'], y=c['y'],
             income=c['data'][22],
-            produces=[by_id[t]['name'] for t in c['data'][2:6] if t != 255],
-            produce_ids=[t for t in c['data'][2:6] if t != 255],
-            defence=2 if sum(1 for t in c['data'][2:6] if t != 255) >= 3 else 1,
+            produces=[by_id[t]['name'] for t in ids],
+            produce_ids=ids,
+            defence=2 if len(ids) >= 3 else 1,
             owner=owner,
             owner_name=sides[owner]['name'] if owner is not None else 'Neutral',
             is_capital=owner is not None,
@@ -124,7 +113,8 @@ def load_game(scenario_dir, terrain_dir='original/TERRAIN0', data_dir='original/
 
     return dict(name=name, sides=sides, cities=cities, sites=sites, signs=signs,
                 items=scn['items'], monsters=scn['monsters'], armies=armies,
-                tiles=tiles, roads=roads, terrain=terrain, strings=strings,
+                tiles=tiles, roads=roads, terrain=terrain, terrain_table=terrain_table,
+                strings=strings,
                 width=MAP_W, height=MAP_H)
 
 
@@ -134,7 +124,7 @@ def validate(g):
     T = g['terrain']
 
     def tile_at(x, y):
-        return g['tiles'][y * MAP_W + x] & mapren.TILE_MASK
+        return g['tiles'][y * MAP_W + x] & 0xff
 
     out.append((len(g['tiles']) == MAP_W * MAP_H,
                 f"map is {MAP_W}x{MAP_H} = {len(g['tiles'])} tiles"))
@@ -144,11 +134,11 @@ def validate(g):
     bad = [c for c in g['cities'] if T.get(tile_at(c['x'], c['y'])) != 'city']
     out.append((not bad, f"all {len(g['cities'])} cities stand on a city tile"))
 
-    bad = [s for s in g['sites'] if T.get(tile_at(s['x'], s['y'])) not in ('temple', 'ruins')]
-    out.append((not bad, f"all {len(g['sites'])} sites stand on a temple/ruins tile"))
+    bad = [s for s in g['sites'] if T.get(tile_at(s['x'], s['y'])) != 'site']
+    out.append((not bad, f"all {len(g['sites'])} sites stand on a site tile"))
 
-    bad = [s for s in g['signs'] if T.get(tile_at(s['x'], s['y'])) != 'signpost']
-    out.append((not bad, f"all {len(g['signs'])} signs stand on a signpost tile"))
+    bad = [s for s in g['signs'] if T.get(tile_at(s['x'], s['y'])) != 'tower']
+    out.append((not bad, f"all {len(g['signs'])} signs stand on a tower-type tile (signpost)"))
 
     caps = [s for s in g['sides'] if s['in_use']]
     owned = [c for c in g['cities'] if c['owner'] is not None]
@@ -165,9 +155,8 @@ def validate(g):
     bad = [c for c in g['cities'] for t in c['produce_ids'] if t not in ids]
     out.append((not bad, "every city production slot names a real army type"))
 
-    unknown = {t for t in set(g['tiles']) if T.get(t & mapren.TILE_MASK) == 'other'}
-    out.append((True, f"{len(unknown)} of {len({t & mapren.TILE_MASK for t in g['tiles']})} "
-                      f"used tiles unclassified by the colour heuristic"))
+    bad = {t & 0xff for t in g['tiles'] if g['terrain_table'][t & 0xff] >= len(TERRAIN_TYPES)}
+    out.append((not bad, f"every used tile has a terrain type ({len({t & 0xff for t in g['tiles']})} tiles used)"))
     return out
 
 
@@ -193,9 +182,9 @@ def report(g):
     print(f"signs: {len(g['signs'])}   items: {len(g['items'])}   "
           f"monsters: {len(g['monsters'])}   army types: {len(g['armies'])}")
 
-    tc = collections.Counter(g['terrain'].get(t & mapren.TILE_MASK, 'other') for t in g['tiles'])
+    tc = collections.Counter(g['terrain'][t & 0xff] for t in g['tiles'])
     total = len(g['tiles'])
-    print("\nterrain (derived):")
+    print("\nterrain (from the .SCN tile table):")
     for k, v in tc.most_common():
         print(f"  {k:<10} {v:>6}  {v * 100 / total:>5.1f}%")
     print(f"  roads/overlay {sum(1 for b in g['roads'] if b):>5} tiles")

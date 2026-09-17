@@ -62,18 +62,16 @@ with 200 gold and Mirea's income is 38; the game's turn-1 status bar reads
 **Ownership.** There is no owner field. At scenario start each side owns exactly
 its capital and everything else is neutral — see `docs/formats/scenario.md`.
 
-**Terrain class.** Classified by the dominant palette colour of each tile in
-`SCENERY0/1.PCK`, plus the four tiles pinned by scenario data (signpost 0,
-temple 10, ruins 12, city 96). It classifies all 92–111 tiles each scenario
-uses, and the proportions are plausible (Erythea: 47% plain, 32% water, 10%
-mountain, 9.5% forest). **But it is a convenience, not authority** — the game's
-own tile-to-terrain table has not been found. `FILE.DAT` references
-`TERRAIN%d\MAPCOLOR.DAT`, which ships with no copy; that is the most likely
-home for the real mapping. Movement costs must not be built on this heuristic
-until the real table is located or the rule is read out of the executable.
+**Terrain.** Each tile's terrain type comes from the table the game itself
+uses: 255 bytes at `.SCN` `0x710` (tile index → type 0–11: road, bridge, water,
+shore, forest, hills, mountains, plain, marsh, tower, city, site). The earlier
+palette-colour heuristic is gone. `gamestate.py` also carries the executable's
+movement cost and combat class for each type. Roads exist only in the `.RD`
+overlay, and terrain type 9 ("tower") is exactly the signpost tiles.
 
 ## What it does not do
 
-No armies exist yet: the starting garrisons are presumably in the undecoded
-16-byte per-city block, and city **defence** is likewise unlocated. So this is a
-map plus an economy plus a production plan — not yet a position you can play.
+It builds the map, the economy and the production plan, but places no armies
+yet. The starting garrisons, the random per-city production stats and the ruin
+contents are all rolled at game start; the rules are in `docs/rules.md`
+(Production, Starting garrisons, Ruins).

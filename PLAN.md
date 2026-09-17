@@ -83,8 +83,8 @@ Handling the overlays:
 
 `tools/gamestate.py` builds a validated starting game state from any scenario
 and passes every structural check on all six. See `docs/gamestate.md`.
-Remaining gaps before it is a *playable* position: starting garrisons, city
-defence, and the real tile-to-terrain table.
+The former gaps (starting garrisons, city defence, the real tile-to-terrain
+table) are all resolved from the executable; see `docs/rules.md`.
 
 ### Phase 2.6 — Playable slice — **DONE**
 

@@ -35,7 +35,7 @@ type, `+0x1b` `u16` "rich" flag.
 **Item record (29 bytes):** `+0` name, `+20` effect type (1 battle, 2 command,
 5 flight, 6 double movement, 7 gold per city, 8 standard), `+21` value, `+22` status (0 out of play, 1 on the ground, 2 in a
 ruin, 3 carried), `+23` `u16` holder or site, `+25`/`+27` x, y.
-| `0x0710` | tile id → terrain type table (`0..11`; 10 = city) |
+| `0x0710` | 255 bytes: tile index → terrain type (0 road, 1 bridge, 2 water, 3 shore, 4 forest, 5 hills, 6 mountains, 7 plain, 8 marsh, 9 tower/signpost, 10 city, 11 site) |
 
 Every shipped `.SCN` is **exactly 12001 bytes** — a fixed layout with fixed-size
 arrays, so unused slots are simply zero. That fixed size across all six
