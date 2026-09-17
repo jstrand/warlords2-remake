@@ -52,7 +52,7 @@ Progress is reported at each step (the percentage passed to `4bed:01ff`):
 | 20 | `4f5f:0000` | `+0x40` **erosion** walks and `+0x3e` **pass** walks (below) |
 | 30 | `4eb7:0000` | water: `+0x3a` then `+0x38` runs, each from a random hill or mountain tile to a random water or shore tile — rivers and lakes down from the highlands — then cleanup |
 | 40 | `random_map_forests`, `4e47:0000` | forest, until it covers `land tiles / 100 × param +0x3c` (the Forest slider) |
-| 50 | `4f5f:06a0` | **1d3** runs of `4fc9:010a` |
+| 50 | `random_map_marshes`, `4f5f:06a0` | **1d3** marshes (below) |
 | 60 | `513d:0000` | cities: per-city setup below |
 | 70 | `513d:003a` | sites (writes "%03d\|%s is\|inhabited by monsters and\|full of treasure!\|" descriptions) |
 | 80 | `5311:0000` | roads: builds the path grid as pseudo-player 14, using the map-generator cost table `DS:01e0` |
@@ -81,6 +81,16 @@ converted to real tiles at the end.
      side (1d10, evens each way), so ridges stay connected.
 
 Both the water phase and the pass phase re-run this cleanup.
+
+### Marshes (`4fc9:010a`)
+
+Each marsh starts on a random plain tile at least 5 tiles from the map edge,
+preferring one **near shore** — it retries up to 4 times for a plain tile with
+shore among the 8 neighbours of its 2×2 footprint, then settles for any plain
+tile. That tile becomes marsh (type 8), and five seeds (the tile and its four
+diagonal neighbours) each spread `1d5+3` more: for every spread, step 1–3
+tiles along one of the 8 neighbour offsets from the seed, and turn the tile
+marsh if it is still plain.
 
 ### Erosion and passes (`4f5f:0044`)
 

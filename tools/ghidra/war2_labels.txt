@@ -544,3 +544,5 @@
 3f5f:0044  func  random_map_walk_line  | void random_map_walk_line(int kind)
 413d:1171  func  random_map_city_economy | void random_map_city_economy(int city, int value)
 413d:161d  func  random_map_city_production | void random_map_city_production(int city, int value)
+3f5f:06a0  func  random_map_marshes
+3fc9:010a  func  random_map_one_marsh
