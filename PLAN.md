@@ -73,10 +73,10 @@ the CS-relative jump tables Ghidra gets wrong. Roughly 500 functions are named.
 Decoded and written up in `docs/rules.md`: combat, movement, production, the
 turn loop, city capture, garrisons, heroes, ruins/temples/sages, quests,
 diplomacy, setup and difficulty, and end-of-game. `docs/formats/save.md` has
-the save layout; `docs/re/` documents the method, the AI structure and the
-random map generator. Start at `docs/re/README.md`.
+the save layout; `docs/re/` documents the method, the computer players and the
+random map generator, both now decoded in full. Start at `docs/re/README.md`.
 
-Still open: most individual AI phases, the random map terrain phases, and
+Still open: one unverified army stat (`docs/rules.md` › Still unknown), and
 graphics/sound/UI plumbing (deliberately skipped).
 
 ### Phase 2.5 — Headless loader — **DONE**
