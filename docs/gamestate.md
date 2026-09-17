@@ -83,5 +83,10 @@ when a scenario starts, following `docs/rules.md`:
   at a purpose rolled from the *Neutral Cities* option, or a placeholder
   Scouts when the option is off.
 
-The seed makes a position reproducible. What it still doesn't do: ruin
-contents, hero offers, and the turn loop itself.
+- Each ruin gets its contents (item, sage, gold or allies) and a guardian or
+  ally type, and magic items are placed in ruins or held back.
+
+The seed makes a position reproducible. Two details are approximated: the
+game's own site-eligibility test for item placement, and its distance metric
+(Chebyshev here) for the "capital within 15 tiles" check. What it still
+doesn't do: hero offers and the turn loop itself.

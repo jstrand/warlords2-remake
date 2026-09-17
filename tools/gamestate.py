@@ -12,7 +12,7 @@ What it builds
 --------------
     sides     8 slots: name, starting gold, capital, in_use
     cities    position, name, income, production types, derived owner
-    sites     temples and ruins with position, type and description text
+    sites     temples and ruins with position, type, description and contents
     signs     signpost positions and text
     items     standards and magic items
     armies    the 29 army types with strength / time / cost
@@ -26,7 +26,8 @@ Two values are DERIVED, not stored (see docs/rules.md):
 `apply_game_start()` then rolls what the game rolls when a scenario starts:
 Navy dropped from production, per-city production stats copied from
 ARMYTYPE.DAT and randomly nudged, slots sorted, defence derived, and one
-garrison army placed per city. Pass a seed for a reproducible position.
+garrison army placed per city, and what each ruin holds. Pass a seed for a
+reproducible position.
 
 Terrain comes from the tile -> terrain-type table stored in every .SCN at
 0x710 (the same table WARLORD2.EXE reads), with the movement costs and combat
@@ -55,6 +56,13 @@ PURPOSE_WEIGHTS = {1: (10, 4, 1), 2: (10, 10, 1), 3: (5, 10, 1),
 GARRISON_PURPOSE = [1, 6, 2, 3]
 SCOUTS = 11        # placeholder garrison when Neutral Cities is off
 SIEGE_ABILITY = 1  # ARMYTYPE +52
+
+# Ruin contents and ally types, from the tables in WARLORD2.EXE
+# (docs/rules.md > Ruins, temples and sages). 3 = sage, 4 = gold, 5 = allies.
+RUIN_CONTENT = {'rich': [5, 5, 4], 'far': [3, 4, 5, 3, 4], 'near': [3, 4, 5]}
+ALLY_TYPES = {'rich': [25, 23, 27, 19], 'far': [24, 20, 26], 'near': [22, 20]}
+SITE_CONTENT = {0: 'empty', 1: 'temple', 2: 'item', 3: 'sage', 4: 'gold', 5: 'allies'}
+CAPITAL_RANGE = 15
 
 # terrain type ids 0..11 as used by WARLORD2.EXE (STRING.DAT group 128 names 0..9)
 TERRAIN_TYPES = ['road', 'bridge', 'water', 'shore', 'forest', 'hills',
@@ -116,6 +124,45 @@ def best_slot(slots, purpose, by_id, side_bonus=False):
     return best
 
 
+def apply_site_setup(g, rng):
+    """Roll what each ruin holds, as setup_random_sites does. The game's own
+    site-eligibility test and distance metric are approximated: any unassigned
+    ruin can take an item, and distance to a capital is Chebyshev."""
+    sites = g['sites']
+    caps = [(s['capital'][0], s['capital'][1]) for s in g['sides'] if s['in_use']]
+    for s in sites:
+        s['content'] = 1 if s['type'] == 1 else 0
+        s['item'] = s['guardian'] = None
+        near = any(max(abs(s['x'] - cx), abs(s['y'] - cy)) < CAPITAL_RANGE for cx, cy in caps)
+        s['band'] = 'rich' if s.get('rich') else ('near' if near else 'far')
+
+    band_hi = len(sites) * 2 // 10
+    band_lo = min(rng.randrange(1, 4) + rng.randrange(1, 4) + 1, band_hi)
+    last = min(22, len(sites) // 3 + rng.randrange(1, 6) - 3 + 8)
+    for item in g['items']:
+        item['status'] = 0
+    free = [s for s in sites if s['content'] == 0]
+    rng.shuffle(free)
+    for idx in range(8, last):
+        if 8 + band_lo <= idx < 8 + band_hi or not free:
+            continue                       # held back, probably for quest rewards
+        site = free.pop()
+        site['content'], site['item'] = 2, idx
+        g['items'][idx]['status'] = 2      # in a ruin
+
+    for s in sites:
+        if s['content'] == 0:
+            s['content'] = rng.choice(RUIN_CONTENT[s['band']])
+        if s['content'] == 1:
+            s['guardian'] = 0
+        elif s['content'] == 5:
+            s['guardian'] = rng.choice(ALLY_TYPES[s['band']])
+        else:
+            s['guardian'] = rng.randrange(1, 10)
+        s['content_name'] = SITE_CONTENT[s['content']]
+    return g
+
+
 def apply_game_start(g, seed=0, neutral_cities=1):
     """Roll the start-of-game setup: per-city production stats, defence and one
     garrison army per city. See docs/rules.md > Production, Starting garrisons.
@@ -143,6 +190,7 @@ def apply_game_start(g, seed=0, neutral_cities=1):
                                owner=c['owner'], strength=slot['strength'], moves=0,
                                upkeep=slot['cost'] // 2, city=c['index']))
     g['armies_placed'] = armies
+    apply_site_setup(g, rng)
     return g
 
 
@@ -252,6 +300,15 @@ def validate(g):
         at = collections.Counter((a['x'], a['y']) for a in placed)
         out.append((max(at.values()) <= 8, "no tile holds more than 8 armies"))
 
+    if g['sites'] and 'content' in g['sites'][0]:
+        placed = [s['item'] for s in g['sites'] if s['content'] == 2]
+        out.append((len(placed) == len(set(placed)), "each placed item is in one ruin"))
+        in_ruin = [i['index'] for i in g['items'] if i['status'] == 2]
+        out.append((sorted(placed) == sorted(in_ruin),
+                    f"{len(in_ruin)} of {len(g['items'])} items placed in ruins"))
+        out.append((all(s['guardian'] is not None for s in g['sites']),
+                    "every site has a guardian or ally type"))
+
     bad = {t & 0xff for t in g['tiles'] if g['terrain_table'][t & 0xff] >= len(TERRAIN_TYPES)}
     out.append((not bad, f"every used tile has a terrain type ({len({t & 0xff for t in g['tiles']})} tiles used)"))
     return out
@@ -274,7 +331,7 @@ def report(g):
               f"owner={c['owner_name']:<14} produces={', '.join(c['produces'])}")
     print(f"  ... {len(g['cities']) - 6} more")
 
-    st = collections.Counter(s['type_name'] for s in g['sites'])
+    st = collections.Counter(s.get('content_name', s['type_name']) for s in g['sites'])
     print(f"\nsites: {len(g['sites'])}  " + ", ".join(f"{k}={v}" for k, v in st.items()))
     print(f"signs: {len(g['signs'])}   items: {len(g['items'])}   "
           f"monsters: {len(g['monsters'])}   army types: {len(g['armies'])}")
