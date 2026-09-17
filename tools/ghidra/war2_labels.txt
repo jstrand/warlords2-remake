@@ -460,3 +460,30 @@
 070b:004e  func  write                | int write(int fd, void *buf, unsigned len)
 57cc:16cd  func  hero_drop_items
 696c:03d9  func  list_carried_items   # (2, 0, army): item indices into DS:4bfc, count in DS:482e
+
+# Computer players (Ghidra 5db9 = flat 4db9); see docs/re/ai.md
+4db9:0000  func  ai_turn
+4db9:0386  func  ai_turn_setup
+4db9:0919  func  ai_hero_city
+4db9:09ab  func  is_computer_turn
+4db9:0af2  func  ai_rebuilding
+4db9:0bd1  func  ai_buy_production_type
+4db9:0c83  func  ai_city_for_type
+4db9:06d4  func  ai_production
+4db9:085f  func  ai_vectoring
+4db9:0dc9  func  ai_debug_log         # empty stub in the shipped game
+458d:0000  func  ai_phase_diplomacy
+5087:0000  func  ai_phase_move_hero
+4ad0:0284  func  ai_phase_move_search
+4ad0:0458  func  ai_phase_move_explore
+463e:0000  func  ai_phase_assault
+4ad0:0000  func  ai_phase_move
+4ad0:0888  func  ai_phase_rescue
+49bf:0000  func  ai_phase_evaluate
+4ca7:01f1  func  ai_phase_clean_city
+47ea:0000  func  ai_phase_neutral
+4e97:04ba  func  ai_phase_quick_attack
+49bf:0c1c  func  ai_phase_update_hide
+4f19:0000  func  ai_phase_assault_xx
+4ad0:10e3  func  ai_phase_specials
+4ad0:0b4d  func  ai_phase_last_rescue
