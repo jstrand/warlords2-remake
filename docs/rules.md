@@ -758,7 +758,7 @@ Checked in order:
 
 Completing a quest also gives the hero **+10 experience**.
 
-## Diplomacy (computer attitudes not decoded)
+## Diplomacy
 
 For every ordered pair of sides there's a byte at `.SCN`
 `0x153b + 8·side + other`:
@@ -811,7 +811,12 @@ Ratings are *relative*: the sides in play are sorted by diplomatic score,
 | 8 | all eight in order |
 
 So the worst-behaved side is always the Running Dog, however low its score.
-How the computer players use the score in their diplomacy hasn't been decoded.
+
+A computer player uses the score when it picks whom to declare war on: the
+**absolute difference** between its own score and the candidate's, divided by
+8, is one term of the target score in `ai_pick_enemy` — so a side whose
+reputation differs sharply from its own, in either direction, is a more
+likely enemy. See `docs/re/ai.md` › Diplomacy.
 Bits 4 and 5 of the side's own diagonal byte flag "has pending
 proposals" and "has only de-escalation offers" (`484e:0cc7`).
 

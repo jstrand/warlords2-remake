@@ -527,3 +527,5 @@
 5536:0e85  func  sage_offer_knowledge | void sage_offer_knowledge(int choice)
 5536:1610  func  sage_build_offer_list
 4e97:0080  func  ai_sage_visit        | void ai_sage_visit(int site)
+4f19:0e04  func  ai_pick_enemy        | int ai_pick_enemy(void)
+2c04:0116  data  opt_all_computer     # demo mode: every side computer, level 2
