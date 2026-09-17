@@ -56,9 +56,9 @@ The comment on each generated line shows the evidence.
 
 | | functions |
 |---|---|
-| hand-named (`war2_labels.txt`) | 350 |
-| generated (`auto_`) | 147 |
-| still `FUN_` | 1079 |
+| hand-named (`war2_labels.txt`) | 393 |
+| generated (`auto_`) | 142 |
+| still `FUN_` | 1041 |
 | thunks / fragments | 3 |
 | **total** | **1579** |
 
