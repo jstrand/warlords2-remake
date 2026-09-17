@@ -410,4 +410,11 @@
 53fa:0941  func  city_apply_sack      | void city_apply_sack(int city)
 549c:016b  func  city_make_ruins      | int city_make_ruins(int x, int y)
 57cc:0a6b  func  after_battle         # loot, experience, ownership change
-2c04:10e3  data  side_atrocity
+2c04:10e3  data  side_diplomatic_score # raised by raze, sack, pillage, diplomacy
+
+# Diplomacy (Ghidra 484e = flat 384e)
+384e:0cc7  func  diplomacy_flag_pending
+384e:0db3  func  diplomacy_apply
+384e:1063  func  diplomacy_score_update
+384e:11bd  func  diplomacy_init
+2c04:153b  data  diplomacy_matrix     # [side*8+other]: bits0-1 state (0 peace,2 war), bits2-3 proposal

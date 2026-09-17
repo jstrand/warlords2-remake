@@ -186,7 +186,48 @@ Production), and "value" means **half a type's purchase price**
 
 Pillage and sack recompute the city's defence (fewer types can drop it from
 2 to 1). The **atrocity** score is a `u16` per side at `.SCN` `0x10e3 +
-2·side`; the computer players' diplomacy code reads it (not yet decoded).
+2·side`; see Diplomacy.
+
+## Diplomacy — partly verified in `WARLORD2.EXE`
+
+For every ordered pair of sides there's a byte at `.SCN`
+`0x153b + 8·side + other`:
+
+- **bits 0–1:** current state, **0 = peace, 1 = intermediate, 2 = war**
+- **bits 2–3:** this side's **proposal** (the state it wants)
+
+At game start (`diplomacy_init`, Ghidra `484e:11bd`) every pair is at **war**
+if the *Diplomacy* option is off, and at **peace** if it's on.
+
+**Attacking** a side you're at peace with (state 0) is refused with
+`STRING.DAT` group 140 ("Milord! Thou art attacking without first having
+declared war"); state 1 is refused in some cases too (`attack_tile`).
+
+**Proposals are applied at the start of the proposing side's turn**
+(`diplomacy_apply`, `484e:0db3`):
+
+- **Escalating** (proposal more hostile than the current state) takes effect
+  **at once, for both sides**. The other side's proposal is raised to match,
+  and a move to war announces "War declared with %s!".
+- **De-escalating** only takes effect when the **other side's proposal is no
+  more hostile** than this one; then both move to it and "Peace negotiated
+  with %s!" is shown.
+
+**Diplomatic score** (the same `u16` per side at `.SCN` `0x10e3` that
+pillage/sack/raze raise; see Capturing a city). `484e:1063` also adds to it
+for each side whose proposal is more peaceful than both the current state and
+the other side's proposal:
+
+| proposal → from current | added |
+|---|---|
+| 0 from 1, or 1 from 2 | 1d2+1 |
+| 0 from 2 | 1d10+10 |
+
+The score most likely feeds the *Diplomatic Rating* titles (`STRING.DAT`
+group 106: Statesman … Running Dog) and the computer players' attitudes. The
+rating code (`484e:0aed`) doesn't decompile cleanly, so that link is
+unconfirmed. Bits 4 and 5 of the side's own diagonal byte flag "has pending
+proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
 ## Production — verified in `WARLORD2.EXE`
 
