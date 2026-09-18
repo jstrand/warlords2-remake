@@ -243,10 +243,24 @@ leave this out.
 ## Movement
 
 The pathfinder lives in resident segment `0555` (Ghidra `1555`). It builds a
-112×156 grid with one byte per tile, then runs a wavefront search from the
-destination. Each grid byte holds a **cost in the low 3 bits** plus flags:
-`0x08` water, `0x10` crossing (bridge, city, some tiles), `0x20` hills,
-`0x40` forest.
+112×156 grid with one byte per tile (`path_build_cost_grid`, `1555:0d9e`),
+then runs a wavefront search from the destination (`path_wavefront`,
+`1555:0373`). Each grid byte holds a **cost in the low 3 bits** plus flags:
+`0x08` water, `0x10` crossing, `0x20` hills, `0x40` forest, `0x80` city.
+
+**Cost 0 means impassable** and is stamped over the tile during grid
+preparation. That covers mountains and every city the moving side does not
+own — so a path may never run *through* a foreign city, only end on one
+(`path_mark_cities` re-opens the destination). A **city occupies a 2×2
+footprint**: all four tiles get the city flag.
+
+**Crossing tiles** (`0x10`) are the only places a stack may change between
+land and water. There are exactly three kinds: a **bridge**, a **port city of
+the moving side** (one whose footprint touches bridge, water or shore —
+`1555:109d`), and a tile whose **map word has bit 15 set**, which scenario
+authors placed by hand (Erythea has none; Tutoria has three).
+
+With *Hidden Map* on, a human player's unexplored tiles are impassable too.
 
 ### Terrain costs (`DS:1274`, static)
 
@@ -269,9 +283,9 @@ flag table built by `build_army_move_flags`, Ghidra `7715:0000`):
 | mode | when | movement |
 |---|---|---|
 | **at sea** | any army is already on water | land rules, sea flag set |
-| **boat** | any army is a boat (`+60`) | water, shore, bridges and cities only; pays the table cost |
+| **boat** | any army is a boat (`+60`) | water and city tiles only; pays the table cost |
 | **flying** | every army flies (`+54`), *or* every non-hero flies and at least one army does, *or* a hero carries a flight item | **2 per tile** (water and mountains included); 1 where the tile costs 1 |
-| **land** | otherwise | table costs; mountains impassable; can only cross between land and water at a crossing tile (`0x10`), and entering water costs an extra 10 (20 if the destination is water) |
+| **land** | otherwise | table costs; mountains impassable; may only cross between land and water at a crossing tile; stepping into open water costs an extra **10**, or **20 when the move's destination tile is itself water or shore** (`1555:08bf` sets the charge once per move) |
 
 A land stack gets a **move bonus** if **any** army in it has one. Forest or
 hills tiles then cost **2** instead of 4 or 6:
