@@ -223,65 +223,69 @@ save/load/new — the check that confirms the reading.
 |---|---|---|---|
 | `0x008` | Backspace | `8065:0fe9` | |
 | `0x009` | Tab | `8065:0f3f` | |
-| `0x011` | Ctrl-Q | `7721:0000` | |
+| `0x011` | Ctrl-Q | `7721:0000` | Game › Quit |
 | `0x020` | Space | `89e0:0a55` | |
-| `0x02c` | `,` | `6c1b:0000` | army info |
-| `0x02e` | `.` | *inline* | |
+| `0x02c` | `,` | `6c1b:0000` | Hero › Inspect |
+| `0x02e` | `.` | *inline* | View › Ruins |
 | `0x035` | `5` | `8611:0565` | map |
-| `0x03d` | `=` | `4976:0167` | quest |
+| `0x03d` | `=` | `4976:0167` | Report › Quest |
 | `0x03f` | `?` | `7721:0084` | version |
-| `0x061` | `a` | `6ef3:0000(0)` | report 0 |
-| `0x062` | `b` | *inline* | |
-| `0x063` | `c` | *inline* | |
-| `0x064` | `d` | `484e:0000` | diplomacy |
-| `0x065` | `e` | `6d51:0000(1)` | history 1 |
-| `0x066` | `f` | `7563:09f7` | heroes |
-| `0x067` | `g` | `6ef3:0000(2)` | report 2 |
-| `0x068` | `h` | `6d51:0000(0)` | history 0 |
-| `0x069` | `i` | `6a89:0de1` | fighting order |
-| `0x06a` | `j` | `6d51:0000(2)` | history 2 |
-| `0x06b` | `k` | `6ef3:0000(1)` | report 1 |
-| `0x06c` | `l` | `6d51:0000(4)` | history 4 |
-| `0x06d` | `m` | `1c8c:04c4` | movement / stack mode |
-| `0x06e` | `n` | `6ef3:0000(3)` | report 3 |
-| `0x06f` | `o` | `89e0:1e3b` | |
-| `0x070` | `p` | *inline* | |
-| `0x071` | `q` | `1b62:06bf` | |
-| `0x072` | `r` | `7721:150d` | resign |
-| `0x073` | `s` | `89e0:0c9c` | |
-| `0x074` | `t` | `66d4:0c21` | items |
-| `0x075` | `u` | `7563:1652` | hero levels |
-| `0x076` | `v` | *inline* | |
-| `0x077` | `w` | `6ef3:0000(4)` | report 4 |
-| `0x078` | `x` | `540d:01a4` | |
-| `0x079` | `y` | `6d51:0000(3)` | history 3 |
-| `0x07a` | `z` | `6536:0000` | search a ruin (`site_search`) |
-| `0x112` | Alt-E | `8065:2074` | |
-| `0x116` | Alt-U | `545c:0000` | |
-| `0x11f` | Alt-S | `7721:093b` | save game |
-| `0x126` | Alt-L | `7721:026b` | load game |
-| `0x12c` | Alt-Z | `7721:128a` | load map |
-| `0x12d` | Alt-X | `64d2:0000(1)` | |
-| `0x131` | Alt-N | `7721:019d` | new game |
-| `0x132` | Alt-M | `7721:1214` | save map |
+| `0x061` | `a` | `6ef3:0000(0)` | Report › Army |
+| `0x062` | `b` | *inline* | View › Build |
+| `0x063` | `c` | *inline* | View › Cities |
+| `0x064` | `d` | `484e:0000` | Report › Diplomacy |
+| `0x065` | `e` | `6d51:0000(1)` | History › Events |
+| `0x066` | `f` | `7563:09f7` | Hero › Plant Flag |
+| `0x067` | `g` | `6ef3:0000(2)` | Report › Gold |
+| `0x068` | `h` | `6d51:0000(0)` | History › City |
+| `0x069` | `i` | `6a89:0de1` | Order › Fight Order |
+| `0x06a` | `j` | `6d51:0000(2)` | History › Gold |
+| `0x06b` | `k` | `6ef3:0000(1)` | Report › City |
+| `0x06c` | `l` | `6d51:0000(4)` | History › Triumphs |
+| `0x06d` | `m` | `1c8c:04c4` | Order › Move All |
+| `0x06e` | `n` | `6ef3:0000(3)` | Report › Production |
+| `0x06f` | `o` | `89e0:1e3b` | View › Army Bonus |
+| `0x070` | `p` | *inline* | View › Production |
+| `0x071` | `q` | `1b62:06bf` | Order › Disband |
+| `0x072` | `r` | `7721:150d` | Order › Resign |
+| `0x073` | `s` | `89e0:0c9c` | View › Stack |
+| `0x074` | `t` | `66d4:0c21` | View › Items |
+| `0x075` | `u` | `7563:1652` | Hero › Levels |
+| `0x076` | `v` | *inline* | View › Vectoring |
+| `0x077` | `w` | `6ef3:0000(4)` | Report › Winning |
+| `0x078` | `x` | `540d:01a4` | Order › Signpost |
+| `0x079` | `y` | `6d51:0000(3)` | History › Winners |
+| `0x07a` | `z` | `6536:0000` | Hero › Search |
+| `0x112` | Alt-E | `8065:2074` | Turn › End Turn |
+| `0x116` | Alt-U | `545c:0000` | Game › Shortcuts |
+| `0x11f` | Alt-S | `7721:093b` | Game › Save game |
+| `0x126` | Alt-L | `7721:026b` | Game › Load game |
+| `0x12c` | Alt-Z | `7721:128a` | Game › Load map |
+| `0x12d` | Alt-X | `64d2:0000(1)` | Game › Settings |
+| `0x131` | Alt-N | `7721:019d` | Game › New game |
+| `0x132` | Alt-M | `7721:1214` | Game › Save map |
 | `0x147` | Home | `8065:0f02` | |
 | `0x14f` | End | *inline* | |
 | `0x153` | Del | *inline* | |
 
 The "what" column is named only where a label or the segment's own contents
-give it away; a blank means the handler is identified but its purpose is not.
-The eight unnamed letters — `b c o p q s v x` — are the ones to chase next:
-they are ordinary in-game commands, and naming them would finish the set.
+Every name comes from the menu data below, which pairs each label with its
+accelerator; the handler addresses are what tie the two tables together.
 
-Two handlers take a constant and are family selectors:
+Two handlers take a constant and are family selectors, and the menu (below)
+names every one of them:
 
-- `6ef3:0000(n)` stores *n* and opens the **reports** dialog
-  (`auto_ui_reports_menu`), so `a g k n w` are its five tabs.
-- `6d51:0000(n)` stores *n* and branches into the **history / graph** screens
-  (`auto_ui_history_lines`, `auto_ui_triumphs`), so `h e j y l` are its five;
-  *n* = 4 takes a different path from the rest.
+| n | `6ef3:0000(n)` — reports | `6d51:0000(n)` — history |
+|---|---|---|
+| 0 | Army (`a`) | City (`h`) |
+| 1 | City (`k`) | Events (`e`) |
+| 2 | Gold (`g`) | Gold (`j`) |
+| 3 | Production (`n`) | Winners (`y`) |
+| 4 | Winning (`w`) | Triumphs (`l`) |
 
-Which tab is which is not established — only that there are five of each.
+The history selector's *n* = 4 takes a different path from the rest, which fits:
+Triumphs is its own screen (`auto_ui_triumphs`, `6d51:0a21`) rather than one of
+the four graphs.
 
 ### Reading the flat image
 
@@ -409,13 +413,51 @@ What is worth taking is the part that is **observable to the player**:
 
 ## Open questions
 
-- Fifteen of the 46 commands have a handler but no established purpose:
-  `.` `b` `c` `o` `p` `q` `s` `v` `x`, Backspace, Tab, Ctrl-Q, Space, and
-  Alt-E/Alt-U/Alt-X/Home/End/Del. Seven of them are handled inline in the
-  dispatcher rather than calling out to a named routine.
-- Which of the five reports and five history screens each letter selects.
+- Six commands still have a handler but no name, because they are not on any
+  menu: Backspace, Tab, Space, Home, End and Del. Four of those are already
+  known by other means — Tab, Backspace, Home and Space are the twins of
+  controls 186, 187, 177 and 240.
+- Where `7ae8:0000`'s item-to-command table is assembled, which would join
+  `UDB.DAT`'s item ids to the command codes.
 - Which control ids get their text from which `STRING.DAT` group — assigned by
   each dialog's own code, so it is per-dialog work rather than one table.
 - What distinguishes the two identical width tables in a `.FIN`, and the 17
   trailing bytes.
 - The three u16 spacing values at `.FIN` +6.
+
+## The menu
+
+The menu bar is built by `7ae8:0052` from a table of eight 12-byte records at
+`4125:1adc`: a far pointer to the menu's items, a far pointer to its title, a
+number, and the menu's index. Item lists run contiguously from one menu's
+pointer to the next's, ending where the bar's own table begins.
+
+An item list is a flat array of **far string pointers**, four bytes each — not
+fixed-size records. Reading it in order, `&` means "the next string is this
+item's accelerator" and `%` is a separator line. So the whole menu, with its
+keys, is recoverable from the executable's data segment.
+
+The eight menus are **SSG, Game, Order, Report, Hero, View, History, Turn**,
+and their items are exactly the accelerators of the command table above:
+
+| menu | items |
+|---|---|
+| SSG | About Warlords II |
+| Game | Settings `alt X`, Shortcuts `alt U`, New game `alt N`, Save game `alt S`, Load game `alt L`, Save map `alt M`, Load map `alt Z`, Quit `^Q` |
+| Order | Fight Order `i`, Move All `m`, Disband `q`, Signpost `x`, Resign `r` |
+| Report | Army `a`, City `k`, Gold `g`, Production `n`, Winning `w`, Diplomacy `d`, Quest `=` |
+| Hero | Inspect `,`, Plant Flag `f`, Levels `u`, Search `z` |
+| View | Army Bonus `o`, Items `t`, Build `b`, Cities `c`, Production `p`, Vectoring `v`, Ruins `.`, Stack `s` |
+| History | City `h`, Events `e`, Gold `j`, Winners `y`, Triumphs `l` |
+| Turn | End Turn `alt E` |
+
+This is what names the command table: every accelerator there now has a label,
+including the eight letters that had none (`b` Build, `c` Cities, `o` Army
+Bonus, `p` Production, `q` Disband, `s` Stack, `v` Vectoring, `x` Signpost).
+
+The item ids in `UDB.DAT` (507–535) are a **third** numbering, distinct from
+both control ids and command codes. `7ae8:0000` maps one to a command code by
+scanning an 8-byte-per-entry table for the id and returning the code at `+6`,
+but that table is assembled at run time and has not been located in the data.
+The names in `UDB.DAT` line up with the menu labels above, so nothing is lost
+by it for now.
