@@ -327,6 +327,12 @@ end
 --- Hand the turn to the next living side, starting a new game turn when the
 --- list wraps. Returns the side now to play, or nil if the game is over.
 function game.endTurn(g)
+  local ending = game.checkEnd(g)
+  if ending.message then g.log[#g.log + 1] = ending.message end
+  if ending.over then
+    g.side = nil
+    return nil
+  end
   for _ = 1, #g.sides do
     g.current = g.current + 1
     if g.current > #g.sides then
@@ -493,6 +499,63 @@ function game.raze(g, side, city, stack)
   game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
   require("warlords.quest").event(g, side, "raze", { city = city, stack = stack or {} })
+end
+
+------------------------------------------------------------- end of the game
+
+--- Is the game over, or nearly? Returns a table describing the position:
+--   { over = bool, winner = side or nil, message = "..." }
+-- end_game_check, Ghidra 8065:1aed. Sets g.won and g.surrenderOffered, the
+-- two flags the original keeps at .SCN 0x15b and 0x15d.
+function game.checkEnd(g)
+  local humans, computers, alive = {}, {}, {}
+  for _, s in ipairs(g.sides) do
+    if s.alive and #game.sideCities(g, s) > 0 then
+      alive[#alive + 1] = s
+      if s.computer then computers[#computers + 1] = s else humans[#humans + 1] = s end
+    end
+  end
+
+  local standing = 0
+  for _, c in ipairs(g.map.cities) do
+    if not c.razed then standing = standing + 1 end
+  end
+
+  if #alive == 0 then
+    g.over = true
+    return { over = true, message = "Alas! No more players are left!" }
+  end
+
+  if #humans == 0 and #computers == 1 then
+    g.won, g.over = true, true
+    computers[1].computer = false          -- so the finished game can be looked at
+    return { over = true, winner = computers[1],
+             message = ("%s has triumphed!"):format(computers[1].name) }
+  end
+
+  if #humans == 1 and #computers == 0 then
+    local mine = #game.sideCities(g, humans[1])
+    if mine * 2 > standing then
+      g.won, g.over = true, true
+      return { over = true, winner = humans[1],
+               message = ("%s rules the world!"):format(humans[1].name) }
+    end
+  end
+
+  if #humans == 1 and #computers > 0 then
+    local mine = #game.sideCities(g, humans[1])
+    local biggest = 0
+    for _, s in ipairs(computers) do
+      biggest = math.max(biggest, #game.sideCities(g, s))
+    end
+    if mine * 2 > standing and mine > biggest + standing // 8 then
+      g.surrenderOffered = true
+      return { over = false, surrender = true,
+               message = "Your enemies offer their surrender!" }
+    end
+  end
+
+  return { over = false }
 end
 
 --------------------------------------------------------------------- sites

@@ -210,7 +210,8 @@ local function endTurn()
     side = game.endTurn(G.g)
   end
   if not side then
-    say("The game is over.")
+    G.over = true
+    say("%s", G.g.log[#G.g.log] or "The game is over.")
     return
   end
   G.player = side
@@ -309,6 +310,12 @@ function love.draw()
             #game.sideCities(G.g, G.player), #game.sideArmies(G.g, G.player)),
     10, sh - BAR + 30)
   love.graphics.print(G.status or "", 10, sh - BAR + 50)
+  if G.g.side and G.g.side.quest then
+    love.graphics.setColor(0.85, 0.8, 0.4)
+    love.graphics.print("quest: " .. require("warlords.quest").describe(G.g.side.quest),
+                        360, sh - BAR + 30)
+    love.graphics.setColor(1, 1, 1)
+  end
 
   love.graphics.setColor(0.7, 0.7, 0.7)
   love.graphics.printf("space: end turn   p: production   c: centre   esc: quit",
@@ -357,6 +364,7 @@ end
 
 function love.keypressed(key)
   if key == "escape" then love.event.quit() return end
+  if G.over then return end
 
   if G.offer then
     if key == "y" then

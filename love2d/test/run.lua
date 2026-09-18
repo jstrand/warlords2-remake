@@ -1243,6 +1243,79 @@ local function testQuests()
   siteMod = siteMod
 end
 
+------------------------------------------------------------ end of the game
+
+local function testEndGame()
+  print("end of the game")
+
+  -- one computer side left: it has triumphed, and is handed to the player
+  local g = game.new(DATA, "ERYTHEA", { seed = 81 })
+  for _, s in ipairs(g.sides) do s.computer = true end
+  local winner = g.sides[1]
+  for _, c in ipairs(g.map.cities) do
+    c.ownerIndex = (c.ownerIndex ~= nil) and winner.index or nil
+  end
+  for i = 2, #g.sides do g.sides[i].alive = false end
+  local r = game.checkEnd(g)
+  ok(r.over, "the game is over")
+  eq(r.winner, winner, "the last side standing wins")
+  ok(not winner.computer, "and is switched to human control")
+  ok(g.won, "the game-won flag is set")
+
+  -- nobody left at all
+  local g2 = game.new(DATA, "ERYTHEA", { seed = 82 })
+  for _, c in ipairs(g2.map.cities) do c.ownerIndex = nil end
+  local r2 = game.checkEnd(g2)
+  ok(r2.over, "with no cities owned the game is over")
+  eq(r2.winner, nil, "and nobody won")
+  ok(r2.message:find("No more players"), "with the right message")
+
+  -- a lone human needs more than half the standing cities
+  local g3 = game.new(DATA, "ERYTHEA", { seed = 83 })
+  for _, s in ipairs(g3.sides) do s.computer = false end
+  local me = g3.sides[1]
+  for i = 2, #g3.sides do g3.sides[i].alive = false end
+  local standing, given = #g3.map.cities, 0
+  for _, c in ipairs(g3.map.cities) do c.ownerIndex = nil end
+  for _, c in ipairs(g3.map.cities) do
+    if given < standing // 2 then c.ownerIndex, given = me.index, given + 1 end
+  end
+  ok(not game.checkEnd(g3).over, "exactly half is not enough")
+  for _, c in ipairs(g3.map.cities) do
+    if c.ownerIndex == nil then c.ownerIndex = me.index break end
+  end
+  local r3 = game.checkEnd(g3)
+  ok(r3.over, "more than half wins")
+  eq(r3.winner, me, "and names the winner")
+
+  -- surrender is offered while computers still play
+  local g4 = game.new(DATA, "ERYTHEA", { seed = 84 })
+  local human = g4.sides[1]
+  human.computer = false
+  for i = 2, #g4.sides do g4.sides[i].computer = true end
+  for _, c in ipairs(g4.map.cities) do c.ownerIndex = nil end
+  local rival = g4.sides[2]
+  local n = #g4.map.cities
+  for i, c in ipairs(g4.map.cities) do
+    if i <= n * 3 // 4 then c.ownerIndex = human.index
+    elseif i == n then c.ownerIndex = rival.index end
+  end
+  local r4 = game.checkEnd(g4)
+  ok(r4.surrender, "a dominant human is offered surrender")
+  ok(not r4.over, "but the game is not over")
+  ok(g4.surrenderOffered, "and the flag is set")
+
+  -- razed cities do not count towards the total
+  local g5 = game.new(DATA, "ERYTHEA", { seed = 85 })
+  local side5 = g5.sides[1]
+  for i = 2, #g5.sides do g5.sides[i].alive = false end
+  for _, s in ipairs(g5.sides) do s.computer = false end
+  for _, c in ipairs(g5.map.cities) do c.ownerIndex = nil end
+  g5.map.cities[1].ownerIndex = side5.index
+  for i = 2, #g5.map.cities do g5.map.cities[i].razed = true end
+  ok(game.checkEnd(g5).over, "one city among ruins is still more than half")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -1281,6 +1354,7 @@ testHeroes("ERYTHEA")
 testHeroExperienceBug()
 testDiplomacy()
 testQuests()
+testEndGame()
 testSites("ERYTHEA")
 testSites("DRAGON")
 testAIGame("TUTORIA", 30)
