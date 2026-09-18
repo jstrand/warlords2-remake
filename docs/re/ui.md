@@ -301,9 +301,22 @@ an extraction — `docs/formats/exe.md`'s simpler "file 0x2000 + linear" does
 and switches on a region id of 1–15. Region records carry an enabled flag at
 `+2`, and a `+12` field that triggers a refresh when zero.
 
-This function decompiles badly (overlapping instructions, an unrecoverable
-jump table), so the record layout above is **uncertain** and the 15 regions
-have not been individually identified. The handlers it reaches are known:
+The array is not built in code — it is loaded from **`DATA/AREA.DAT`**, which
+is fully decoded in [`../formats/screens.md`](../formats/screens.md), along
+with `BUTTON.DAT`, the 36 dialogs and 428 controls behind every other screen.
+That file confirms the 14-byte record read here and gives all seven screens'
+regions, including the main one:
+
+| region | rect |
+|---|---|
+| 3 | `(0, 0, 640, 18)` menu bar |
+| 13 | `(0, 17, 392, 386)` map panel |
+| 2 | `(16, 30, 360, 360)` map viewport |
+| 1 | `(400, 30, 224, 312)` strategic map |
+| 9 | `(16, 408, 360, 56)` bottom bar |
+
+which is an independent confirmation of the viewport and strategic-map rects
+derived from the code above. The handlers this function reaches are known:
 `740d:0037` for the map itself (which goes on to `attack_tile`,
 `military_advisor`, the army-info panels and the tutorial hooks),
 `7204:033b` for cities, and `8065:0b3b` / `8065:0e04` for two drag modes.
@@ -359,9 +372,11 @@ What is worth taking is the part that is **observable to the player**:
   Alt-E/Alt-U/Alt-X/Home/End/Del. Seven of them are handled inline in the
   dispatcher rather than calling out to a named routine.
 - Which of the five reports and five history screens each letter selects.
-- The 15 hot regions of the map screen — the dispatcher is known, the
-  individual regions are not.
-- The rest of the 33-byte control record: rect and control type.
+- The 7 flag bytes at control +12 in `BUTTON.DAT`, which must hold the control
+  **type**. Everything else about the screens is now data
+  (`../formats/screens.md`); this is what stands between that data and drawing
+  it.
+- How a control's bitmap id maps to a `PICS/*.PCK` file.
 - What distinguishes the two identical width tables in a `.FIN`, and the 17
   trailing bytes.
 - The three u16 spacing values at `.FIN` +6.
