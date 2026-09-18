@@ -24,6 +24,11 @@ quest.DESCRIPTIONS = {
 }
 
 quest.ITEM_RANGE, quest.CITY_RANGE = 50, 60
+
+-- what a quest's target *is*, so it can be saved and restored by reference
+quest.TARGET_KIND = {
+  [0] = "army", "item", "armytype", "side", "city", "city", "none",
+}
 quest.EXPERIENCE = 10
 
 --------------------------------------------------------------------- targets
@@ -117,7 +122,8 @@ function quest.assign(g, side, h)
                        or type == quest.RAZE)) then
       local target = quest.pickTarget(g, side, type, h)
       if target then
-        local q = { type = type, hero = h, target = target, done = 0 }
+        local q = { type = type, hero = h, target = target, done = 0,
+                    targetKind = quest.TARGET_KIND[type] }
         if type == quest.SLAUGHTER then q.required = g.rng:dice(1, 12, 10)
         elseif type == quest.PILLAGE_GOLD then q.required = g.rng:dice(3, 300, 500) end
         side.quest = q

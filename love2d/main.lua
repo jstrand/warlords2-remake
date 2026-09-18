@@ -18,6 +18,7 @@ local ai     = require("warlords.ai")
 local rules  = require("warlords.rules")
 local hero   = require("warlords.hero")
 local armytype = require("warlords.armytype")
+local saveMod = require("warlords.save")
 
 local TILE = scn.TILE
 local ARMY_CELL, ARMY_COLS = 32, 16   -- A<n>.PCK is a 16x2 grid of 32x32 sprites
@@ -82,6 +83,8 @@ function love.load(arg)
     G.armyQuads[i] = quadsFor(img, ARMY_COLS, ARMY_CELL, ARMY_CELL, ARMY_CELL, 32)
   end
 
+  G.dataDir = dataDir
+  G.savePath = "warlords-save.lua"
   G.g = game.new(dataDir, scenario, { seed = os.time() })
   G.player = game.begin(G.g)
   G.selection = nil
@@ -318,8 +321,8 @@ function love.draw()
   end
 
   love.graphics.setColor(0.7, 0.7, 0.7)
-  love.graphics.printf("space: end turn   p: production   c: centre   esc: quit",
-                       sw - 430, sh - BAR + 50, 420, "right")
+  love.graphics.printf("space: end turn   p: production   c: centre   F5/F9: save/load   esc: quit",
+                       sw - 520, sh - BAR + 50, 510, "right")
   love.graphics.setColor(1, 1, 1)
 end
 
@@ -382,6 +385,19 @@ function love.keypressed(key)
 
   if key == "space" then endTurn()
   elseif key == "p" then cycleProduction()
+  elseif key == "f5" then
+    saveMod.write(G.g, G.savePath)
+    say("Saved to %s.", G.savePath)
+  elseif key == "f9" then
+    local okRead, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
+    if okRead then
+      G.g, G.selection, G.captured, G.over = loaded, nil, nil, nil
+      G.player = loaded.sides[loaded.current]
+      centreOn(G.player.capital.x, G.player.capital.y)
+      say("Loaded %s: turn %d, %s to play.", G.savePath, loaded.turn, G.player.name)
+    else
+      say("Nothing to load.")
+    end
   elseif key == "c" then
     if G.selection then centreOn(G.selection.x, G.selection.y)
     else centreOn(G.player.capital.x, G.player.capital.y) end

@@ -1316,6 +1316,99 @@ local function testEndGame()
   ok(game.checkEnd(g5).over, "one city among ruins is still more than half")
 end
 
+-------------------------------------------------------------- saving a game
+
+local function testSave()
+  print("save and load")
+  local saveMod = require("warlords.save")
+  local aiMod = require("warlords.ai")
+  local q = require("warlords.quest")
+
+  local g = game.new(DATA, "ERYTHEA", { seed = 91, options = { quests = 1, diplomacy = 1 } })
+  local side = game.begin(g)
+  while side and g.turn <= 8 do aiMod.playTurn(g, side); side = game.endTurn(g) end
+
+  -- give a hero an item and a quest, so the references are exercised
+  local h
+  for _, a in ipairs(g.armies) do if a.type == armytype.HERO then h = a end end
+  ok(h ~= nil, "the game has a hero to save")
+  local owner = g.map.sides[h.owner + 1]
+  owner.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[5],
+                  targetKind = "city", done = 0 }
+  h.items = { g.map.items[1] }
+  g.map.items[1].status = 3
+
+  local text = saveMod.encode(g)
+  ok(#text > 1000, "the save has content")
+  local h2 = saveMod.decode(text, DATA)
+
+  eq(h2.turn, g.turn, "the turn survives")
+  eq(h2.current, g.current, "whose turn it is survives")
+  eq(#h2.armies, #g.armies, "every army survives")
+  eq(h2.rng.state, g.rng.state, "the dice carry on where they left off")
+
+  for i, a in ipairs(g.armies) do
+    local b = h2.armies[i]
+    eq(b.x, a.x, "army " .. i .. " keeps its place")
+    eq(b.type, a.type, "army " .. i .. " keeps its type")
+    eq(b.strength, a.strength, "army " .. i .. " keeps its strength")
+    eq(b.moves, a.moves, "army " .. i .. " keeps its movement")
+    eq(b.owner, a.owner, "army " .. i .. " keeps its owner")
+  end
+
+  for i, c in ipairs(g.map.cities) do
+    eq(h2.map.cities[i].ownerIndex, c.ownerIndex, "city " .. i .. " keeps its owner")
+    eq(h2.map.cities[i].producing, c.producing, "city " .. i .. " keeps its production")
+    eq(#h2.map.cities[i].slots, #c.slots, "city " .. i .. " keeps its slots")
+  end
+
+  for i, s in ipairs(g.sides) do
+    eq(h2.sides[i].gold, s.gold, s.name .. " keeps its gold")
+    eq(h2.sides[i].alive, s.alive, s.name .. " keeps its standing")
+    eq(h2.sides[i].diploScore or 0, s.diploScore or 0, s.name .. " keeps its score")
+  end
+
+  for i, s in ipairs(g.map.sites) do
+    eq(h2.map.sites[i].content, s.content, "site " .. i .. " keeps its contents")
+    eq(h2.map.sites[i].searched, s.searched, "site " .. i .. " remembers being searched")
+    eq(h2.map.sites[i].rich, s.rich, "site " .. i .. " keeps its rich flag")
+  end
+
+  -- the references between objects are rebuilt, not copied
+  local owner2 = h2.map.sides[owner.index + 1]
+  ok(owner2.quest ~= nil, "the quest survives")
+  eq(owner2.quest.type, q.OCCUPY, "with its type")
+  eq(owner2.quest.target.index, g.map.cities[5].index, "and its target city")
+  ok(owner2.quest.hero ~= nil, "and its hero")
+  eq(owner2.quest.hero.type, armytype.HERO, "which is a hero")
+  local carried = false
+  for _, a in ipairs(h2.armies) do
+    if a.items and #a.items > 0 then carried = true end
+  end
+  ok(carried, "carried items survive")
+
+  -- diplomacy survives
+  local d = require("warlords.diplomacy")
+  eq(d.state(h2, 0, 1), d.state(g, 0, 1), "the diplomatic state survives")
+
+  -- and the reloaded game keeps playing
+  local side2 = h2.sides[h2.current]
+  local before = h2.turn
+  for _ = 1, #h2.sides * 2 do
+    if not side2 then break end
+    aiMod.playTurn(h2, side2)
+    side2 = game.endTurn(h2)
+  end
+  ok(h2.turn > before, "the reloaded game plays on")
+
+  -- a file round trip
+  local path = os.tmpname()
+  saveMod.write(g, path)
+  local h3 = saveMod.read(path, DATA)
+  eq(#h3.armies, #g.armies, "a save written to a file reads back")
+  os.remove(path)
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -1355,6 +1448,7 @@ testHeroExperienceBug()
 testDiplomacy()
 testQuests()
 testEndGame()
+testSave()
 testSites("ERYTHEA")
 testSites("DRAGON")
 testAIGame("TUTORIA", 30)
