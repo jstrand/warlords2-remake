@@ -115,6 +115,7 @@ function love.load(arg)
 
   G.menuLayout = menuMod.layout(G.font, 18, screen.WIDTH)
   G.openMenu = nil
+  G.cityMode = 3            -- the dialog opens on production
 
   G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
   G.stratRect = screen.region(G.screen, screen.REGION.STRATEGIC)
@@ -263,9 +264,28 @@ local CITY_DIALOG, CITY_SLOT_FIRST, CITY_SLOTS = 6, 197, 4
 -- button beside the production row. All three are cut from CITYBU.PCK.
 local CITY_DONE, CITY_DONE_ALT, CITY_STOP = 192, 201, 202
 
+-- The dialog has four modes, chosen by the row of buttons along its foot
+-- (193-196), and each shows a different set of controls. Read off screenshots
+-- of the running game; docs/formats/screens.md > Dialog 6.
+local CITY_MODE_FIRST = 193
+local MODE_INFO, MODE_CITY, MODE_PRODUCTION, MODE_VECTOR = 1, 2, 3, 4
+
+-- Controls belonging to each mode, beyond the ones always shown.
+local MODE_CONTROLS = {
+  [MODE_INFO]       = {},
+  [MODE_CITY]       = { 203, 205, 204 },   -- Rename, Raze, Build Prod
+  [MODE_PRODUCTION] = { 202 },             -- Stop
+  [MODE_VECTOR]     = { 210, 211, 212 },   -- vector, change destination, See All
+}
+-- Always present: the mode buttons and Done.
+local MODE_ALWAYS = { 193, 194, 195, 196, 192 }
+-- The production list is shown by two of the modes only.
+local LIST_MODES = { [MODE_INFO] = true, [MODE_PRODUCTION] = true }
+
 function openCity(city)
   if not G.cityView then G.cityView = screen.dialog(G.screen, CITY_DIALOG) end
   G.city = city
+  G.cityMode = G.cityMode or MODE_PRODUCTION
   say("%s: %s", city.name,
       city.ownerIndex == G.player.index and "choose what to build" or "not yours")
 end
@@ -284,6 +304,34 @@ local function pickProduction(n)
   game.setProduction(G.g, c, n)
   say("%s will build %s: strength %d, %d turns, upkeep %d.",
       c.name, slot.name, slot.strength, slot.time, math.floor(slot.cost / 2))
+end
+
+--- Burn the city down. Only ours, and only with a stack standing in it.
+local function razeCity()
+  local c = G.city
+  if c.ownerIndex ~= G.player.index then say("%s is not yours.", c.name) return end
+  local stack = selectableAt(c.x, c.y)
+  if #stack == 0 then say("Nobody of ours stands in %s.", c.name) return end
+  game.raze(G.g, G.player, c, stack)
+  say("%s is burned to nothing.", c.name)
+  stratDirty()
+  closeCity()
+end
+
+--- Send what this city builds to the city at this point on the strategic map.
+local function vectorTo(mx, my)
+  local c = G.city
+  if c.ownerIndex ~= G.player.index then say("%s is not yours.", c.name) return end
+  local dest = game.cityAt(G.g, mx, my)
+  if not dest then say("There is no city there.") return end
+  if dest.ownerIndex ~= G.player.index then say("%s is not yours.", dest.name) return end
+  if dest == c then
+    game.vector(G.g, c, nil)
+    say("%s keeps what it builds.", c.name)
+  else
+    game.vector(G.g, c, dest)
+    say("%s sends what it builds to %s.", c.name, dest.name)
+  end
 end
 
 local function loadGame()
@@ -494,7 +542,31 @@ local function ringFor(sideIndex)
   return math.max(0, math.min(8, sideIndex + 1))
 end
 
+--- Draw only the controls this mode shows. The original does the same: the
+--- dialog is one screen whose contents change with the foot buttons.
+local function drawCityControls()
+  G.cityMode = G.cityMode or MODE_PRODUCTION
+  local show = {}
+  for _, id in ipairs(MODE_ALWAYS) do show[id] = true end
+  for _, id in ipairs(MODE_CONTROLS[G.cityMode] or {}) do show[id] = true end
+  love.graphics.setColor(1, 1, 1)
+  for _, c in ipairs(G.cityView.dialog.controls) do
+    if show[c.id] and c.bitmap ~= 0 and c.w > 0 then
+      local art = G.screen.art_for(c.bitmap)
+      -- the mode you are in shows its button lit
+      local st = (c.id == CITY_MODE_FIRST + G.cityMode - 1)
+                 and uidata.ACTIVE or uidata.NORMAL
+      local sr = c.src[st]
+      if art and sr.x + c.w <= art.w and sr.y + c.h <= art.h then
+        love.graphics.draw(art.image,
+          love.graphics.newQuad(sr.x, sr.y, c.w, c.h, art.w, art.h), c.x, c.y)
+      end
+    end
+  end
+end
+
 local function drawCity()
+  G.cityMode = G.cityMode or MODE_PRODUCTION
   local c = G.city
   local R = CITY_RECT
 
@@ -503,7 +575,6 @@ local function drawCity()
   love.graphics.draw(G.marble, R.x, R.y)
   love.graphics.setScissor()
 
-  -- the strategic map fills the dialog's left panel
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
@@ -513,60 +584,89 @@ local function drawCity()
   love.graphics.rectangle("line", R.x + c.x * 2 - 1.5, R.y + c.y * 2 - 1.5, 5, 5)
   love.graphics.setScissor()
 
-  -- the name, centred over the right panel, in the font the original uses
   love.graphics.setColor(1, 1, 1)
   G.titleFont.draw(c.name, 432 - math.floor(G.titleFont.width(c.name) / 2), R.y + 2)
 
+  local owner = c.ownerIndex or 8
   local building = c.slots and c.producing and c.slots[c.producing]
-  G.bigFont.draw("Current:", 350, R.y + 53)
-  if building then
-    local owner = c.ownerIndex or 8
-    love.graphics.draw(G.abits, G.ringQuads[ringFor(c.ownerIndex)], 444, R.y + 45)
-    love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][building.type % 32],
-                       448, R.y + 49)
-    G.bigFont.draw(("%dt"):format(c.countdown or building.time), 492, R.y + 53)
-  else
-    G.bigFont.draw("nothing", 444, R.y + 53)
-  end
 
-  -- the production choices, each on a ring: grey, or the owner's for the one
-  -- being built
-  for i = 1, CITY_SLOTS do
-    local ctl = cityControl(CITY_SLOT_FIRST + i - 1)
-    local slot = c.slots and c.slots[i]
-    if ctl and slot then
-      local owner = c.ownerIndex or 8
+  if G.cityMode == MODE_PRODUCTION then
+    -- The "Current" ring is always grey; only the chosen entry in the list
+    -- below takes the owner's colour.
+    G.bigFont.draw("Current:", 350, R.y + 53)
+    if building then
+      love.graphics.draw(G.abits, G.ringQuads[0], 444, R.y + 46)
+      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][building.type % 32],
+                         444, R.y + 45)
+      G.bigFont.draw(("%dt"):format(c.countdown or building.time), 492, R.y + 53)
+    else
+      G.bigFont.draw("nothing", 444, R.y + 53)
+    end
+    if building then
       love.graphics.setColor(1, 1, 1)
-      love.graphics.draw(G.abits,
-        G.ringQuads[c.producing == i and ringFor(c.ownerIndex) or 0],
-        ctl.x, ctl.y + 1)
-      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32],
-                         ctl.x, ctl.y)
+      love.graphics.draw(G.bigArmy, 320, R.y + 123)
+      local tx, ty = 459, R.y + 126
+      G.bigFont.draw(building.name, tx, ty)
+      for k, line in ipairs({
+        ("Time: %d"):format(building.time),
+        ("Cost: %d"):format(building.cost),
+        ("Strength: %d"):format(building.strength),
+        ("Move: %d"):format(building.move),
+      }) do
+        G.bigFont.draw(line, tx, ty + 14 + k * (G.bigFont.lineHeight + 4))
+      end
     end
-  end
 
-  -- BIGARMY is the "producing" symbol, the same picture whatever is built
-  if building then
+  elseif G.cityMode == MODE_INFO then
     love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(G.bigArmy, 320, R.y + 123)
-  end
-
-  -- the chosen type's numbers, where the original lists them
-  if building then
-    love.graphics.setColor(1, 1, 1)
-    local tx, ty = 459, R.y + 126
-    G.bigFont.draw(building.name, tx, ty)
+    local tx, ty = 350, R.y + 40
     for k, line in ipairs({
-      ("Time: %d"):format(building.time),
-      ("Cost: %d"):format(building.cost),
-      ("Strength: %d"):format(building.strength),
-      ("Move: %d"):format(building.move),
+      ("Income: %d gold"):format(c.income),
+      ("Defence: %d"):format(c.defence),
+      ("Owner: %s"):format(c.ownerIndex and G.g.map.sides[c.ownerIndex + 1].name
+                           or "nobody"),
     }) do
-      G.bigFont.draw(line, tx, ty + 14 + k * (G.bigFont.lineHeight + 4))
+      G.bigFont.draw(line, tx, ty + (k - 1) * (G.bigFont.lineHeight + 4))
+    end
+
+  elseif G.cityMode == MODE_VECTOR then
+    love.graphics.setColor(1, 1, 1)
+    G.bigFont.draw("Current:", 340, R.y + 46)
+    local dest = c.vectorTo and G.g.map.cities[c.vectorTo + 1]
+    G.bigFont.draw(dest and ("vectored to " .. dest.name) or "kept here",
+                   340, R.y + 46 + G.bigFont.lineHeight + 4)
+    G.bigFont.draw("click a city on the map to vector there",
+                   340, R.y + 46 + (G.bigFont.lineHeight + 4) * 3)
+
+  elseif G.cityMode == MODE_CITY then
+    love.graphics.setColor(1, 1, 1)
+    local labels = { "Give the city a new name", "Burn it to nothing",
+                     "Buy new army types" }
+    for k, id in ipairs({ 203, 205, 204 }) do
+      local ctl = cityControl(id)
+      if ctl then G.bigFont.draw(labels[k], ctl.x + ctl.w + 10, ctl.y + 8) end
     end
   end
 
-  screen.drawDialogControls(G.screen, G.cityView)
+  -- the production list: the chosen entry rings in the owner's colour
+  if LIST_MODES[G.cityMode] then
+    for i = 1, CITY_SLOTS do
+      local ctl = cityControl(CITY_SLOT_FIRST + i - 1)
+      local slot = c.slots and c.slots[i]
+      if ctl then
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.draw(G.abits,
+          G.ringQuads[(slot and c.producing == i) and ringFor(c.ownerIndex) or 0],
+          ctl.x, ctl.y + 1)
+        if slot then
+          love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32],
+                             ctl.x, ctl.y)
+        end
+      end
+    end
+  end
+
+  drawCityControls()
 end
 
 function love.draw()
@@ -601,11 +701,19 @@ function love.mousepressed(x, y, button)
       pickProduction(c.id - CITY_SLOT_FIRST + 1)
     elseif c and (c.id == CITY_DONE or c.id == CITY_DONE_ALT) then
       closeCity()
-    elseif c and c.id == CITY_STOP then
+    elseif c and c.id >= CITY_MODE_FIRST and c.id < CITY_MODE_FIRST + 4 then
+      G.cityMode = c.id - CITY_MODE_FIRST + 1
+    elseif c and c.id == CITY_STOP and G.cityMode == MODE_PRODUCTION then
       if G.city.ownerIndex == G.player.index then
         game.setProduction(G.g, G.city, nil)
         say("%s builds nothing.", G.city.name)
       end
+    elseif c and c.id == 205 and G.cityMode == MODE_CITY then
+      razeCity()
+    elseif G.cityMode == MODE_VECTOR
+       and x >= CITY_RECT.x and x < CITY_RECT.x + 224
+       and y >= CITY_RECT.y and y < CITY_RECT.y + 312 then
+      vectorTo(math.floor((x - CITY_RECT.x) / 2), math.floor((y - CITY_RECT.y) / 2))
     elseif x < CITY_RECT.x or y < CITY_RECT.y
         or x >= CITY_RECT.x + CITY_RECT.w or y >= CITY_RECT.y + CITY_RECT.h then
       closeCity()          -- a click outside the dialog dismisses it

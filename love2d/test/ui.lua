@@ -238,6 +238,23 @@ if G and G.g then
             c.x + 2, c.y + 2, 1)
       end
     end
+    -- every mode of the dialog, with its own controls
+    for mode = 1, 4 do
+      G.city = mine
+      local btn
+      for _, k in ipairs(G.cityView.dialog.controls) do
+        if k.id == 192 + mode then btn = k end
+      end
+      if btn then
+        try(("city mode %d"):format(mode), love.mousepressed, btn.x + 2, btn.y + 2, 1)
+        if G.cityMode ~= mode then
+          fail("city dialog", ("button %d did not select mode %d"):format(btn.id, mode))
+        end
+        try(("draw city mode %d"):format(mode), love.draw)
+      end
+    end
+    G.cityMode = 3
+
     -- Stop, then Done: both are real controls of dialog 6
     for _, id in ipairs({ 202, 192 }) do
       G.city = mine

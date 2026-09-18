@@ -333,5 +333,26 @@ and the clipping is obvious on screen.
 The name is drawn in `CHANCE36`, centred over the right panel; everything
 else on the dialog is `CHANCE17`.
 
-Controls 203–205, 210–212 and 214–216 belong to states this screenshot does
-not show, and are not identified.
+### The dialog's four modes
+
+The row of buttons along the foot (193–196) does not act on the city: it
+**switches the dialog between four modes**, each showing a different set of
+controls over the same frame. The button for the mode you are in is drawn lit.
+
+| mode | button | shows |
+|---|---|---|
+| Info | 193 | income, defence, owner, the city's description, and the production list |
+| City | 194 | Rename (203), Raze (205), Build Prod (204), each with a line of text |
+| Production | 195 | the production list, Stop (202), `BIGARMY.PCK` and the chosen type's numbers |
+| Vector | 196 | Current / Next turn / Turn after rows, vector and change-destination buttons (210, 211), See All (212) |
+
+That is why 203–205, 210–212 and 214–216 never appear together: they belong to
+different modes. 214–216 share their rects with 210–212 and are the second
+variant of each.
+
+The production list (197–200) is shown by the Info and Production modes only.
+
+### The rings, again
+
+The ring beside **Current** is always grey. Only the entry in the *list* that
+is being built takes the owner's colour.
