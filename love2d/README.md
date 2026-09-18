@@ -43,6 +43,16 @@ luajit love2d/test/run.lua          # what LOVE actually runs -- check both
 lua love2d/test/run.lua /path/to/data
 ```
 
+The front end can be exercised without a window too. `love2d/test/ui.lua`
+stubs enough of the LÖVE API to load `main.lua` and click, key, save, load
+and play a whole game through it — it asserts nothing about what is drawn,
+only that the code runs:
+
+```sh
+luajit love2d/test/ui.lua           # Tutoria
+luajit love2d/test/ui.lua original ERYTHEA
+```
+
 **Write for Lua 5.1.** LÖVE embeds LuaJIT, so the engine avoids `//` and the
 `&`/`|` operators — they parse under a modern `lua` binary and then fail to
 load in the game. Use `math.floor`, and the `has`/`with` helpers in `move.lua`
