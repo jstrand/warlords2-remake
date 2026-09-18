@@ -79,7 +79,7 @@ function site.markRich(g)
     s.rich, s.revealed = false, 0xff
     if s.type ~= site.TEMPLE then ruins[#ruins + 1] = s end
   end
-  local want = #g.map.sites * site.RICH_SHARE // 10
+  local want = math.floor(#g.map.sites * site.RICH_SHARE / 10)
   g.rng:shuffle(ruins)
   for i = 1, math.min(want, #ruins) do
     ruins[i].rich = true
@@ -117,12 +117,12 @@ function site.setup(g)
   end
 
   -- magic items, from the .ITM pool
-  local reserved = #g.map.sites * 2 // 10
+  local reserved = math.floor(#g.map.sites * 2 / 10)
   site.fillItemPool(g, reserved)
 
   local bandHi = reserved
   local bandLo = math.min(g.rng:dice(2, 3, 1), bandHi)
-  local last = math.min(22, #g.map.sites // 3 + g.rng:dice(1, 5, -3) + 8)
+  local last = math.min(22, math.floor(#g.map.sites / 3) + g.rng:dice(1, 5, -3) + 8)
 
   local free = {}
   for _, s in ipairs(g.map.sites) do
@@ -306,7 +306,7 @@ function site.search(g, stack, x, y)
         local a = {
           x = ax, y = ay, owner = h.owner, type = type.id, name = type.name,
           strength = type.strength, maxMoves = type.move, moves = 0,
-          upkeep = type.cost // 2, homeCity = h.homeCity,
+          upkeep = math.floor(type.cost / 2), homeCity = h.homeCity,
         }
         g.armies[#g.armies + 1] = a
         joined[#joined + 1] = a

@@ -108,7 +108,7 @@ function hero.recruit(g, side, offer)
       local a = {
         x = ax or hx, y = ay or hy, owner = side.index, type = type.id, name = type.name,
         strength = type.strength, maxMoves = type.move, moves = 0,
-        upkeep = type.cost // 2, homeCity = city.index,
+        upkeep = math.floor(type.cost / 2), homeCity = city.index,
       }
       g.armies[#g.armies + 1] = a
       allies[#allies + 1] = a

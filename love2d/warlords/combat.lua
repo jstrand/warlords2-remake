@@ -190,7 +190,7 @@ function combat.fortify(g, attackers, x, y, class)
     value = city and city.defence or 0
   end
   local city = g.map.cityTile[y * g.map.width + x]
-  if city and city.ownerIndex == nil then value = value // 2 end   -- neutral
+  if city and city.ownerIndex == nil then value = math.floor(value / 2) end   -- neutral
   return value
 end
 
@@ -329,7 +329,7 @@ function combat.advise(g, attackers, defenders, x, y)
   for _ = 1, combat.ADVICE_BATTLES do
     if combat.resolve(g, attackers, defenders, x, y).won then wins = wins + 1 end
   end
-  return combat.ADVICE[wins // 2], wins
+  return combat.ADVICE[math.floor(wins / 2)], wins
 end
 
 return combat

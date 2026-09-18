@@ -274,7 +274,7 @@ function quest.reward(g, side, q)
         local a = {
           x = x, y = y, owner = side.index, type = type.id, name = type.name,
           strength = type.strength, maxMoves = type.move, moves = 0,
-          upkeep = type.cost // 2, homeCity = home.index,
+          upkeep = math.floor(type.cost / 2), homeCity = home.index,
         }
         g.armies[#g.armies + 1] = a
         joined[#joined + 1] = a

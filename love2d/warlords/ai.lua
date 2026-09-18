@@ -326,7 +326,7 @@ function ai.phaseDiplomacy(g, side)
   for _, other in ipairs(g.sides) do
     if other.alive and other.index ~= side.index then
       local wantWar = marchingOn[other.index]
-      if leader == other and leaderCities * 100 // math.max(1, total) > ai.LEADER_SHARE then
+      if leader == other and math.floor(leaderCities * 100 / math.max(1, total)) > ai.LEADER_SHARE then
         wantWar = true
       end
       diplomacy.propose(g, side.index, other.index,
@@ -397,7 +397,7 @@ function ai.phaseExplore(g, side)
   local frontier = {}
   local mask = (g.explored or {})[side.index] or {}
   for k in pairs(mask) do
-    local x, y = k % g.map.width, k // g.map.width
+    local x, y = k % g.map.width, math.floor(k / g.map.width)
     local edge = false
     for dx = -1, 1 do
       for dy = -1, 1 do

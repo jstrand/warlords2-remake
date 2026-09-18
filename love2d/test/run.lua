@@ -1,7 +1,14 @@
 -- Headless tests for the rules core. No LOVE, no graphics.
 --
 --     lua love2d/test/run.lua                 -- from the repository root
+--     luajit love2d/test/run.lua              -- what LOVE actually runs
 --     lua love2d/test/run.lua /path/to/data   -- point at your own original/
+--
+-- **Run it under luajit too.** LOVE embeds LuaJIT, which is Lua 5.1: it has
+-- neither the `//` integer division operator nor the `&` and `|` bitwise
+-- operators. Both parse fine under the `lua` binary on most machines and then
+-- fail to load in the game, so the engine avoids them -- `math.floor` for
+-- division, and the arithmetic helpers in move.lua for the cost grid's flags.
 --
 -- Every assertion cites the rule it checks; docs/rules.md is the spec.
 
@@ -244,7 +251,7 @@ local function testTurnLoop(scenario)
   end
   ok(built ~= nil, "the new army belongs to the city that built it")
   if built then
-    eq(built.upkeep, city.slots[1].cost // 2, "upkeep is half the slot cost")
+    eq(built.upkeep, math.floor(city.slots[1].cost / 2), "upkeep is half the slot cost")
     eq(built.x, city.x, "the new army stands in its city")
   end
 
@@ -581,7 +588,7 @@ local function testCombat(scenario)
   local verdict, wins = combat.advise(g, att, def, enemy.x, enemy.y)
   ok(verdict ~= nil, "the advisor has a verdict")
   ok(wins >= 0 and wins <= 19, "the advisor's win count is in range")
-  eq(verdict, combat.ADVICE[wins // 2], "the verdict is wins/2 into the table")
+  eq(verdict, combat.ADVICE[math.floor(wins / 2)], "the verdict is wins/2 into the table")
 end
 
 local function testCapture(scenario)
@@ -627,7 +634,7 @@ local function testCapture(scenario)
   end
   if extra then
     game.setCityOwner(g, extra, victim.index)
-    eq(game.loot(g, victim), (400 // 2) // 2, "two cities: half the per-city share")
+    eq(game.loot(g, victim), math.floor(math.floor(400 / 2) / 2), "two cities: half the per-city share")
   end
 end
 
@@ -678,7 +685,7 @@ local function testCityChoices(scenario)
   ok(city ~= nil, "found a city with something to pillage")
   if city then
     local n, dear = #city.slots, city.slots[#city.slots]
-    local want = math.abs(g.types.byId[dear.type].price) // 2
+    local want = math.floor(math.abs(g.types.byId[dear.type].price) / 2)
     local gold0, score0 = side.gold, side.diploScore or 0
     local got = game.pillage(g, side, city)
     eq(got, want, "pillage pays half the type's purchase price")
@@ -698,7 +705,7 @@ local function testCityChoices(scenario)
     local cheapest = city2.slots[1]
     local want = 0
     for i = 2, #city2.slots do
-      want = want + math.abs(g.types.byId[city2.slots[i].type].price) // 2
+      want = want + math.floor(math.abs(g.types.byId[city2.slots[i].type].price) / 2)
     end
     local gold0, score0 = side.gold, side.diploScore or 0
     local got = game.sack(g, side, city2)
@@ -955,7 +962,7 @@ local function testSites(scenario)
       ok(s.guardian and s.guardian >= 1 and s.guardian <= 9, "a ruin has a guardian")
     end
   end
-  eq(rich, #g.map.sites * 3 // 10, "three in ten sites are rich")
+  eq(rich, math.floor(#g.map.sites * 3 / 10), "three in ten sites are rich")
 
   -- items: each hidden item is in exactly one ruin
   local placed = {}
@@ -1278,7 +1285,7 @@ local function testEndGame()
   local standing, given = #g3.map.cities, 0
   for _, c in ipairs(g3.map.cities) do c.ownerIndex = nil end
   for _, c in ipairs(g3.map.cities) do
-    if given < standing // 2 then c.ownerIndex, given = me.index, given + 1 end
+    if given < math.floor(standing / 2) then c.ownerIndex, given = me.index, given + 1 end
   end
   ok(not game.checkEnd(g3).over, "exactly half is not enough")
   for _, c in ipairs(g3.map.cities) do
@@ -1297,7 +1304,7 @@ local function testEndGame()
   local rival = g4.sides[2]
   local n = #g4.map.cities
   for i, c in ipairs(g4.map.cities) do
-    if i <= n * 3 // 4 then c.ownerIndex = human.index
+    if i <= math.floor(n * 3 / 4) then c.ownerIndex = human.index
     elseif i == n then c.ownerIndex = rival.index end
   end
   local r4 = game.checkEnd(g4)

@@ -38,9 +38,15 @@ Everything under `warlords/` except `pal.lua`, `pck.lua` and the drawing in
 and checked without a window:
 
 ```sh
-lua love2d/test/run.lua             # ~5500 assertions, about a second
+lua love2d/test/run.lua             # ~6500 assertions, about a second
+luajit love2d/test/run.lua          # what LOVE actually runs -- check both
 lua love2d/test/run.lua /path/to/data
 ```
+
+**Write for Lua 5.1.** LÖVE embeds LuaJIT, so the engine avoids `//` and the
+`&`/`|` operators — they parse under a modern `lua` binary and then fail to
+load in the game. Use `math.floor`, and the `has`/`with` helpers in `move.lua`
+for the cost grid's flags.
 
 | module | holds |
 |---|---|

@@ -368,7 +368,7 @@ local function cycleProduction()
   game.setProduction(G.g, city, next)
   local slot = city.slots[next]
   say("%s builds %s: strength %d, move %d, %d turns, upkeep %d.",
-      city.name, slot.name, slot.strength, slot.move, slot.time, slot.cost // 2)
+      city.name, slot.name, slot.strength, slot.move, slot.time, math.floor(slot.cost / 2))
 end
 
 function love.keypressed(key)

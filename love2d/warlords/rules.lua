@@ -82,7 +82,8 @@ function rules.citySlots(produceIds, types, rng)
     end
     move = math.max(6, move)
     if rng:chance(10) then
-      cost = cost + (rng:chance(60) and -(cost // 4) or (cost // 4))
+      local quarter = math.floor(cost / 4)
+      cost = cost + (rng:chance(60) and -quarter or quarter)
     end
     if rng:chance(10) then
       time = rng:chance(60) and math.max(1, time - 1) or time + 1
@@ -112,7 +113,7 @@ function rules.bestSlot(slots, purpose, types, sideBonus)
       local time = slot.time + ((str < 3 and purpose ~= 6) and 1 or 0)
       local score = (10 - math.min(10, time)) * w.time
                   + str * w.str
-                  + (slot.move * w.move) // 2
+                  + math.floor(slot.move * w.move / 2)
       if score > bestScore then best, bestScore = slot, score end
     end
   end
@@ -137,7 +138,7 @@ function rules.armyFromSlot(slot, enhanced)
     type = slot.type, name = slot.name,
     strength = strength,
     maxMoves = slot.move,
-    upkeep = slot.cost // 2,
+    upkeep = math.floor(slot.cost / 2),
   }
 end
 

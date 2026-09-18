@@ -32,6 +32,20 @@ move.HILLS_F, move.FOREST_F, move.CITY_F = 0x20, 0x40, 0x80
 -- stack modes, as the original numbers them
 move.BOAT, move.LAND, move.FLYING = 0, 1, 2
 
+-- The cost grid packs a cost and four flags into one number, exactly as the
+-- original packs them into one byte. LOVE runs LuaJIT, which has no bitwise
+-- operators, so the two accessors below do it with arithmetic: every flag is a
+-- distinct power of two above the 3-bit cost.
+local function has(byte, flag)
+  return byte % (flag + flag) >= flag
+end
+
+local function with(byte, flag)
+  return has(byte, flag) and byte or byte + flag
+end
+
+move.has = has
+
 move.WATER_PENALTY = 10       -- a land stack stepping into open water
 move.WATER_PENALTY_TO = 20    -- ... when the whole move is aimed at water
 move.MIN_MOVE_LEFT = 2        -- the walk stops below this
@@ -112,15 +126,15 @@ function move.grid(g, sideIndex)
       local terrain = scn.terrainAt(g.map, x, y)
       local byte = scn.roadAt(g.map, x, y) % 0x20 ~= 0 and 1 or move.COST[terrain]
       if terrain == move.BRIDGE then
-        byte = byte | move.CROSS_F | move.WATER_F
+        byte = with(with(byte, move.CROSS_F), move.WATER_F)
       elseif terrain == move.WATER then
-        byte = byte | move.WATER_F
+        byte = with(byte, move.WATER_F)
       elseif terrain == move.FOREST then
-        byte = byte | move.FOREST_F
+        byte = with(byte, move.FOREST_F)
       elseif terrain == move.HILLS then
-        byte = byte | move.HILLS_F
+        byte = with(byte, move.HILLS_F)
       end
-      if g.map.crossing[i + 1] then byte = byte | move.CROSS_F end
+      if g.map.crossing[i + 1] then byte = with(byte, move.CROSS_F) end
       grid[i] = byte
     end
   end
@@ -135,9 +149,9 @@ function move.grid(g, sideIndex)
         local x, y = c.x + dx, c.y + dy
         if x < W and y < H then
           local i = y * W + x
-          local byte = grid[i] | move.CITY_F
+          local byte = with(grid[i], move.CITY_F)
           if mine then
-            if port then byte = byte | move.CROSS_F | move.WATER_F end
+            if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
           else
             byte = byte - (byte % 8)          -- cost 0: impassable
           end
@@ -151,7 +165,7 @@ function move.grid(g, sideIndex)
   if g.map.options.hiddenMap ~= 0 and sideIndex ~= nil then
     local gameMod = require("warlords.game")
     for i = 0, W * H - 1 do
-      if not gameMod.seen(g, sideIndex, i % W, i // W) then
+      if not gameMod.seen(g, sideIndex, i % W, math.floor(i / W)) then
         grid[i] = grid[i] - (grid[i] % 8)          -- cost 0: impassable
       end
     end
@@ -173,36 +187,34 @@ end
 --- charge for this move (10, or 20 when the move is aimed at water).
 function move.stepCost(fromByte, toByte, mode, woods, hills, penalty)
   local cost = toByte % 8
-  local toWater, fromWater = toByte & move.WATER_F, fromByte & move.WATER_F
-  local toCross = toByte & move.CROSS_F
+  local toWater, fromWater = has(toByte, move.WATER_F), has(fromByte, move.WATER_F)
+  local toCross = has(toByte, move.CROSS_F)
 
   if mode == move.FLYING then
     -- 2 per tile, water and mountains included; 1 where the tile costs 1
-    if toWater ~= 0 and toCross == 0 then return 2 end
+    if toWater and not toCross then return 2 end
     if cost == 0 or cost > 2 then return 2 end
     return cost
   end
 
   if mode == move.BOAT then
     -- a boat keeps to water and cities
-    if toWater == 0 and (toByte & move.CITY_F) == 0 then return nil end
+    if not toWater and not has(toByte, move.CITY_F) then return nil end
     return cost == 0 and nil or cost
   end
 
   if cost == 0 then return nil end             -- mountains, enemy cities
 
   -- land: the shoreline may only be crossed at a crossing tile
-  if toWater ~= fromWater
-     and toCross == 0 and (fromByte & move.CROSS_F) == 0 then
+  if toWater ~= fromWater and not toCross and not has(fromByte, move.CROSS_F) then
     return nil
   end
   if cost > 2 then
-    if woods and (toByte & move.FOREST_F) ~= 0 then cost = 2 end
-    if hills and (toByte & move.HILLS_F) ~= 0 then cost = 2 end
+    if woods and has(toByte, move.FOREST_F) then cost = 2 end
+    if hills and has(toByte, move.HILLS_F) then cost = 2 end
   end
   -- stepping out of land (or off a crossing) into open water costs extra
-  if (fromWater == 0 or (fromByte & move.CROSS_F) ~= 0)
-     and toWater ~= 0 and toCross == 0 then
+  if (not fromWater or has(fromByte, move.CROSS_F)) and toWater and not toCross then
     cost = cost + penalty
   end
   return cost
@@ -241,8 +253,8 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   local goal = dy * W + dx
   local goalByte = grid[goal]
   local restore
-  if goalByte % 8 == 0 and (goalByte & move.CITY_F) ~= 0 then
-    restore, grid[goal] = goalByte, goalByte | 1
+  if goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
+    restore, grid[goal] = goalByte, goalByte + 1
   end
 
   local dist, prev, done = {}, {}, {}
@@ -250,7 +262,7 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   dist[start] = 0
 
   local function heuristic(k)
-    local x, y = k % W, k // W
+    local x, y = k % W, math.floor(k / W)
     local ax, ay = x - dx, y - dy
     if ax < 0 then ax = -ax end
     if ay < 0 then ay = -ay end
@@ -263,7 +275,7 @@ function move.findPath(g, stack, sx, sy, dx, dy)
     heap[n] = { k, d }
     local i = n
     while i > 1 do
-      local p = i // 2
+      local p = math.floor(i / 2)
       if heap[p][2] <= heap[i][2] then break end
       heap[p], heap[i] = heap[i], heap[p]
       i = p
@@ -291,7 +303,7 @@ function move.findPath(g, stack, sx, sy, dx, dy)
     if not done[k] then
       done[k] = true
       local d = dist[k]
-      local x, y = k % W, k // W
+      local x, y = k % W, math.floor(k / W)
       for _, dir in pairs(move.DIRS) do
         local nx, ny = x + dir[1], y + dir[2]
         if nx >= 0 and ny >= 0 and nx < W and ny < H then
@@ -315,7 +327,7 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   local path, k = {}, goal
   while k ~= start do
     local p = prev[k]
-    table.insert(path, 1, { x = k % W, y = k // W, cost = p[2] })
+    table.insert(path, 1, { x = k % W, y = math.floor(k / W), cost = p[2] })
     k = p[1]
   end
   if #path > move.MAX_PATH then return nil end

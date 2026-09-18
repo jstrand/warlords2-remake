@@ -372,8 +372,8 @@ end
 function game.loot(g, loser)
   if not loser then return 0 end
   local n = #game.sideCities(g, loser)
-  local share = n > 1 and (loser.gold // n) or loser.gold
-  return share // 2
+  local share = n > 1 and math.floor(loser.gold / n) or loser.gold
+  return math.floor(share / 2)
 end
 
 --- Fight for a tile and apply the outcome: the dead are removed, and a city
@@ -438,7 +438,7 @@ end
 
 -- A production type's "value" is half its purchase price (ARMYTYPE +30).
 local function slotValue(g, slot)
-  return math.abs(g.types.byId[slot.type].price) // 2
+  return math.floor(math.abs(g.types.byId[slot.type].price) / 2)
 end
 
 local function recompute(g, city)
@@ -600,7 +600,7 @@ function game.checkEnd(g)
     for _, s in ipairs(computers) do
       biggest = math.max(biggest, #game.sideCities(g, s))
     end
-    if mine * 2 > standing and mine > biggest + standing // 8 then
+    if mine * 2 > standing and mine > biggest + math.floor(standing / 8) then
       g.surrenderOffered = true
       return { over = false, surrender = true,
                message = "Your enemies offer their surrender!" }
