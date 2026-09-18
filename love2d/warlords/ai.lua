@@ -347,9 +347,12 @@ function ai.phaseHeroes(g, side)
 
   for _, a in ipairs(gameMod.sideArmies(g, side)) do
     if a.type == armytype.HERO and not a.transit and (a.moves or 0) > 0 then
+      -- a temple is worth a visit when the side has no quest in hand
+      local wantTemple = g.map.options.quests ~= 0 and side.quest == nil
       local best, bestScore
       for _, s in ipairs(g.map.sites) do
-        if not s.searched and not taken[s] and s.content ~= siteMod.TEMPLE then
+        local worth = s.content ~= siteMod.TEMPLE or wantTemple
+        if not s.searched and not taken[s] and worth then
           local d = distance(a.x, a.y, s.x, s.y)
           local score = d < 15 and (215 - d) or (d < 40 and (90 - d) or nil)
           if score and (not bestScore or score > bestScore) then best, bestScore = s, score end
@@ -370,6 +373,7 @@ function ai.phaseHeroes(g, side)
           local found = gameMod.searchHere(g, stack)
           if found and found.kind == "killed" then break end   -- the hero is gone
         end
+        taken[best] = true
       end
     end
   end

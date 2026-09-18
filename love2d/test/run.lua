@@ -1126,6 +1126,123 @@ local function testDiplomacy()
   end
 end
 
+-------------------------------------------------------------------- quests
+
+local function testQuests()
+  print("quests")
+  local q = require("warlords.quest")
+  local siteMod = require("warlords.site")
+
+  -- with the option off no quest is ever assigned
+  local off = game.new(DATA, "ERYTHEA", { seed = 71 })
+  local sideOff = game.begin(off)
+  local heroOff = { x = 10, y = 10, owner = sideOff.index, type = armytype.HERO,
+                    strength = 5, experience = 0, items = {} }
+  eq(q.assign(off, sideOff, heroOff), nil, "no quests when the option is off")
+
+  local g = game.new(DATA, "ERYTHEA", { seed = 71, options = { quests = 1 } })
+  local side = game.begin(g)
+  local h = { x = side.capital.x, y = side.capital.y, owner = side.index,
+              type = armytype.HERO, strength = 5, experience = 0, items = {} }
+  g.armies[#g.armies + 1] = h
+
+  local quest1 = q.assign(g, side, h)
+  ok(quest1 ~= nil, "a quest is assigned")
+  ok(quest1.type >= 0 and quest1.type <= 6, "with a known type")
+  ok(quest1.target ~= nil, "and a target")
+  eq(q.assign(g, side, h), nil, "only one quest at a time")
+  ok(q.describe(quest1):len() > 0, "a quest describes itself")
+
+  -- the type table: 4, 5 and 6 come up twice as often as 0..3
+  local counts = {}
+  for _, t in ipairs(q.TYPE_TABLE) do counts[t] = (counts[t] or 0) + 1 end
+  eq(counts[0], 1, "type 0 has one slot")
+  eq(counts[4], 2, "type 4 has two")
+  eq(counts[6], 2, "type 6 has two")
+  eq(#q.TYPE_TABLE, 10, "the table is rolled with 1d10")
+
+  -- occupy: taking the target city with the hero completes it
+  side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[2], done = 0 }
+  side.gold = 5000
+  local r = q.event(g, side, "occupy", { city = g.map.cities[2], stack = { h } })
+  ok(r and not r.failed, "occupying the target completes the quest")
+  eq(side.quest, nil, "and the quest is cleared")
+  eq(h.experience, q.EXPERIENCE, "the hero gains 10 experience")
+  ok(r.reward ~= nil, "a reward was given")
+
+  -- ... but not without the hero
+  h.experience = 0
+  side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[3], done = 0 }
+  r = q.event(g, side, "occupy", { city = g.map.cities[3], stack = {} })
+  ok(r and r.failed, "occupying without the hero fails the quest: " .. tostring(r.failed))
+  eq(h.experience, 0, "and pays no experience")
+
+  -- raze: razing the occupy target is the wrong thing to do
+  side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[4], done = 0 }
+  r = q.event(g, side, "raze", { city = g.map.cities[4], stack = { h } })
+  ok(r and r.failed, "razing a city you were to keep fails the quest")
+
+  -- slaughter: dead armies of the target side count up to the total
+  local victim = g.sides[#g.sides]
+  side.quest = { type = q.SLAUGHTER, hero = h, target = victim, required = 3, done = 0 }
+  local dead = { { owner = victim.index }, { owner = victim.index } }
+  eq(q.event(g, side, "battle", { stack = { h }, killed = dead }), nil,
+     "two of three is not enough")
+  eq(side.quest.done, 2, "the count rises")
+  r = q.event(g, side, "battle", { stack = { h }, killed = dead })
+  ok(r and not r.failed, "the third kill completes it")
+
+  -- ... and kills without the hero do not count
+  side.quest = { type = q.SLAUGHTER, hero = h, target = victim, required = 2, done = 0 }
+  q.event(g, side, "battle", { stack = {}, killed = dead })
+  eq(side.quest.done, 0, "kills away from the hero do not count")
+
+  -- pillage: gold adds up
+  side.quest = { type = q.PILLAGE_GOLD, hero = h, target = true, required = 100, done = 0 }
+  q.event(g, side, "pillage", { stack = { h }, gold = 60 })
+  eq(side.quest.done, 60, "pillaged gold counts")
+  r = q.event(g, side, "pillage", { stack = { h }, gold = 60 })
+  ok(r and not r.failed, "reaching the total completes it")
+
+  -- retrieve: the priests take the item back
+  local item = { index = 99, name = "Testsword", type = rules.ITEM_BATTLE, value = 1, status = 3 }
+  h.items = { item }
+  side.quest = { type = q.RETRIEVE_ITEM, hero = h, target = item, done = 0 }
+  r = q.event(g, side, "item", { hero = h })
+  ok(r and not r.failed, "carrying the item completes the quest")
+  local stillCarried = false
+  for _, it in ipairs(h.items) do if it == item then stillCarried = true end end
+  ok(not stillCarried, "the quest item is taken away (the reward may add another)")
+  eq(item.status, 0, "it leaves play")
+
+  -- slay hero: the target must die in a battle the quest hero was in
+  local prey = { type = armytype.HERO, owner = victim.index }
+  side.quest = { type = q.SLAY_HERO, hero = h, target = prey, done = 0 }
+  eq(q.event(g, side, "battle", { stack = {}, killed = { prey } }), nil,
+     "someone else killing the quarry does not count")
+  r = q.event(g, side, "battle", { stack = { h }, killed = { prey } })
+  ok(r and not r.failed, "the hero killing the quarry completes it")
+
+  -- start of turn: losing the hero abandons the quest
+  side.quest = { type = q.PILLAGE_GOLD, hero = { type = armytype.HERO }, required = 1, done = 0 }
+  r = q.event(g, side, "turn")
+  ok(r and r.failed, "a quest with a dead hero is abandoned: " .. tostring(r.failed))
+
+  -- rewards: a poor side is given gold
+  side.gold = 50
+  local reward = q.reward(g, side, { hero = h })
+  eq(reward.kind, "gold", "a side with no gold is given gold")
+  ok(reward.gold >= 1002 and reward.gold <= 3000, "2d1000+1000: " .. reward.gold)
+
+  -- a small side past turn 15 is given allies
+  g.turn = 20
+  side.gold = 5000
+  reward = q.reward(g, side, { hero = h })
+  eq(reward.kind, "allies", "a small side past turn 15 is given allies")
+  ok(#reward.armies >= 1 and #reward.armies <= 8, "1d3+5 allies arrive")
+  siteMod = siteMod
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -1163,6 +1280,7 @@ testCityChoices("ERYTHEA")
 testHeroes("ERYTHEA")
 testHeroExperienceBug()
 testDiplomacy()
+testQuests()
 testSites("ERYTHEA")
 testSites("DRAGON")
 testAIGame("TUTORIA", 30)

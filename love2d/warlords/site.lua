@@ -231,7 +231,13 @@ function site.search(g, stack, x, y)
 
   if s.content == site.TEMPLE then
     local blessed = site.bless(g, s, stack)
-    return { site = s, kind = "temple", blessed = blessed }
+    local out = { site = s, kind = "temple", blessed = blessed }
+    -- a stack with a hero may also take a quest here
+    if h and g.map.options.quests ~= 0 then
+      local side = g.map.sides[h.owner + 1]
+      out.quest = require("warlords.quest").assign(g, side, h)
+    end
+    return out
   end
 
   -- only a stack with a hero may search a ruin
@@ -267,7 +273,9 @@ function site.search(g, stack, x, y)
       h.items = h.items or {}
       h.items[#h.items + 1] = found
     end
-    return { site = s, kind = "item", item = found, hero = h }
+    local side = g.map.sides[h.owner + 1]
+    local q = require("warlords.quest").event(g, side, "item", { hero = h })
+    return { site = s, kind = "item", item = found, hero = h, quest = q }
 
   elseif s.content == site.GOLD then
     local gold = s.rich and g.rng:dice(3, 1000, 1000) or g.rng:dice(3, 500, 500)

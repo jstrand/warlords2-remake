@@ -314,6 +314,10 @@ function game.startTurn(g, side)
   end
   side.heroOffer = heroMod.offer(g, side)
   heroMod.checkPromotions(g, side)
+  local questResult = require("warlords.quest").event(g, side, "turn")
+  if questResult and questResult.failed then
+    g.log[#g.log + 1] = ("Quest abandoned: %s."):format(questResult.failed)
+  end
   applyIncome(g, side)
   runProduction(g, side)
   resetMovement(g, side)
@@ -383,6 +387,10 @@ function game.resolveAttack(g, stack, x, y)
     if d.type == armytype.HERO then heroMod.dropItems(g, d, x, y) end
   end
   heroMod.battleExperience(g, attackers, defenders, result, city ~= nil)
+  local questMod = require("warlords.quest")
+  local mySide = g.map.sides[(stack[1] and stack[1].owner or 0) + 1]
+  result.quest = questMod.event(g, mySide, "battle",
+                                { stack = attackers, killed = result.deadDefenders })
 
   removeArmies(g, result.deadAttackers)
   removeArmies(g, result.deadDefenders)
@@ -401,6 +409,9 @@ function game.resolveAttack(g, stack, x, y)
     city.ownerIndex = winner.index
     move.invalidate(g)
     result.captured = city
+    result.quest = questMod.event(g, winner, "occupy",
+                                  { city = city, stack = result.attackers })
+                   or result.quest
   end
 
   -- The survivors walk into the tile they just cleared -- but only as many as
@@ -439,18 +450,20 @@ end
 
 --- Strip the most expensive production type for gold. docs/rules.md >
 --- Capturing a city.
-function game.pillage(g, side, city)
+function game.pillage(g, side, city, stack)
   if #city.slots < 1 then return 0 end
   local slot = table.remove(city.slots)          -- slots are sorted cheapest first
   local gold = slotValue(g, slot)
   side.gold = side.gold + gold
   game.addDiploScore(g, side, g.rng:dice(1, 5, 0))
   recompute(g, city)
+  require("warlords.quest").event(g, side, "pillage",
+                                  { city = city, gold = gold, stack = stack or {} })
   return gold
 end
 
 --- Strip every production type but the cheapest.
-function game.sack(g, side, city)
+function game.sack(g, side, city, stack)
   if #city.slots < 2 then return 0 end
   local gold = 0
   while #city.slots > 1 do
@@ -459,11 +472,13 @@ function game.sack(g, side, city)
   side.gold = side.gold + gold
   game.addDiploScore(g, side, g.rng:dice(1, 10, 5))
   recompute(g, city)
+  require("warlords.quest").event(g, side, "pillage",
+                                  { city = city, gold = gold, stack = stack or {} })
   return gold
 end
 
 --- Burn the city to the ground: it becomes neutral ruins and produces nothing.
-function game.raze(g, side, city)
+function game.raze(g, side, city, stack)
   local move = require("warlords.move")
   city.razed = true
   city.ownerIndex = nil
@@ -477,6 +492,7 @@ function game.raze(g, side, city)
   end
   game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
+  require("warlords.quest").event(g, side, "raze", { city = city, stack = stack or {} })
 end
 
 --------------------------------------------------------------------- sites
