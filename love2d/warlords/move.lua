@@ -208,6 +208,10 @@ end
 
 --- Cheapest path from (sx,sy) to (dx,dy) for a stack, as a list of
 --- { x, y, cost } steps, or nil if there is no route.
+--
+-- The original floods the whole map from the destination; this is A* with a
+-- Chebyshev heuristic, which is admissible because no step costs less than 1
+-- and diagonals are allowed. Same paths, a fraction of the tiles visited.
 function move.findPath(g, stack, sx, sy, dx, dy)
   if sx == dx and sy == dy then return {} end
   local W, H = g.map.width, g.map.height
@@ -234,7 +238,15 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   local start = sy * W + sx
   dist[start] = 0
 
-  local heap, n = { { start, 0 } }, 1
+  local function heuristic(k)
+    local x, y = k % W, k // W
+    local ax, ay = x - dx, y - dy
+    if ax < 0 then ax = -ax end
+    if ay < 0 then ay = -ay end
+    return ax > ay and ax or ay
+  end
+
+  local heap, n = { { start, heuristic(start) } }, 1
   local function push(k, d)
     n = n + 1
     heap[n] = { k, d }
@@ -263,10 +275,11 @@ function move.findPath(g, stack, sx, sy, dx, dy)
 
   while n > 0 do
     local top = pop()
-    local k, d = top[1], top[2]
+    local k = top[1]
     if k == goal then break end
     if not done[k] then
       done[k] = true
+      local d = dist[k]
       local x, y = k % W, k // W
       for _, dir in pairs(move.DIRS) do
         local nx, ny = x + dir[1], y + dir[2]
@@ -277,7 +290,7 @@ function move.findPath(g, stack, sx, sy, dx, dy)
             if c and (dist[nk] == nil or d + c < dist[nk]) then
               dist[nk] = d + c
               prev[nk] = { k, c }
-              push(nk, d + c)
+              push(nk, d + c + heuristic(nk))
             end
           end
         end

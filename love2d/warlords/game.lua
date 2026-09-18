@@ -67,6 +67,32 @@ function game.itemBonus(g, side, itemType)
   return total
 end
 
+--- A tile in the city with room for another army: the four tiles of its
+--- footprint in order, then -- if `spill` is set -- up to 20 tries on a random
+--- tile within one step of it. Returns x, y or nil.
+-- FUN_6f8c_0bff, the guard on every army the game places in a city.
+function game.freeTileIn(g, city, spill)
+  for dx = 0, 1 do
+    for dy = 0, 1 do
+      local x, y = city.x + dx, city.y + dy
+      if x < g.map.width and y < g.map.height
+         and #game.armiesAt(g, x, y) < rules.MAX_STACK then
+        return x, y
+      end
+    end
+  end
+  if not spill then return nil end
+  for _ = 1, 20 do
+    local x = city.x + g.rng:dice(1, 3, -2)
+    local y = city.y + g.rng:dice(1, 3, -2)
+    if x >= 0 and y >= 0 and x < g.map.width and y < g.map.height
+       and #game.armiesAt(g, x, y) < rules.MAX_STACK then
+      return x, y
+    end
+  end
+  return nil
+end
+
 --------------------------------------------------------------------- economy
 
 --- docs/rules.md > Start of a side's turn, step 4.
@@ -111,6 +137,7 @@ local function setupGarrisons(g)
     if slot then
       local a = rules.armyFromSlot(slot, owned and g.map.sides[c.ownerIndex + 1].enhanced)
       a.x, a.y, a.owner, a.moves, a.homeCity = c.x, c.y, c.ownerIndex, 0, c.index
+
       placeArmy(g, a)
     else
       -- Neutral Cities off: a placeholder Scouts army of strength 1.
@@ -181,8 +208,8 @@ end
 --- Place a produced army, or send it back. Returns the army, or nil if it was
 --- disbanded. docs/rules.md > Start of a side's turn, step 5.
 local function deliver(g, army, city)
-  if #game.armiesAt(g, city.x, city.y) >= rules.MAX_STACK
-     or city.ownerIndex ~= army.owner then
+  local x, y = game.freeTileIn(g, city, true)
+  if not x or city.ownerIndex ~= army.owner then
     if army.returning then
       return nil                      -- already heading home: disbanded
     end
@@ -191,7 +218,7 @@ local function deliver(g, army, city)
     army.transit = { turns = TRANSIT_TURNS, dest = home.index }
     return army
   end
-  army.x, army.y, army.transit, army.returning = city.x, city.y, nil, nil
+  army.x, army.y, army.transit, army.returning = x, y, nil, nil
   army.moves = 0
   return army
 end
@@ -202,19 +229,24 @@ local function runProduction(g, side)
     if c.producing then
       c.countdown = c.countdown - 1
       if c.countdown <= 0 then
-        if side.gold > 0 then
+        local vectored = c.vectorTo and c.vectorTo ~= c.index
+                         and c.vectorTo ~= STANDARD_DEST
+        local x, y = game.freeTileIn(g, c, true)
+        if side.gold <= 0 then
+          c.countdown = 0               -- no gold: it waits, built but unpaid
+        elseif not (x or vectored) then
+          c.countdown = 0               -- nowhere to stand: it waits too
+        else
           local slot = c.slots[c.producing]
           local a = rules.armyFromSlot(slot, side.enhanced)
           a.owner, a.homeCity, a.moves = side.index, c.index, 0
-          a.x, a.y = c.x, c.y
-          if c.vectorTo and c.vectorTo ~= c.index and c.vectorTo ~= STANDARD_DEST then
+          a.x, a.y = x, y
+          if vectored then
             a.transit = { turns = TRANSIT_TURNS, dest = c.vectorTo }
             a.x, a.y = nil, nil
           end
           placeArmy(g, a)
           c.countdown = slot.time       -- the city starts the next one
-        else
-          c.countdown = 0               -- no gold: it waits, built but unpaid
         end
       end
     end
@@ -366,9 +398,15 @@ function game.resolveAttack(g, stack, x, y)
     result.captured = city
   end
 
-  -- survivors walk into the tile they just cleared
+  -- The survivors walk into the tile they just cleared -- but only as many as
+  -- fit. The rest stay where they are, as they would if the walk had been
+  -- blocked (docs/rules.md > Moving a stack).
   if result.won then
-    for _, a in ipairs(result.attackers) do a.x, a.y = x, y end
+    local room = rules.MAX_STACK - #game.armiesAt(g, x, y)
+    for _, a in ipairs(result.attackers) do
+      if room <= 0 then break end
+      a.x, a.y, room = x, y, room - 1
+    end
   end
   return result
 end

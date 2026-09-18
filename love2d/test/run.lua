@@ -863,6 +863,71 @@ local function testHeroExperienceBug()
   eq(dead.experience, 0, "a hero that died gains nothing")
 end
 
+------------------------------------------------------------ a whole AI game
+
+local function testAIGame(scenario, turns)
+  print(("AI game: %s, %d turns"):format(scenario, turns))
+  local aiMod = require("warlords.ai")
+  local g = game.new(DATA, scenario, { seed = 101 })
+  local side = game.begin(g)
+
+  local captures, battles = 0, 0
+  local ownedAtStart = {}
+  for _, s in ipairs(g.sides) do ownedAtStart[s.index] = #game.sideCities(g, s) end
+
+  while side and g.turn <= turns do
+    aiMod.playTurn(g, side)
+    side = game.endTurn(g)
+  end
+
+  ok(g.turn > turns or side == nil, "the game ran to the turn limit")
+
+  -- every invariant that must hold at any point in a game
+  local perTile = {}
+  for _, a in ipairs(g.armies) do
+    ok(g.types.byId[a.type] ~= nil, "every army has a real type")
+    if not a.transit then
+      ok(a.x and a.y, "a placed army has a position")
+      ok(a.x >= 0 and a.x < g.map.width and a.y >= 0 and a.y < g.map.height,
+         "every army is on the map")
+      local k = a.y * g.map.width + a.x
+      perTile[k] = (perTile[k] or 0) + 1
+    end
+    ok((a.moves or 0) >= 0, "movement never goes negative")
+    ok((a.moves or 0) <= rules.MAX_MOVE, "movement never exceeds the cap")
+  end
+  local worst = 0
+  for _, n in pairs(perTile) do worst = math.max(worst, n) end
+  ok(worst <= rules.MAX_STACK, "no tile ever holds more than 8 armies: " .. worst)
+
+  for _, s in ipairs(g.sides) do
+    ok(s.gold >= 0, s.name .. " never goes into debt")
+    if not s.alive then ok(#game.sideCities(g, s) == 0, "a dead side owns nothing") end
+  end
+
+  for _, c in ipairs(g.map.cities) do
+    if c.ownerIndex ~= nil then
+      ok(g.map.sides[c.ownerIndex + 1] ~= nil, "a city's owner is a real side")
+    end
+    ok(#c.slots <= 4, "a city never gains production slots")
+  end
+
+  -- the game has actually moved on: somebody owns more than they started with
+  local moved = false
+  for _, s in ipairs(g.sides) do
+    local now = #game.sideCities(g, s)
+    if now ~= ownedAtStart[s.index] then moved = true end
+    captures = captures + math.max(0, now - ownedAtStart[s.index])
+  end
+  ok(moved, "cities changed hands over " .. turns .. " turns")
+  ok(captures > 0, ("the computer players took %d cities"):format(captures))
+
+  -- and armies were actually produced
+  ok(#g.armies > #g.map.cities, ("armies were built: %d from %d cities")
+     :format(#g.armies, #g.map.cities))
+  battles = battles
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -899,6 +964,8 @@ testCapture("ERYTHEA")
 testCityChoices("ERYTHEA")
 testHeroes("ERYTHEA")
 testHeroExperienceBug()
+testAIGame("TUTORIA", 30)
+testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
 
 print(("\n%d passed, %d failed"):format(passed, failed))

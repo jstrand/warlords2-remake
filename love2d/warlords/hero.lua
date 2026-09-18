@@ -80,11 +80,14 @@ end
 --- Hire the offered hero. Returns the hero army and the allies it brought.
 -- hero_recruit, Ghidra 7563:031b.
 function hero.recruit(g, side, offer)
+  local gameMod = require("warlords.game")
   local city = offer.city
   side.gold = math.max(0, side.gold - (offer.price or 0))
+  local hx, hy = gameMod.freeTileIn(g, city, true)
+  hx, hy = hx or city.x, hy or city.y
 
   local h = {
-    x = city.x, y = city.y, owner = side.index, type = armytype.HERO,
+    x = hx, y = hy, owner = side.index, type = armytype.HERO,
     name = "Hero", strength = hero.START_STRENGTH,
     maxMoves = hero.START_MOVES, moves = 0, upkeep = 0,
     homeCity = city.index, level = 1, experience = 0, items = {},
@@ -101,8 +104,9 @@ function hero.recruit(g, side, offer)
   if not offer.first then
     local type, n = hero.allies(g)
     for _ = 1, n do
+      local ax, ay = gameMod.freeTileIn(g, city, true)
       local a = {
-        x = city.x, y = city.y, owner = side.index, type = type.id, name = type.name,
+        x = ax or hx, y = ay or hy, owner = side.index, type = type.id, name = type.name,
         strength = type.strength, maxMoves = type.move, moves = 0,
         upkeep = type.cost // 2, homeCity = city.index,
       }
