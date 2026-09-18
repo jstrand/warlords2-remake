@@ -359,6 +359,68 @@ function game.resolveAttack(g, stack, x, y)
   return result
 end
 
+----------------------------------------------------- what to do with a city
+
+-- A production type's "value" is half its purchase price (ARMYTYPE +30).
+local function slotValue(g, slot)
+  return math.abs(g.types.byId[slot.type].price) // 2
+end
+
+local function recompute(g, city)
+  city.defence = rules.cityDefence(#city.slots)
+  if city.producing and city.producing > #city.slots then
+    city.producing, city.countdown = nil, 0
+  end
+end
+
+--- Raise a side's atrocity score, the u16 at .SCN 0x10e3 + 2*side that the
+--- diplomatic rating reads. docs/rules.md > Diplomacy.
+function game.addAtrocity(g, side, n)
+  side.atrocity = (side.atrocity or 0) + n
+end
+
+--- Strip the most expensive production type for gold. docs/rules.md >
+--- Capturing a city.
+function game.pillage(g, side, city)
+  if #city.slots < 1 then return 0 end
+  local slot = table.remove(city.slots)          -- slots are sorted cheapest first
+  local gold = slotValue(g, slot)
+  side.gold = side.gold + gold
+  game.addAtrocity(g, side, g.rng:dice(1, 5, 0))
+  recompute(g, city)
+  return gold
+end
+
+--- Strip every production type but the cheapest.
+function game.sack(g, side, city)
+  if #city.slots < 2 then return 0 end
+  local gold = 0
+  while #city.slots > 1 do
+    gold = gold + slotValue(g, table.remove(city.slots))
+  end
+  side.gold = side.gold + gold
+  game.addAtrocity(g, side, g.rng:dice(1, 10, 5))
+  recompute(g, city)
+  return gold
+end
+
+--- Burn the city to the ground: it becomes neutral ruins and produces nothing.
+function game.raze(g, side, city)
+  local move = require("warlords.move")
+  city.razed = true
+  city.ownerIndex = nil
+  city.previousOwner = rules.NEUTRAL
+  city.slots = {}
+  city.producing, city.countdown, city.vectorTo = nil, 0, nil
+  city.defence = 0
+  city.income = 0
+  for _, c in ipairs(g.map.cities) do
+    if c.vectorTo == city.index then c.vectorTo = nil end
+  end
+  game.addAtrocity(g, side, g.rng:dice(1, 15, 10))
+  move.invalidate(g)
+end
+
 --------------------------------------------------------------- city commands
 
 --- Choose what a city builds. `slotIndex` is nil to stop producing.

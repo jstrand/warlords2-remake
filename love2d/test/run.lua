@@ -657,6 +657,87 @@ local function testTutorialHero()
   ok(deaths > 0, "without the tutorial flag the hero can die")
 end
 
+------------------------------------------------- what to do with a captured city
+
+local function testCityChoices(scenario)
+  print("pillage, sack and raze: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 29 })
+  local side = game.begin(g)
+
+  local function captured(want)
+    local city
+    for _, c in ipairs(g.map.cities) do
+      if c.ownerIndex == nil and #c.slots >= want then city = c break end
+    end
+    if city then game.setCityOwner(g, city, side.index) end
+    return city
+  end
+
+  -- pillage takes the most expensive type and pays half its purchase price
+  local city = captured(2)
+  ok(city ~= nil, "found a city with something to pillage")
+  if city then
+    local n, dear = #city.slots, city.slots[#city.slots]
+    local want = math.abs(g.types.byId[dear.type].price) // 2
+    local gold0, atrocity0 = side.gold, side.atrocity or 0
+    local got = game.pillage(g, side, city)
+    eq(got, want, "pillage pays half the type's purchase price")
+    eq(side.gold, gold0 + want, "the gold was paid")
+    eq(#city.slots, n - 1, "pillage removed one type")
+    eq(city.defence, rules.cityDefence(#city.slots), "defence was recomputed")
+    local d = (side.atrocity or 0) - atrocity0
+    ok(d >= 1 and d <= 5, "pillage costs 1d5 atrocity: " .. d)
+    for _, s2 in ipairs(city.slots) do
+      ok(s2.type ~= dear.type or s2 ~= dear, "the pillaged type is gone")
+    end
+  end
+
+  -- sack strips everything but the cheapest
+  local city2 = captured(3)
+  if city2 then
+    local cheapest = city2.slots[1]
+    local want = 0
+    for i = 2, #city2.slots do
+      want = want + math.abs(g.types.byId[city2.slots[i].type].price) // 2
+    end
+    local gold0, atrocity0 = side.gold, side.atrocity or 0
+    local got = game.sack(g, side, city2)
+    eq(got, want, "sack pays for every type it strips")
+    eq(side.gold, gold0 + want, "the gold was paid")
+    eq(#city2.slots, 1, "only the cheapest type is left")
+    eq(city2.slots[1], cheapest, "and it is the cheapest one")
+    eq(city2.defence, 1, "one type means defence 1")
+    local d = (side.atrocity or 0) - atrocity0
+    ok(d >= 6 and d <= 15, "sack costs 1d10+5 atrocity: " .. d)
+  end
+
+  -- raze leaves neutral ruins that produce nothing
+  local city3 = captured(1)
+  if city3 then
+    local before = #game.sideCities(g, side)
+    local other
+    for _, c in ipairs(g.map.cities) do
+      if c.ownerIndex == side.index and c ~= city3 then other = c break end
+    end
+    if other then game.vector(g, other, city3) end
+    local atrocity0 = side.atrocity or 0
+    game.raze(g, side, city3)
+    eq(city3.ownerIndex, nil, "a razed city is neutral")
+    eq(#city3.slots, 0, "a razed city produces nothing")
+    eq(city3.income, 0, "a razed city earns nothing")
+    eq(#game.sideCities(g, side), before - 1, "the side no longer owns it")
+    if other then eq(other.vectorTo, nil, "vectoring to it was cancelled") end
+    local d = (side.atrocity or 0) - atrocity0
+    ok(d >= 11 and d <= 25, "raze costs 1d15+10 atrocity: " .. d)
+  end
+
+  -- pillaging a city with nothing to take does nothing
+  local empty = { slots = {}, index = -1 }
+  eq(game.pillage(g, side, empty), 0, "pillaging an empty city pays nothing")
+  eq(game.sack(g, side, { slots = { { type = 11 } }, index = -1 }), 0,
+     "sacking a one-type city pays nothing")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -690,6 +771,7 @@ testMovement("ISLADIA")
 testStackLimit("ERYTHEA")
 testCombat("ERYTHEA")
 testCapture("ERYTHEA")
+testCityChoices("ERYTHEA")
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
 
 print(("\n%d passed, %d failed"):format(passed, failed))

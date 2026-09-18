@@ -94,6 +94,8 @@ function scn.load(dir, name)
       computer = u16(s, CONTROLLERS + 2 * i) ~= 0,
       level = u16(s, LEVELS + 2 * i),
       enhanced = u16(s, ENHANCED + 2 * i) ~= 0,
+      atrocity = u16(s, ATROCITY + 2 * i),   -- the diplomatic score
+
     }
   end
 
