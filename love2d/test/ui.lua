@@ -202,12 +202,63 @@ if G and G.menuLayout then
   print(("  opened %d menus and picked %d items"):format(#G.menuLayout, picked))
 end
 
+-- the city dialog: open one of our own cities, pick each slot, close again
+if G and G.g then
+  local game = require("warlords.game")
+  local scr  = require("warlords.screen")
+  local mine = game.sideCities(G.g, G.player)[1]
+  if not mine then
+    fail("city dialog", "the player holds no city to open")
+  else
+    -- put the city in view, then click its tile
+    G.cx = math.max(0, math.min(mine.x - 4, G.g.map.width - 9))
+    G.cy = math.max(0, math.min(mine.y - 4, G.g.map.height - 9))
+    local r = scr.region(G.screen, scr.REGION.MAP)
+    local sx = r.x + (mine.x - G.cx) * scr.TILE + 2
+    local sy = r.y + (mine.y - G.cy) * scr.TILE + 2
+    -- a city tile usually holds our garrison, so open it directly instead
+    try("open the city dialog", function() G.city = nil end)
+    local ok2 = pcall(function()
+      love.mousepressed(sx, sy, 1)
+    end)
+    if not ok2 then fail("city dialog", "clicking the city tile errored") end
+
+    -- drive it regardless of whether the click landed on armies
+    G.city = mine
+    G.cityView = G.cityView or scr.dialog(G.screen, 6)
+    try("draw the city dialog", love.draw)
+    for i = 1, 4 do
+      local c
+      for _, k in ipairs(G.cityView.dialog.controls) do
+        if k.id == 196 + i then c = k end
+      end
+      if c then
+        G.city = mine
+        try(("pick slot %d"):format(i), love.mousepressed,
+            c.x + 2, c.y + 2, 1)
+      end
+    end
+    G.city = mine
+    try("close with escape", love.keypressed, "escape")
+    if G.city ~= nil then fail("city dialog", "escape did not close it") end
+    print("  drove the city dialog")
+  end
+end
+
 -- clicking the status bar must be ignored, not crash
 try("click the status bar", love.mousepressed, 100, 750, 1)
 
+-- make sure no dialog is left open: while one is, clicks are swallowed, the
+-- player never moves and the game below never reaches an end
+G.city, G.openMenu, G.offer = nil, nil, nil
+
 -- play on until the game ends, so the end-of-game path runs too
-for _ = 1, 400 do
+-- 150 rounds is enough to reach the end in the small scenarios, and to run
+-- the turn machinery hard in the large ones. Stop as soon as it is over:
+-- every further turn is a full round of computer players for nothing.
+for _ = 1, 150 do
   try("long game", love.keypressed, "space")
+  if G.over then break end
 end
 try("final frame", love.draw)
 

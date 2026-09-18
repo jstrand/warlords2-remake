@@ -33,7 +33,7 @@ local ROAD_KEY, ARMY_KEY = 1, 10
 
 local G = {}
 
-local presentOffer, stratDirty        -- defined below, wanted before that
+local presentOffer, stratDirty, openCity, closeCity  -- defined below
 
 local function quadsFor(img, cols, cellW, cellH, stride, count)
   local qs = {}
@@ -158,11 +158,7 @@ local function select(x, y)
   if #stack == 0 then
     G.selection = nil
     local city = game.cityAt(G.g, x, y)
-    if city then
-      say("%s: %s, income %d", city.name,
-          city.ownerIndex and G.g.map.sides[city.ownerIndex + 1].name or "neutral",
-          city.income)
-    end
+    if city then openCity(city) end
     return
   end
   G.selection = { x = x, y = y, stack = stack }
@@ -240,6 +236,35 @@ local function endTurn()
   if not presentOffer(side) then
     say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   end
+end
+
+-- The city dialog is dialog 6 (7204:0000 pushes 6 to the dialog opener). Its
+-- four 32x70 slots, ids 197-200, are the city's production choices; they carry
+-- no art of their own, so the game draws the army in each.
+-- docs/formats/screens.md.
+local CITY_DIALOG, CITY_SLOT_FIRST, CITY_SLOTS = 6, 197, 4
+
+function openCity(city)
+  if not G.cityView then G.cityView = screen.dialog(G.screen, CITY_DIALOG) end
+  G.city = city
+  say("%s: %s", city.name,
+      city.ownerIndex == G.player.index and "choose what to build" or "not yours")
+end
+
+function closeCity()
+  G.city = nil
+end
+
+--- Set the city building slot n (1-based), if it is ours.
+local function pickProduction(n)
+  local c = G.city
+  if not c then return end
+  if c.ownerIndex ~= G.player.index then say("%s is not yours.", c.name) return end
+  local slot = c.slots and c.slots[n]
+  if not slot then say("There is no such slot.") return end
+  game.setProduction(G.g, c, n)
+  say("%s will build %s: strength %d, %d turns, upkeep %d.",
+      c.name, slot.name, slot.strength, slot.time, math.floor(slot.cost / 2))
 end
 
 local function loadGame()
@@ -429,14 +454,61 @@ end
 -- and window coordinates are the same. That matters beyond tidiness --
 -- love.graphics.setScissor takes window pixels and ignores any transform, so
 -- scaling here would clip the map and the strategic map to the wrong place.
+--- The city dialog: the original's rects, with the armies drawn into its
+--- four production slots.
+local function drawCity()
+  local c = G.city
+  love.graphics.setColor(0.18, 0.18, 0.18, 0.85)
+  love.graphics.rectangle("fill", 0, 18, screen.WIDTH, screen.HEIGHT - 18)
+
+  local panel = { x = 296, y = 100, w = 320, h = 260 }
+  love.graphics.setColor(0.35, 0.35, 0.35)
+  love.graphics.rectangle("fill", panel.x, panel.y, panel.w, panel.h)
+  love.graphics.setColor(0.65, 0.65, 0.65)
+  love.graphics.rectangle("line", panel.x + 0.5, panel.y + 0.5, panel.w - 1, panel.h - 1)
+
+  love.graphics.setColor(1, 1, 1)
+  G.font.draw(c.name, panel.x + 10, panel.y + 6)
+  G.font.draw(("defence %d   income %d"):format(c.defence, c.income),
+              panel.x + 10, panel.y + 6 + G.font.lineHeight)
+
+  for i = 1, CITY_SLOTS do
+    local ctl = nil
+    for _, k in ipairs(G.cityView.dialog.controls) do
+      if k.id == CITY_SLOT_FIRST + i - 1 then ctl = k end
+    end
+    local slot = c.slots and c.slots[i]
+    if ctl then
+      local lit = (c.producing == i)
+      love.graphics.setColor(lit and 0.55 or 0.28, lit and 0.55 or 0.28, lit and 0.3 or 0.28)
+      love.graphics.rectangle("fill", ctl.x, ctl.y, ctl.w, ctl.h)
+      love.graphics.setColor(0.7, 0.7, 0.7)
+      love.graphics.rectangle("line", ctl.x + 0.5, ctl.y + 0.5, ctl.w - 1, ctl.h - 1)
+      if slot then
+        local owner = c.ownerIndex or 8
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32], ctl.x, ctl.y)
+        G.font.draw(("%d/%d"):format(slot.strength, slot.time),
+                    ctl.x + 2, ctl.y + ARMY_CELL + 2)
+        G.font.draw(tostring(math.floor(slot.cost / 2)),
+                    ctl.x + 2, ctl.y + ARMY_CELL + 2 + G.font.lineHeight)
+      end
+    end
+  end
+
+  love.graphics.setColor(1, 1, 1)
+  G.font.draw("click a slot, or esc to close", panel.x + 10, panel.y + panel.h - 18)
+end
+
 function love.draw()
   screen.drawBackground(G.screen)
   drawMap()
   drawStrategic()
   screen.drawControls(G.screen)
   drawShortcutLabels()
-  drawMenuBar()
   drawBottomBar()
+  if G.city then drawCity() end
+  drawMenuBar()
 end
 
 --------------------------------------------------------------------- input
@@ -453,6 +525,16 @@ end
 
 function love.mousepressed(x, y, button)
   if G.over or G.offer then return end
+
+  if G.city then
+    local c = screen.dialogControlAt(G.cityView, x, y)
+    if c and c.id >= CITY_SLOT_FIRST and c.id < CITY_SLOT_FIRST + CITY_SLOTS then
+      pickProduction(c.id - CITY_SLOT_FIRST + 1)
+    else
+      closeCity()
+    end
+    return
+  end
 
   -- the menu bar takes precedence over everything beneath it
   local hit = menuMod.titleAt(G.menuLayout, x, y, 18)
@@ -602,6 +684,7 @@ MENU_DOES = {
 function love.keypressed(key)
   if key == "escape" then
     if G.openMenu then G.openMenu = nil return end
+    if G.city then closeCity() return end
     love.event.quit() return
   end
   if G.over then return end

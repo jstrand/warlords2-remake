@@ -30,6 +30,7 @@ regions and fonts are the game's own, read from its data files at runtime
 | input | does |
 |---|---|
 | the menu bar | open a menu; pick an item to run it |
+| left click a city | open it and choose what it builds |
 | left click the map | select a stack, or walk the selection there |
 | right click the map | inspect a tile |
 | click the strategic map | recentre the view |
@@ -105,9 +106,10 @@ here.
 
 ## What is not here yet
 
-Sound, and the interface for most of what the rules core can already do:
-there is no city dialog, no way to split a stack, no diplomacy screen and no
-quest log — those systems run, but only the engine drives them.
+Sound, and the interface for much of what the rules core can already do:
+there is no way to split a stack, no diplomacy screen and no quest log — those
+systems run, but only the engine drives them. The city dialog sets production
+and nothing else; the original's also vectors, razes and rearranges garrisons.
 
 The computer player is honest about its limits. Its phase order, city roles,
 production purposes and garrison sizes come from the original; its target

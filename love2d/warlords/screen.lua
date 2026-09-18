@@ -145,6 +145,41 @@ function screen.drawControls(self)
   end
 end
 
+--- Another dialog's layout, sharing this screen's art and bitmap table.
+--- The main screen stays loaded underneath, as it does in the original.
+function screen.dialog(self, id)
+  local d = uidata.dialog(self.ui, id)
+  if not d then return nil end
+  local state = {}
+  for _, c in ipairs(d.controls) do state[c.id] = uidata.NORMAL end
+  return { dialog = d, state = state, id = id }
+end
+
+--- The controls of a loaded dialog, drawn from this screen's art.
+function screen.drawDialogControls(self, view)
+  love.graphics.setColor(1, 1, 1)
+  for _, c in ipairs(view.dialog.controls) do
+    if c.bitmap ~= 0 and c.w > 0 and c.h > 0 then
+      local art = self.art_for(c.bitmap)
+      local s = c.src[view.state[c.id] or uidata.NORMAL]
+      if art and s.x + c.w <= art.w and s.y + c.h <= art.h then
+        love.graphics.draw(art.image,
+          love.graphics.newQuad(s.x, s.y, c.w, c.h, art.w, art.h), c.x, c.y)
+      end
+    end
+  end
+end
+
+function screen.dialogControlAt(view, x, y)
+  for _, c in ipairs(view.dialog.controls) do
+    if c.w > 0 and c.h > 0
+       and x >= c.x and x < c.x + c.w and y >= c.y and y < c.y + c.h then
+      return c
+    end
+  end
+  return nil
+end
+
 --------------------------------------------------------------- strategic map
 
 --- Build the strategic map as one image, a pixel per tile. It is drawn at
