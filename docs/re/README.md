@@ -10,6 +10,7 @@ What's here, and where to look first.
 | [`runtime.md`](runtime.md) | segment 0: Borland runtime, SSG's assembly helpers, sound drivers |
 | [`ai.md`](ai.md) | computer players: turn pipeline, AI data, decoded decisions |
 | [`random_map.md`](random_map.md) | random map generator: pipeline and `RANDOM.DAT` parameters |
+| [`ui.md`](ui.md) | the interface: 640×480 planar VGA, screen layout, the widget toolkit, event loop, fonts |
 
 The **rules** that came out of all this live in [`../rules.md`](../rules.md),
 and the file formats in [`../formats/`](../formats). `docs/rules.md` is the
@@ -28,8 +29,9 @@ diplomacy, city roles, production, garrisons, hero expeditions and assaults.
 
 ## Still open
 
-- Graphics, sound and UI plumbing — deliberately skipped; the data formats
-  are decoded in `docs/formats/`.
+- Sound — deliberately skipped.
+- Graphics and UI plumbing — the screen layout, widget model, event loop and
+  fonts are in [`ui.md`](ui.md); the open ends are listed at the end of it.
 - A handful of small unknowns, listed at the end of `docs/rules.md`.
 
 ## Method notes
