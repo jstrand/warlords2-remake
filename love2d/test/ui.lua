@@ -176,6 +176,32 @@ for _, key in ipairs({ "p", "p", "c", "home", "up", "down", "left", "right",
 end
 try("frame after the keys", love.draw)
 
+-- open every menu and pick every item in it
+if G and G.menuLayout then
+  local menuMod = require("warlords.menu")
+  local picked = 0
+  for i, m in ipairs(G.menuLayout) do
+    try(("open menu %s"):format(m.title), love.mousepressed, m.x + 2, 4, 1)
+    if G.openMenu ~= i then
+      fail("menu", ("clicking %s did not open it"):format(m.title))
+    end
+    for _, r in ipairs(m.drop.rows) do
+      if r.label ~= "-" then
+        -- reopen, then pick the row
+        G.openMenu = i
+        try(("pick %s > %s"):format(m.title, r.label),
+            love.mousepressed, r.x + 2, r.y + 1, 1)
+        if G.openMenu ~= nil then
+          fail("menu", ("picking %s left the menu open"):format(r.label))
+        end
+        picked = picked + 1
+      end
+    end
+    G.openMenu = nil
+  end
+  print(("  opened %d menus and picked %d items"):format(#G.menuLayout, picked))
+end
+
 -- clicking the status bar must be ignored, not crash
 try("click the status bar", love.mousepressed, 100, 750, 1)
 

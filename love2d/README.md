@@ -4,8 +4,11 @@ A from-scratch Warlords II engine in Lua. It reads the **original game's data
 files** at runtime and plays a real game: move stacks, fight, take cities, set
 production, end the turn, and let the computer players answer.
 
-Nothing here is derived from SSG's content — no art, no text, no data. You
-supply your own copy of the game.
+No art, no sound and no game data ships here: all of it is read from **your own
+copy of the game** at runtime. The only exception is a handful of short
+interface labels — the menu titles and item names — which live inside
+`WARLORD2.EXE` rather than in a data file, and so are written out in
+`warlords/menu.lua` instead of being loaded.
 
 ## Running
 
@@ -18,13 +21,15 @@ love love2d ISLADIA                # another scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
 ```
 
-The window is the original's own **640 × 480** screen, scaled up by a whole
-number so the pixels stay square. The chrome is not a lookalike: the
-background, buttons, regions and fonts are the game's own, read from its data
-files at runtime (`docs/formats/screens.md`).
+The window is the original's own **640 × 480** screen, at exactly that size —
+so screen and window coordinates are the same, which `love.graphics.setScissor`
+quietly depends on. The chrome is not a lookalike: the background, buttons,
+regions and fonts are the game's own, read from its data files at runtime
+(`docs/formats/screens.md`).
 
 | input | does |
 |---|---|
+| the menu bar | open a menu; pick an item to run it |
 | left click the map | select a stack, or walk the selection there |
 | right click the map | inspect a tile |
 | click the strategic map | recentre the view |
@@ -79,6 +84,7 @@ for the cost grid's flags.
 | `uidata.lua` | `JOIN.DAT`, `AREA.DAT`, `BUTTON.DAT`, `FILE.DAT`: the screen layout |
 | `font.lua` | the `.FNT`/`.FIN` proportional fonts |
 | `screen.lua` | the 640×480 screen: background, controls, hit regions |
+| `menu.lua` | the menu bar and its items, laid out the original's way |
 | `ai.lua` | a computer player |
 
 Every rule cites where it came from: `docs/rules.md` for the rule itself, and

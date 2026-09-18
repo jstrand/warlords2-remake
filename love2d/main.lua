@@ -24,6 +24,7 @@ local saveMod  = require("warlords.save")
 local screen   = require("warlords.screen")
 local uidata   = require("warlords.uidata")
 local font     = require("warlords.font")
+local menuMod  = require("warlords.menu")
 
 local TILE = screen.TILE
 local ARMY_CELL, ARMY_COLS = 32, 16
@@ -95,6 +96,9 @@ function love.load(arg)
   G.screen = screen.load(dataDir, palette, uidata.MAIN_SCREEN, 0)
   G.font = font.load(dataDir, "TEXT", palette, 3)
   G.bigFont = font.load(dataDir, "CHANCE17", palette, 3)
+
+  G.menuLayout = menuMod.layout(G.font, 18, screen.WIDTH)
+  G.openMenu = nil
 
   G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
   G.stratRect = screen.region(G.screen, screen.REGION.STRATEGIC)
@@ -238,6 +242,16 @@ local function endTurn()
   end
 end
 
+local function loadGame()
+  local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
+  if not ok then say("Nothing to load.") return end
+  G.g, G.selection = loaded, nil
+  stratDirty()
+  G.player = loaded.sides[loaded.current]
+  centreOn(G.player.capital.x, G.player.capital.y)
+  say("Loaded: turn %d, %s to play.", loaded.turn, G.player.name)
+end
+
 --------------------------------------------------------------------- drawing
 
 local function topArmy(stack)
@@ -340,15 +354,35 @@ local function drawShortcutLabels()
   end
 end
 
-local MENUS = { "SSG", "Game", "Order", "Report", "Hero", "View", "History", "Turn" }
-
 local function drawMenuBar()
   love.graphics.setColor(1, 1, 1)
-  local x = 8
-  for _, name in ipairs(MENUS) do
-    local w = math.ceil(G.font.width(name) / 8) * 8
-    G.font.draw(name, x, 2)
-    x = x + w + 16
+  for i, m in ipairs(G.menuLayout) do
+    if i == G.openMenu then
+      love.graphics.setColor(0.35, 0.35, 0.35)
+      love.graphics.rectangle("fill", m.x, 0, m.w, 18)
+      love.graphics.setColor(1, 1, 1)
+    end
+    G.font.draw(m.title, m.x + menuMod.PAD, menuMod.BAR_Y)
+  end
+
+  local open = G.menuLayout[G.openMenu]
+  if not open then return end
+  local d = open.drop
+  love.graphics.setColor(0.27, 0.27, 0.27)
+  love.graphics.rectangle("fill", d.x, d.y, d.w, d.h)
+  love.graphics.setColor(0.6, 0.6, 0.6)
+  love.graphics.rectangle("line", d.x + 0.5, d.y + 0.5, d.w - 1, d.h - 1)
+  for _, r in ipairs(d.rows) do
+    if r.label == "-" then
+      love.graphics.setColor(0.5, 0.5, 0.5)
+      love.graphics.line(r.x + 4, r.y + 2, r.x + r.w - 4, r.y + 2)
+    else
+      love.graphics.setColor(1, 1, 1)
+      G.font.draw(r.label, r.x + menuMod.PAD, r.y + 1)
+      if r.key then
+        G.font.draw(r.key, r.x + r.w - menuMod.PAD - G.font.width(r.key), r.y + 1)
+      end
+    end
   end
 end
 
@@ -407,8 +441,31 @@ end
 
 --------------------------------------------------------------------- input
 
+-- A menu item dispatches on its accelerator, so a menu pick and a key press
+-- reach the same place -- which is how the original works too, both going
+-- through one command dispatcher. docs/re/ui.md > Commands.
+local MENU_DOES     -- filled in below, next to the key handler
+
+local function menuPick(key)
+  local act = MENU_DOES[key]
+  if act then act() else say("%s is not implemented yet.", key) end
+end
+
 function love.mousepressed(x, y, button)
   if G.over or G.offer then return end
+
+  -- the menu bar takes precedence over everything beneath it
+  local hit = menuMod.titleAt(G.menuLayout, x, y, 18)
+  if hit then
+    G.openMenu = (G.openMenu == hit) and nil or hit
+    return
+  end
+  if G.openMenu then
+    local row = menuMod.rowAt(G.menuLayout, G.openMenu, x, y)
+    G.openMenu = nil
+    if row and row.key then menuPick(row.key) end
+    return
+  end
 
   local c = screen.controlAt(G.screen, x, y)
   if c then
@@ -506,9 +563,49 @@ function love.mousereleased(x, y, button)
   if act then act() else say("Button %d is not wired up yet.", id) end
 end
 
+-- Each menu accelerator, as far as this engine can honour it. The names are
+-- the original's (docs/re/ui.md > The menu); what is missing says so rather
+-- than failing quietly.
+MENU_DOES = {
+  ["alt E"] = function() endTurn() end,
+  ["^Q"]    = function() love.event.quit() end,
+  ["alt S"] = function()
+    saveMod.write(G.g, G.savePath)
+    say("Saved to %s.", G.savePath)
+  end,
+  ["alt L"] = function() loadGame() end,
+  ["z"] = function()
+    if not G.selection then say("Nothing is selected.") return end
+    local found = game.searchHere(G.g, G.selection.stack)
+    say("%s", found and game.describeSearch(found) or "There is nothing here to search.")
+  end,
+  [","] = function()
+    if not G.selection then say("Nothing is selected.") return end
+    local a = G.selection.stack[1]
+    say("%s: strength %d, %d of %d moves.", a.name, a.strength, a.moves or 0, a.maxMoves)
+  end,
+  ["g"] = function()
+    say("Gold %d, income %d, upkeep %d.", G.player.gold,
+        G.player.income or 0, G.player.upkeepTotal or 0)
+  end,
+  ["c"] = function()
+    say("You hold %d cities.", #game.sideCities(G.g, G.player))
+  end,
+  ["s"] = function()
+    if not G.selection then say("Nothing is selected.") return end
+    local names = {}
+    for _, a in ipairs(G.selection.stack) do names[#names + 1] = a.name end
+    say("Stack: %s.", table.concat(names, ", "))
+  end,
+}
+
 function love.keypressed(key)
-  if key == "escape" then love.event.quit() return end
+  if key == "escape" then
+    if G.openMenu then G.openMenu = nil return end
+    love.event.quit() return
+  end
   if G.over then return end
+  if G.openMenu then G.openMenu = nil end
 
   if G.offer then
     if key == "y" then
@@ -530,17 +627,7 @@ function love.keypressed(key)
   elseif key == "f5" then
     saveMod.write(G.g, G.savePath)
     say("Saved to %s.", G.savePath)
-  elseif key == "f9" then
-    local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
-    if ok then
-      G.g, G.selection = loaded, nil
-      stratDirty()
-      G.player = loaded.sides[loaded.current]
-      centreOn(G.player.capital.x, G.player.capital.y)
-      say("Loaded: turn %d, %s to play.", loaded.turn, G.player.name)
-    else
-      say("Nothing to load.")
-    end
+  elseif key == "f9" then loadGame()
   elseif key == "up" or key == "w" then G.cy = G.cy - 1; clampCamera()
   elseif key == "down" or key == "s" then G.cy = G.cy + 1; clampCamera()
   elseif key == "left" or key == "a" then G.cx = G.cx - 1; clampCamera()
