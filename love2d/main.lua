@@ -416,11 +416,35 @@ function love.mousepressed(x, y, button)
   end
 end
 
--- What each of the main screen's buttons does is not decoded yet: the control
--- ids in BUTTON.DAT do not match the command codes in the keyboard table, and
--- nothing read so far joins the two. Until that is traced, a button presses
--- and releases but only the ones listed here act. docs/re/ui.md > Commands.
+-- A control's id, minus 100, indexes a 397-entry jump table at 17be:0b0c --
+-- that is what turns a click into an action, and several of its entries are
+-- the very routines the keyboard table calls, which is how a button and a key
+-- are known to do the same thing. docs/re/ui.md > Commands.
+--
+-- Wired here are only the ones whose meaning is established. The rest press
+-- and release but do nothing, rather than being guessed at.
 local ACTION = {}
+
+-- The 3x3 pad, ids 320-327, all reach 8611:0723 with the id minus 320, and
+-- that routine steps the cursor by one in x, y or both. Laid out on screen
+-- the eight ids run clockwise from north, which is what fixes the order.
+local PAD_STEP = {
+  [0] = { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 },
+         { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 },
+}
+for i = 0, 7 do
+  local step = PAD_STEP[i]
+  ACTION[320 + i] = function()
+    if not G.selection then say("Nothing is selected.") return end
+    moveSelection(G.selection.x + step[1], G.selection.y + step[2])
+  end
+end
+
+-- The pad's centre, id 177, shares its handler (8065:0f02) with the Home key.
+ACTION[177] = function()
+  if G.selection then centreOn(G.selection.x, G.selection.y)
+  else centreOn(G.player.capital.x, G.player.capital.y) end
+end
 
 function love.mousereleased(x, y, button)
   local id = G.pressed
@@ -452,6 +476,8 @@ function love.keypressed(key)
   end
 
   if key == "space" then endTurn()
+  -- Home shares its handler with the pad's centre button (8065:0f02)
+  elseif key == "home" then ACTION[177]()
   elseif key == "c" and G.selection then centreOn(G.selection.x, G.selection.y)
   elseif key == "f5" then
     saveMod.write(G.g, G.savePath)

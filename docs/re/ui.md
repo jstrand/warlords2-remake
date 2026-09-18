@@ -293,6 +293,49 @@ elsewhere. Always verify against `index.txt`'s `bytes=` field before trusting
 an extraction — `docs/formats/exe.md`'s simpler "file 0x2000 + linear" does
 **not** hold here.
 
+### What a control does
+
+Clicking a control ends at `17be:04d8(id)`, which is the answer to how a
+button becomes an action:
+
+```
+mov bx, dx              ; the control id
+sub bx, 0x64            ; minus 100
+cmp bx, 0x18c
+ja  done                ; ids 100..496 only
+shl bx, 1
+jmp word cs:[bx+0xb0c]  ; 397 entries, again CS-relative
+```
+
+So there is **no id-to-command mapping**: controls have a jump table of their
+own, parallel to the keyboard one, 397 entries at `17be:0b0c`. Entries share
+stubs freely, and 171 distinct stubs cover all 397 ids.
+
+The two tables **meet at their handlers**, which is what gives a button its
+meaning: control 186 and Tab both call `8065:0f3f`, control 187 and Backspace
+both `8065:0fe9`, control 177 and Home both `8065:0f02`, control 240 and Space
+both `89e0:0a55`.
+
+Where a row of controls shares one stub, the stub subtracts the row's base to
+get an index — the id is still in DX:
+
+| controls | stub does | meaning |
+|---|---|---|
+| 320–327 | `8611:0723(id - 320)` | the **3 × 3 pad**: steps the cursor one tile |
+| 224–231 | `89e0:0963(id - 224)` | the **army slot**, 0–7 |
+| 232–239 | `89e0:0910(id - 232)` | the **movement bar** under slot 0–7 |
+| 179–182 | `545c:0072(id - 179)` | the four unlabelled buttons, 0–3 |
+
+The rest of the main screen resolves to one handler each: 174–178 to five
+routines in `8065`, 183/184/185 (one button, three variants) to `484e:0346`
+in the diplomacy segment, 186/187/188 to `8065:0f3f`/`0fe9`/`104e`, and
+240/241 to `89e0:0a55`/`0a99`.
+
+The pad's eight ids run **clockwise from north** when laid out by their screen
+positions — 320 is top-centre, 321 top-right, and so on round to 327 top-left
+— which is what fixes the direction order, and `8611:0723` does step the
+cursor by ±1 in x, y or both.
+
 ### Hot regions on the map screen
 
 `1726:0009` handles clicks on the main screen. It walks a region array —

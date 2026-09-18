@@ -170,7 +170,7 @@ if G and G.screen then
 end
 
 -- the rest of the keys
-for _, key in ipairs({ "p", "p", "c", "up", "down", "left", "right",
+for _, key in ipairs({ "p", "p", "c", "home", "up", "down", "left", "right",
                        "w", "a", "s", "d", "f5", "f9", "space" }) do
   try("key " .. key, love.keypressed, key)
 end

@@ -244,8 +244,8 @@ detail:
   They are drawn by game code, not controls, and their art is not the obvious
   candidate: in a screenshot they measure about 16 px, while `SHIELDS.PCK` is
   on a 40 px stride and `BSHIELD.PCK` on a 32 px one.
-- **What each control does.** The control ids on the main screen (173–188,
-  224–241, 320–327) do not overlap the keyboard command codes (`0x08`–`0x153`),
-  and nothing read so far joins the two. Until it is found, the remake presses
-  and releases buttons but runs no action.
+- What most controls **mean**. How a control becomes an action is now decoded
+  — a jump table of its own at `17be:0b0c`, see `../re/ui.md` — and several
+  share handlers with keyboard commands, which names them. Most still do not
+  have a name.
 - What the region and dialog ids mean individually, beyond the main screen.
