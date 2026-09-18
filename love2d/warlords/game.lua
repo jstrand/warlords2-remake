@@ -185,6 +185,7 @@ function game.new(dataDir, scenario, opts)
   end
 
   setupGarrisons(g)
+  require("warlords.site").setup(g)
 
   g.current = 1             -- index into g.sides
   g.side = g.sides[1]
@@ -471,6 +472,39 @@ function game.raze(g, side, city)
   end
   game.addAtrocity(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
+end
+
+--------------------------------------------------------------------- sites
+
+--- Search whatever the stack is standing on, if anything. Returns the result
+--- table from site.search, or nil.
+function game.searchHere(g, stack)
+  if #stack == 0 then return nil end
+  return require("warlords.site").search(g, stack, stack[1].x, stack[1].y)
+end
+
+--- A line of prose for a search result, for the interface to show.
+function game.describeSearch(r)
+  if not r then return nil end
+  local name = r.site.name
+  if r.kind == "temple" then
+    return r.blessed > 0
+      and ("%s blesses %d of your armies."):format(name, r.blessed)
+      or ("%s has blessed them already."):format(name)
+  elseif r.kind == "no hero" then
+    return ("%s can only be searched by a hero."):format(name)
+  elseif r.kind == "killed" then
+    return ("Your hero is slain in %s by a %s!"):format(name, r.monster and r.monster.name or "guardian")
+  elseif r.kind == "gold" then
+    return ("%s yields %d gold!"):format(name, r.gold)
+  elseif r.kind == "item" then
+    return ("Your hero finds the %s in %s!"):format(r.item and r.item.name or "treasure", name)
+  elseif r.kind == "allies" then
+    return ("%d %s join you at %s!"):format(#r.armies, r.type.name, name)
+  elseif r.kind == "sage" then
+    return ("A sage dwells in %s."):format(name)
+  end
+  return ("%s holds nothing."):format(name)
 end
 
 --------------------------------------------------------------- city commands

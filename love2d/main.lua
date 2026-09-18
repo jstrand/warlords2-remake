@@ -182,6 +182,18 @@ local function moveSelection(x, y)
     sel.x, sel.y = sel.stack[1].x, sel.stack[1].y
     say("Moved %d tiles for %d. %d movement left.", r.steps, r.spent,
         move.stackMoves(sel.stack))
+    -- standing on a ruin or temple searches it
+    local found = game.searchHere(G.g, sel.stack)
+    if found then
+      say("%s", game.describeSearch(found))
+      if found.kind == "killed" then
+        local alive = {}
+        for _, a in ipairs(sel.stack) do
+          if a.type ~= armytype.HERO then alive[#alive + 1] = a end
+        end
+        G.selection = #alive > 0 and { x = alive[1].x, y = alive[1].y, stack = alive } or nil
+      end
+    end
   end
   if G.selection and #G.selection.stack > 0 then
     G.selection.x, G.selection.y = G.selection.stack[1].x, G.selection.stack[1].y

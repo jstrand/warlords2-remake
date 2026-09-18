@@ -928,6 +928,131 @@ local function testAIGame(scenario, turns)
   battles = battles
 end
 
+---------------------------------------------------------------------- sites
+
+local function testSites(scenario)
+  print("sites: " .. scenario)
+  local siteMod = require("warlords.site")
+  local heroMod = require("warlords.hero")
+  local g = game.new(DATA, scenario, { seed = 53 })
+
+  -- every site holds something, and only ruins are rich
+  local rich, temples, contents = 0, 0, {}
+  for _, s in ipairs(g.map.sites) do
+    ok(s.content ~= nil, "every site has contents")
+    ok(s.content ~= siteMod.EMPTY, "no site is left empty")
+    if s.rich then
+      rich = rich + 1
+      ok(s.type ~= siteMod.TEMPLE, "a temple is never rich")
+    end
+    if s.content == siteMod.TEMPLE then temples = temples + 1 end
+    contents[s.content] = (contents[s.content] or 0) + 1
+    if s.content == siteMod.ALLIES then
+      ok(s.allyType ~= nil, "an ally ruin knows what joins")
+      ok(g.types.byId[s.allyType] ~= nil, "and it is a real army type")
+    end
+    if s.content ~= siteMod.TEMPLE then
+      ok(s.guardian and s.guardian >= 1 and s.guardian <= 9, "a ruin has a guardian")
+    end
+  end
+  eq(rich, #g.map.sites * 3 // 10, "three in ten sites are rich")
+
+  -- items: each hidden item is in exactly one ruin
+  local placed = {}
+  for _, s in ipairs(g.map.sites) do
+    if s.content == siteMod.ITEM then
+      ok(not placed[s.item], "an item is hidden in only one ruin")
+      placed[s.item] = true
+    end
+  end
+  for _, it in ipairs(g.map.items) do
+    if placed[it.index] then eq(it.status, 2, "a hidden item is marked hidden") end
+  end
+
+  -- reserved items only ever go in rich ruins, ordinary ones never do
+  local byIndex = {}
+  for _, it in ipairs(g.map.items) do byIndex[it.index] = it end
+  for _, s in ipairs(g.map.sites) do
+    if s.content == siteMod.ITEM then
+      eq(siteMod.itemReserved(byIndex[s.item]), s.rich,
+         "a reserved item needs a rich ruin")
+    end
+  end
+
+  -- the pool refilled records 8..21 from the .ITM file
+  if g.map.itemPool then
+    local names = {}
+    for _, p in ipairs(g.map.itemPool) do names[p.name] = true end
+    for i = 8, 21 do
+      if byIndex[i] then ok(names[byIndex[i].name], "item " .. i .. " came from the pool") end
+    end
+    for i = 0, 7 do
+      if byIndex[i] then eq(byIndex[i].type, rules.ITEM_STANDARD, "records 0-7 are standards") end
+    end
+  end
+
+  -- searching a ruin needs a hero
+  local ruin
+  for _, s in ipairs(g.map.sites) do
+    if s.content == siteMod.GOLD then ruin = s break end
+  end
+  if ruin then
+    local side = g.sides[1]
+    local grunt = { x = ruin.x, y = ruin.y, owner = side.index, type = 11,
+                    strength = 3, maxMoves = 10, moves = 10 }
+    g.armies[#g.armies + 1] = grunt
+    local r = siteMod.search(g, { grunt }, ruin.x, ruin.y)
+    eq(r.kind, "no hero", "a stack without a hero cannot search a ruin")
+    ok(not ruin.searched, "and the ruin is not used up")
+
+    -- with a strong hero it pays out
+    local h = { x = ruin.x, y = ruin.y, owner = side.index, type = armytype.HERO,
+                strength = 9, maxMoves = 14, moves = 14, experience = 0, items = {} }
+    g.armies[#g.armies + 1] = h
+    local gold0 = side.gold
+    r = siteMod.search(g, { h, grunt }, ruin.x, ruin.y)
+    ok(r.kind == "gold" or r.kind == "killed", "a hero gets a result: " .. r.kind)
+    if r.kind == "gold" then
+      ok(r.gold >= 503 and r.gold <= 4000, "the gold is in range: " .. r.gold)
+      eq(side.gold, gold0 + r.gold, "the gold was paid")
+      eq(h.experience, 3, "searching is worth 3 experience")
+    end
+    ok(ruin.searched, "a searched ruin is used up")
+    eq(siteMod.search(g, { h }, ruin.x, ruin.y), nil, "and cannot be searched again")
+  end
+
+  -- a temple blesses each army once, and only the first four temples bless
+  local temple
+  for _, s in ipairs(g.map.sites) do
+    if s.content == siteMod.TEMPLE and s.templeIndex == 0 then temple = s break end
+  end
+  if temple then
+    local side = g.sides[1]
+    local a = { x = temple.x, y = temple.y, owner = side.index, type = 11, strength = 3 }
+    local r = siteMod.search(g, { a }, temple.x, temple.y)
+    eq(r.kind, "temple", "a temple blesses")
+    eq(r.blessed, 1, "one army was blessed")
+    eq(a.strength, 4, "the blessing adds a strength")
+    eq(siteMod.search(g, { a }, temple.x, temple.y).blessed, 0,
+       "the same temple does not bless twice")
+    a.strength = 9
+    a.blessings = {}
+    siteMod.search(g, { a }, temple.x, temple.y)
+    eq(a.strength, 9, "a blessing never passes 9")
+  end
+
+  -- the guardian formula
+  local strong = { strength = 9, items = {} }
+  local weak = { strength = 1, items = {} }
+  local survived, died = 0, 0
+  for _ = 1, 400 do
+    if siteMod.survivesGuardian(g, strong, { strong }, 3) then survived = survived + 1 end
+    if not siteMod.survivesGuardian(g, weak, { weak }, 8) then died = died + 1 end
+  end
+  eq(survived, 400, "a strong hero always beats a weak guardian")
+  ok(died > 0, "a weak hero sometimes dies to a strong one")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -964,6 +1089,8 @@ testCapture("ERYTHEA")
 testCityChoices("ERYTHEA")
 testHeroes("ERYTHEA")
 testHeroExperienceBug()
+testSites("ERYTHEA")
+testSites("DRAGON")
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end

@@ -176,8 +176,8 @@ function scn.load(dir, name)
   for i = 0, N_MONSTERS - 1 do
     local nm = cstr(s, MONSTERS + MONSTER_STRIDE * i, 12)
     if nm ~= "" then
-      monsters[#monsters + 1] =
-        { index = i, name = nm, strength = u16(s, MONSTER_STRENGTH + 2 * i) }
+      -- keyed by slot: a site's guardian byte indexes this directly
+      monsters[i] = { index = i, name = nm, strength = u16(s, MONSTER_STRENGTH + 2 * i) }
     end
   end
 

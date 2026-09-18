@@ -291,6 +291,46 @@ function ai.sendAt(g, side, stack, city)
   end
 end
 
+---------------------------------------------------------------- hero errands
+
+--- Send each hero, with the stack it stands in, at the nearest unsearched
+--- ruin. The scoring is the original's (ai_send_hero_party, Ghidra 5ad0:11a6):
+--- 215 - d inside 15 tiles, 90 - d inside 40, nothing further.
+function ai.phaseHeroes(g, side)
+  local gameMod = require("warlords.game")
+  local siteMod = require("warlords.site")
+  local taken = {}
+
+  for _, a in ipairs(gameMod.sideArmies(g, side)) do
+    if a.type == armytype.HERO and not a.transit and (a.moves or 0) > 0 then
+      local best, bestScore
+      for _, s in ipairs(g.map.sites) do
+        if not s.searched and not taken[s] and s.content ~= siteMod.TEMPLE then
+          local d = distance(a.x, a.y, s.x, s.y)
+          local score = d < 15 and (215 - d) or (d < 40 and (90 - d) or nil)
+          if score and (not bestScore or score > bestScore) then best, bestScore = s, score end
+        end
+      end
+      if best then
+        taken[best] = true
+        -- the hero takes one companion, as the original does
+        local stack = { a }
+        for _, mate in ipairs(gameMod.armiesAt(g, a.x, a.y)) do
+          if mate ~= a and mate.owner == side.index and #stack < 2 then
+            stack[#stack + 1] = mate
+          end
+        end
+        local path = move.findPath(g, stack, a.x, a.y, best.x, best.y)
+        if path and #path > 0 then
+          move.walk(g, stack, path)
+          local found = gameMod.searchHere(g, stack)
+          if found and found.kind == "killed" then break end   -- the hero is gone
+        end
+      end
+    end
+  end
+end
+
 --------------------------------------------------------------------- the turn
 
 --- Play one computer turn. The phase order is the original's, minus the
@@ -305,6 +345,7 @@ function ai.playTurn(g, side)
   end
 
   ai.phaseEvaluate(g, side)
+  ai.phaseHeroes(g, side)
   ai.phaseOrders(g, side)
   ai.phaseMove(g, side)
   ai.phaseNeutral(g, side)
