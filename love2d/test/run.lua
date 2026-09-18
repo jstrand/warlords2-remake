@@ -738,6 +738,131 @@ local function testCityChoices(scenario)
      "sacking a one-type city pays nothing")
 end
 
+--------------------------------------------------------------------- heroes
+
+local function testHeroes(scenario)
+  print("heroes: " .. scenario)
+  local heroMod = require("warlords.hero")
+  local g = game.new(DATA, scenario, { seed = 37 })
+  local side = game.begin(g)
+
+  -- turn 1 always offers a free hero at the capital, carrying the standard
+  local offer = side.heroOffer
+  ok(offer ~= nil, "a hero offers itself on turn 1")
+  eq(offer.price, 0, "the first hero is free")
+  eq(offer.city, side.capital, "the first hero appears at the capital")
+  local h, allies = heroMod.recruit(g, side, offer)
+  eq(h.type, armytype.HERO, "the recruit is a hero")
+  eq(h.strength, 5, "a new hero has strength 5")
+  eq(h.maxMoves, 14, "a new hero has 14 movement")
+  eq(#allies, 0, "the first hero brings no allies")
+  eq(#h.items, 1, "the first hero carries one item")
+  eq(h.items[1].type, rules.ITEM_STANDARD, "and it is the side's standard")
+
+  -- promotions: one step at a time, +1 strength and +2 movement each
+  h.experience = 15
+  local promoted = heroMod.checkPromotions(g, side)
+  eq(#promoted, 1, "15 experience promotes a Hero")
+  eq(h.level, 2, "the hero is now level 2")
+  eq(h.title, "Cavalier", "level 2 is a Cavalier")
+  eq(h.strength, 6, "promotion adds a strength")
+  eq(h.maxMoves, 16, "promotion adds 2 movement")
+  eq(#heroMod.checkPromotions(g, side), 0, "no second promotion on the same experience")
+  h.experience = 60
+  heroMod.checkPromotions(g, side)
+  eq(h.level, 3, "60 experience promotes one step only")
+  heroMod.checkPromotions(g, side)
+  eq(h.title, "Paladin", "the next check reaches Paladin")
+  eq(#heroMod.checkPromotions(g, side), 0, "a Paladin is not promoted again")
+
+  -- experience is capped at 60
+  heroMod.addExperience(g, h, 99)
+  eq(h.experience, rules.MAX_HERO_XP, "experience is capped at 60")
+
+  -- allies: a later hero brings 1-3 of one magical type
+  local type, n = heroMod.allies(g)
+  ok(type ~= nil, "the allies have a type")
+  ok(n >= 1 and n <= 3, "1 to 3 allies arrive")
+
+  -- the hero cap per side
+  eq(heroMod.MAX_PER_SIDE, 5, "a side may hold 5 heroes")
+  eq(heroMod.MAX_IN_GAME, 40, "the game holds 40 heroes")
+  local blocked = true
+  for _ = 1, 5 do
+    g.armies[#g.armies + 1] = { type = armytype.HERO, owner = side.index, x = 0, y = 0 }
+  end
+  g.turn = 2
+  for _ = 1, 50 do if heroMod.offer(g, side) then blocked = false end end
+  ok(blocked, "no hero is offered once the side is at its limit")
+
+  -- death: items drop where the hero fell, and drown in water
+  local carrier = { type = armytype.HERO, owner = side.index,
+                    items = { { name = "Firesword", type = rules.ITEM_BATTLE, value = 1 } } }
+  local dry
+  for y = 0, g.map.height - 1 do
+    for x = 0, g.map.width - 1 do
+      if not dry and require("warlords.scn").terrainAt(g.map, x, y) == movement.PLAIN then
+        dry = { x = x, y = y }
+      end
+    end
+  end
+  local dropped = heroMod.dropItems(g, carrier, dry.x, dry.y)
+  eq(#dropped, 1, "the item was dropped")
+  eq(dropped[1].status, 1, "a dropped item lies on the ground")
+  eq(dropped[1].x, dry.x, "it lies where the hero fell")
+  eq(#carrier.items, 0, "the dead hero carries nothing")
+
+  local wet
+  for y = 0, g.map.height - 1 do
+    for x = 0, g.map.width - 1 do
+      if not wet and require("warlords.scn").terrainAt(g.map, x, y) == movement.WATER then
+        wet = { x = x, y = y }
+      end
+    end
+  end
+  if wet then
+    local drowner = { type = armytype.HERO, owner = side.index,
+                      items = { { name = "Icesword", type = rules.ITEM_BATTLE, value = 1 } } }
+    local lost = drowner.items[1]
+    eq(#heroMod.dropItems(g, drowner, wet.x, wet.y), 0, "nothing is dropped in water")
+    eq(lost.status, 0, "an item lost at sea is gone for good")
+  end
+end
+
+local function testHeroExperienceBug()
+  print("hero experience: the original's bug")
+  local heroMod = require("warlords.hero")
+  local g = game.new(DATA, "ERYTHEA", { seed = 41 })
+
+  local function run()
+    local defHero = { type = armytype.HERO, strength = 5, owner = 1, experience = 0 }
+    local attackers = { { type = 11, strength = 3, owner = 0 } }
+    local defenders = { defHero }
+    local result = { deadByArmy = {} }
+    heroMod.battleExperience(g, attackers, defenders, result, false)
+    return defHero.experience
+  end
+
+  rules.bugs.heroExperienceReadsAttackerTypes = true
+  eq(run(), 0, "with the bug on, a defending hero facing a non-hero gains nothing")
+
+  rules.bugs.heroExperienceReadsAttackerTypes = false
+  eq(run(), 1, "with the bug off, the defender is credited")
+  rules.bugs.heroExperienceReadsAttackerTypes = true
+
+  -- an attacking hero is always credited, and a city is worth 2
+  local h = { type = armytype.HERO, strength = 5, owner = 0, experience = 0 }
+  heroMod.battleExperience(g, { h }, {}, { deadByArmy = {} }, false)
+  eq(h.experience, 1, "an attacking hero gains 1 in the open")
+  heroMod.battleExperience(g, { h }, {}, { deadByArmy = {} }, true)
+  eq(h.experience, 3, "attacking a city is worth 2")
+
+  -- a dead hero is credited nothing
+  local dead = { type = armytype.HERO, strength = 5, owner = 0, experience = 0 }
+  heroMod.battleExperience(g, { dead }, {}, { deadByArmy = { [dead] = true } }, true)
+  eq(dead.experience, 0, "a hero that died gains nothing")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -772,6 +897,8 @@ testStackLimit("ERYTHEA")
 testCombat("ERYTHEA")
 testCapture("ERYTHEA")
 testCityChoices("ERYTHEA")
+testHeroes("ERYTHEA")
+testHeroExperienceBug()
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
 
 print(("\n%d passed, %d failed"):format(passed, failed))

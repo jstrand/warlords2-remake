@@ -196,7 +196,7 @@ end
 
 --- Both sides' modifiers. Returns attackMod, defendMod.
 function combat.modifiers(g, attackers, defenders, x, y, class)
-  local cap = g.combatCap or 5
+  local cap = g.map.combatCap or 5
   local atkHero = lineHas(g, defenders, combat.NEGATE_HERO) and 0
                   or combat.heroBonus(g, attackers)
   local atkStack = lineHas(g, defenders, combat.NEGATE_OTHER) and 0
@@ -294,8 +294,13 @@ function combat.resolve(g, attackers, defenders, x, y)
   for _, e in ipairs(atk) do if e.dead then deadAttackers[#deadAttackers + 1] = e.army end end
   for _, e in ipairs(def) do if e.dead then deadDefenders[#deadDefenders + 1] = e.army end end
 
+  local deadByArmy = {}
+  for _, a in ipairs(deadAttackers) do deadByArmy[a] = true end
+  for _, a in ipairs(deadDefenders) do deadByArmy[a] = true end
+
   return {
     won = #survivors(def) == 0,
+    deadByArmy = deadByArmy,
     log = log,
     attackMod = attackMod, defendMod = defendMod, class = class,
     attackers = survivors(atk), defenders = survivors(def),

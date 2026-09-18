@@ -268,11 +268,15 @@ function game.heroWithDoubleMoveAt(g, side, x, y)
 end
 
 --- Run the start of `side`'s turn. Returns false if the side was eliminated.
+-- The order is the original's (start_of_turn, Ghidra 8cc6:0000).
 function game.startTurn(g, side)
   if #game.sideCities(g, side) == 0 then
     eliminate(g, side)
     return false
   end
+  local heroMod = require("warlords.hero")
+  side.heroOffer = heroMod.offer(g, side)
+  heroMod.checkPromotions(g, side)
   applyIncome(g, side)
   runProduction(g, side)
   resetMovement(g, side)
@@ -330,8 +334,18 @@ end
 function game.resolveAttack(g, stack, x, y)
   local combat = require("warlords.combat")
   local move = require("warlords.move")
+  local heroMod = require("warlords.hero")
   local attackers, defenders, defOwner, city = combat.lines(g, stack, x, y)
   local result = combat.resolve(g, attackers, defenders, x, y)
+
+  -- a dead hero drops what it carried where it fell
+  for _, a in ipairs(result.deadAttackers) do
+    if a.type == armytype.HERO then heroMod.dropItems(g, a, a.x, a.y) end
+  end
+  for _, d in ipairs(result.deadDefenders) do
+    if d.type == armytype.HERO then heroMod.dropItems(g, d, x, y) end
+  end
+  heroMod.battleExperience(g, attackers, defenders, result, city ~= nil)
 
   removeArmies(g, result.deadAttackers)
   removeArmies(g, result.deadDefenders)
