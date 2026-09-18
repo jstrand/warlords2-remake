@@ -305,6 +305,60 @@ function game.begin(g)
   return g.side
 end
 
+--------------------------------------------------------------------- combat
+
+local function removeArmies(g, dead)
+  local gone = {}
+  for _, a in ipairs(dead) do gone[a] = true end
+  for i = #g.armies, 1, -1 do
+    if gone[g.armies[i]] then table.remove(g.armies, i) end
+  end
+end
+
+--- Gold taken with a city won from another side. Neutral cities pay nothing.
+-- docs/rules.md > Capturing a city (67cc:0a6b).
+function game.loot(g, loser)
+  if not loser then return 0 end
+  local n = #game.sideCities(g, loser)
+  local share = n > 1 and (loser.gold // n) or loser.gold
+  return share // 2
+end
+
+--- Fight for a tile and apply the outcome: the dead are removed, and a city
+--- whose last defender falls changes hands. Returns the combat result with
+--- `captured` set to the city, if any.
+function game.resolveAttack(g, stack, x, y)
+  local combat = require("warlords.combat")
+  local move = require("warlords.move")
+  local attackers, defenders, defOwner, city = combat.lines(g, stack, x, y)
+  local result = combat.resolve(g, attackers, defenders, x, y)
+
+  removeArmies(g, result.deadAttackers)
+  removeArmies(g, result.deadDefenders)
+
+  if result.won and city then
+    local winner = g.map.sides[stack[1].owner + 1]
+    local loser = defOwner and g.map.sides[defOwner + 1] or nil
+    if loser then
+      local loot = game.loot(g, loser)
+      winner.gold = winner.gold + loot
+      loser.gold = math.max(0, loser.gold - 2 * loot)
+      result.loot = loot
+    end
+    city.previousOwner = (city.ownerIndex == winner.index) and rules.NEUTRAL or city.ownerIndex
+    city.producing, city.countdown, city.vectorTo = nil, 0, nil
+    city.ownerIndex = winner.index
+    move.invalidate(g)
+    result.captured = city
+  end
+
+  -- survivors walk into the tile they just cleared
+  if result.won then
+    for _, a in ipairs(result.attackers) do a.x, a.y = x, y end
+  end
+  return result
+end
+
 --------------------------------------------------------------- city commands
 
 --- Choose what a city builds. `slotIndex` is nil to stop producing.

@@ -10,6 +10,7 @@ package.path = "love2d/?.lua;" .. package.path
 local armytype = require("warlords.armytype")
 local game     = require("warlords.game")
 local movement = require("warlords.move")
+local combat   = require("warlords.combat")
 local rules    = require("warlords.rules")
 local rng      = require("warlords.rng")
 
@@ -443,6 +444,219 @@ local function testStackLimit(scenario)
   ok(army.x ~= tx or army.y ~= ty, "the army stayed off the full tile")
 end
 
+--------------------------------------------------------------------- combat
+
+local function testCombat(scenario)
+  print("combat: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 17 })
+  local side = game.begin(g)
+
+  -- the hero command table
+  eq(combat.HERO_TABLE[0], 0, "a strength-0 hero commands nothing")
+  eq(combat.HERO_TABLE[4], 1, "strength 4 gives +1")
+  eq(combat.HERO_TABLE[9], 3, "strength 9 gives +3")
+
+  -- terrain classes, in the order the ARMYTYPE bonus fields are stored
+  eq(combat.CITY, 0, "city is class 0")
+  eq(combat.OPEN, 1, "open is class 1")
+  eq(combat.WOODS, 2, "woods is class 2")
+  eq(combat.HILLS, 3, "hills is class 3")
+
+  local scnmod = require("warlords.scn")
+  local seen = {}
+  for y = 0, g.map.height - 1, 7 do
+    for x = 0, g.map.width - 1, 7 do
+      local class = combat.terrainClass(g, x, y)
+      local t = scnmod.terrainAt(g.map, x, y)
+      seen[class] = true
+      if t == movement.FOREST then eq(class, combat.WOODS, "forest fights as woods") end
+      if t == movement.HILLS or t == movement.MOUNTAINS then
+        eq(class, combat.HILLS, "hills and mountains fight as hills")
+      end
+      if t == movement.CITY or t == movement.SITE then
+        eq(class, combat.CITY, "cities and sites fight as city")
+      end
+      if t == movement.PLAIN or t == movement.MARSH or t == movement.WATER then
+        eq(class, combat.OPEN, "plain, marsh and water fight as open")
+      end
+    end
+  end
+  ok(seen[combat.OPEN], "the map has open ground")
+
+  -- the combat cap comes from the scenario and is 5 in every shipped one
+  eq(g.map.combatCap, 5, "the combat cap is 5")
+
+  -- fight order: every army type has a rank, and the ranks are a permutation
+  local row, used = g.map.fightOrder[0], {}
+  for t = 0, 28 do
+    ok(row[t] ~= nil, "type " .. t .. " has a fight order")
+    used[row[t]] = true
+  end
+  local distinct = 0
+  for _ in pairs(used) do distinct = distinct + 1 end
+  eq(distinct, 29, "fight order is a permutation of 29 ranks")
+
+  -- a neutral city's fortify bonus is halved
+  local neutral
+  for _, c in ipairs(g.map.cities) do
+    if c.ownerIndex == nil and c.defence == 2 then neutral = c break end
+  end
+  if neutral then
+    local cls = combat.terrainClass(g, neutral.x, neutral.y)
+    eq(combat.fortify(g, {}, neutral.x, neutral.y, cls), 1,
+       "a neutral city's defence 2 fortifies for 1")
+    game.setCityOwner(g, neutral, g.sides[#g.sides].index)
+    eq(combat.fortify(g, {}, neutral.x, neutral.y, cls), 2,
+       "an owned city's defence 2 fortifies for 2")
+    game.setCityOwner(g, neutral, nil)
+  end
+
+  -- Siege cancels the city bonus entirely
+  local siege
+  for _, a in ipairs(g.types.list) do
+    if a.bonus[52] == combat.SIEGE then siege = a end
+  end
+  if siege and neutral then
+    local cls = combat.terrainClass(g, neutral.x, neutral.y)
+    eq(combat.fortify(g, { { type = siege.id } }, neutral.x, neutral.y, cls), 0,
+       "a Siege attacker cancels the city bonus")
+  end
+
+  -- a boat at sea fights at exactly 4, whatever its strength
+  local boatArmy = { type = 11, strength = 9, atSea = true }
+  eq(combat.strength(g, boatArmy, 5, combat.OPEN, movement.WATER), 4,
+     "an army at sea on water fights at 4")
+  eq(combat.strength(g, boatArmy, 5, combat.OPEN, movement.SHORE), 4,
+     "an army at sea on shore fights at 4")
+  boatArmy.atSea = false
+  ok(combat.strength(g, boatArmy, 5, combat.OPEN, movement.PLAIN) > 4,
+     "ashore it fights normally")
+
+  -- strength is capped at 15
+  eq(combat.strength(g, { type = 11, strength = 9 }, 99, combat.OPEN, movement.PLAIN), 15,
+     "strength is capped at 15")
+
+  -- the lines: defenders are everyone on the tile who is not the attacker
+  local a1 = game.sideArmies(g, side)[1]
+  local enemy
+  for _, c in ipairs(g.map.cities) do if c.ownerIndex ~= side.index then enemy = c break end end
+  local att, def, defOwner, city = combat.lines(g, { a1 }, enemy.x, enemy.y)
+  eq(#att, 1, "the attacking line is the stack")
+  ok(#def >= 1, "the city has defenders")
+  eq(city, enemy, "the battle names the city")
+  for _, d in ipairs(def) do ok(d.owner ~= side.index, "no defender belongs to the attacker") end
+
+  -- lines come out sorted by fight order, lowest first
+  local sorted = true
+  for i = 2, #def do
+    local ownerRow = g.map.fightOrder[defOwner or 8]
+    if ownerRow[def[i].type] < ownerRow[def[i - 1].type] then sorted = false end
+  end
+  ok(sorted, "the defending line is sorted by fight order")
+
+  -- a battle always ends, and its log records one death per entry
+  local r = combat.resolve(g, att, def, enemy.x, enemy.y)
+  ok(#r.log >= 1, "the battle logged at least one death")
+  eq(#r.log, #r.deadAttackers + #r.deadDefenders, "one log entry per dead army")
+  ok(r.won == (#r.defenders == 0), "the attacker wins only if every defender is dead")
+
+  -- overwhelming force wins nearly always; hopeless odds nearly never
+  local function odds(atkStrength, nAtk, defStrength, nDef)
+    local A, D = {}, {}
+    for _ = 1, nAtk do A[#A + 1] = { type = 11, strength = atkStrength, owner = side.index } end
+    for _ = 1, nDef do D[#D + 1] = { type = 11, strength = defStrength, owner = nil } end
+    local wins = 0
+    for _ = 1, 200 do
+      if combat.resolve(g, A, D, 0, 0).won then wins = wins + 1 end
+    end
+    return wins
+  end
+  ok(odds(9, 8, 1, 1) > 190, "eight strong armies beat one weak one")
+  ok(odds(1, 1, 9, 8) < 10, "one weak army loses to eight strong ones")
+  local many = odds(3, 8, 9, 1)
+  ok(many > 150, "many weak armies beat one strong one: " .. many)
+
+  -- the Military Advisor runs 19 battles and reports one of ten verdicts
+  eq(combat.ADVICE_BATTLES, 19, "the advisor fights 19 battles")
+  local verdict, wins = combat.advise(g, att, def, enemy.x, enemy.y)
+  ok(verdict ~= nil, "the advisor has a verdict")
+  ok(wins >= 0 and wins <= 19, "the advisor's win count is in range")
+  eq(verdict, combat.ADVICE[wins // 2], "the verdict is wins/2 into the table")
+end
+
+local function testCapture(scenario)
+  print("capture: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 23 })
+  local side = game.begin(g)
+
+  -- give the attacker an overwhelming stack next to a neutral city
+  local target
+  for _, c in ipairs(g.map.cities) do if c.ownerIndex == nil then target = c break end end
+  ok(target ~= nil, "found a neutral city")
+  local stack = {}
+  for _ = 1, 8 do
+    local a = { x = target.x, y = target.y - 1, owner = side.index, type = 11,
+                name = "Scouts", strength = 9, maxMoves = 20, moves = 20, upkeep = 1 }
+    g.armies[#g.armies + 1] = a
+    stack[#stack + 1] = a
+  end
+
+  local before = #game.sideCities(g, side)
+  local r = game.resolveAttack(g, stack, target.x, target.y)
+  ok(r.won, "the overwhelming stack took the city")
+  eq(target.ownerIndex, side.index, "the city changed hands")
+  eq(#game.sideCities(g, side), before + 1, "the side owns one more city")
+  eq(target.producing, nil, "a captured city is not building anything")
+  for _, a in ipairs(r.attackers) do
+    eq(a.x, target.x, "the survivors moved in")
+  end
+  -- the dead are gone from the game
+  for _, dead in ipairs(r.deadDefenders) do
+    local stillThere = false
+    for _, a in ipairs(g.armies) do if a == dead then stillThere = true end end
+    ok(not stillThere, "a dead defender is removed")
+  end
+
+  -- loot: taking a city from a side pays, taking a neutral one does not
+  local victim = g.sides[#g.sides]
+  victim.gold = 400
+  eq(game.loot(g, victim), 200, "one city: half its gold")
+  local extra = nil
+  for _, c in ipairs(g.map.cities) do
+    if c.ownerIndex == nil and c ~= target then extra = c break end
+  end
+  if extra then
+    game.setCityOwner(g, extra, victim.index)
+    eq(game.loot(g, victim), (400 // 2) // 2, "two cities: half the per-city share")
+  end
+end
+
+local function testTutorialHero()
+  print("tutorial: a hero cannot die attacking neutrals")
+  local g = game.new(DATA, "TUTORIA", { seed = 31 })
+  local side = game.begin(g)
+  eq(g.map.options.tutorial, 1, "TUTORIA sets the tutorial flag")
+  ok(not side.computer, "the tutorial player is human")
+
+  local hero = { type = armytype.HERO, strength = 1, owner = side.index }
+  local defenders = {}
+  for _ = 1, 8 do defenders[#defenders + 1] = { type = 11, strength = 9, owner = nil } end
+  local deaths = 0
+  for _ = 1, 50 do
+    local r = combat.resolve(g, { hero }, defenders, 0, 0)
+    deaths = deaths + #r.deadAttackers
+  end
+  eq(deaths, 0, "the tutorial hero never dies against neutrals")
+
+  -- with the flag off the same hero dies readily
+  g.map.options.tutorial = 0
+  deaths = 0
+  for _ = 1, 50 do
+    deaths = deaths + #combat.resolve(g, { hero }, defenders, 0, 0).deadAttackers
+  end
+  ok(deaths > 0, "without the tutorial flag the hero can die")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -474,6 +688,9 @@ testVectoring("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")
+testCombat("ERYTHEA")
+testCapture("ERYTHEA")
+if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
 
 print(("\n%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

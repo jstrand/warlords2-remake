@@ -15,6 +15,8 @@ local SIDE_NAMES, SIDE_STRIDE = 0, 20
 local SIDE_RECS, SIDE_REC_STRIDE = 387, 20
 local LEVELS, CONTROLLERS, ENHANCED = 0xc0, 0xd0, 0xf0
 local MONSTER_STRENGTH = 0x1007
+local FIGHT_ORDER, FIGHT_ROWS, FIGHT_TYPES = 0x60b, 9, 29
+local COMBAT_CAP, ATROCITY = 0x112, 0x10e3
 local TERRAIN_TABLE, TERRAIN_COUNT = 0x710, 255
 local SITES_COUNT, SITES, SITE_STRIDE = 0x80f, 0x811, 31
 local ITEMS, ITEM_STRIDE, N_ITEMS = 3305, 29, 22
@@ -136,6 +138,16 @@ function scn.load(dir, name)
     if c then c.owner = sd end
   end
 
+  -- fight order: 29 bytes per player, row 8 for neutral (FUN_1b62_0024)
+  local fightOrder = {}
+  for row = 0, FIGHT_ROWS - 1 do
+    local r = {}
+    for t = 0, FIGHT_TYPES - 1 do
+      r[t] = s:byte(FIGHT_ORDER + row * FIGHT_TYPES + t + 1)
+    end
+    fightOrder[row] = r
+  end
+
   local sites = {}
   for i = 0, u16(s, SITES_COUNT) - 1 do
     local o = SITES + SITE_STRIDE * i
@@ -187,7 +199,8 @@ function scn.load(dir, name)
     name = name, sides = sides, cities = cities, cityAt = byPos, cityTile = cityTile,
     sites = sites, items = items, monsters = monsters, crossing = crossing,
     itemPool = scn.loadItemPool(base .. ".ITM"),
-    options = options, terrainType = terrainType,
+    options = options, terrainType = terrainType, fightOrder = fightOrder,
+    combatCap = u16(s, COMBAT_CAP),
     tiles = tiles, roads = roads,
     width = scn.MAP_W, height = scn.MAP_H,
   }
