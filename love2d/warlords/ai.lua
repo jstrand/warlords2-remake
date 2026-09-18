@@ -379,6 +379,79 @@ function ai.phaseHeroes(g, side)
   end
 end
 
+---------------------------------------------------------------- exploring
+
+--- Walk spare stacks towards the edge of what the side has seen.
+--
+-- Ours, not the original's: it has dedicated explore and search phases and
+-- marks whole cities as explorers (roles 11 and 13), which this does not
+-- reproduce. It shows: with *Hidden Map* on the computer players expand much
+-- more slowly than they do with it off, because they spend too long feeling
+-- their way around. Worth replacing with the real phases before anyone plays
+-- a fog game seriously.
+function ai.phaseExplore(g, side)
+  if g.map.options.hiddenMap == 0 then return end
+  local gameMod = require("warlords.game")
+
+  -- the frontier: seen tiles that touch something unseen
+  local frontier = {}
+  local mask = (g.explored or {})[side.index] or {}
+  for k in pairs(mask) do
+    local x, y = k % g.map.width, k // g.map.width
+    local edge = false
+    for dx = -1, 1 do
+      for dy = -1, 1 do
+        local nx, ny = x + dx, y + dy
+        if nx >= 0 and ny >= 0 and nx < g.map.width and ny < g.map.height
+           and not gameMod.seen(g, side.index, nx, ny) then
+          edge = true
+        end
+      end
+    end
+    if edge then frontier[#frontier + 1] = { x = x, y = y } end
+  end
+  if #frontier == 0 then return end
+
+  -- who can go: anything already in the field without an order, plus the
+  -- surplus in each city beyond the two that hold it
+  local scouts = {}
+  local inCity = {}
+  for _, c in ipairs(gameMod.sideCities(g, side)) do
+    local here = gameMod.armiesAt(g, c.x, c.y)
+    for i, a in ipairs(here) do
+      inCity[a] = true
+      -- the attack phase has first call on the third army; only the fourth
+      -- and beyond are spare enough to go wandering
+      if i >= 4 and not a.order and (a.moves or 0) > 0 then scouts[#scouts + 1] = a end
+    end
+  end
+  for _, a in ipairs(gameMod.sideArmies(g, side)) do
+    if not inCity[a] and not a.transit and not a.order and (a.moves or 0) > 0 then
+      scouts[#scouts + 1] = a
+    end
+  end
+
+  for _, scout in ipairs(scouts) do
+    -- head for the *far* edge of what we know, so a scout covers ground
+    -- instead of shuffling one tile at a time; keep trying, because a
+    -- frontier tile may be across water
+    local candidates = {}
+    for _, f in ipairs(frontier) do
+      local d = distance(scout.x, scout.y, f.x, f.y)
+      if d > 0 then candidates[#candidates + 1] = { f = f, d = d } end
+    end
+    table.sort(candidates, function(p, q) return p.d > q.d end)
+    for i = 1, math.min(#candidates, 8) do
+      local f = candidates[i].f
+      local path = move.findPath(g, { scout }, scout.x, scout.y, f.x, f.y)
+      if path and #path > 0 then
+        move.walk(g, { scout }, path)
+        break
+      end
+    end
+  end
+end
+
 --------------------------------------------------------------------- the turn
 
 --- Play one computer turn. The phase order is the original's, minus the
@@ -397,6 +470,7 @@ function ai.playTurn(g, side)
   ai.phaseHeroes(g, side)
   ai.phaseOrders(g, side)
   ai.phaseMove(g, side)
+  ai.phaseExplore(g, side)
   ai.phaseNeutral(g, side)
   ai.phaseGarrisons(g, side)
   ai.phaseProduction(g, side)

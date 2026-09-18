@@ -97,7 +97,8 @@ local function isPort(g, city)
 end
 
 --- Build the cost grid for one side. Cached on the game state; call
---- move.invalidate(g) when city ownership changes.
+--- move.invalidate(g) when city ownership changes -- or when the side sees
+--- more of the map.
 function move.grid(g, sideIndex)
   g.grids = g.grids or {}
   local cached = g.grids[sideIndex or -1]
@@ -142,6 +143,16 @@ function move.grid(g, sideIndex)
           end
           grid[i] = byte
         end
+      end
+    end
+  end
+
+  -- with Hidden Map on, a side cannot path through what it has not seen
+  if g.map.options.hiddenMap ~= 0 and sideIndex ~= nil then
+    local gameMod = require("warlords.game")
+    for i = 0, W * H - 1 do
+      if not gameMod.seen(g, sideIndex, i % W, i // W) then
+        grid[i] = grid[i] - (grid[i] % 8)          -- cost 0: impassable
       end
     end
   end
@@ -378,6 +389,19 @@ function move.walk(g, stack, path)
     a.x, a.y = dest.x, dest.y
     a.moves = math.max(0, (a.moves or 0) - cost)
     a.atSea = water
+  end
+
+  -- walking uncovers the map as it goes
+  if g.map.options.hiddenMap ~= 0 and side ~= nil then
+    local gameMod = require("warlords.game")
+    local flying = move.stackMode(g, stack) == move.FLYING
+    local found = 0
+    for _, step in ipairs(path) do
+      if step == dest then break end
+      found = found + gameMod.reveal(g, side, step.x, step.y, flying)
+    end
+    found = found + gameMod.reveal(g, side, dest.x, dest.y, flying)
+    if found > 0 then move.invalidate(g) end
   end
 
   result.steps, result.spent = lastOk, cost

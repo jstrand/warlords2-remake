@@ -1409,6 +1409,79 @@ local function testSave()
   os.remove(path)
 end
 
+------------------------------------------------------------- the hidden map
+
+local function testHiddenMap()
+  print("hidden map")
+
+  -- with the option off everything is visible and nothing is tracked
+  local off = game.new(DATA, "ERYTHEA", { seed = 101 })
+  ok(game.seen(off, 0, 5, 5), "with the option off every tile is seen")
+  eq(game.reveal(off, 0, 5, 5, false), 0, "and nothing is revealed")
+
+  local g = game.new(DATA, "ERYTHEA", { seed = 101, options = { hiddenMap = 1 } })
+  local side = game.begin(g)
+
+  -- a side starts seeing its own cities and armies
+  ok(game.seen(g, side.index, side.capital.x, side.capital.y), "its capital is seen")
+  ok(not game.seen(g, side.index, 0, 0), "the far corner is not")
+
+  -- radius 1 in the open, 2 on a city or flying
+  local g2 = game.new(DATA, "ERYTHEA", { seed = 102, options = { hiddenMap = 1 } })
+  local open
+  for y = 20, 60 do
+    for x = 20, 60 do
+      if not open and not game.cityAt(g2, x, y) then open = { x = x, y = y } end
+    end
+  end
+  -- side 20 is nobody, so its map starts completely dark
+  eq(game.reveal(g2, 20, open.x, open.y, false), 9, "in the open a stack sees 3x3")
+  eq(game.reveal(g2, 20, open.x, open.y, false), 0, "seeing it again reveals nothing new")
+  local far = { x = open.x + 20, y = open.y }
+  eq(game.reveal(g2, 20, far.x, far.y, true), 25, "a flying stack sees 5x5")
+  local city = g2.map.cities[1]
+  eq(game.reveal(g2, 21, city.x, city.y, false), 25, "standing on a city sees 5x5")
+
+  -- unseen tiles are impassable
+  local army = game.sideArmies(g, side)[1]
+  army.moves = 99
+  local unseen
+  for _, c in ipairs(g.map.cities) do
+    if not unseen and not game.seen(g, side.index, c.x, c.y)
+       and c.ownerIndex ~= side.index then unseen = c end
+  end
+  ok(unseen ~= nil, "there is a city the side has not seen")
+  eq(movement.findPath(g, { army }, army.x, army.y, unseen.x, unseen.y), nil,
+     "a side cannot path into the dark")
+
+  -- ... and walking uncovers as it goes
+  local before = 0
+  for _ in pairs(g.explored[side.index] or {}) do before = before + 1 end
+  local target
+  for dx = -3, 3 do
+    for dy = -3, 3 do
+      local x, y = army.x + dx, army.y + dy
+      if not target and x >= 0 and y >= 0 and game.seen(g, side.index, x, y)
+         and (x ~= army.x or y ~= army.y) then
+        local p = movement.findPath(g, { army }, army.x, army.y, x, y)
+        if p and #p > 0 then target = { x = x, y = y } end
+      end
+    end
+  end
+  if target then
+    movement.moveTo(g, { army }, target.x, target.y)
+    local after = 0
+    for _ in pairs(g.explored[side.index] or {}) do after = after + 1 end
+    ok(after > before, ("walking uncovered %d more tiles"):format(after - before))
+  end
+
+  -- each side keeps its own map
+  local other
+  for _, s in ipairs(g.sides) do if s.index ~= side.index then other = s end end
+  ok(not game.seen(g, other.index, side.capital.x, side.capital.y),
+     "another side has not seen our capital")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -1448,6 +1521,7 @@ testHeroExperienceBug()
 testDiplomacy()
 testQuests()
 testEndGame()
+testHiddenMap()
 testSave()
 testSites("ERYTHEA")
 testSites("DRAGON")

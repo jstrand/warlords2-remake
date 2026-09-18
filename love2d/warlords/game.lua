@@ -187,6 +187,7 @@ function game.new(dataDir, scenario, opts)
   require("warlords.diplomacy").init(g)
   setupGarrisons(g)
   require("warlords.site").setup(g)
+  for _, s in ipairs(g.sides) do game.revealStart(g, s) end
 
   g.current = 1             -- index into g.sides
   g.side = g.sides[1]
@@ -499,6 +500,57 @@ function game.raze(g, side, city, stack)
   game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
   require("warlords.quest").event(g, side, "raze", { city = city, stack = stack or {} })
+end
+
+--------------------------------------------------------------- the hidden map
+
+-- Tiles a side has seen. The original keeps one bit per tile for the human
+-- player (flag 0x20 of the overlay byte) and gives its computer players a
+-- per-city "not seen yet" flag instead; the engine keeps a mask per side,
+-- which comes to the same thing for one human and works for hotseat too.
+
+--- Has this side seen the tile? Always true with Hidden Map off.
+function game.seen(g, side, x, y)
+  if g.map.options.hiddenMap == 0 then return true end
+  local mask = g.explored and g.explored[side]
+  if not mask then return false end
+  return mask[y * g.map.width + x] or false
+end
+
+--- Uncover the tiles around (x, y). The square is 2 tiles out for a flying
+--- stack or one standing on a city, 1 otherwise. FUN_8611_1298.
+function game.reveal(g, side, x, y, flying)
+  if g.map.options.hiddenMap == 0 then return 0 end
+  g.explored = g.explored or {}
+  g.explored[side] = g.explored[side] or {}
+  local mask = g.explored[side]
+
+  local onCity = g.map.cityTile[y * g.map.width + x] ~= nil
+  local r = (flying or onCity) and 2 or 1
+  local found = 0
+  for ty = y - r, y + r do
+    for tx = x - r, x + r do
+      if tx >= 0 and ty >= 0 and tx < g.map.width and ty < g.map.height then
+        local k = ty * g.map.width + tx
+        if not mask[k] then
+          mask[k] = true
+          found = found + 1
+        end
+      end
+    end
+  end
+  return found
+end
+
+--- Uncover everything a side can already see: its cities and its armies.
+function game.revealStart(g, side)
+  if g.map.options.hiddenMap == 0 then return end
+  for _, c in ipairs(game.sideCities(g, side)) do
+    game.reveal(g, side.index, c.x, c.y, false)
+  end
+  for _, a in ipairs(game.sideArmies(g, side)) do
+    if not a.transit then game.reveal(g, side.index, a.x, a.y, false) end
+  end
 end
 
 ------------------------------------------------------------- end of the game
