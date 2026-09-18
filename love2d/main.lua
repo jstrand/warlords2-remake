@@ -92,6 +92,9 @@ function love.load(arg)
     G.armyQuads[i] = quadsFor(img, ARMY_COLS, ARMY_CELL, ARMY_CELL, ARMY_CELL, 32)
   end
 
+  -- MARBLE.PCK is 480 wide, exactly the city dialog's width
+  G.marble = pck.toImage(dataDir .. "/PICS/MARBLE.PCK", palette)
+
   -- the original's own chrome and fonts
   G.screen = screen.load(dataDir, palette, uidata.MAIN_SCREEN, 0)
   G.font = font.load(dataDir, "TEXT", palette, 3)
@@ -243,6 +246,9 @@ end
 -- no art of their own, so the game draws the army in each.
 -- docs/formats/screens.md.
 local CITY_DIALOG, CITY_SLOT_FIRST, CITY_SLOTS = 6, 197, 4
+-- 192 and 201 are the two variants of Done, 202 is Stop -- the octagonal
+-- button beside the production row. All three are cut from CITYBU.PCK.
+local CITY_DONE, CITY_DONE_ALT, CITY_STOP = 192, 201, 202
 
 function openCity(city)
   if not G.cityView then G.cityView = screen.dialog(G.screen, CITY_DIALOG) end
@@ -454,50 +460,81 @@ end
 -- and window coordinates are the same. That matters beyond tidiness --
 -- love.graphics.setScissor takes window pixels and ignores any transform, so
 -- scaling here would clip the map and the strategic map to the wrong place.
---- The city dialog: the original's rects, with the armies drawn into its
---- four production slots.
+--- The city dialog, laid out as the original's: its rect is (80,60) 480x320,
+--- with the strategic map filling the left 224x312 -- which is exactly the
+--- 112x156 map at two pixels a tile -- and the city panel on the right. The
+--- buttons are its own controls, cut from CITYBU.PCK.
+local CITY_RECT = { x = 80, y = 60, w = 480, h = 320 }
+
+local function cityControl(id)
+  for _, k in ipairs(G.cityView.dialog.controls) do
+    if k.id == id then return k end
+  end
+  return nil
+end
+
 local function drawCity()
   local c = G.city
-  love.graphics.setColor(0.18, 0.18, 0.18, 0.85)
-  love.graphics.rectangle("fill", 0, 18, screen.WIDTH, screen.HEIGHT - 18)
-
-  local panel = { x = 296, y = 100, w = 320, h = 260 }
-  love.graphics.setColor(0.35, 0.35, 0.35)
-  love.graphics.rectangle("fill", panel.x, panel.y, panel.w, panel.h)
-  love.graphics.setColor(0.65, 0.65, 0.65)
-  love.graphics.rectangle("line", panel.x + 0.5, panel.y + 0.5, panel.w - 1, panel.h - 1)
+  local R = CITY_RECT
 
   love.graphics.setColor(1, 1, 1)
-  G.font.draw(c.name, panel.x + 10, panel.y + 6)
-  G.font.draw(("defence %d   income %d"):format(c.defence, c.income),
-              panel.x + 10, panel.y + 6 + G.font.lineHeight)
+  love.graphics.setScissor(R.x, R.y, R.w, R.h)
+  love.graphics.draw(G.marble, R.x, R.y)
+  love.graphics.setScissor()
 
+  -- the strategic map fills the dialog's left panel
+  if not G.stratImage then
+    G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
+  end
+  love.graphics.setScissor(R.x, R.y, 224, 312)
+  love.graphics.draw(G.stratImage, R.x, R.y, 0, 2, 2)
+  love.graphics.setScissor()
+  -- where this city is
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.rectangle("line", R.x + c.x * 2 - 1.5, R.y + c.y * 2 - 1.5, 5, 5)
+
+  -- the city's name, and what it is building
+  love.graphics.setColor(1, 1, 1)
+  G.bigFont.draw(c.name, 320, R.y + 4)
+  local building = c.slots and c.producing and c.slots[c.producing]
+  G.font.draw(building
+      and ("Current: %s  %dt"):format(building.name, c.countdown or building.time)
+      or "Current: nothing", 320, R.y + 4 + G.bigFont.lineHeight)
+
+  -- the four production choices, in their own slots
   for i = 1, CITY_SLOTS do
-    local ctl = nil
-    for _, k in ipairs(G.cityView.dialog.controls) do
-      if k.id == CITY_SLOT_FIRST + i - 1 then ctl = k end
-    end
+    local ctl = cityControl(CITY_SLOT_FIRST + i - 1)
     local slot = c.slots and c.slots[i]
-    if ctl then
-      local lit = (c.producing == i)
-      love.graphics.setColor(lit and 0.55 or 0.28, lit and 0.55 or 0.28, lit and 0.3 or 0.28)
-      love.graphics.rectangle("fill", ctl.x, ctl.y, ctl.w, ctl.h)
-      love.graphics.setColor(0.7, 0.7, 0.7)
-      love.graphics.rectangle("line", ctl.x + 0.5, ctl.y + 0.5, ctl.w - 1, ctl.h - 1)
-      if slot then
-        local owner = c.ownerIndex or 8
+    if ctl and slot then
+      local owner = c.ownerIndex or 8
+      if c.producing == i then
         love.graphics.setColor(1, 1, 1)
-        love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32], ctl.x, ctl.y)
-        G.font.draw(("%d/%d"):format(slot.strength, slot.time),
-                    ctl.x + 2, ctl.y + ARMY_CELL + 2)
-        G.font.draw(tostring(math.floor(slot.cost / 2)),
-                    ctl.x + 2, ctl.y + ARMY_CELL + 2 + G.font.lineHeight)
+        love.graphics.rectangle("line", ctl.x - 0.5, ctl.y - 0.5, ctl.w + 1, ARMY_CELL + 1)
       end
+      love.graphics.setColor(1, 1, 1)
+      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32], ctl.x, ctl.y)
     end
   end
 
-  love.graphics.setColor(1, 1, 1)
-  G.font.draw("click a slot, or esc to close", panel.x + 10, panel.y + panel.h - 18)
+  -- the selected type's numbers, where the original lists them
+  if building then
+    love.graphics.setColor(1, 1, 1)
+    local tx, ty = 448, R.y + 130
+    G.font.draw(building.name, tx, ty)
+    for k, line in ipairs({
+      ("Time: %d"):format(building.time),
+      ("Cost: %d"):format(building.cost),
+      ("Strength: %d"):format(building.strength),
+      ("Move: %d"):format(building.move),
+    }) do
+      G.font.draw(line, tx, ty + k * (G.font.lineHeight + 2))
+    end
+  end
+
+  G.font.draw(("defence %d   income %d"):format(c.defence, c.income),
+              320, R.y + R.h - G.font.lineHeight - 6)
+
+  screen.drawDialogControls(G.screen, G.cityView)
 end
 
 function love.draw()
@@ -530,8 +567,16 @@ function love.mousepressed(x, y, button)
     local c = screen.dialogControlAt(G.cityView, x, y)
     if c and c.id >= CITY_SLOT_FIRST and c.id < CITY_SLOT_FIRST + CITY_SLOTS then
       pickProduction(c.id - CITY_SLOT_FIRST + 1)
-    else
+    elseif c and (c.id == CITY_DONE or c.id == CITY_DONE_ALT) then
       closeCity()
+    elseif c and c.id == CITY_STOP then
+      if G.city.ownerIndex == G.player.index then
+        game.setProduction(G.g, G.city, nil)
+        say("%s builds nothing.", G.city.name)
+      end
+    elseif x < CITY_RECT.x or y < CITY_RECT.y
+        or x >= CITY_RECT.x + CITY_RECT.w or y >= CITY_RECT.y + CITY_RECT.h then
+      closeCity()          -- a click outside the dialog dismisses it
     end
     return
   end

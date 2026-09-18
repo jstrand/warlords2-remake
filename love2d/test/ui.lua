@@ -238,6 +238,26 @@ if G and G.g then
             c.x + 2, c.y + 2, 1)
       end
     end
+    -- Stop, then Done: both are real controls of dialog 6
+    for _, id in ipairs({ 202, 192 }) do
+      G.city = mine
+      local c
+      for _, k in ipairs(G.cityView.dialog.controls) do
+        if k.id == id then c = k end
+      end
+      if c then
+        try(("city button %d"):format(id), love.mousepressed, c.x + 2, c.y + 2, 1)
+      end
+    end
+    if G.city ~= nil then fail("city dialog", "Done did not close it") end
+
+    -- a click outside the dialog dismisses it; one inside must not
+    G.city = mine
+    try("click inside the panel", love.mousepressed, 300, 350, 1)
+    if G.city == nil then fail("city dialog", "a click inside closed it") end
+    try("click outside the panel", love.mousepressed, 10, 460, 1)
+    if G.city ~= nil then fail("city dialog", "a click outside did not close it") end
+
     G.city = mine
     try("close with escape", love.keypressed, "escape")
     if G.city ~= nil then fail("city dialog", "escape did not close it") end

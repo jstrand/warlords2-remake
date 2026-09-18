@@ -289,3 +289,31 @@ and not control ids; `7ae8:0000` is what maps between them, and that mapping
 has not been read yet. The names are still useful on their own: five of them
 (Army, City, Gold, Prod, Win) confirm that the reports dialog has exactly the
 five tabs its `6ef3:0000(n)` argument implies.
+
+## Dialog 6 — the city screen
+
+`7204:0000` pushes **6** to the dialog opener when a click lands on a city, so
+dialog 6 is the city screen: button group 6 and area screen 3. Checked against
+a screenshot of the running game, its rect is `(80, 60)` 480 × 320.
+
+| what | rect | from |
+|---|---|---|
+| the strategic map | `(80, 60)` 224 × 312 | area screen 3, region 6 |
+| production choices | `(312/360/408/456, 142)` 32 × 70 | controls 197–200 |
+| Stop | `(504, 140)` 40 × 36 | control 202 |
+| action buttons | `(312/360/408/456, 327)` 40 × 40 | controls 193–196 |
+| Done | `(512, 327)` 40 × 40 | controls 192, 201 |
+
+The left panel is the **strategic map** — 224 × 312 is the 112 × 156 map at two
+pixels a tile, the same as on the main screen — not a map-selection widget as
+this document first guessed from the rect alone. Screens 4 and 6 place the same
+rect, so they are probably the same thing.
+
+`CITYBU.PCK` (416 × 120) is the dialog's buttons: a 40-pixel grid, three rows
+for the three states, holding the four action buttons, Done, Stop, Raze,
+Rename, Build Prod and See All. `CITY.PCK` (320 × 312) is not the panel but an
+illustration — a castle gateway — and the picture beside the statistics in the
+running game is a per-army-type illustration, whose source is not yet found.
+
+Controls 203–205, 210–212 and 214–216 belong to states this screenshot does
+not show, and are not identified.
