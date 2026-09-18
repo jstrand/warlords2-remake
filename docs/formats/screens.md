@@ -236,6 +236,16 @@ detail:
 - Which control ids get text, and from which `STRING.DAT` group. The text
   pointer is assigned by each dialog's own code, so this is per-dialog work
   rather than one table.
-- The icons overlaid on the four blank buttons of the main screen's cluster,
-  and what the eight army slots draw.
+- The icons overlaid on the four blank buttons of the main screen's cluster
+  (ids 179–182). Their own source rects point at plain button frames in
+  `BUTTON.PCK`, yet the running game shows icons on them, so something is
+  drawn over the top.
+- The turn counter and the row of player shields at the right of the menu bar.
+  They are drawn by game code, not controls, and their art is not the obvious
+  candidate: in a screenshot they measure about 16 px, while `SHIELDS.PCK` is
+  on a 40 px stride and `BSHIELD.PCK` on a 32 px one.
+- **What each control does.** The control ids on the main screen (173–188,
+  224–241, 320–327) do not overlap the keyboard command codes (`0x08`–`0x153`),
+  and nothing read so far joins the two. Until it is found, the remake presses
+  and releases buttons but runs no action.
 - What the region and dialog ids mean individually, beyond the main screen.

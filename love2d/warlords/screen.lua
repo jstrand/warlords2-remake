@@ -196,6 +196,14 @@ function screen.region(self, id)
   return nil
 end
 
+--- One control by id, or nil.
+function screen.control(self, id)
+  for _, c in ipairs(self.dialog.controls) do
+    if c.id == id then return c end
+  end
+  return nil
+end
+
 --- The control under a point, or nil.
 function screen.controlAt(self, x, y)
   for _, c in ipairs(self.dialog.controls) do

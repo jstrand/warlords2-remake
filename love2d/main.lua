@@ -333,24 +333,43 @@ local function drawMenuBar()
   end
 end
 
+-- The bottom bar's eight army slots and the movement bar under each are real
+-- controls, so their rects come from BUTTON.DAT rather than from us: ids
+-- 224-231 are the slots and 232-239 the bars. They carry no art of their own
+-- (bitmap 0), which is the layout's way of saying the game draws them.
+local SLOT_FIRST, BAR_FIRST, SLOT_COUNT = 224, 232, 8
+
+local function drawArmySlots()
+  for i = 0, SLOT_COUNT - 1 do
+    local a = G.selection.stack[i + 1]
+    if not a then break end
+    local slot = screen.control(G.screen, SLOT_FIRST + i)
+    local bar  = screen.control(G.screen, BAR_FIRST + i)
+    if slot then
+      local owner = a.owner or 8
+      love.graphics.setColor(1, 1, 1)
+      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][a.type % 32],
+        slot.x + math.floor((slot.w - ARMY_CELL) / 2), slot.y)
+    end
+    if bar then
+      local text = tostring(a.moves or 0)
+      G.font.draw(text, bar.x + math.floor((bar.w - G.font.width(text)) / 2), bar.y)
+    end
+  end
+end
+
 local function drawBottomBar()
   local r = G.barRect
   love.graphics.setColor(1, 1, 1)
-  if G.selection then
-    local x = r.x + 8
-    for _, a in ipairs(G.selection.stack) do
-      local owner = a.owner or 8
-      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][a.type % 32], x, r.y + 2)
-      G.font.draw(tostring(a.moves or 0), x + 4, r.y + 38)
-      x = x + 40
-    end
+  if G.selection and #G.selection.stack > 0 then
+    drawArmySlots()
   else
-    local cities = #game.sideCities(G.g, G.player)
     G.font.draw(("Cities %d    %d gp    income %d    upkeep %d"):format(
-      cities, G.player.gold, G.player.income or 0, G.player.upkeepTotal or 0),
+      #game.sideCities(G.g, G.player), G.player.gold,
+      G.player.income or 0, G.player.upkeepTotal or 0),
       r.x + 8, r.y + 6)
   end
-  G.font.draw(G.status or "", r.x + 8, r.y + 34)
+  G.font.draw(G.status or "", r.x + 8, r.y + r.h - G.font.lineHeight - 4)
 end
 
 -- The window is exactly 640x480, so there is no transform: screen coordinates
