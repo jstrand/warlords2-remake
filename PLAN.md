@@ -89,17 +89,24 @@ table) are all resolved from the executable; see `docs/rules.md`.
 ### Phase 2.6 — Playable slice — **DONE**
 
 `love2d/` is a LOVE 11 project that reads the original data files at runtime
-(no bundled assets), draws a scenario at 100% scale, and allows exactly one
-move. Verified running: map, roads, cities and army render correctly, and the
-three implemented rules (no water, no mountains, cities must be attacked) all
-fire. See `love2d/README.md`.
+(no bundled assets) and draws a scenario at 100% scale. See `love2d/README.md`.
 
-### Phase 3 — Engine
-Data model → turn loop → rendering → input → AI. Build headless first: load a scenario, run a turn, assert state, *then* draw it.
+### Phase 3 — Engine — **in progress**
 
-Engine/language is an open decision (see below). Whatever you pick, keep `tools/` (Python) and the game engine separate — the Python side stays the format lab forever.
+**Lua, in `love2d/warlords/`.** The rules core is headless: it never touches
+`love.*`, so `lua love2d/test/run.lua` checks it without a window (~5500
+assertions). `tools/` stays Python and stays the format lab.
 
-Milestones: render Erythea's map → move a stack → take a city → combat → production → one working AI opponent → full scenario playable to victory.
+Done: game state, the turn loop (income, upkeep, production, vectoring,
+movement reset), movement (cost grid, stack modes, pathfinding, walking),
+combat, city capture and pillage/sack/raze, heroes, and a computer player.
+A scenario plays to victory — Tutoria ends around turn 40 with the computer
+players fighting it out.
+
+`rules.bugs` reproduces the original's faults by default, one flag each.
+
+Left: ruins, temples and sages; quests; diplomacy; sea transport; the hidden
+map. Every one of them is already decoded in `docs/rules.md`.
 
 ### Phase 4 — Audio
 - XMI → MIDI conversion (or direct playback). Port ScummVM's XMIDI parser; it's the reference implementation.
