@@ -311,9 +311,22 @@ rect, so they are probably the same thing.
 
 `CITYBU.PCK` (416 × 120) is the dialog's buttons: a 40-pixel grid, three rows
 for the three states, holding the four action buttons, Done, Stop, Raze,
-Rename, Build Prod and See All. `CITY.PCK` (320 × 312) is not the panel but an
-illustration — a castle gateway — and the picture beside the statistics in the
-running game is a per-army-type illustration, whose source is not yet found.
+Rename, Build Prod and See All.
+
+The picture beside the statistics is **`BIGARMY.PCK`** — one 128 × 128 image
+used as the symbol for *this city is producing*, the same whatever is being
+built, not a per-type illustration. `CITY.PCK` (320 × 312) is a separate
+illustration of a castle gateway and does not appear on this dialog.
+
+**`ABITS.PCK`** (480 × 40) is twelve 40 × 40 cells, the first nine of which are
+rings: grey, then white, yellow, orange, red, green, blue, light blue and
+black. A production choice sits on the grey ring, and the one being built on
+its owner's — so the ring is the side's colour. Cell 0 being grey puts a side's
+ring at its index plus one, which matches a screenshot where the second
+shield's side rings in yellow, cell 2.
+
+The name is drawn in `CHANCE36`, centred over the right panel; everything
+else on the dialog is `CHANCE17`.
 
 Controls 203–205, 210–212 and 214–216 belong to states this screenshot does
 not show, and are not identified.

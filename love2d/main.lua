@@ -94,11 +94,21 @@ function love.load(arg)
 
   -- MARBLE.PCK is 480 wide, exactly the city dialog's width
   G.marble = pck.toImage(dataDir .. "/PICS/MARBLE.PCK", palette)
+  -- BIGARMY.PCK is one 128x128 symbol for "this city is producing", not a
+  -- picture of the army; ABITS.PCK holds nine 40x40 rings, grey then one per
+  -- side, used to ring the chosen production in the owner's colour.
+  G.bigArmy = pck.toImage(dataDir .. "/PICS/BIGARMY.PCK", palette)
+  G.abits = pck.toImage(dataDir .. "/PICS/ABITS.PCK", palette, 3)
+  G.ringQuads = {}
+  for i = 0, 8 do
+    G.ringQuads[i] = love.graphics.newQuad(i * 40, 0, 40, 40, 480, 40)
+  end
 
   -- the original's own chrome and fonts
   G.screen = screen.load(dataDir, palette, uidata.MAIN_SCREEN, 0)
   G.font = font.load(dataDir, "TEXT", palette, 3)
   G.bigFont = font.load(dataDir, "CHANCE17", palette, 3)
+  G.titleFont = font.load(dataDir, "CHANCE36", palette, 3)
 
   G.menuLayout = menuMod.layout(G.font, 18, screen.WIDTH)
   G.openMenu = nil
@@ -473,6 +483,14 @@ local function cityControl(id)
   return nil
 end
 
+-- Ring cell 0 is grey and cells 1-8 are the side colours, so a side's ring is
+-- its index plus one. Checked against a screenshot where the second shield's
+-- side had the yellow ring, which is cell 2.
+local function ringFor(sideIndex)
+  if not sideIndex then return 0 end
+  return math.max(0, math.min(8, sideIndex + 1))
+end
+
 local function drawCity()
   local c = G.city
   local R = CITY_RECT
@@ -488,51 +506,62 @@ local function drawCity()
   end
   love.graphics.setScissor(R.x, R.y, 224, 312)
   love.graphics.draw(G.stratImage, R.x, R.y, 0, 2, 2)
-  love.graphics.setScissor()
-  -- where this city is
   love.graphics.setColor(1, 1, 1)
   love.graphics.rectangle("line", R.x + c.x * 2 - 1.5, R.y + c.y * 2 - 1.5, 5, 5)
+  love.graphics.setScissor()
 
-  -- the city's name, and what it is building
+  -- the name, centred over the right panel, in the font the original uses
   love.graphics.setColor(1, 1, 1)
-  G.bigFont.draw(c.name, 320, R.y + 4)
-  local building = c.slots and c.producing and c.slots[c.producing]
-  G.font.draw(building
-      and ("Current: %s  %dt"):format(building.name, c.countdown or building.time)
-      or "Current: nothing", 320, R.y + 4 + G.bigFont.lineHeight)
+  G.titleFont.draw(c.name, 432 - math.floor(G.titleFont.width(c.name) / 2), R.y + 2)
 
-  -- the four production choices, in their own slots
+  local building = c.slots and c.producing and c.slots[c.producing]
+  G.bigFont.draw("Current:", 350, R.y + 53)
+  if building then
+    local owner = c.ownerIndex or 8
+    love.graphics.draw(G.abits, G.ringQuads[ringFor(c.ownerIndex)], 444, R.y + 45)
+    love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][building.type % 32],
+                       448, R.y + 49)
+    G.bigFont.draw(("%dt"):format(c.countdown or building.time), 492, R.y + 53)
+  else
+    G.bigFont.draw("nothing", 444, R.y + 53)
+  end
+
+  -- the production choices, each on a ring: grey, or the owner's for the one
+  -- being built
   for i = 1, CITY_SLOTS do
     local ctl = cityControl(CITY_SLOT_FIRST + i - 1)
     local slot = c.slots and c.slots[i]
     if ctl and slot then
       local owner = c.ownerIndex or 8
-      if c.producing == i then
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.rectangle("line", ctl.x - 0.5, ctl.y - 0.5, ctl.w + 1, ARMY_CELL + 1)
-      end
       love.graphics.setColor(1, 1, 1)
-      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32], ctl.x, ctl.y)
+      love.graphics.draw(G.abits,
+        G.ringQuads[c.producing == i and ringFor(c.ownerIndex) or 0],
+        ctl.x - 4, ctl.y - 4)
+      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32],
+                         ctl.x, ctl.y)
     end
   end
 
-  -- the selected type's numbers, where the original lists them
+  -- BIGARMY is the "producing" symbol, the same picture whatever is built
   if building then
     love.graphics.setColor(1, 1, 1)
-    local tx, ty = 448, R.y + 130
-    G.font.draw(building.name, tx, ty)
+    love.graphics.draw(G.bigArmy, 320, R.y + 123)
+  end
+
+  -- the chosen type's numbers, where the original lists them
+  if building then
+    love.graphics.setColor(1, 1, 1)
+    local tx, ty = 459, R.y + 126
+    G.bigFont.draw(building.name, tx, ty)
     for k, line in ipairs({
       ("Time: %d"):format(building.time),
       ("Cost: %d"):format(building.cost),
       ("Strength: %d"):format(building.strength),
       ("Move: %d"):format(building.move),
     }) do
-      G.font.draw(line, tx, ty + k * (G.font.lineHeight + 2))
+      G.bigFont.draw(line, tx, ty + 14 + k * (G.bigFont.lineHeight + 4))
     end
   end
-
-  G.font.draw(("defence %d   income %d"):format(c.defence, c.income),
-              320, R.y + R.h - G.font.lineHeight - 6)
 
   screen.drawDialogControls(G.screen, G.cityView)
 end
