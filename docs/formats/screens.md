@@ -236,10 +236,9 @@ detail:
 - Which control ids get text, and from which `STRING.DAT` group. The text
   pointer is assigned by each dialog's own code, so this is per-dialog work
   rather than one table.
-- The icons overlaid on the four blank buttons of the main screen's cluster
-  (ids 179–182). Their own source rects point at plain button frames in
-  `BUTTON.PCK`, yet the running game shows icons on them, so something is
-  drawn over the top.
+- The icons drawn on the four configurable buttons (see below) — their art is
+  blank because the icon depends on what is assigned, and where that icon
+  comes from is not yet known.
 - The turn counter and the row of player shields at the right of the menu bar.
   They are drawn by game code, not controls, and their art is not the obvious
   candidate: in a screenshot they measure about 16 px, while `SHIELDS.PCK` is
@@ -249,3 +248,44 @@ detail:
   share handlers with keyboard commands, which names them. Most still do not
   have a name.
 - What the region and dialog ids mean individually, beyond the main screen.
+
+## `UDB/UDB.DAT` and `UDB/UDB.CUR` — the configurable buttons
+
+Four of the main screen's buttons (control ids 179–182) are **user
+assignable**, which is why their art in `BUTTON.PCK` is blank and why they
+resist being named from the layout alone.
+
+Clicking one reaches `545c:0072(n)`, whose segment is labelled
+`auto_str_menu_shortcuts`. It reads the menu item assigned to button *n*,
+turns it into a command code with `7ae8:0000`, and runs that through
+**`17be:0064` — the same dispatcher a key press uses**. So a shortcut button
+is exactly a key press by another route.
+
+**`UDB.CUR`** is 8 bytes: four u16, the menu item on each button. As shipped:
+
+| button | control | item | name |
+|---|---|---|---|
+| 0 | 179 | 521 | Search |
+| 1 | 180 | 507 | Move All |
+| 2 | 181 | 517 | Heroes |
+| 3 | 182 | 535 | End Turn |
+
+**`UDB.DAT`** is 21 records of 68 bytes — two u16 then a NUL-terminated name —
+listing every item that may be assigned, and naming 21 of the game's menu
+commands:
+
+| id | name | id | name | id | name |
+|---|---|---|---|---|---|
+| 507 | Move All | 516 | Quest Report | 527 | Vectoring |
+| 508 | Disband | 517 | Heroes | 528 | Ruins |
+| 510 | Army Rpt | 518 | Plant Flag | 529 | Stack |
+| 511 | City Rpt | 521 | Search | 530 | City History |
+| 512 | Gold Rpt | 524 | Build | 531 | Event History |
+| 513 | Prod Rpt | 525 | City Info | 534 | Triumphs |
+| 514 | Win Rpt | 526 | Production | 535 | End Turn |
+
+These ids are **menu item** numbers, not the command codes of `docs/re/ui.md`
+and not control ids; `7ae8:0000` is what maps between them, and that mapping
+has not been read yet. The names are still useful on their own: five of them
+(Army, City, Gold, Prod, Win) confirm that the reports dialog has exactly the
+five tabs its `6ef3:0000(n)` argument implies.

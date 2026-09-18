@@ -321,6 +321,25 @@ function stratDirty()
   G.stratImage = nil
 end
 
+-- The four configurable buttons carry no icon in BUTTON.PCK; the original
+-- draws whatever the assigned command uses. Until that art is found, name
+-- them from UDB.DAT so they at least say what they do.
+local function drawShortcutLabels()
+  local ui = G.screen.ui
+  for i = 0, uidata.SHORTCUT_COUNT - 1 do
+    local c = screen.control(G.screen, uidata.SHORTCUT_FIRST + i)
+    local id = ui.shortcuts[i]
+    local name = id and ui.shortcutNames[id]
+    if c and name then
+      love.graphics.setColor(1, 1, 1)
+      local short = name:sub(1, 6)
+      G.font.draw(short,
+        c.x + math.max(1, math.floor((c.w - G.font.width(short)) / 2)),
+        c.y + math.floor((c.h - G.font.lineHeight) / 2))
+    end
+  end
+end
+
 local MENUS = { "SSG", "Game", "Order", "Report", "Hero", "View", "History", "Turn" }
 
 local function drawMenuBar()
@@ -381,6 +400,7 @@ function love.draw()
   drawMap()
   drawStrategic()
   screen.drawControls(G.screen)
+  drawShortcutLabels()
   drawMenuBar()
   drawBottomBar()
 end
@@ -437,6 +457,34 @@ for i = 0, 7 do
   ACTION[320 + i] = function()
     if not G.selection then say("Nothing is selected.") return end
     moveSelection(G.selection.x + step[1], G.selection.y + step[2])
+  end
+end
+
+-- Ids 179-182 are the four **configurable** buttons, which is why their art in
+-- BUTTON.PCK is blank and why they were the hardest to place. 545c:0072 reads
+-- the menu item assigned to button n from UDB/UDB.CUR, turns it into a command
+-- code and runs it through the same dispatcher a key press uses. The shipped
+-- assignment is Search, Move All, Heroes, End Turn.
+local SHORTCUT_DOES = {
+  ["Search"] = function()
+    if not G.selection then say("Nothing is selected.") return end
+    local found = game.searchHere(G.g, G.selection.stack)
+    say("%s", found and game.describeSearch(found) or "There is nothing here to search.")
+  end,
+  ["End Turn"] = function() endTurn() end,
+}
+
+local function shortcutName(n)
+  local id = G.screen.ui.shortcuts[n]
+  return id and G.screen.ui.shortcutNames[id] or nil
+end
+
+for i = 0, uidata.SHORTCUT_COUNT - 1 do
+  ACTION[uidata.SHORTCUT_FIRST + i] = function()
+    local name = shortcutName(i)
+    if not name then say("That button has nothing assigned.") return end
+    local act = SHORTCUT_DOES[name]
+    if act then act() else say("%s is not implemented yet.", name) end
   end
 end
 

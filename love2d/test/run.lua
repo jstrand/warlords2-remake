@@ -991,6 +991,15 @@ local function testScreenLayout()
     end
   end
 
+  -- the four configurable buttons, from UDB/UDB.CUR and UDB/UDB.DAT
+  eq(ui.shortcutNames[507], "Move All", "UDB.DAT names menu item 507")
+  eq(ui.shortcutNames[535], "End Turn", "and item 535")
+  local want = { [0] = "Search", "Move All", "Heroes", "End Turn" }
+  for i = 0, 3 do
+    eq(ui.shortcutNames[ui.shortcuts[i]], want[i],
+       ("button %d (control %d) is %s"):format(i, 179 + i, want[i]))
+  end
+
   -- every control's three source rects must lie inside its own bitmap
   local pckMod = require("warlords.pck")
   local sizes, checked = {}, 0

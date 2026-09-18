@@ -115,6 +115,42 @@ function uidata.buttons(path)
   return out
 end
 
+--------------------------------------------------------------- the shortcuts
+
+--- UDB/UDB.DAT: the menu items that may be put on the four configurable
+--- buttons, as {id -> name}. 21 records of 68 bytes: two u16 then a name.
+function uidata.shortcutNames(path)
+  local s = read(path)
+  local out = {}
+  local i = 0
+  while (i + 1) * 68 <= #s do
+    local at = i * 68 + 1
+    local id = u16(s, at + 2)
+    local stop = s:find("\0", at + 4, true) or (at + 4)
+    local name = s:sub(at + 4, stop - 1)
+    if #name > 0 then out[id] = name end
+    i = i + 1
+  end
+  return out
+end
+
+--- UDB/UDB.CUR: which menu item sits on each of the four buttons.
+-- The shipped default is Search, Move All, Heroes, End Turn.
+function uidata.shortcuts(path)
+  local s = read(path)
+  local out = {}
+  for i = 0, math.floor(#s / 2) - 1 do
+    out[i] = u16(s, i * 2 + 1)
+  end
+  return out
+end
+
+-- The four configurable buttons, in order. Each runs its assigned menu item
+-- through the ordinary command dispatcher: 545c:0072 reads the assignment,
+-- 7ae8:0000 turns it into a command code and 17be:0064 runs it -- the same
+-- path a key press takes. docs/re/ui.md.
+uidata.SHORTCUT_FIRST, uidata.SHORTCUT_COUNT = 179, 4
+
 --------------------------------------------------------------------- assembled
 
 --- Load every layout file under `dataDir`. Returns a table with `joins`,
@@ -126,7 +162,17 @@ function uidata.load(dataDir)
   for i, name in ipairs(files[4]) do          -- group 3, 1-indexed here
     bitmaps[i - 1] = name:lower()
   end
+  -- The user's own shortcut assignments, if the game has a UDB directory.
+  local shortcuts, shortcutNames = {}, {}
+  local ok = pcall(function()
+    shortcutNames = uidata.shortcutNames(dataDir .. "/UDB/UDB.DAT")
+    shortcuts = uidata.shortcuts(dataDir .. "/UDB/UDB.CUR")
+  end)
+  if not ok then shortcuts, shortcutNames = {}, {} end
+
   return {
+    shortcuts = shortcuts,
+    shortcutNames = shortcutNames,
     joins = uidata.joins(d .. "JOIN.DAT"),
     areas = uidata.areas(d .. "AREA.DAT"),
     buttons = uidata.buttons(d .. "BUTTON.DAT"),
