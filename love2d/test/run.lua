@@ -9,6 +9,7 @@ package.path = "love2d/?.lua;" .. package.path
 
 local armytype = require("warlords.armytype")
 local game     = require("warlords.game")
+local movement = require("warlords.move")
 local rules    = require("warlords.rules")
 local rng      = require("warlords.rng")
 
@@ -292,6 +293,156 @@ local function testVectoring(scenario)
   ok(from.vectorTo == nil, "vectoring only sticks while the city is building")
 end
 
+------------------------------------------------------------------- movement
+
+local function testMovement(scenario)
+  print("movement: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 11 })
+  local side = game.begin(g)
+  local army = game.sideArmies(g, side)[1]
+  local stack = { army }
+
+  -- terrain costs come straight from the table, with roads at 1
+  eq(movement.COST[movement.MOUNTAINS], 0, "mountains are impassable")
+  eq(movement.COST[movement.ROAD], 1, "a road costs 1")
+  eq(movement.COST[movement.HILLS], 6, "hills cost 6")
+
+  -- the cost grid: a tile with a road costs 1 whatever its terrain
+  local grid = movement.grid(g, side.index)
+  local roaded, roadCostOk = 0, true
+  for y = 0, g.map.height - 1 do
+    for x = 0, g.map.width - 1 do
+      if require("warlords.scn").roadAt(g.map, x, y) % 0x20 ~= 0 then
+        roaded = roaded + 1
+        if grid[y * g.map.width + x] % 8 ~= 1 then roadCostOk = false end
+      end
+    end
+  end
+  ok(roaded > 0, "the scenario has roads")
+  ok(roadCostOk, "every road tile costs 1")
+
+  -- a land stack cannot step into open water or onto a mountain
+  local W = movement.WATER_F
+  local land, water = 2, 2 | W       -- cost-2 land, cost-2 open water
+  eq(movement.stepCost(land, water, movement.LAND, false, false, 10), nil,
+     "a land stack cannot enter open water")
+  eq(movement.stepCost(land, 0, movement.LAND, false, false, 10), nil,
+     "nothing enters a cost-0 tile on land")
+  eq(movement.stepCost(land, 6 | movement.HILLS_F, movement.LAND, false, false, 10), 6,
+     "hills cost 6 without the bonus")
+  eq(movement.stepCost(land, 6 | movement.HILLS_F, movement.LAND, false, true, 10), 2,
+     "the hills bonus brings them to 2")
+  eq(movement.stepCost(land, 4 | movement.FOREST_F, movement.LAND, true, false, 10), 2,
+     "the woods bonus brings forest to 2")
+
+  -- crossing the shoreline: only at a crossing tile, and it costs extra
+  local cross = 1 | W | movement.CROSS_F
+  eq(movement.stepCost(land, cross, movement.LAND, false, false, 10), 1,
+     "a crossing tile is free of the water charge")
+  eq(movement.stepCost(cross, water, movement.LAND, false, false, 10), 2 + 10,
+     "stepping from a crossing into water costs the penalty")
+  eq(movement.stepCost(cross, water, movement.LAND, false, false, 20), 2 + 20,
+     "a move aimed at water pays 20")
+
+  -- flying pays 2 everywhere, 1 where the tile costs 1
+  eq(movement.stepCost(land, 0, movement.FLYING, false, false, 10), 2,
+     "a flier crosses mountains at 2")
+  eq(movement.stepCost(land, water, movement.FLYING, false, false, 10), 2,
+     "a flier crosses water at 2")
+  eq(movement.stepCost(land, 1, movement.FLYING, false, false, 10), 1,
+     "a flier pays 1 on a road")
+  eq(movement.stepCost(land, 6 | movement.HILLS_F, movement.FLYING, false, false, 10), 2,
+     "a flier pays 2 over hills")
+
+  -- a boat keeps to water and cities
+  eq(movement.stepCost(water, land, movement.BOAT, false, false, 10), nil,
+     "a boat cannot go ashore")
+  eq(movement.stepCost(water, water, movement.BOAT, false, false, 10), 2,
+     "a boat moves on water")
+
+  -- the stack shares the lowest movement allowance
+  army.moves = 7
+  eq(movement.stackMoves({ army, { moves = 3 }, { moves = 9 } }), 3,
+     "a stack moves at the pace of its slowest army")
+
+  -- a real path out of the capital, and the cost charged to the army
+  army.moves = army.maxMoves
+  local from = { x = army.x, y = army.y }
+  local target
+  for dx = -6, 6 do
+    for dy = -6, 6 do
+      local x, y = from.x + dx, from.y + dy
+      if not target and x >= 0 and y >= 0 and x < g.map.width and y < g.map.height
+         and not game.cityAt(g, x, y) then
+        local p = movement.findPath(g, stack, from.x, from.y, x, y)
+        if p and #p >= 2 then target = { x = x, y = y, path = p } end
+      end
+    end
+  end
+  ok(target ~= nil, "found somewhere to walk to")
+  if target then
+    local before = army.moves
+    local r = movement.moveTo(g, stack, target.x, target.y)
+    ok(r.steps > 0, "the stack moved")
+    eq(army.moves, math.max(0, before - r.spent), "the cost was charged to the army")
+    ok(army.x ~= from.x or army.y ~= from.y, "the army is somewhere else")
+  end
+
+  -- a stack with no movement left goes nowhere
+  army.moves = 0
+  local r = movement.moveTo(g, stack, from.x, from.y + 1)
+  eq(r.steps, 0, "an army with no moves stays put")
+
+  -- walking into a city the side does not own is an attack, not a move
+  local enemy
+  for _, c in ipairs(g.map.cities) do
+    if c.ownerIndex ~= side.index then enemy = c break end
+  end
+  ok(enemy ~= nil, "there is a city to attack")
+  if enemy then
+    army.moves = 99
+    army.x, army.y = enemy.x, enemy.y - 1
+    local path = movement.findPath(g, stack, army.x, army.y, enemy.x, enemy.y)
+    if path and #path > 0 then
+      local res = movement.walk(g, stack, path)
+      eq(res.stopped, "attack", "stepping into an enemy city starts an attack")
+      ok(res.attack and res.attack.city == enemy, "the attack names the city")
+      eq(army.x, enemy.x, "the attacker has not entered the city")
+      ok(army.y == enemy.y - 1, "the attacker stayed where it was")
+    end
+  end
+
+  -- a path may not run *through* a city the side does not own
+  if enemy then
+    local grid2 = movement.grid(g, side.index)
+    eq(grid2[enemy.y * g.map.width + enemy.x] % 8, 0,
+       "an enemy city is impassable in the cost grid")
+  end
+end
+
+local function testStackLimit(scenario)
+  print("stack limit: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 13 })
+  local side = game.begin(g)
+  local army = game.sideArmies(g, side)[1]
+
+  -- fill the tile north of the army with eight of the side's armies
+  local tx, ty = army.x, army.y - 1
+  if ty < 0 then tx, ty = army.x, army.y + 1 end
+  for _ = 1, rules.MAX_STACK do
+    g.armies[#g.armies + 1] = {
+      x = tx, y = ty, owner = side.index, type = army.type, name = army.name,
+      strength = 1, maxMoves = 10, moves = 10, upkeep = 0, homeCity = army.homeCity,
+    }
+  end
+  eq(#game.armiesAt(g, tx, ty), rules.MAX_STACK, "the tile is full")
+
+  army.moves = 99
+  local r = movement.moveTo(g, { army }, tx, ty)
+  eq(r.steps, 0, "a stack cannot stop on a full tile")
+  ok(army.x ~= tx or army.y ~= ty, "the army stayed off the full tile")
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -320,6 +471,9 @@ for _, s in ipairs(SCENARIOS) do
 end
 testTurnLoop("ERYTHEA")
 testVectoring("ERYTHEA")
+testMovement("ERYTHEA")
+testMovement("ISLADIA")
+testStackLimit("ERYTHEA")
 
 print(("\n%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

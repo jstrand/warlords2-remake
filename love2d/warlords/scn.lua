@@ -117,6 +117,17 @@ function scn.load(dir, name)
     byPos[c.y * scn.MAP_W + c.x] = c
   end
 
+  -- A city covers a 2x2 footprint on the map (path_build_cost_grid marks all
+  -- four tiles); byPos keys the top-left, cityTile every tile of it.
+  local cityTile = {}
+  for _, c in ipairs(cities) do
+    for dx = 0, 1 do
+      for dy = 0, 1 do
+        cityTile[(c.y + dy) * scn.MAP_W + (c.x + dx)] = c
+      end
+    end
+  end
+
   -- Ownership is derived: at scenario start a side owns only its capital.
   for _, sd in ipairs(sides) do
     local c = byPos[sd.capY * scn.MAP_W + sd.capX]
@@ -160,17 +171,21 @@ function scn.load(dir, name)
   local terrainType = {}
   for i = 0, TERRAIN_COUNT - 1 do terrainType[i] = s:byte(TERRAIN_TABLE + i + 1) end
 
-  -- terrain grid + road overlay
+  -- terrain grid + road overlay. Bit 15 of a map word marks a **crossing**:
+  -- the tile where a stack may change between land and water (path_build_cost_grid,
+  -- Ghidra 1555:0d9e).
   local m = readAll(base .. ".MAP")
-  local tiles = {}
+  local tiles, crossing = {}, {}
   for i = 0, scn.MAP_W * scn.MAP_H - 1 do
-    tiles[i + 1] = u16(m, i * 2) % 0x8000
+    local w = u16(m, i * 2)
+    tiles[i + 1] = w % 0x8000
+    crossing[i + 1] = w >= 0x8000
   end
   local roads = readAll(base .. ".RD")
 
   return {
-    name = name, sides = sides, cities = cities, cityAt = byPos,
-    sites = sites, items = items, monsters = monsters,
+    name = name, sides = sides, cities = cities, cityAt = byPos, cityTile = cityTile,
+    sites = sites, items = items, monsters = monsters, crossing = crossing,
     itemPool = scn.loadItemPool(base .. ".ITM"),
     options = options, terrainType = terrainType,
     tiles = tiles, roads = roads,
@@ -184,6 +199,11 @@ end
 
 function scn.roadAt(g, x, y)
   return g.roads:byte(y * scn.MAP_W + x + 1)
+end
+
+--- Is this tile a crossing (map word bit 15)?
+function scn.isCrossing(g, x, y)
+  return g.crossing[y * scn.MAP_W + x + 1]
 end
 
 --- The terrain type id (0-11) of a map tile, via the scenario's own table.

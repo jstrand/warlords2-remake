@@ -27,8 +27,15 @@ function game.armiesAt(g, x, y)
   return out
 end
 
+--- The city standing on a tile, anywhere in its 2x2 footprint.
 function game.cityAt(g, x, y)
-  return g.map.cityAt[key(g, x, y)]
+  return g.map.cityTile[key(g, x, y)]
+end
+
+--- Give a city to a side (nil for neutral) and drop the cached cost grids.
+function game.setCityOwner(g, city, sideIndex)
+  city.ownerIndex = sideIndex
+  require("warlords.move").invalidate(g)
 end
 
 function game.sideCities(g, side)
