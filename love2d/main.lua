@@ -28,6 +28,8 @@ local BAR = 76                        -- status bar height
 
 local G = {}          -- view state; the game itself lives in G.g
 
+local presentOffer    -- defined with the turn sequence, wanted by love.load
+
 local function quadsFor(img, cols, cellW, cellH, stride, count)
   local qs = {}
   for i = 0, count - 1 do
@@ -89,12 +91,18 @@ function love.load(arg)
   G.player = game.begin(G.g)
   G.selection = nil
   G.cx, G.cy = G.player.capital.x - 6, G.player.capital.y - 5
-  say("Click a stack to select it, then click where to go. Space ends the turn.")
 
   love.graphics.setBackgroundColor(0, 0, 0)
   G.font = love.graphics.newFont(13)
   G.bold = love.graphics.newFont(15)
   love.graphics.setFont(G.font)
+
+  -- game.begin has already run the first turn's start, so the free turn-1 hero
+  -- is waiting on the side; it has to be put to the player here, because
+  -- endTurn -- which asks about every later offer -- has not run yet.
+  if not presentOffer(G.player) then
+    say("Click a stack to select it, then click where to go. Space ends the turn.")
+  end
 end
 
 ------------------------------------------------------------------ the camera
@@ -204,6 +212,22 @@ local function moveSelection(x, y)
   end
 end
 
+--- Put a pending hero offer to the player. The turn-1 hero is free and always
+--- comes (docs/rules.md > When a hero offers to join), so it is worded as a
+--- gift rather than a price.
+function presentOffer(side)
+  if not side.heroOffer then return false end
+  G.offer = side.heroOffer
+  if G.offer.first then
+    say("A hero comes to %s to serve you, and asks no pay. Y to accept, N to refuse.",
+        G.offer.city.name)
+  else
+    say("A hero offers to serve for %d gold. Press Y to hire, N to refuse.",
+        G.offer.price)
+  end
+  return true
+end
+
 local function endTurn()
   G.selection, G.captured = nil, nil
   local side = game.endTurn(G.g)
@@ -218,11 +242,7 @@ local function endTurn()
     return
   end
   G.player = side
-  if side.heroOffer then
-    G.offer = side.heroOffer
-    say("A hero offers to serve for %d gold. Press Y to hire, N to refuse.",
-        G.offer.price)
-  else
+  if not presentOffer(side) then
     say("Turn %d. %d gold, income %d, upkeep %d.", G.g.turn, side.gold,
         side.income or 0, side.upkeepTotal or 0)
   end
@@ -381,9 +401,9 @@ function love.keypressed(key)
       say("%s joins at %s.", h.title or "A hero",
           G.g.map.cities[h.homeCity + 1].name)
       centreOn(h.x, h.y)
-      G.offer = nil
+      G.offer, G.player.heroOffer = nil, nil
     elseif key == "n" then
-      G.offer = nil
+      G.offer, G.player.heroOffer = nil, nil
       say("The hero rides away.")
     end
     return
@@ -413,3 +433,7 @@ function love.keypressed(key)
   elseif key == "right" or key == "d" then G.cx = G.cx + 3; clampCamera()
   end
 end
+
+-- LOVE ignores what main.lua returns; the headless harness in test/ui.lua uses
+-- it to look at the view state without making any of this global.
+return G

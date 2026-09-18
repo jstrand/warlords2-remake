@@ -69,7 +69,7 @@ love = {
 
 print("loading the front end")
 local chunk = assert(loadfile("love2d/main.lua"))
-chunk()
+local G = chunk()          -- main.lua hands back its view state, for tests
 
 print("  scenario: " .. SCENARIO)
 if not try("love.load", love.load, { SCENARIO, DATA }) then
@@ -79,6 +79,33 @@ end
 
 try("first frame", love.draw)
 print(("  drew %d sprites"):format(drawCalls))
+
+-- Turn 1 always offers a free hero (docs/rules.md > When a hero offers to
+-- join), and the offer has to reach the player at load: game.begin runs the
+-- first turn's start, so nothing else will ever ask about it. This went
+-- unnoticed once because the engine set the offer and the front end dropped it.
+local function heroesOf(g, side)
+  local n = 0
+  for _, a in ipairs(g.armies) do
+    if a.type == 28 and a.owner == side.index then n = n + 1 end
+  end
+  return n
+end
+
+if not G then
+  fail("turn-1 hero", "main.lua did not return its state")
+elseif not G.offer then
+  fail("turn-1 hero", "no hero was offered on turn 1")
+else
+  local before = heroesOf(G.g, G.player)
+  try("accept the turn-1 hero", love.keypressed, "y")
+  local after = heroesOf(G.g, G.player)
+  if after ~= before + 1 then
+    fail("turn-1 hero", ("accepting gave %d heroes, wanted %d"):format(after, before + 1))
+  else
+    print("  the free turn-1 hero arrived")
+  end
+end
 
 -- the turn sequence, several times over: this runs every computer player too
 for i = 1, 3 do
