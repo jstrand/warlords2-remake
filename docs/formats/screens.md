@@ -318,12 +318,17 @@ used as the symbol for *this city is producing*, the same whatever is being
 built, not a per-type illustration. `CITY.PCK` (320 × 312) is a separate
 illustration of a castle gateway and does not appear on this dialog.
 
-**`ABITS.PCK`** (480 × 40) is twelve 40 × 40 cells, the first nine of which are
-rings: grey, then white, yellow, orange, red, green, blue, light blue and
-black. A production choice sits on the grey ring, and the one being built on
-its owner's — so the ring is the side's colour. Cell 0 being grey puts a side's
-ring at its index plus one, which matches a screenshot where the second
-shield's side rings in yellow, cell 2.
+**`ABITS.PCK`** (480 × 40) opens with **nine rings, each 32 × 30 on a 32-pixel
+stride** from x = 0: grey, then white, yellow, orange, red, green, blue, light
+blue and black. A production choice sits on the grey ring, and the one being
+built on its owner's — so the ring is the side's colour. Cell 0 being grey puts
+a side's ring at its index plus one, which matches a screenshot where the
+second shield's side rings in yellow, cell 2.
+
+The stride is **not** 40, and the rings are **not** 40 tall: the rest of the
+sheet holds unrelated bits, and below y = 30 there is a strip of small pieces —
+"Group Move", digits, terrain marks. A 40 × 40 cell drags both into the ring
+and the clipping is obvious on screen.
 
 The name is drawn in `CHANCE36`, centred over the right panel; everything
 else on the dialog is `CHANCE17`.

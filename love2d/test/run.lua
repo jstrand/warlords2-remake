@@ -1000,6 +1000,40 @@ local function testScreenLayout()
        ("button %d (control %d) is %s"):format(i, 179 + i, want[i]))
   end
 
+  -- ABITS.PCK's rings: nine 32x30 cells on a 32-pixel stride, grey then one
+  -- per side. A 40x40 cell drags in the strip of other bits below them.
+  do
+    local pckM = require("warlords.pck")
+    local w, h, px = pckM.decode(DATA .. "/PICS/ABITS.PCK")
+    eq(w, 480, "ABITS.PCK is 480 wide")
+    eq(h, 40, "and 40 tall")
+    local BG, seen = 3, {}
+    for cell = 0, 8 do
+      local count = {}
+      for y = 0, 29 do
+        for x = cell * 32, cell * 32 + 31 do
+          local v = px[y * w + x + 1]
+          if v ~= BG then count[v] = (count[v] or 0) + 1 end
+        end
+      end
+      local best, bestN = nil, 0
+      for v, n in pairs(count) do if n > bestN then best, bestN = v, n end end
+      ok(bestN > 40, ("ring %d has ink"):format(cell))
+      if cell > 0 then
+        ok(not seen[best], ("ring %d has its own colour"):format(cell))
+        seen[best] = true
+      end
+    end
+    -- the strip below the rings is something else, so the cell must stop at 30
+    local ringRow, stripRow = 0, 0
+    for x = 0, 287 do
+      if px[15 * w + x + 1] ~= BG then ringRow = ringRow + 1 end
+      if px[38 * w + x + 1] ~= BG then stripRow = stripRow + 1 end
+    end
+    ok(stripRow > ringRow * 2,
+       "row 38 is far denser than row 15, so it is not part of the rings")
+  end
+
   -- every control's three source rects must lie inside its own bitmap
   local pckMod = require("warlords.pck")
   local sizes, checked = {}, 0

@@ -30,6 +30,7 @@ local TILE = screen.TILE
 local ARMY_CELL, ARMY_COLS = 32, 16
 local ROAD_STRIDE, ROAD_COLS = 48, 13
 local ROAD_KEY, ARMY_KEY = 1, 10
+local RING_W, RING_H = 32, 30      -- one ABITS ring
 
 local G = {}
 
@@ -98,10 +99,12 @@ function love.load(arg)
   -- picture of the army; ABITS.PCK holds nine 40x40 rings, grey then one per
   -- side, used to ring the chosen production in the owner's colour.
   G.bigArmy = pck.toImage(dataDir .. "/PICS/BIGARMY.PCK", palette)
+  -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
+  -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   G.abits = pck.toImage(dataDir .. "/PICS/ABITS.PCK", palette, 3)
   G.ringQuads = {}
   for i = 0, 8 do
-    G.ringQuads[i] = love.graphics.newQuad(i * 40, 0, 40, 40, 480, 40)
+    G.ringQuads[i] = love.graphics.newQuad(i * RING_W, 0, RING_W, RING_H, 480, 40)
   end
 
   -- the original's own chrome and fonts
@@ -536,7 +539,7 @@ local function drawCity()
       love.graphics.setColor(1, 1, 1)
       love.graphics.draw(G.abits,
         G.ringQuads[c.producing == i and ringFor(c.ownerIndex) or 0],
-        ctl.x - 4, ctl.y - 4)
+        ctl.x, ctl.y + 1)
       love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32],
                          ctl.x, ctl.y)
     end
