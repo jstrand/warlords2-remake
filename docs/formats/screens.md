@@ -122,10 +122,23 @@ and the runtime fields are simply zero on disk.
 | 12 | u32 | *runtime* far pointer to the control's **text**; zero on disk |
 | 16 | u16 | *runtime* — zero on disk |
 | 18 | u8 | *runtime* last-drawn value, to suppress repaints |
-| 19 | u16 ×2 | source x, y — state 0 (normal) |
-| 23 | u16 ×2 | source x, y — state 1 (pressed) |
-| 27 | u16 ×2 | source x, y — state 2 (disabled) |
+| 19 | u16 ×2 | source x, y — state 0 (**active**) |
+| 23 | u16 ×2 | source x, y — state 1 (**normal**) |
+| 27 | u16 ×2 | source x, y — state 2 (**disabled**) |
 | 31 | u16 | **bitmap id** the three source rects are cut from |
+
+The sprite painter indexes the pairs arithmetically — `1771:0001` reads
+source x from `+0x13 + 4·state` and y from `+0x15 + 4·state` — so pair *n* is
+state *n*, with no table.
+
+**State 1, not 0, is the resting appearance.** Cropping the three rects of one
+button out of `BUTTON.PCK` shows state 0 as a red icon on a pressed frame,
+state 1 as a black icon on a raised frame, and state 2 as a grey icon on a
+flat frame. The order holds for every button checked, including the wide
+`Drop It` / `Take It` text buttons, whose three variants sit side by side
+rather than stacked. Since the shipped records all carry `+4 = 0`, a dialog
+that did not set its controls' states would come up entirely lit — the state
+is always assigned by the dialog's own code.
 
 Verified across all 428 shipped controls: every field marked *runtime* is zero
 in every record, and only the id, rect, source rects and bitmap id carry data.
@@ -151,14 +164,36 @@ So a remake does not need a type enum — it needs the same rule. What a control
 *does* on a click is not in the file either; that lives in the dialog's own
 code, reached through the command table (`docs/re/ui.md`).
 
-### Bitmap ids
+### Bitmap ids — `DATA/FILE.DAT` group 3
 
 The id at +31 indexes a runtime **bitmap registry** at `4125:1f56`, 12 bytes
 per entry (flags, a far pointer to the pixels, a group id, a mask pointer),
-filled on demand from `PICS/*.PCK`. The id is therefore a registry slot, not a
-file number, and the id → filename mapping has to be read from the loader —
-**still open**. Only 11 distinct ids appear in the whole file, and 4 covers 84
-of the 156 sprite controls.
+filled on demand by `1997:03a9`. That loader gets the file name from
+`get_file_string(3, id)` — so the id is simply an index into **`FILE.DAT`
+group 3, which holds exactly 79 `.pck` names**.
+
+`FILE.DAT` has the same layout as `STRING.DAT`, so `tools/string_dat.py`
+reads it unchanged (89 groups; group 3 is the bitmaps, and the rest name the
+game's other data and music files).
+
+The directory comes from the registry's flag byte, not the name:
+
+| flags & 3 | directory |
+|---|---|
+| 1 | a fixed path constant |
+| 2 | `TERRAIN<n>\`, with *n* the scenario's terrain set |
+| else | a second fixed path constant |
+
+which is why `a0.pck`, `scenery0.pck`, `road.pck` and `movebar0.pck` resolve
+into `TERRAIN0/` while `button.pck` and `popup.pck` resolve into `PICS/`.
+
+**Validated:** for all 428 controls, resolving the bitmap id through group 3
+to a real file and checking all three source rects against that file's
+dimensions gives **468 rects in bounds, none out of bounds, and no name that
+fails to resolve**.
+
+Of the 11 ids the file uses, 4 (`button.pck`) covers 84 sprite controls,
+63 (`citybu.pck`) 16, 31 (`setupbu.pck`) 13 and 61 (`dbutton.pck`) 11.
 
 ### The main game screen
 
@@ -179,21 +214,28 @@ interface:
 Ids 224–241 have no bitmap and no text: they are the stack panel the game
 draws itself, inside `AREA.DAT`'s bottom-bar region `(16, 408, 360, 56)`.
 
-### Cross-check against the art
+### Cross-check against the running game
 
 `PICS/SCREEN0..3.PCK` are four 320 × 240 quadrants that assemble into the
-640 × 480 background. Drawing the `AREA.DAT` regions and `BUTTON.DAT` control
-rects over that image puts every one of them exactly on a recessed panel in
-the art — the map viewport, the strategic map, the bottom bar, and the button
-cluster with its 3 × 3 pad. The layout data, the code and the artwork all
-agree.
+640 × 480 background. Compositing that background and then blitting every
+sprite control at its state-1 source rect **reproduces the real screen**: the
+five-button toolbar, the three-button row, the 3 × 3 order pad and the crossed
+swords all land where a DOSBox screenshot has them, in the same art. The
+`AREA.DAT` regions land exactly on the recessed panels in the same image.
+
+Two things in that screenshot do **not** come from this data, and are drawn by
+game code: the menu bar's text, and the turn counter and player shields to its
+right. The four 32 × 29 buttons on the cluster's bottom row have deliberately
+blank art here — their icons are overlaid separately.
 
 ## What is still missing
 
-- **How a bitmap id (control +31) maps to a `PICS/*.PCK` file.** The registry
-  is filled on demand by the loader; the id → filename table has not been
-  read. This is the last thing needed to draw a dialog from data alone.
+Nothing now blocks drawing a screen from this data. What is left is per-screen
+detail:
+
 - Which control ids get text, and from which `STRING.DAT` group. The text
   pointer is assigned by each dialog's own code, so this is per-dialog work
   rather than one table.
+- The icons overlaid on the four blank buttons of the main screen's cluster,
+  and what the eight army slots draw.
 - What the region and dialog ids mean individually, beyond the main screen.

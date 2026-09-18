@@ -371,10 +371,8 @@ What is worth taking is the part that is **observable to the player**:
   Alt-E/Alt-U/Alt-X/Home/End/Del. Seven of them are handled inline in the
   dispatcher rather than calling out to a named routine.
 - Which of the five reports and five history screens each letter selects.
-- How a control's bitmap id maps to a `PICS/*.PCK` file. The id indexes a
-  runtime registry at `4125:1f56` filled on demand by the loader; the
-  id → filename table has not been read. This is the last piece needed to
-  draw a dialog from data alone.
+- Which control ids get their text from which `STRING.DAT` group — assigned by
+  each dialog's own code, so it is per-dialog work rather than one table.
 - What distinguishes the two identical width tables in a `.FIN`, and the 17
   trailing bytes.
 - The three u16 spacing values at `.FIN` +6.
