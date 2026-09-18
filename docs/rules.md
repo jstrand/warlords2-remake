@@ -178,6 +178,14 @@ why the production screen's numbers differ per city.
 `+20`: **1 with fewer than 3 production types, otherwise 2**. It's recomputed
 at setup and whenever a type is bought.
 
+**Where a new army stands** (`6f8c:0bff`, the guard on every army the game
+places in a city). A city covers **2×2 tiles** and each tile holds up to 8
+armies, so a city holds up to 32. The routine returns the **first of the four
+tiles with room**, in the order (x,y), (x,y+1), (x+1,y), (x+1,y+1); if all
+four are full it tries **20 random tiles within ±1** of the city, and if that
+fails too the army is not placed — production waits. The same test gates
+garrisons, hired heroes and their allies, and armies arriving from vectoring.
+
 **A new army** (`city_produce_army`, `6f8c:0dd7`) takes its move and strength
 from the city slot. Upkeep is half the slot's cost. Strength gets **+2 (max 9)**
 when the owning side's **Enhanced** flag (`.SCN` `0x00f0 + 2·side`) is set.
