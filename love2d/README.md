@@ -18,15 +18,19 @@ love love2d ISLADIA                # another scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
 ```
 
+The window is the original's own **640 × 480** screen, scaled up by a whole
+number so the pixels stay square. The chrome is not a lookalike: the
+background, buttons, regions and fonts are the game's own, read from its data
+files at runtime (`docs/formats/screens.md`).
+
 | input | does |
 |---|---|
-| left click a stack | select it |
-| left click elsewhere | walk there — and attack whatever blocks the way |
-| right click | inspect a tile |
-| `p` | cycle what the selected city builds |
+| left click the map | select a stack, or walk the selection there |
+| right click the map | inspect a tile |
+| click the strategic map | recentre the view |
 | `space` | end the turn; the computer players then take theirs |
 | `c` | centre on the selection |
-| arrows / WASD | scroll |
+| arrows / WASD | scroll one tile |
 | `y` / `n` | hire or refuse an offered hero |
 | `F5` / `F9` | save and load |
 | `esc` | quit |
@@ -72,6 +76,9 @@ for the cost grid's flags.
 | `quest.lua` | taking a quest, checking it off, the reward |
 | `diplomacy.lua` | the pair matrix, proposals, the diplomatic rating |
 | `save.lua` | saving and loading a game in progress |
+| `uidata.lua` | `JOIN.DAT`, `AREA.DAT`, `BUTTON.DAT`, `FILE.DAT`: the screen layout |
+| `font.lua` | the `.FNT`/`.FIN` proportional fonts |
+| `screen.lua` | the 640×480 screen: background, controls, hit regions |
 | `ai.lua` | a computer player |
 
 Every rule cites where it came from: `docs/rules.md` for the rule itself, and

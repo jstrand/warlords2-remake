@@ -951,6 +951,81 @@ end
 
 ---------------------------------------------------------------------- sites
 
+-- The screen layout comes out of the game's own files, so these are the
+-- numbers docs/formats/screens.md records, checked against the shipped data.
+local function testScreenLayout()
+  print("screen layout")
+  local uidata = require("warlords.uidata")
+  local ui = uidata.load(DATA)
+
+  eq(ui.bitmaps[0], "startup.pck", "bitmap 0 is the startup screen")
+  eq(ui.bitmaps[4], "button.pck", "bitmap 4 is the button sheet")
+  eq(ui.bitmaps[78], "movebar7.pck", "there are 79 bitmaps, 0 to 78")
+
+  local n = 0
+  for _ in pairs(ui.joins) do n = n + 1 end
+  eq(n, 36, "JOIN.DAT names 36 dialogs")
+  eq(ui.joins[0].button, 0, "dialog 0 uses button group 0")
+  eq(ui.joins[0].area, 2, "dialog 0 uses area screen 2")
+  -- the join is not the identity: three pairs of dialogs swap button groups
+  eq(ui.joins[9].button, 11, "dialog 9 takes button group 11")
+  eq(ui.joins[12].button, 9, "and dialog 12 takes group 9")
+
+  local d = uidata.dialog(ui, uidata.MAIN_SCREEN)
+  eq(#d.controls, 43, "the main screen has 43 controls")
+  eq(#d.regions, 6, "and 6 regions")
+
+  local want = {
+    [1] = { 400, 30, 224, 312 },   -- strategic map
+    [2] = { 16, 30, 360, 360 },    -- map viewport: 9x9 tiles of 40
+    [3] = { 0, 0, 640, 18 },       -- menu bar
+    [9] = { 16, 408, 360, 56 },    -- bottom bar
+  }
+  for _, r in ipairs(d.regions) do
+    local w = want[r.id]
+    if w then
+      eq(r.x, w[1], ("region %d x"):format(r.id))
+      eq(r.y, w[2], ("region %d y"):format(r.id))
+      eq(r.w, w[3], ("region %d width"):format(r.id))
+      eq(r.h, w[4], ("region %d height"):format(r.id))
+    end
+  end
+
+  -- every control's three source rects must lie inside its own bitmap
+  local pckMod = require("warlords.pck")
+  local sizes, checked = {}, 0
+  for _, group in pairs(ui.buttons) do
+    for _, c in ipairs(group.controls) do
+      if c.bitmap ~= 0 and c.w > 0 then
+        local name = ui.bitmaps[c.bitmap]
+        if sizes[name] == nil then
+          sizes[name] = false
+          for _, dir in ipairs({ "/PICS/", "/TERRAIN0/", "/" }) do
+            local p = DATA .. dir .. name:upper()
+            local f = io.open(p, "rb")
+            if f then
+              f:close()
+              local w, h = pckMod.decode(p)
+              sizes[name] = { w = w, h = h }
+              break
+            end
+          end
+        end
+        local s = sizes[name]
+        ok(s ~= false, "bitmap resolves to a file: " .. tostring(name))
+        if s then
+          for st = 0, 2 do
+            ok(c.src[st].x + c.w <= s.w and c.src[st].y + c.h <= s.h,
+               ("control %d state %d lies inside %s"):format(c.id, st, name))
+            checked = checked + 1
+          end
+        end
+      end
+    end
+  end
+  ok(checked >= 400, ("checked %d source rects"):format(checked))
+end
+
 local function testSites(scenario)
   print("sites: " .. scenario)
   local siteMod = require("warlords.site")
@@ -1557,6 +1632,7 @@ testHiddenMap()
 testSave()
 testSites("ERYTHEA")
 testSites("DRAGON")
+testScreenLayout()
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
