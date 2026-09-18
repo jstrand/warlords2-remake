@@ -67,7 +67,12 @@ a Ghidra address for the routine it was read out of. If the two ever disagree,
 `rules.bugs` decides whether the engine reproduces faults found in
 `WARLORD2.EXE`. They are **on** by default, so a game can be compared against
 the original move for move; set one to `false` to play the game as it was
-evidently meant to work. Each is documented where it is used.
+evidently meant to work.
+
+A flag only exists once the engine actually reads it — a test enforces that —
+so the list is shorter than the list of bugs in `docs/re/`. Two decoded AI
+faults have no flag yet because the phases they live in have no counterpart
+here.
 
 ## What is not here yet
 

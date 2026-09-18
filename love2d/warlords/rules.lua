@@ -17,15 +17,17 @@ local rules = {}
 rules.bugs = {
   -- Post-battle hero experience checks the *attacker's* type array when
   -- deciding whether a surviving defender was a hero (docs/rules.md > Combat).
+  -- Used by hero.battleExperience.
   heroExperienceReadsAttackerTypes = true,
-  -- The AI's diplomacy phase can never escalate to war through its own
-  -- grudge and threat tests: both "declare war" branches sit inside the
-  -- failing half of the enclosing test (docs/re/ai.md > Diplomacy).
-  aiWarEscalationUnreachable = true,
-  -- ai_pick_enemy's "enemy cities next to mine" term accumulates into the
-  -- side's own slot, which is zeroed before the pick (docs/re/ai.md).
-  aiAdjacencyTermSelfScored = true,
 }
+
+-- Two more faults are decoded but have nothing to switch off yet, because the
+-- code they live in has no counterpart here: the AI's diplomacy phase can
+-- never escalate to war through its own grudge and threat tests (both
+-- "declare war" branches sit inside the failing half of the enclosing test),
+-- and ai_pick_enemy's "enemy cities next to mine" term accumulates into the
+-- side's own slot, which is zeroed before the pick. See docs/re/ai.md >
+-- Diplomacy. If those phases are ever ported properly, they belong above.
 
 rules.NEUTRAL = 15          -- the owner byte used for neutral cities
 rules.MAX_STACK = 8         -- armies on one tile

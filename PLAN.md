@@ -97,16 +97,17 @@ table) are all resolved from the executable; see `docs/rules.md`.
 `love.*`, so `lua love2d/test/run.lua` checks it without a window (~5500
 assertions). `tools/` stays Python and stays the format lab.
 
-Done: game state, the turn loop (income, upkeep, production, vectoring,
-movement reset), movement (cost grid, stack modes, pathfinding, walking),
-combat, city capture and pillage/sack/raze, heroes, and a computer player.
-A scenario plays to victory — Tutoria ends around turn 40 with the computer
-players fighting it out.
+Done: game state and the turn loop, movement, combat, city capture and
+pillage/sack/raze, heroes, ruins/temples/sages, quests, diplomacy, the hidden
+map, the end-of-game conditions, saving and loading, and a computer player.
+A scenario plays to victory on its own.
 
-`rules.bugs` reproduces the original's faults by default, one flag each.
+`rules.bugs` reproduces the original's faults, one flag per fault the engine
+actually reads.
 
-Left: ruins, temples and sages; quests; diplomacy; sea transport; the hidden
-map. Every one of them is already decoded in `docs/rules.md`.
+Left: the interface for what the engine can already do (city dialog, stack
+splitting, diplomacy and quest screens), sound, and a computer player that
+explores as well as the original's does.
 
 ### Phase 4 — Audio
 - XMI → MIDI conversion (or direct playback). Port ScummVM's XMIDI parser; it's the reference implementation.

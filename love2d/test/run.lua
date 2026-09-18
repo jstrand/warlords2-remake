@@ -1488,9 +1488,20 @@ local function testBugFlags()
   print("bug compatibility")
   ok(rules.bugs.heroExperienceReadsAttackerTypes,
      "the original's bugs are reproduced by default")
-  local n = 0
-  for _ in pairs(rules.bugs) do n = n + 1 end
-  ok(n >= 3, "every documented bug has a flag")
+  -- every flag must actually control something: a flag nothing reads is a
+  -- promise the engine does not keep
+  local used = {}
+  for _, module in ipairs({ "hero", "combat", "game", "move", "ai", "site", "quest" }) do
+    local f = io.open("love2d/warlords/" .. module .. ".lua", "r")
+    if f then
+      local text = f:read("*a")
+      f:close()
+      for name in text:gmatch("rules%.bugs%.([%w_]+)") do used[name] = true end
+    end
+  end
+  for name in pairs(rules.bugs) do
+    ok(used[name], "the " .. name .. " flag is read by the engine")
+  end
 end
 
 --------------------------------------------------------------------- main
