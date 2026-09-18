@@ -122,7 +122,7 @@ function save.encode(g)
       index = c.index, ownerIndex = c.ownerIndex, producing = c.producing,
       countdown = c.countdown, vectorTo = c.vectorTo, razed = c.razed or nil,
       defence = c.defence, income = c.income, previousOwner = c.previousOwner,
-      slots = c.slots,
+      razedBy = c.razedBy, slots = c.slots,
     }
   end
 
@@ -197,7 +197,11 @@ function save.decode(text, dataDir)
     c.ownerIndex, c.producing, c.countdown = saved.ownerIndex, saved.producing, saved.countdown
     c.vectorTo, c.razed, c.defence = saved.vectorTo, bool(saved.razed), saved.defence
     c.income, c.previousOwner, c.slots = saved.income, saved.previousOwner, saved.slots
+    c.razedBy = saved.razedBy
   end
+  -- the map comes back off disk with every city as tile 96, so restamp the
+  -- castles from the ownership we have just restored
+  require("warlords.scn").refreshCityTiles(g.map)
 
   for _, saved in ipairs(state.sites) do
     local s = g.map.sites[saved.index + 1]

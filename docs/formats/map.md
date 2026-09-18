@@ -101,6 +101,49 @@ col   = cell % 16        row  = cell // 16
 
 Erythea uses 111 distinct indices, max 152 — comfortably inside the two sheets.
 
+## City castles
+
+A city's castle is **terrain, not a sprite**. `SCENERY1` carries the castles
+as 80×80 blocks — two cells across and two rows down — so a block whose
+top-left cell is `t` covers `t`, `t+1`, `t+16`, `t+17`. Every `.MAP` ships
+its cities as block 96, and the game **rewrites those four cells** whenever a
+city changes hands, which is why ownership never appears in the map file.
+
+`set_city_tiles` (`6bd8:0000`) picks the block:
+
+```
+if owner == 15 then owner = -1 end            -- neutral
+if owner < 6 then base, off = 0x62, owner * 2
+else              base, off = 0x80, (owner - 6) * 2 end
+tile = base + off
+```
+
+| owner | block | castle |
+|---|---|---|
+| neutral (15 → −1) | 96 | grey castle |
+| 0 | 98 | white cliff citadel |
+| 1 | 100 | volcano peak |
+| 2 | 102 | brown rock hive |
+| 3 | 104 | orange stepped city |
+| 4 | 106 | palisaded tree city |
+| 5 | 108 | orange-roofed castle |
+| 6 | 128 | grey castle, blue spires |
+| 7 | 130 | black tower |
+
+Sides 0–5 run along the sheet's top row and then **skip 110**, which is a
+mountain sprite, restarting at 128 on the second row — that jump is the whole
+reason for the `owner < 6` branch.
+
+`city_make_ruins` (`649c:016b`) has no such split: the razed blocks are eight
+contiguous 80×80 cells from `0xa0`, so `tile = 0xa0 + owner * 2`. It reads the
+owner **before** overwriting it with 15, so ruins keep the colours of whoever
+held the city, and each razed block is the burning version of the castle
+directly above it. There is no razed block for a neutral city.
+
+The scenario's own terrain table is an independent witness to all of this: it
+marks every cell of every castle block as terrain **10** (city) and every cell
+of the razed row as **11** (ruins), while 110/126 — the gap — are 6 and 7.
+
 ## Usage
 
 ```sh
@@ -118,5 +161,6 @@ The `.RD` overlay is drawn automatically when the sibling file exists.
   bytes) or `.SGN` (11858 bytes, "signs").
 - City placement: `.CTY` is plain text descriptions only, so city *positions*
   must live in `.SCN` or `.SPC`. The city icons visible in the render come from
-  the terrain tiles themselves, so the map bakes in the city graphic while the
-  scenario data must separately record ownership and stats.
+  the terrain tiles themselves — see **City castles** above: the map ships
+  every city as the neutral block and the game restamps it per owner, so
+  ownership and stats live only in the scenario data.

@@ -184,6 +184,8 @@ function game.new(dataDir, scenario, opts)
     c.vectorTo = nil
   end
 
+  scn.refreshCityTiles(g.map)
+
   require("warlords.diplomacy").init(g)
   setupGarrisons(g)
   require("warlords.site").setup(g)
@@ -414,6 +416,7 @@ function game.resolveAttack(g, stack, x, y)
     city.previousOwner = (city.ownerIndex == winner.index) and rules.NEUTRAL or city.ownerIndex
     city.producing, city.countdown, city.vectorTo = nil, 0, nil
     city.ownerIndex = winner.index
+    scn.setCityTiles(g.map, city)
     move.invalidate(g)
     result.captured = city
     result.quest = questMod.event(g, winner, "occupy",
@@ -488,6 +491,9 @@ end
 function game.raze(g, side, city, stack)
   local move = require("warlords.move")
   city.razed = true
+  -- city_make_ruins reads the owner before clearing it: the ruins keep the
+  -- colours of whoever held the city, so remember who that was.
+  city.razedBy = city.ownerIndex or 0
   city.ownerIndex = nil
   city.previousOwner = rules.NEUTRAL
   city.slots = {}
@@ -497,6 +503,7 @@ function game.raze(g, side, city, stack)
   for _, c in ipairs(g.map.cities) do
     if c.vectorTo == city.index then c.vectorTo = nil end
   end
+  scn.setCityTiles(g.map, city)
   game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
   require("warlords.quest").event(g, side, "raze", { city = city, stack = stack or {} })

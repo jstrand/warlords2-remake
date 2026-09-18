@@ -1069,6 +1069,73 @@ local function testScreenLayout()
   ok(checked >= 400, ("checked %d source rects"):format(checked))
 end
 
+-- A city's castle is the map's own terrain, restamped when it changes hands
+-- (scn.setCityTiles, from set_city_tiles 6bd8:0000 and city_make_ruins
+-- 649c:016b). The scenario's terrain table is an independent witness: it
+-- marks every castle cell as terrain 10 and every razed cell as 11, with
+-- the mountain sprite sitting in the gap the owner arithmetic skips.
+local function testCityCastles()
+  print("city castles")
+  local scn = require("warlords.scn")
+  local g = game.new(DATA, "TUTORIA", { seed = 11 })
+  local map = g.map
+
+  local WANT = { [-1] = 96, [0] = 98, [1] = 100, [2] = 102, [3] = 104,
+                 [4] = 106, [5] = 108, [6] = 128, [7] = 130 }
+  local city = map.cities[1]
+  for owner, base in pairs(WANT) do
+    city.ownerIndex = owner >= 0 and owner or nil
+    city.razed = nil
+    ok(scn.cityTileBase(city) == base,
+       ("owner %d takes castle block %d"):format(owner, base))
+    scn.setCityTiles(map, city)
+    ok(scn.tileAt(map, city.x, city.y) == base, "top-left cell is the block")
+    ok(scn.tileAt(map, city.x + 1, city.y) == base + 1, "top-right is +1")
+    ok(scn.tileAt(map, city.x, city.y + 1) == base + 16, "bottom-left is +16")
+    ok(scn.tileAt(map, city.x + 1, city.y + 1) == base + 17, "bottom-right is +17")
+    -- and all four cells must still count as city terrain, or movement,
+    -- defence and the cost grid would all read the castle as open ground
+    for dx = 0, 1 do
+      for dy = 0, 1 do
+        ok(scn.terrainAt(map, city.x + dx, city.y + dy) == 10,
+           ("castle cell %d,%d is city terrain"):format(dx, dy))
+      end
+    end
+  end
+
+  -- the razed row is contiguous, eight sides from 0xa0, and keeps the
+  -- colours of whoever held the city
+  for owner = 0, 7 do
+    city.ownerIndex, city.razed, city.razedBy = nil, true, owner
+    ok(scn.cityTileBase(city) == 0xa0 + 2 * owner,
+       ("ruins of side %d take block %d"):format(owner, 0xa0 + 2 * owner))
+    scn.setCityTiles(map, city)
+    for dx = 0, 1 do
+      for dy = 0, 1 do
+        ok(scn.terrainAt(map, city.x + dx, city.y + dy) == 11,
+           ("ruin cell %d,%d is ruins terrain"):format(dx, dy))
+      end
+    end
+  end
+
+  -- capture and raze must restamp through the game, not just by hand
+  local g2 = game.new(DATA, "TUTORIA", { seed = 12 })
+  local c2 = g2.map.cities[1]
+  for _, side in ipairs(g2.sides) do
+    game.setCityOwner(g2, c2, side.index)
+    scn.setCityTiles(g2.map, c2)
+  end
+  local mine = game.sideCities(g2, g2.sides[1])[1]
+  ok(mine ~= nil, "the first side holds a city to raze")
+  if mine then
+    local was = mine.ownerIndex
+    game.raze(g2, g2.sides[1], mine, {})
+    ok(mine.razedBy == was, "raze remembers who held the city")
+    ok(scn.tileAt(g2.map, mine.x, mine.y) == 0xa0 + 2 * was,
+       "raze restamps the map with that side's ruins")
+  end
+end
+
 local function testSites(scenario)
   print("sites: " .. scenario)
   local siteMod = require("warlords.site")
@@ -1676,6 +1743,7 @@ testSave()
 testSites("ERYTHEA")
 testSites("DRAGON")
 testScreenLayout()
+testCityCastles()
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end

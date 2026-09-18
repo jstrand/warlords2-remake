@@ -226,4 +226,51 @@ function scn.terrainAt(g, x, y)
   return g.terrainType[scn.tileAt(g, x, y) % 256]
 end
 
+-------------------------------------------------------------- city castles
+--
+-- A city's castle is drawn from the map itself: the .MAP file ships every
+-- city as tile 96, and the game *rewrites* those four tiles whenever the
+-- city changes hands. SCENERY1 holds the castles as 80x80 blocks -- two
+-- tiles across and two rows down -- so a block whose top-left cell is `t`
+-- covers t, t+1, t+16, t+17 (16 cells to a sheet row).
+--
+-- set_city_tiles (6bd8:0000) picks the block for an owner:
+--
+--     if owner == 15 then owner = -1 end          -- neutral
+--     if owner < 6 then base, off = 0x62, owner * 2
+--     else              base, off = 0x80, (owner - 6) * 2 end
+--
+-- so neutral lands on 0x60 = 96, sides 0..5 run 98..108 along the top row,
+-- and sides 6 and 7 restart at 128 on the second -- the gap at 110 is the
+-- mountain sprite sitting between them.
+--
+-- city_make_ruins (649c:016b) has no such split: the razed row is eight
+-- contiguous blocks from 0xa0, and it reads the owner *before* clearing it,
+-- so ruins keep the colours of whoever held the city.
+
+function scn.cityTileBase(city)
+  if city.razed then
+    return 0xa0 + 2 * (city.razedBy or 0)
+  end
+  local o = city.ownerIndex
+  if not o then return 96 end          -- the original passes owner -1
+  if o < 6 then return 0x62 + 2 * o end
+  return 0x80 + 2 * (o - 6)
+end
+
+--- Stamp a city's 2x2 castle onto the map in its owner's colours.
+function scn.setCityTiles(map, city)
+  local t = scn.cityTileBase(city)
+  local i = city.y * scn.MAP_W + city.x + 1
+  map.tiles[i] = t
+  map.tiles[i + 1] = t + 1
+  map.tiles[i + scn.MAP_W] = t + 16
+  map.tiles[i + scn.MAP_W + 1] = t + 17
+end
+
+--- Restamp every city. Cheap enough to run after a load rather than track.
+function scn.refreshCityTiles(map)
+  for _, c in ipairs(map.cities) do scn.setCityTiles(map, c) end
+end
+
 return scn
