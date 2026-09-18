@@ -91,6 +91,30 @@ end
 try("first frame", love.draw)
 print(("  drew %d sprites"):format(drawCalls))
 
+-- Every human turn opens with the banner (8cc6:0259), which blocks on any
+-- input. It has to be dismissed before anything else reaches the game, so
+-- the harness clears it the way a player would.
+local function dismissBanner(what)
+  if G.banner then try(what or "dismiss the banner", love.keypressed, "return") end
+  if G.banner then fail("banner", "a key did not dismiss it") end
+end
+
+if not G.banner then
+  fail("banner", "no banner at the start of the first turn")
+else
+  if G.banner.name ~= G.player.name then
+    fail("banner", ("banner says %q, player is %q"):format(G.banner.name, G.player.name))
+  end
+  if G.banner.turn ~= G.g.turn then fail("banner", "banner shows the wrong turn") end
+  if G.banner.colour == nil then fail("banner", "the side has no colour to frame it") end
+  try("draw the banner", love.draw)
+  -- a click dismisses it too, and must not reach the map underneath
+  try("click the banner away", love.mousepressed, 320, 200, 1)
+  if G.banner ~= nil then fail("banner", "a click did not dismiss it") end
+  print("  the turn banner opened and closed")
+end
+dismissBanner()
+
 -- Turn 1 always offers a free hero (docs/rules.md > When a hero offers to
 -- join), and the offer has to reach the player at load: game.begin runs the
 -- first turn's start, so nothing else will ever ask about it. This went
@@ -121,6 +145,7 @@ end
 -- the turn sequence, several times over: this runs every computer player too
 for i = 1, 3 do
   try("end turn " .. i, love.keypressed, "space")
+  dismissBanner("dismiss the banner on turn " .. i)
 end
 try("frame after the turns", love.draw)
 
@@ -149,6 +174,9 @@ if G and G.screen then
       -- Several controls share a rect: 183/184/185 are three variants of one
       -- button, as are 240/241. Only the one hit testing finds can light up.
       local hit = screenMod.controlAt(G.screen, cx, cy)
+      -- one of these controls ends the turn, which raises the banner; it
+      -- would otherwise eat the next control's press
+      dismissBanner()
       try(("press control %d"):format(c.id), love.mousepressed, cx, cy, 1)
       if hit and G.screen.state[hit.id] ~= uidata.ACTIVE then
         fail("control press", ("control %d did not light up"):format(hit.id))
@@ -173,6 +201,7 @@ end
 for _, key in ipairs({ "p", "p", "c", "home", "up", "down", "left", "right",
                        "w", "a", "s", "d", "f5", "f9", "space" }) do
   try("key " .. key, love.keypressed, key)
+  dismissBanner()
 end
 try("frame after the keys", love.draw)
 
@@ -287,7 +316,7 @@ try("click the status bar", love.mousepressed, 100, 750, 1)
 
 -- make sure no dialog is left open: while one is, clicks are swallowed, the
 -- player never moves and the game below never reaches an end
-G.city, G.openMenu, G.offer = nil, nil, nil
+G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
 
 -- play on until the game ends, so the end-of-game path runs too
 -- 150 rounds is enough to reach the end in the small scenarios, and to run
@@ -295,6 +324,7 @@ G.city, G.openMenu, G.offer = nil, nil, nil
 -- every further turn is a full round of computer players for nothing.
 for _ = 1, 150 do
   try("long game", love.keypressed, "space")
+  dismissBanner()
   if G.over then break end
 end
 try("final frame", love.draw)

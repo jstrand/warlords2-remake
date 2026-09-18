@@ -29,6 +29,7 @@ regions and fonts are the game's own, read from its data files at runtime
 
 | input | does |
 |---|---|
+| any key or click | dismiss the start-of-turn banner, and nothing else |
 | the menu bar | open a menu; pick an item to run it |
 | left click a city | open it and choose what it builds |
 | left click the map | select a stack, or walk the selection there |

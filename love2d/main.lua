@@ -34,7 +34,7 @@ local RING_W, RING_H = 32, 30      -- one ABITS ring
 
 local G = {}
 
-local presentOffer, stratDirty, openCity, closeCity  -- defined below
+local presentOffer, stratDirty, openCity, closeCity, showBanner  -- defined below
 
 local function quadsFor(img, cols, cellW, cellH, stride, count)
   local qs = {}
@@ -99,6 +99,8 @@ function love.load(arg)
   -- picture of the army; ABITS.PCK holds nine 40x40 rings, grey then one per
   -- side, used to ring the chosen production in the owner's colour.
   G.bigArmy = pck.toImage(dataDir .. "/PICS/BIGARMY.PCK", palette)
+  -- CITY.PCK is 320x312: the gatehouse behind the start-of-turn banner
+  G.cityPic = pck.toImage(dataDir .. "/PICS/CITY.PCK", palette)
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   G.abits = pck.toImage(dataDir .. "/PICS/ABITS.PCK", palette, 3)
@@ -135,6 +137,7 @@ function love.load(arg)
 
   love.graphics.setBackgroundColor(0, 0, 0)
 
+  showBanner(G.player)
   if not presentOffer(G.player) then
     say("Click a stack, then click where to go.")
   end
@@ -225,6 +228,19 @@ local function moveSelection(x, y)
   end
 end
 
+-- The start-of-turn banner (8cc6:0259). Popup 6 of the table at 4125:06a8 is
+-- (160, 60) 320x312 -- exactly CITY.PCK, which FILE.DAT group 3 gives as
+-- bitmap 28, the id 54f6:0000 loads for this popup. 54f6:0000 then frames it
+-- in the side's own colour, and the turn routine writes two centred lines
+-- over it at x = 320: the side's name at y = 85 and "Turn %d" at y = 130.
+-- 7ecb:0142 then blocks until any input arrives.
+local BANNER = { x = 160, y = 60, w = 320, h = 312 }
+local BANNER_NAME_Y, BANNER_TURN_Y = 85, 130
+
+function showBanner(side)
+  G.banner = { name = side.name, turn = G.g.turn, colour = side.colour or 15 }
+end
+
 function presentOffer(side)
   if not side.heroOffer then return false end
   G.offer = side.heroOffer
@@ -250,6 +266,7 @@ local function endTurn()
   end
   G.player = side
   stratDirty()
+  showBanner(side)
   if not presentOffer(side) then
     say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   end
@@ -669,6 +686,36 @@ local function drawCity()
   drawCityControls()
 end
 
+--- The start-of-turn banner: CITY.PCK framed in the side's colour, with the
+--- side's name and the turn number centred over it.
+local function drawBanner()
+  local b, R = G.banner, BANNER
+
+  -- 54f6:0000 draws the frame first and blits the picture over it, so only
+  -- the parts that fall outside the picture ever show. It outlines the saved
+  -- area -- the picture grown by 16 either side and 1 above -- then an inner
+  -- rect 5 in and 10 down, then fills the gap between them (24d0:0497 is a
+  -- filled rect, called once per edge). There are 16 pixels of room to the
+  -- left and right but only one above, which is why the original's side
+  -- borders are a solid band and its top and bottom are a single line.
+  local c = G.palette[b.colour + 1] or G.palette[16]   -- pal.lua is 1-based
+  love.graphics.setColor(c[1], c[2], c[3])
+  local function frame(x, y, w, h)
+    love.graphics.rectangle("line", x + 0.5, y + 0.5, w - 1, h - 1)
+  end
+  frame(R.x - 16, R.y - 1, R.w + 32, R.h + 4)
+  frame(R.x - 11, R.y + 9, R.w + 22, R.h - 16)
+  love.graphics.rectangle("fill", R.x - 10, R.y, 10, R.h)
+  love.graphics.rectangle("fill", R.x + R.w, R.y, 10, R.h)
+
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.cityPic, R.x, R.y)
+  local f = G.titleFont
+  f.draw(b.name, R.x + math.floor((R.w - f.width(b.name)) / 2), BANNER_NAME_Y)
+  local turn = ("Turn %d"):format(b.turn)
+  f.draw(turn, R.x + math.floor((R.w - f.width(turn)) / 2), BANNER_TURN_Y)
+end
+
 function love.draw()
   screen.drawBackground(G.screen)
   drawMap()
@@ -678,6 +725,7 @@ function love.draw()
   drawBottomBar()
   if G.city then drawCity() end
   drawMenuBar()
+  if G.banner then drawBanner() end
 end
 
 --------------------------------------------------------------------- input
@@ -693,6 +741,9 @@ local function menuPick(key)
 end
 
 function love.mousepressed(x, y, button)
+  -- 7ecb:0142 blocks the turn routine until any input arrives: the banner
+  -- eats the click that dismisses it rather than passing it on
+  if G.banner then G.banner = nil return end
   if G.over or G.offer then return end
 
   if G.city then
@@ -867,6 +918,8 @@ MENU_DOES = {
 }
 
 function love.keypressed(key)
+  -- any key, escape included, only dismisses the banner
+  if G.banner then G.banner = nil return end
   if key == "escape" then
     if G.openMenu then G.openMenu = nil return end
     if G.city then closeCity() return end

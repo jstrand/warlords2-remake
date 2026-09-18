@@ -393,6 +393,72 @@ the index to them.
 Static screens — credits, help pages, the tutorial — are not code at all:
 they are the `.GFX` markup scripts already decoded in `docs/formats/gfx.md`.
 
+### Popups
+
+Beside the `BUTTON.DAT` dialogs there is a second, simpler mechanism: a stack
+of **popups**, pushed by `54f6:0000` and popped by `54f6:069c`, which save and
+restore the screen behind them. A popup is an index into a rect table at
+`4125:06a8`, eight bytes an entry — `x, y, w, h`:
+
+| # | rect | used for |
+|---|---|---|
+| 0 | (80, 60) 480×320 | the city dialog's area |
+| 1, 7 | (160, 90) 320×200 | |
+| 2 | (80, 60) 480×312 | |
+| 3 | (96, 50) 200×200 | |
+| 4 | (120, 50) 400×360 | |
+| 5 | (144, 179) 352×64 | |
+| 6 | (160, 60) 320×312 | the start-of-turn banner |
+| 8 | (160, 60) 320×312 | |
+| 9 | (160, 60) 320×280 | |
+| 10 | (32, 60) 576×312 | |
+| 11 | (80, 60) 480×350 | |
+
+The saved area is the rect grown by 16 either side, 1 above and 3 below.
+`54f6:0000` then switches on the popup number for a bitmap id — 6 → `0x1c`,
+7 → `0x20`, 9 → `0x2c`, 13 → `0x45`, 23 → `0x46` — which `FILE.DAT` group 3
+resolves, so popup 6 is `city.pck` at exactly its own 320×312.
+
+### The start-of-turn banner
+
+`8cc6:0259` is the start of a turn. After the income, upkeep and movement
+resets it pushes popup 6 and writes two lines over it:
+
+```
+FUN_54f6_0000(6)                                    -- push the popup
+FUN_78a8_06ae(1, 15, 0, 3)                          -- white, black shadow, font 3
+FUN_7ecb_00d6(320, 85, current_player * 0x14, 0x3c04)   -- the side's name
+sprintf(buf, "Turn %d", game_turn())
+FUN_7ecb_00d6(320, 130, buf)
+auto_sound_turn_8sn()                               -- the fanfare
+FUN_7ecb_0142()                                     -- block until any input
+FUN_54f6_069c()                                     -- pop, restoring the screen
+```
+
+`7ecb:00d6` is **draw centred**: it calls `21e2:04aa(x - width(s)/2, y, s)`, so
+320 is the screen's centre line, and 85 and 130 are the tops of the two lines.
+`7ecb:0142` is the blocking wait — the banner goes away on *any* key or click,
+and that input does nothing else.
+
+The name comes from `0x3c04:(side * 0x14)`. Segment `0x3c04` is the scenario
+file loaded verbatim, which is how `.SCN` offsets and code offsets agree:
+`0xc0` is the level table and `0xd0` the human/computer table, exactly as
+`scn.lua` already had them. The eight 20-byte names therefore end at `0xa0`,
+where the **side colour table** begins — one palette index a side, the same
+eight in every scenario:
+
+| side | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|---|
+| colour | 15 | 7 | 8 | 9 | 10 | 6 | 5 | 0 |
+| | white | yellow | orange | red | green | blue | cyan | black |
+
+`54f6:0000` frames popup 6 in that colour, and **draws the frame before the
+picture**, so only what falls outside the 320×312 shows. It outlines the saved
+area, outlines again 5 in and 10 down, then fills the gap with `24d0:0497`
+(a filled rect, one call an edge). There are 16 pixels of room to the left and
+right but only one above, which is why the banner's side borders are a solid
+band and its top and bottom are a single line.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the

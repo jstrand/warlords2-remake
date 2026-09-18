@@ -12,6 +12,11 @@ scn.TILE = 40                -- terrain tiles are 40x40
 scn.TILE_MASK = 0x7FFF       -- bit 15 of a map entry is a flag
 
 local SIDE_NAMES, SIDE_STRIDE = 0, 20
+-- The eight 20-byte side names end exactly at 0xa0, where the side colour
+-- table begins: one palette index a side, the same eight in every scenario
+-- (white, yellow, orange, red, green, blue, cyan, black). The turn banner
+-- draws its border in it, and 54f6:0000 reads it as the side's own colour.
+local SIDE_COLOURS = 0xa0
 local SIDE_RECS, SIDE_REC_STRIDE = 387, 20
 local LEVELS, CONTROLLERS, ENHANCED = 0xc0, 0xd0, 0xf0
 local MONSTER_STRENGTH = 0x1007
@@ -87,6 +92,7 @@ function scn.load(dir, name)
     sides[i + 1] = {
       index = i,
       name = cstr(s, SIDE_NAMES + SIDE_STRIDE * i, SIDE_STRIDE),
+      colour = u16(s, SIDE_COLOURS + 2 * i),
       gold = u16(s, o + 2),
       capX = u16(s, o + 6),
       capY = u16(s, o + 8),
