@@ -191,11 +191,108 @@ and **Enter** (`0x0d`) a list at `4125:155b`, each looking for the first
 control that answers — the cancel and default buttons. Letters `A`–`Z` are
 excluded from the general path and handled as menu accelerators.
 
-Everything else goes through a **46-entry table of (command code, handler)**
-at `4125:0337`, two parallel arrays 92 bytes apart. Ghidra cannot recover the
-jump table, so the table is identified but **not extracted**; pulling the 46
-pairs out of the flattened image would give the complete command set in one
-step, and is the obvious next thing to do here.
+Everything else goes through a **46-entry table of (command code, handler)**,
+two parallel arrays 92 bytes apart, scanned linearly.
+
+Ghidra puts that table in DGROUP at `4125:0337`. **It is wrong** — this is the
+CS-relative jump table failure the README warns about. The disassembly reads
+
+```
+mov cx, 0x2e            ; 46 entries
+mov bx, 0x337
+.loop:
+mov ax, word cs:[bx]    ; CS, not DS
+cmp ax, [bp-2]
+jz  .match
+add bx, 2
+loop .loop
+.match:
+jmp word cs:[bx+0x5c]   ; near jump, same segment
+```
+
+so both arrays live **in the code segment** `17be`, at offsets `0x337` and
+`0x393`. Each handler offset points at a short stub that pushes any constant
+argument and far-calls the real routine.
+
+### The command set
+
+Codes below `0x100` are ASCII. Codes above are `0x100 | BIOS scan code`, which
+is what makes `0x11f`/`0x126`/`0x131` come out as Alt-S/Alt-L/Alt-N against
+save/load/new — the check that confirms the reading.
+
+| code | key | handler | what |
+|---|---|---|---|
+| `0x008` | Backspace | `8065:0fe9` | |
+| `0x009` | Tab | `8065:0f3f` | |
+| `0x011` | Ctrl-Q | `7721:0000` | |
+| `0x020` | Space | `89e0:0a55` | |
+| `0x02c` | `,` | `6c1b:0000` | army info |
+| `0x02e` | `.` | *inline* | |
+| `0x035` | `5` | `8611:0565` | map |
+| `0x03d` | `=` | `4976:0167` | quest |
+| `0x03f` | `?` | `7721:0084` | version |
+| `0x061` | `a` | `6ef3:0000(0)` | report 0 |
+| `0x062` | `b` | *inline* | |
+| `0x063` | `c` | *inline* | |
+| `0x064` | `d` | `484e:0000` | diplomacy |
+| `0x065` | `e` | `6d51:0000(1)` | history 1 |
+| `0x066` | `f` | `7563:09f7` | heroes |
+| `0x067` | `g` | `6ef3:0000(2)` | report 2 |
+| `0x068` | `h` | `6d51:0000(0)` | history 0 |
+| `0x069` | `i` | `6a89:0de1` | fighting order |
+| `0x06a` | `j` | `6d51:0000(2)` | history 2 |
+| `0x06b` | `k` | `6ef3:0000(1)` | report 1 |
+| `0x06c` | `l` | `6d51:0000(4)` | history 4 |
+| `0x06d` | `m` | `1c8c:04c4` | movement / stack mode |
+| `0x06e` | `n` | `6ef3:0000(3)` | report 3 |
+| `0x06f` | `o` | `89e0:1e3b` | |
+| `0x070` | `p` | *inline* | |
+| `0x071` | `q` | `1b62:06bf` | |
+| `0x072` | `r` | `7721:150d` | resign |
+| `0x073` | `s` | `89e0:0c9c` | |
+| `0x074` | `t` | `66d4:0c21` | items |
+| `0x075` | `u` | `7563:1652` | hero levels |
+| `0x076` | `v` | *inline* | |
+| `0x077` | `w` | `6ef3:0000(4)` | report 4 |
+| `0x078` | `x` | `540d:01a4` | |
+| `0x079` | `y` | `6d51:0000(3)` | history 3 |
+| `0x07a` | `z` | `6536:0000` | search a ruin (`site_search`) |
+| `0x112` | Alt-E | `8065:2074` | |
+| `0x116` | Alt-U | `545c:0000` | |
+| `0x11f` | Alt-S | `7721:093b` | save game |
+| `0x126` | Alt-L | `7721:026b` | load game |
+| `0x12c` | Alt-Z | `7721:128a` | load map |
+| `0x12d` | Alt-X | `64d2:0000(1)` | |
+| `0x131` | Alt-N | `7721:019d` | new game |
+| `0x132` | Alt-M | `7721:1214` | save map |
+| `0x147` | Home | `8065:0f02` | |
+| `0x14f` | End | *inline* | |
+| `0x153` | Del | *inline* | |
+
+The "what" column is named only where a label or the segment's own contents
+give it away; a blank means the handler is identified but its purpose is not.
+The eight unnamed letters — `b c o p q s v x` — are the ones to chase next:
+they are ordinary in-game commands, and naming them would finish the set.
+
+Two handlers take a constant and are family selectors:
+
+- `6ef3:0000(n)` stores *n* and opens the **reports** dialog
+  (`auto_ui_reports_menu`), so `a g k n w` are its five tabs.
+- `6d51:0000(n)` stores *n* and branches into the **history / graph** screens
+  (`auto_ui_history_lines`, `auto_ui_triumphs`), so `h e j y l` are its five;
+  *n* = 4 takes a different path from the rest.
+
+Which tab is which is not established — only that there are five of each.
+
+### Reading the flat image
+
+For this build, a Ghidra address `S:O` is at file offset
+`(S - 0x1000) * 16 + O + 0xC600` in `build/WAR2FLAT.EXE`. That holds for 1401
+of the 1579 functions in `index.txt` (checked by matching each recorded
+prologue); the ~178 that miss are overlay code, which the flattener placed
+elsewhere. Always verify against `index.txt`'s `bytes=` field before trusting
+an extraction — `docs/formats/exe.md`'s simpler "file 0x2000 + linear" does
+**not** hold here.
 
 ### Hot regions on the map screen
 
@@ -257,8 +354,11 @@ What is worth taking is the part that is **observable to the player**:
 
 ## Open questions
 
-- The 46 command codes and handlers at `4125:0337` — identified, not
-  extracted.
+- Fifteen of the 46 commands have a handler but no established purpose:
+  `.` `b` `c` `o` `p` `q` `s` `v` `x`, Backspace, Tab, Ctrl-Q, Space, and
+  Alt-E/Alt-U/Alt-X/Home/End/Del. Seven of them are handled inline in the
+  dispatcher rather than calling out to a named routine.
+- Which of the five reports and five history screens each letter selects.
 - The 15 hot regions of the map screen — the dispatcher is known, the
   individual regions are not.
 - The rest of the 33-byte control record: rect and control type.
