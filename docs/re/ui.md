@@ -125,17 +125,16 @@ works through it.
 
 ### Controls
 
-A control is **33 bytes** (`0x21`). Confirmed fields:
+A control is **33 bytes** (`0x21`), the same shape on disk and in memory. The
+full record is in [`../formats/screens.md`](../formats/screens.md); the fields
+the toolkit itself touches are the id at `+0`, the state at `+4` (0 normal,
+1 pressed, 2 disabled), the dirty flag at `+5`, the rect at `+6`, and a far
+pointer to the control's **text** at `+12`.
 
-| offset | meaning |
-|---|---|
-| `+0` | u16 control **id** |
-| `+4` | u8 **value / state** (pressed, checked, selection) |
-| `+5` | u8 **dirty** — set when the value changes, cleared after painting |
-| `+12` | far pointer to a bitmap, or 0 for a procedurally drawn control |
-
-The rest of the 33 bytes is the control's rect and type, not yet separated
-out.
+There is **no control-type field**. `1a0a:0005` decides what to paint from the
+text pointer: non-zero paints a centred, auto-sized text control; zero with a
+bitmap id at `+31` blits one of three state sprites; both zero paints nothing
+and leaves the area to game code.
 
 The accessors are the most-called functions in the program:
 
@@ -372,11 +371,10 @@ What is worth taking is the part that is **observable to the player**:
   Alt-E/Alt-U/Alt-X/Home/End/Del. Seven of them are handled inline in the
   dispatcher rather than calling out to a named routine.
 - Which of the five reports and five history screens each letter selects.
-- The 7 flag bytes at control +12 in `BUTTON.DAT`, which must hold the control
-  **type**. Everything else about the screens is now data
-  (`../formats/screens.md`); this is what stands between that data and drawing
-  it.
-- How a control's bitmap id maps to a `PICS/*.PCK` file.
+- How a control's bitmap id maps to a `PICS/*.PCK` file. The id indexes a
+  runtime registry at `4125:1f56` filled on demand by the loader; the
+  id → filename table has not been read. This is the last piece needed to
+  draw a dialog from data alone.
 - What distinguishes the two identical width tables in a `.FIN`, and the 17
   trailing bytes.
 - The three u16 spacing values at `.FIN` +6.
