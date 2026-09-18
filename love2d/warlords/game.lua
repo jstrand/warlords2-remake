@@ -184,6 +184,7 @@ function game.new(dataDir, scenario, opts)
     c.vectorTo = nil
   end
 
+  require("warlords.diplomacy").init(g)
   setupGarrisons(g)
   require("warlords.site").setup(g)
 
@@ -308,6 +309,9 @@ function game.startTurn(g, side)
     return false
   end
   local heroMod = require("warlords.hero")
+  for _, m in ipairs(require("warlords.diplomacy").apply(g, side)) do
+    g.log[#g.log + 1] = m
+  end
   side.heroOffer = heroMod.offer(g, side)
   heroMod.checkPromotions(g, side)
   applyIncome(g, side)
@@ -426,10 +430,11 @@ local function recompute(g, city)
   end
 end
 
---- Raise a side's atrocity score, the u16 at .SCN 0x10e3 + 2*side that the
---- diplomatic rating reads. docs/rules.md > Diplomacy.
-function game.addAtrocity(g, side, n)
-  side.atrocity = (side.atrocity or 0) + n
+--- Raise a side's **diplomatic score**, the u16 at .SCN 0x10e3 + 2*side that
+--- the diplomatic rating reads. Both atrocities and peace overtures raise it;
+--- see diplomacy.addScore. docs/rules.md > Diplomacy.
+function game.addDiploScore(g, side, n)
+  side.diploScore = (side.diploScore or 0) + n
 end
 
 --- Strip the most expensive production type for gold. docs/rules.md >
@@ -439,7 +444,7 @@ function game.pillage(g, side, city)
   local slot = table.remove(city.slots)          -- slots are sorted cheapest first
   local gold = slotValue(g, slot)
   side.gold = side.gold + gold
-  game.addAtrocity(g, side, g.rng:dice(1, 5, 0))
+  game.addDiploScore(g, side, g.rng:dice(1, 5, 0))
   recompute(g, city)
   return gold
 end
@@ -452,7 +457,7 @@ function game.sack(g, side, city)
     gold = gold + slotValue(g, table.remove(city.slots))
   end
   side.gold = side.gold + gold
-  game.addAtrocity(g, side, g.rng:dice(1, 10, 5))
+  game.addDiploScore(g, side, g.rng:dice(1, 10, 5))
   recompute(g, city)
   return gold
 end
@@ -470,7 +475,7 @@ function game.raze(g, side, city)
   for _, c in ipairs(g.map.cities) do
     if c.vectorTo == city.index then c.vectorTo = nil end
   end
-  game.addAtrocity(g, side, g.rng:dice(1, 15, 10))
+  game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
 end
 

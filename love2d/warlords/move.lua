@@ -337,12 +337,22 @@ function move.walk(g, stack, path)
 
     local city = g.map.cityTile[step.y * g.map.width + step.x]
     local here = stackAt(g, step.x, step.y)
+    local diplomacy = require("warlords.diplomacy")
     if city and city.ownerIndex ~= side then
+      if not diplomacy.mayAttack(g, side, city.ownerIndex) then
+        result.stopped = "at peace"
+        break
+      end
       result.stopped = "attack"
       result.attack = { x = step.x, y = step.y, city = city }
       break
     end
     if here[1] and here[1].owner ~= side then
+      -- a tile held by a side we are at peace with simply blocks
+      if not diplomacy.mayAttack(g, side, here[1].owner) then
+        result.stopped = "at peace"
+        break
+      end
       result.stopped = "attack"
       result.attack = { x = step.x, y = step.y }
       break

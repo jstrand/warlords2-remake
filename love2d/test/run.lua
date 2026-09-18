@@ -679,14 +679,14 @@ local function testCityChoices(scenario)
   if city then
     local n, dear = #city.slots, city.slots[#city.slots]
     local want = math.abs(g.types.byId[dear.type].price) // 2
-    local gold0, atrocity0 = side.gold, side.atrocity or 0
+    local gold0, score0 = side.gold, side.diploScore or 0
     local got = game.pillage(g, side, city)
     eq(got, want, "pillage pays half the type's purchase price")
     eq(side.gold, gold0 + want, "the gold was paid")
     eq(#city.slots, n - 1, "pillage removed one type")
     eq(city.defence, rules.cityDefence(#city.slots), "defence was recomputed")
-    local d = (side.atrocity or 0) - atrocity0
-    ok(d >= 1 and d <= 5, "pillage costs 1d5 atrocity: " .. d)
+    local d = (side.diploScore or 0) - score0
+    ok(d >= 1 and d <= 5, "pillage costs 1d5 diplomatic score: " .. d)
     for _, s2 in ipairs(city.slots) do
       ok(s2.type ~= dear.type or s2 ~= dear, "the pillaged type is gone")
     end
@@ -700,15 +700,15 @@ local function testCityChoices(scenario)
     for i = 2, #city2.slots do
       want = want + math.abs(g.types.byId[city2.slots[i].type].price) // 2
     end
-    local gold0, atrocity0 = side.gold, side.atrocity or 0
+    local gold0, score0 = side.gold, side.diploScore or 0
     local got = game.sack(g, side, city2)
     eq(got, want, "sack pays for every type it strips")
     eq(side.gold, gold0 + want, "the gold was paid")
     eq(#city2.slots, 1, "only the cheapest type is left")
     eq(city2.slots[1], cheapest, "and it is the cheapest one")
     eq(city2.defence, 1, "one type means defence 1")
-    local d = (side.atrocity or 0) - atrocity0
-    ok(d >= 6 and d <= 15, "sack costs 1d10+5 atrocity: " .. d)
+    local d = (side.diploScore or 0) - score0
+    ok(d >= 6 and d <= 15, "sack costs 1d10+5 diplomatic score: " .. d)
   end
 
   -- raze leaves neutral ruins that produce nothing
@@ -720,15 +720,15 @@ local function testCityChoices(scenario)
       if c.ownerIndex == side.index and c ~= city3 then other = c break end
     end
     if other then game.vector(g, other, city3) end
-    local atrocity0 = side.atrocity or 0
+    local score0 = side.diploScore or 0
     game.raze(g, side, city3)
     eq(city3.ownerIndex, nil, "a razed city is neutral")
     eq(#city3.slots, 0, "a razed city produces nothing")
     eq(city3.income, 0, "a razed city earns nothing")
     eq(#game.sideCities(g, side), before - 1, "the side no longer owns it")
     if other then eq(other.vectorTo, nil, "vectoring to it was cancelled") end
-    local d = (side.atrocity or 0) - atrocity0
-    ok(d >= 11 and d <= 25, "raze costs 1d15+10 atrocity: " .. d)
+    local d = (side.diploScore or 0) - score0
+    ok(d >= 11 and d <= 25, "raze costs 1d15+10 diplomatic score: " .. d)
   end
 
   -- pillaging a city with nothing to take does nothing
@@ -1053,6 +1053,79 @@ local function testSites(scenario)
   ok(died > 0, "a weak hero sometimes dies to a strong one")
 end
 
+----------------------------------------------------------------- diplomacy
+
+local function testDiplomacy()
+  print("diplomacy")
+  local d = require("warlords.diplomacy")
+
+  -- the option decides where everyone starts
+  local off = game.new(DATA, "ERYTHEA", { seed = 61 })
+  eq(off.map.options.diplomacy, 0, "the shipped scenarios have diplomacy off")
+  eq(d.state(off, 0, 1), d.WAR, "with the option off every pair starts at war")
+  ok(d.mayAttack(off, 0, 1), "and may attack freely")
+
+  local g = game.new(DATA, "ERYTHEA", { seed = 61, options = { diplomacy = 1 } })
+  eq(d.state(g, 0, 1), d.PEACE, "with the option on every pair starts at peace")
+  ok(not d.mayAttack(g, 0, 1), "a side at peace may not attack")
+  ok(d.mayAttack(g, 0, nil), "neutrals may always be attacked")
+  eq(d.state(g, 0, 0), d.PEACE, "a side is at peace with itself")
+
+  -- escalation lands at once, for both sides
+  d.propose(g, 0, 1, d.WAR)
+  local msgs = d.apply(g, g.sides[1])
+  eq(d.state(g, 0, 1), d.WAR, "declaring war takes effect at once")
+  eq(d.state(g, 1, 0), d.WAR, "and binds the other side too")
+  ok(msgs[1] and msgs[1]:find("War declared"), "and is announced")
+  eq(d.proposal(g, 1, 0), d.WAR, "the other side's proposal is raised to match")
+
+  -- de-escalation needs both
+  local g2 = game.new(DATA, "ERYTHEA", { seed = 62, options = { diplomacy = 1 } })
+  d.propose(g2, 0, 1, d.WAR)
+  d.apply(g2, g2.sides[1])
+  g2.diplomacy.proposal[1 * 8 + 0] = nil                -- forget their matching proposal
+  d.propose(g2, 0, 1, d.PEACE)
+  d.apply(g2, g2.sides[1])
+  eq(d.state(g2, 0, 1), d.WAR, "one-sided peace does not land")
+  d.propose(g2, 0, 1, d.PEACE)
+  d.propose(g2, 1, 0, d.PEACE)
+  local m2 = d.apply(g2, g2.sides[1])
+  eq(d.state(g2, 0, 1), d.PEACE, "matched proposals make peace")
+  ok(m2[1] and m2[1]:find("Peace negotiated"), "and it is announced")
+
+  -- making peace raises the diplomatic score, exactly as an atrocity does
+  ok((g2.sides[1].diploScore or 0) >= 11, "peace from war is worth 1d10+10")
+
+  -- ratings are relative and lowest-first
+  local g3 = game.new(DATA, "ERYTHEA", { seed = 63 })
+  for i, s in ipairs(g3.sides) do s.diploScore = i * 10 end
+  local r = d.ratings(g3)
+  eq(r[g3.sides[1].index], "Statesman", "the lowest score is the Statesman")
+  eq(r[g3.sides[#g3.sides].index], "Running Dog", "the highest is the Running Dog")
+
+  -- with two sides in play only the two extremes are used
+  local ranks = d.RATING_RANKS[2]
+  eq(#ranks, 2, "two sides take two titles")
+  eq(d.TITLES[ranks[1]], "Statesman", "best of two")
+  eq(d.TITLES[ranks[2]], "Running Dog", "worst of two")
+
+  -- a stack at peace is blocked rather than drawn into a fight
+  local g4 = game.new(DATA, "ERYTHEA", { seed = 64, options = { diplomacy = 1 } })
+  local side = game.begin(g4)
+  local victim
+  for _, s in ipairs(g4.sides) do if s.index ~= side.index then victim = s end end
+  local city = victim.capital
+  local army = { x = city.x, y = city.y - 1, owner = side.index, type = 11,
+                 name = "Scouts", strength = 3, maxMoves = 20, moves = 20, upkeep = 1 }
+  g4.armies[#g4.armies + 1] = army
+  local path = movement.findPath(g4, { army }, army.x, army.y, city.x, city.y)
+  if path and #path > 0 then
+    local r2 = movement.walk(g4, { army }, path)
+    eq(r2.stopped, "at peace", "a stack at peace cannot walk into their city")
+    eq(army.x, city.x, "and has not moved into it")
+  end
+end
+
 --------------------------------------------------------------------- bugs
 
 local function testBugFlags()
@@ -1089,6 +1162,7 @@ testCapture("ERYTHEA")
 testCityChoices("ERYTHEA")
 testHeroes("ERYTHEA")
 testHeroExperienceBug()
+testDiplomacy()
 testSites("ERYTHEA")
 testSites("DRAGON")
 testAIGame("TUTORIA", 30)

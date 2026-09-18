@@ -291,6 +291,50 @@ function ai.sendAt(g, side, stack, city)
   end
 end
 
+--------------------------------------------------------------- diplomacy
+
+ai.LEADER_SHARE = 50           -- % of all cities that makes a side the target
+
+--- Set this side's proposals. The original clears them all first and then
+--- works through its grudge, threat, leader and assault tests
+--- (docs/re/ai.md > Diplomacy); the two escalate-to-war branches in its own
+--- grudge and threat tests are unreachable, so war only ever comes from the
+--- last three. This keeps those three.
+function ai.phaseDiplomacy(g, side)
+  local gameMod = require("warlords.game")
+  local diplomacy = require("warlords.diplomacy")
+  if g.map.options.diplomacy == 0 then return end     -- everyone is already at war
+
+  local total = #g.map.cities
+  local leader, leaderCities = nil, 0
+  for _, s in ipairs(g.sides) do
+    if s.alive then
+      local n = #gameMod.sideCities(g, s)
+      if n > leaderCities then leader, leaderCities = s, n end
+    end
+  end
+
+  -- whoever we have armies marching on
+  local marchingOn = {}
+  for _, a in ipairs(gameMod.sideArmies(g, side)) do
+    if a.order then
+      local city = g.map.cities[a.order.target + 1]
+      if city and city.ownerIndex then marchingOn[city.ownerIndex] = true end
+    end
+  end
+
+  for _, other in ipairs(g.sides) do
+    if other.alive and other.index ~= side.index then
+      local wantWar = marchingOn[other.index]
+      if leader == other and leaderCities * 100 // math.max(1, total) > ai.LEADER_SHARE then
+        wantWar = true
+      end
+      diplomacy.propose(g, side.index, other.index,
+                        wantWar and diplomacy.WAR or diplomacy.PEACE)
+    end
+  end
+end
+
 ---------------------------------------------------------------- hero errands
 
 --- Send each hero, with the stack it stands in, at the nearest unsearched
@@ -344,6 +388,7 @@ function ai.playTurn(g, side)
     side.heroOffer = nil
   end
 
+  ai.phaseDiplomacy(g, side)
   ai.phaseEvaluate(g, side)
   ai.phaseHeroes(g, side)
   ai.phaseOrders(g, side)

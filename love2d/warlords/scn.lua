@@ -16,7 +16,7 @@ local SIDE_RECS, SIDE_REC_STRIDE = 387, 20
 local LEVELS, CONTROLLERS, ENHANCED = 0xc0, 0xd0, 0xf0
 local MONSTER_STRENGTH = 0x1007
 local FIGHT_ORDER, FIGHT_ROWS, FIGHT_TYPES = 0x60b, 9, 29
-local COMBAT_CAP, ATROCITY = 0x112, 0x10e3
+local COMBAT_CAP, DIPLO_SCORE = 0x112, 0x10e3
 local TERRAIN_TABLE, TERRAIN_COUNT = 0x710, 255
 local SITES_COUNT, SITES, SITE_STRIDE = 0x80f, 0x811, 31
 local ITEMS, ITEM_STRIDE, N_ITEMS = 3305, 29, 22
@@ -94,7 +94,7 @@ function scn.load(dir, name)
       computer = u16(s, CONTROLLERS + 2 * i) ~= 0,
       level = u16(s, LEVELS + 2 * i),
       enhanced = u16(s, ENHANCED + 2 * i) ~= 0,
-      atrocity = u16(s, ATROCITY + 2 * i),   -- the diplomatic score
+      diploScore = u16(s, DIPLO_SCORE + 2 * i),
 
     }
   end
