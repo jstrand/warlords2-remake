@@ -28,6 +28,7 @@ love love2d ERYTHEA /path/to/data  # your own copy of the game files
 | `c` | centre on the selection |
 | arrows / WASD | scroll |
 | `y` / `n` | hire or refuse an offered hero |
+| `F5` / `F9` | save and load |
 | `esc` | quit |
 
 ## The rules core
@@ -51,6 +52,10 @@ lua love2d/test/run.lua /path/to/data
 | `move.lua` | the cost grid, stack modes, pathfinding, walking a path |
 | `combat.lua` | battle lines, modifiers, the d20 resolution, the Military Advisor |
 | `hero.lua` | offers, allies, experience, promotion, death |
+| `site.lua` | ruins, temples and sages: contents, searching, blessings |
+| `quest.lua` | taking a quest, checking it off, the reward |
+| `diplomacy.lua` | the pair matrix, proposals, the diplomatic rating |
+| `save.lua` | saving and loading a game in progress |
 | `ai.lua` | a computer player |
 
 Every rule cites where it came from: `docs/rules.md` for the rule itself, and
@@ -66,6 +71,11 @@ evidently meant to work. Each is documented where it is used.
 
 ## What is not here yet
 
-Diplomacy, ruins and temples, quests, sea transport, the hidden map, and
-sound. The rules for all of them are decoded — see `docs/rules.md` — they are
-simply not wired up.
+Sound, and the interface for most of what the rules core can already do:
+there is no city dialog, no way to split a stack, no diplomacy screen and no
+quest log — those systems run, but only the engine drives them.
+
+The computer player is honest about its limits. Its phase order, city roles,
+production purposes and garrison sizes come from the original; its target
+scoring, standing orders and exploring are ours, and with *Hidden Map* on it
+expands far more slowly than the original would.

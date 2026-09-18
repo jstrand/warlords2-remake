@@ -260,7 +260,13 @@ function love.draw()
       for tx = 0, cols do
         local mx = G.cx + tx
         if mx >= 0 and mx < G.g.map.width then
-          drawTile(mx, my, tx * TILE, ty * TILE)
+          if game.seen(G.g, G.player.index, mx, my) then
+            drawTile(mx, my, tx * TILE, ty * TILE)
+          else
+            love.graphics.setColor(0.04, 0.04, 0.06)
+            love.graphics.rectangle("fill", tx * TILE, ty * TILE, TILE, TILE)
+            love.graphics.setColor(1, 1, 1)
+          end
         end
       end
     end
@@ -271,7 +277,7 @@ function love.draw()
   for _, a in ipairs(G.g.armies) do
     if not a.transit then
       local k = a.y * G.g.map.width + a.x
-      if not drawn[k] then
+      if not drawn[k] and game.seen(G.g, G.player.index, a.x, a.y) then
         drawn[k] = true
         local tx, ty = a.x - G.cx, a.y - G.cy
         if tx >= 0 and ty >= 0 and tx <= cols and ty <= rows then
