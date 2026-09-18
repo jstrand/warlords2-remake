@@ -15,6 +15,9 @@ package.path = "love2d/?.lua;" .. package.path
 
 local DATA = arg[1] or "original"
 local SCENARIO = arg[2] or "TUTORIA"
+-- A fixed seed, so a run is reproducible: without one the harness plays a
+-- different game every time and its runtime swings wildly.
+local SEED = arg[3] or "20250918"
 local failures = 0
 
 local function fail(what, err)
@@ -79,8 +82,8 @@ print("loading the front end")
 local chunk = assert(loadfile("love2d/main.lua"))
 local G = chunk()          -- main.lua hands back its view state, for tests
 
-print("  scenario: " .. SCENARIO)
-if not try("love.load", love.load, { SCENARIO, DATA }) then
+print("  scenario: " .. SCENARIO .. ", seed " .. SEED)
+if not try("love.load", love.load, { SCENARIO, DATA, SEED }) then
   print(("\n%d failed"):format(failures))
   os.exit(1)
 end
@@ -134,6 +137,37 @@ for _, button in ipairs({ 1, 2 }) do
   end
 end
 try("frame after clicking", love.draw)
+
+-- press and release every control of the main screen, on and off the button,
+-- so the state handling runs for all of them
+if G and G.screen then
+  local uidata = require("warlords.uidata")
+  local screenMod = require("warlords.screen")
+  for _, c in ipairs(G.screen.dialog.controls) do
+    if c.w > 0 and c.h > 0 then
+      local cx, cy = c.x + math.floor(c.w / 2), c.y + math.floor(c.h / 2)
+      -- Several controls share a rect: 183/184/185 are three variants of one
+      -- button, as are 240/241. Only the one hit testing finds can light up.
+      local hit = screenMod.controlAt(G.screen, cx, cy)
+      try(("press control %d"):format(c.id), love.mousepressed, cx, cy, 1)
+      if hit and G.screen.state[hit.id] ~= uidata.ACTIVE then
+        fail("control press", ("control %d did not light up"):format(hit.id))
+      end
+      try(("release control %d"):format(c.id), love.mousereleased, cx, cy, 1)
+      if hit and G.screen.state[hit.id] ~= uidata.NORMAL then
+        fail("control release", ("control %d stayed lit"):format(hit.id))
+      end
+    end
+  end
+  -- released away from the button: must still reset, and must not act
+  local c = G.screen.dialog.controls[2]
+  try("press then leave", love.mousepressed, c.x + 1, c.y + 1, 1)
+  try("release elsewhere", love.mousereleased, 5, 470, 1)
+  if G.screen.state[c.id] ~= uidata.NORMAL then
+    fail("control release", "a button left pressed after releasing off it")
+  end
+  print("  exercised every control on the main screen")
+end
 
 -- the rest of the keys
 for _, key in ipairs({ "p", "p", "c", "up", "down", "left", "right",

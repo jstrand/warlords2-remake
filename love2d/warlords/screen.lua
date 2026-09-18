@@ -74,6 +74,20 @@ function screen.load(dataDir, palette, dialogId, terrain)
     end
   end
 
+  -- TERRAIN<n>/MAPCOLOR.DAT is the strategic map's own colour table: one
+  -- palette index per terrain tile id. Rendering the map through it gives the
+  -- green-islands-on-blue of the original's overview exactly.
+  self.mapColour = {}
+  do
+    local p = ("%s/TERRAIN%d/MAPCOLOR.DAT"):format(dataDir, terrain or 0)
+    local f = io.open(p, "rb")
+    if f then
+      local s = f:read("*a")
+      f:close()
+      for i = 1, #s do self.mapColour[i - 1] = s:byte(i) end
+    end
+  end
+
   -- Controls, with a live state each. State 1 is the resting look.
   self.state = {}
   for _, c in ipairs(self.dialog.controls) do
@@ -105,10 +119,22 @@ function screen.drawBackground(self)
   end
 end
 
+-- Some controls share a rect exactly -- 183/184/185 are three variants of one
+-- button, 240/241 two of another. The original enables whichever it wants and
+-- shows only that; until we know which, draw the first, so what is drawn is
+-- also what hit testing finds.
+local function isCovered(self, c, index)
+  for i = 1, index - 1 do
+    local o = self.dialog.controls[i]
+    if o.x == c.x and o.y == c.y and o.w == c.w and o.h == c.h then return true end
+  end
+  return false
+end
+
 function screen.drawControls(self)
   love.graphics.setColor(1, 1, 1)
-  for _, c in ipairs(self.dialog.controls) do
-    if c.bitmap ~= 0 and c.w > 0 and c.h > 0 then
+  for i, c in ipairs(self.dialog.controls) do
+    if c.bitmap ~= 0 and c.w > 0 and c.h > 0 and not isCovered(self, c, i) then
       local st = self.state[c.id] or uidata.NORMAL
       local q = self.quad(c, st)
       local art = self.art_for(c.bitmap)
@@ -117,6 +143,35 @@ function screen.drawControls(self)
       end
     end
   end
+end
+
+--------------------------------------------------------------- strategic map
+
+--- Build the strategic map as one image, a pixel per tile. It is drawn at
+--- twice the size, which is how the original's 112x156 map fills the
+--- 224x312 region exactly. Rebuild it only when the fog changes -- per-tile
+--- rectangles every frame would be 17472 draw calls.
+function screen.strategicImage(self, g, side, seen)
+  local scnMod = require("warlords.scn")
+  local w, h = g.map.width, g.map.height
+  local bytes = {}
+  for y = 0, h - 1 do
+    for x = 0, w - 1 do
+      local c
+      if seen and not seen(g, side, x, y) then
+        c = { 0, 0, 0 }
+      else
+        local idx = self.mapColour[scnMod.tileAt(g.map, x, y)] or 0
+        c = self.palette[idx + 1] or { 0, 0, 0 }
+      end
+      bytes[#bytes + 1] = string.char(
+        math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255), 255)
+    end
+  end
+  local data = love.image.newImageData(w, h, "rgba8", table.concat(bytes))
+  local img = love.graphics.newImage(data)
+  img:setFilter("nearest", "nearest")
+  return img
 end
 
 --------------------------------------------------------------------- regions

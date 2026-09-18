@@ -25,7 +25,6 @@ local screen   = require("warlords.screen")
 local uidata   = require("warlords.uidata")
 local font     = require("warlords.font")
 
-local W, H = screen.WIDTH, screen.HEIGHT
 local TILE = screen.TILE
 local ARMY_CELL, ARMY_COLS = 32, 16
 local ROAD_STRIDE, ROAD_COLS = 48, 13
@@ -33,7 +32,7 @@ local ROAD_KEY, ARMY_KEY = 1, 10
 
 local G = {}
 
-local presentOffer
+local presentOffer, stratDirty        -- defined below, wanted before that
 
 local function quadsFor(img, cols, cellW, cellH, stride, count)
   local qs = {}
@@ -102,7 +101,11 @@ function love.load(arg)
   G.barRect  = screen.region(G.screen, screen.REGION.BOTTOMBAR)
   G.menuRect = screen.region(G.screen, screen.REGION.MENUBAR)
 
-  G.g = game.new(dataDir, scenario, { seed = os.time() })
+  -- A third argument fixes the seed, so a run can be reproduced exactly.
+  -- test/ui.lua passes one; without it every game is different.
+  local seed = tonumber(arg[3]) or os.time()
+  G.seed = seed
+  G.g = game.new(dataDir, scenario, { seed = seed })
   G.player = game.begin(G.g)
   G.selection = nil
   -- centre the 9x9 viewport on the capital
@@ -194,6 +197,7 @@ local function moveSelection(x, y)
     say("They cannot move: %s.", r.stopped)
   else
     sel.x, sel.y = sel.stack[1].x, sel.stack[1].y
+    stratDirty()
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack))
     local found = game.searchHere(G.g, sel.stack)
     if found then say("%s", game.describeSearch(found)) end
@@ -228,6 +232,7 @@ local function endTurn()
     return
   end
   G.player = side
+  stratDirty()
   if not presentOffer(side) then
     say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   end
@@ -286,34 +291,34 @@ local function drawMap()
   love.graphics.setScissor()
 end
 
---- The strategic map: two pixels per tile, with the viewport box on it.
+--- The strategic map: MAPCOLOR.DAT through the palette, one pixel per tile,
+--- drawn at double size so a 112x156 map fills the 224x312 region exactly.
 local function drawStrategic()
   local r = G.stratRect
-  love.graphics.setScissor(r.x, r.y, r.w, r.h)
-  local terrain = G.g.map.terrain
-  for my = 0, G.g.map.height - 1 do
-    for mx = 0, G.g.map.width - 1 do
-      if game.seen(G.g, G.player, mx, my) then
-        local c = G.palette[(terrain and terrain[scn.terrainAt(G.g.map, mx, my)] or 10) + 1]
-                  or G.palette[11]
-        love.graphics.setColor(c[1], c[2], c[3])
-      else
-        love.graphics.setColor(0, 0, 0)
-      end
-      love.graphics.rectangle("fill", r.x + mx * 2, r.y + my * 2, 2, 2)
-    end
+  if not G.stratImage then
+    G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
+  love.graphics.setScissor(r.x, r.y, r.w, r.h)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.stratImage, r.x, r.y, 0, 2, 2)
+
   for _, city in ipairs(G.g.map.cities) do
     if not city.razed and game.seen(G.g, G.player, city.x, city.y) then
       love.graphics.setColor(1, 1, 1)
       love.graphics.rectangle("fill", r.x + city.x * 2, r.y + city.y * 2, 4, 4)
     end
   end
+  -- the viewport box: 9x9 tiles at 2 pixels each, as the original draws it
   love.graphics.setColor(1, 1, 1)
   love.graphics.rectangle("line",
     r.x + G.cx * 2 + 0.5, r.y + G.cy * 2 + 0.5,
     screen.VIEW_COLS * 2, screen.VIEW_ROWS * 2)
   love.graphics.setScissor()
+end
+
+--- The fog only ever opens, so the strategic map is rebuilt on demand.
+function stratDirty()
+  G.stratImage = nil
 end
 
 local MENUS = { "SSG", "Game", "Order", "Report", "Hero", "View", "History", "Turn" }
@@ -348,40 +353,31 @@ local function drawBottomBar()
   G.font.draw(G.status or "", r.x + 8, r.y + 34)
 end
 
---- Scale the 640x480 screen up by a whole number and centre it.
-local function viewTransform()
-  local sw, sh = love.graphics.getDimensions()
-  local s = math.max(1, math.floor(math.min(sw / W, sh / H)))
-  return s, math.floor((sw - W * s) / 2), math.floor((sh - H * s) / 2)
-end
-
+-- The window is exactly 640x480, so there is no transform: screen coordinates
+-- and window coordinates are the same. That matters beyond tidiness --
+-- love.graphics.setScissor takes window pixels and ignores any transform, so
+-- scaling here would clip the map and the strategic map to the wrong place.
 function love.draw()
-  local s, ox, oy = viewTransform()
-  love.graphics.push()
-  love.graphics.translate(ox, oy)
-  love.graphics.scale(s, s)
-
   screen.drawBackground(G.screen)
   drawMap()
   drawStrategic()
   screen.drawControls(G.screen)
   drawMenuBar()
   drawBottomBar()
-
-  love.graphics.pop()
 end
 
 --------------------------------------------------------------------- input
 
---- Turn a window point into a point on the 640x480 screen.
-local function toScreen(x, y)
-  local s, ox, oy = viewTransform()
-  return math.floor((x - ox) / s), math.floor((y - oy) / s)
-end
-
-function love.mousepressed(mx, my, button)
+function love.mousepressed(x, y, button)
   if G.over or G.offer then return end
-  local x, y = toScreen(mx, my)
+
+  local c = screen.controlAt(G.screen, x, y)
+  if c then
+    G.pressed = c.id
+    G.screen.state[c.id] = uidata.ACTIVE
+    return
+  end
+
   local r = screen.regionAt(G.screen, x, y)
   if not r then return end
 
@@ -399,6 +395,24 @@ function love.mousepressed(mx, my, button)
   elseif r.id == screen.REGION.STRATEGIC then
     centreOn(math.floor((x - r.x) / 2), math.floor((y - r.y) / 2))
   end
+end
+
+-- What each of the main screen's buttons does is not decoded yet: the control
+-- ids in BUTTON.DAT do not match the command codes in the keyboard table, and
+-- nothing read so far joins the two. Until that is traced, a button presses
+-- and releases but only the ones listed here act. docs/re/ui.md > Commands.
+local ACTION = {}
+
+function love.mousereleased(x, y, button)
+  local id = G.pressed
+  if not id then return end
+  G.pressed = nil
+  G.screen.state[id] = uidata.NORMAL
+
+  local c = screen.controlAt(G.screen, x, y)
+  if not c or c.id ~= id then return end          -- released off the button
+  local act = ACTION[id]
+  if act then act() else say("Button %d is not wired up yet.", id) end
 end
 
 function love.keypressed(key)
@@ -427,6 +441,7 @@ function love.keypressed(key)
     local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
     if ok then
       G.g, G.selection = loaded, nil
+      stratDirty()
       G.player = loaded.sides[loaded.current]
       centreOn(G.player.capital.x, G.player.capital.y)
       say("Loaded: turn %d, %s to play.", loaded.turn, G.player.name)
