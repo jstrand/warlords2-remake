@@ -531,7 +531,10 @@ Checked once per turn for the current side:
 
 ### What a new hero is (`hero_recruit`, `7563:031b`)
 
-A hero is an army of type 28 with **strength 5** and **14 movement**. Its name
+A hero is an army of type 28 with **strength 5** and **14 movement**. The 14 is
+written to **both** the maximum (`+6`) and the moves left (`+7`), so a hero
+**can move on the turn it joins** — unlike a produced army, which arrives with
+0 moves left (see Start of a side's turn, step 5). Its name
 is a random entry from `TERRAIN<n>\HERONAM<side>.DAT` (`load_hero_name`); each
 entry also carries a flag, probably gender. Hero state lives in the `.SCN`
 image: name `0x223 + 20·hero` (40 slots), in-use flags `0x543`, experience
@@ -543,6 +546,13 @@ Dragons if none qualify). The price is paid first. `hero_brings_allies`
 (`7563:01fc`) does have a "do allies come?" flag, but it is **hard-coded to 1**
 and the test is dead code, so allies always arrive. Worth watching for in a
 real game.
+
+Allies are built by `create_ally_army` (`6536:12e6`), which is also what a ruin
+and a quest reward use. It takes the type's own strength and move, writes the
+move to both `+6` and `+7` so allies too are ready at once, and sets **upkeep
+(`+11`) to 0** — allies cost nothing to keep. It also leaves the home city
+(`+9`) at 0 rather than the city they appeared in; the remake records the real
+city instead, since nothing yet depends on the difference.
 
 ### Death (`hero_drop_items`, Ghidra `67cc:16cd`)
 

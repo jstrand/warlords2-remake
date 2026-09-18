@@ -271,11 +271,7 @@ function quest.reward(g, side, q)
     for _ = 1, n do
       local x, y = gameMod.freeTileIn(g, home, true)
       if x then
-        local a = {
-          x = x, y = y, owner = side.index, type = type.id, name = type.name,
-          strength = type.strength, maxMoves = type.move, moves = 0,
-          upkeep = math.floor(type.cost / 2), homeCity = home.index,
-        }
+        local a = heroMod.newAlly(g, type, x, y, side.index, home.index)
         g.armies[#g.armies + 1] = a
         joined[#joined + 1] = a
       end

@@ -762,6 +762,9 @@ local function testHeroes(scenario)
   eq(h.type, armytype.HERO, "the recruit is a hero")
   eq(h.strength, 5, "a new hero has strength 5")
   eq(h.maxMoves, 14, "a new hero has 14 movement")
+  -- hero_recruit writes the 14 to both +6 and +7, so the hero can ride on the
+  -- turn it joins. A produced army is the one that has to wait.
+  eq(h.moves, 14, "a new hero joins with its moves already full")
   eq(#allies, 0, "the first hero brings no allies")
   eq(#h.items, 1, "the first hero carries one item")
   eq(h.items[1].type, rules.ITEM_STANDARD, "and it is the side's standard")
@@ -790,6 +793,17 @@ local function testHeroes(scenario)
   local type, n = heroMod.allies(g)
   ok(type ~= nil, "the allies have a type")
   ok(n >= 1 and n <= 3, "1 to 3 allies arrive")
+
+  -- create_ally_army (6536:12e6) gives an ally the type's own move in both the
+  -- maximum and the moves left, and no upkeep at all
+  g.turn = 4
+  local _, escort = heroMod.recruit(g, side, { price = 0, city = side.capital })
+  ok(#escort >= 1, "a later hero arrives with an escort")
+  for _, a in ipairs(escort) do
+    eq(a.moves, a.maxMoves, "an ally joins with its moves already full")
+    eq(a.upkeep, 0, "an ally costs no upkeep")
+  end
+  g.turn = 1
 
   -- the hero cap per side
   eq(heroMod.MAX_PER_SIDE, 5, "a side may hold 5 heroes")

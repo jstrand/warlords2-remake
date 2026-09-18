@@ -303,11 +303,8 @@ function site.search(g, stack, x, y)
         end
       end
       if #gameMod.armiesAt(g, ax, ay) < rules.MAX_STACK then
-        local a = {
-          x = ax, y = ay, owner = h.owner, type = type.id, name = type.name,
-          strength = type.strength, maxMoves = type.move, moves = 0,
-          upkeep = math.floor(type.cost / 2), homeCity = h.homeCity,
-        }
+        local a = require("warlords.hero").newAlly(
+          g, type, ax, ay, h.owner, h.homeCity)
         g.armies[#g.armies + 1] = a
         joined[#joined + 1] = a
       end

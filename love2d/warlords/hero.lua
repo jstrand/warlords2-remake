@@ -77,6 +77,19 @@ function hero.allies(g)
   return type, n
 end
 
+--- One ally army, as create_ally_army (Ghidra 6536:12e6) builds it: the type's
+--- own strength and move, arriving with its moves already full (+6 and +7 both
+--- get the type's move) and with **no upkeep** -- allies are free to keep.
+-- All three places allies appear (a hired hero's escort, a ruin, a quest
+-- reward) go through that one routine, so they go through this one.
+function hero.newAlly(g, type, x, y, owner, homeCity)
+  return {
+    x = x, y = y, owner = owner, type = type.id, name = type.name,
+    strength = type.strength, maxMoves = type.move, moves = type.move,
+    upkeep = 0, homeCity = homeCity,
+  }
+end
+
 --- Hire the offered hero. Returns the hero army and the allies it brought.
 -- hero_recruit, Ghidra 7563:031b.
 function hero.recruit(g, side, offer)
@@ -89,7 +102,10 @@ function hero.recruit(g, side, offer)
   local h = {
     x = hx, y = hy, owner = side.index, type = armytype.HERO,
     name = "Hero", strength = hero.START_STRENGTH,
-    maxMoves = hero.START_MOVES, moves = 0, upkeep = 0,
+    -- A hero rides in ready: hero_recruit writes its full move allowance to
+    -- both the maximum (+6) and the moves left (+7), so it can act on the turn
+    -- it joins. Produced armies are the ones that wait a turn, not these.
+    maxMoves = hero.START_MOVES, moves = hero.START_MOVES, upkeep = 0,
     homeCity = city.index, level = 1, experience = 0, items = {},
   }
   if offer.first then
@@ -105,11 +121,7 @@ function hero.recruit(g, side, offer)
     local type, n = hero.allies(g)
     for _ = 1, n do
       local ax, ay = gameMod.freeTileIn(g, city, true)
-      local a = {
-        x = ax or hx, y = ay or hy, owner = side.index, type = type.id, name = type.name,
-        strength = type.strength, maxMoves = type.move, moves = 0,
-        upkeep = math.floor(type.cost / 2), homeCity = city.index,
-      }
+      local a = hero.newAlly(g, type, ax or hx, ay or hy, side.index, city.index)
       g.armies[#g.armies + 1] = a
       allies[#allies + 1] = a
     end
