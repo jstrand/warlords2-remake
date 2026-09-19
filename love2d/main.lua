@@ -700,11 +700,14 @@ local function drawBanner()
     love.graphics.setColor(c[1], c[2], c[3])
   end
 
-  -- The shadow is two black runs a side, down and to the right of the popup
-  -- grown by one: 1133:02fe draws a horizontal run, 1133:0344 a vertical.
+  -- The shadow is two black runs a side, down and to the right: 1133:02fe
+  -- draws a horizontal run, 1133:0344 a vertical, off the popup rect grown
+  -- by one. Taken literally that puts them at x+w and y+h of the grown rect,
+  -- one clear of the picture, and the blank pixel between shows through --
+  -- the original has none, so they sit against the picture here.
   setPal(0)
-  fill(R.x + 1, R.y + R.h + 1, R.w + 2, 2)
-  fill(R.x + R.w + 1, R.y + 1, 2, R.h + 2)
+  fill(R.x + 1, R.y + R.h, R.w + 2, 2)
+  fill(R.x + R.w, R.y + 1, 2, R.h + 2)
 
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.cityPic, R.x, R.y)
@@ -730,6 +733,8 @@ local function drawBanner()
   fill(R.x + R.w - 10, R.y + 1, 9, R.h - 2)           -- right
   setPal(b.edge)
   outline(10, 10, R.w - 20, R.h - 20)
+
+  love.graphics.setColor(1, 1, 1)   -- or the frame's colour tints the glyphs
   local f = G.titleFont
   f.draw(b.name, R.x + math.floor((R.w - f.width(b.name)) / 2), BANNER_NAME_Y)
   local turn = ("Turn %d"):format(b.turn)
