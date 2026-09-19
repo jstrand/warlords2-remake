@@ -238,7 +238,8 @@ local BANNER = { x = 160, y = 60, w = 320, h = 312 }
 local BANNER_NAME_Y, BANNER_TURN_Y = 85, 130
 
 function showBanner(side)
-  G.banner = { name = side.name, turn = G.g.turn, colour = side.colour or 15 }
+  G.banner = { name = side.name, turn = G.g.turn,
+               colour = side.colour or 15, edge = side.edge or 0 }
 end
 
 function presentOffer(side)
@@ -691,26 +692,44 @@ end
 local function drawBanner()
   local b, R = G.banner, BANNER
 
-  -- The frame is a plain band of the side's colour all the way round the
-  -- picture, backed by a black edge and a drop shadow down and to the right.
-  -- Ghidra loses the rect arguments 54f6:0000 passes to 24d0:0497, so the
-  -- widths here are measured off a screenshot rather than read out of the
-  -- code; only the colour and the picture's own rect come from the EXE.
-  local BAND, EDGE, SHADOW = 6, 1, 5
-  local o = BAND + EDGE
   local function fill(x, y, w, h)
     love.graphics.rectangle("fill", x, y, w, h)
   end
-  love.graphics.setColor(0, 0, 0)
-  fill(R.x - o + SHADOW, R.y - o + SHADOW, R.w + o * 2, R.h + o * 2)
-  fill(R.x - o, R.y - o, R.w + o * 2, R.h + o * 2)
+  local function setPal(i)
+    local c = G.palette[i + 1] or G.palette[1]        -- pal.lua is 1-based
+    love.graphics.setColor(c[1], c[2], c[3])
+  end
 
-  local c = G.palette[b.colour + 1] or G.palette[16]   -- pal.lua is 1-based
-  love.graphics.setColor(c[1], c[2], c[3])
-  fill(R.x - BAND, R.y - BAND, R.w + BAND * 2, R.h + BAND * 2)
+  -- The shadow is two black runs a side, down and to the right of the popup
+  -- grown by one: 1133:02fe draws a horizontal run, 1133:0344 a vertical.
+  setPal(0)
+  fill(R.x + 1, R.y + R.h + 1, R.w + 2, 2)
+  fill(R.x + R.w + 1, R.y + 1, 2, R.h + 2)
 
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.cityPic, R.x, R.y)
+
+  -- The frame is painted INTO the picture, over its outer ten pixels, and
+  -- the result blitted whole -- which is why the banner is exactly CITY.PCK
+  -- and no larger. 54f6:0000 outlines it, lays a 9-pixel band inset by one
+  -- on each edge, then outlines again 10 in. The outline takes the side's
+  -- edge colour (0xb0, black for all but side 7) and the band the side's own
+  -- colour (0xa0). All of it is in the picture's own coordinates.
+  local function outline(x, y, w, h)
+    fill(R.x + x, R.y + y, w, 1)
+    fill(R.x + x, R.y + y + h - 1, w, 1)
+    fill(R.x + x, R.y + y, 1, h)
+    fill(R.x + x + w - 1, R.y + y, 1, h)
+  end
+  setPal(b.edge)
+  outline(0, 0, R.w, R.h)
+  setPal(b.colour)
+  fill(R.x + 1, R.y + 1, R.w - 2, 9)                  -- top
+  fill(R.x + 1, R.y + 1, 9, R.h - 2)                  -- left
+  fill(R.x + 1, R.y + R.h - 10, R.w - 2, 9)           -- bottom
+  fill(R.x + R.w - 10, R.y + 1, 9, R.h - 2)           -- right
+  setPal(b.edge)
+  outline(10, 10, R.w - 20, R.h - 20)
   local f = G.titleFont
   f.draw(b.name, R.x + math.floor((R.w - f.width(b.name)) / 2), BANNER_NAME_Y)
   local turn = ("Turn %d"):format(b.turn)

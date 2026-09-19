@@ -452,15 +452,38 @@ eight in every scenario:
 | colour | 15 | 7 | 8 | 9 | 10 | 6 | 5 | 0 |
 | | white | yellow | orange | red | green | blue | cyan | black |
 
-`54f6:0000` frames popup 6 in that colour: two outlines (`2012:0bb7` draws a
-horizontal run, `2012:0f08` a vertical one) and then four filled rects
-(`24d0:0497`, one an edge). **Ghidra recovers none of the rect arguments** —
-it drops the arguments to `216d:002e`, which is the rect constructor — so the
-frame's measurements are not readable from the decompilation, and the widths
-in the remake are taken off a screenshot instead: a plain band of the side's
-colour all the way round the picture, a black edge outside it, and a black
-drop shadow down and to the right. Only the colour and the picture's own rect
-come from the code.
+There is a **second** colour table right after it at `0xb0`: the colour a side
+outlines things in, `0` for everyone except side 7, who outlines in `9`, red.
+
+`54f6:0000` frames popup 6 using both. **Read this one off the disassembly,
+not the decompilation** — Ghidra drops the arguments to `216d:002e`, the rect
+constructor, so every rect in this routine decompiles as noise. The real
+sequence, all in the *picture's own* coordinates:
+
+```
+outline (0, 0, 320, 312)              edge colour (0xb0)
+fill    (1, 1, 318, 9)                side colour (0xa0)   top
+fill    (1, 1, 9, 310)                                     left
+fill    (1, 302, 318, 9)                                   bottom
+fill    (310, 1, 9, 310)                                   right
+outline (10, 10, 300, 292)            edge colour (0xb0)
+```
+
+`2012:0bb7` draws a horizontal run and `2012:0f08` a vertical one, so an
+outline is four of them; `24d0:0497` fills a rect by drawing one horizontal
+run a scanline.
+
+The crucial part is *where* this lands. `1997:034a` and `1997:060a` lock
+bitmap `0x1c` and make it the drawing target, so the frame is painted **into
+`CITY.PCK` itself, over its outer ten pixels**; `1997:06bb` unlocks it and
+`1997:0129` blits the whole 320×312 to (160, 60). The banner is therefore
+exactly the size of the picture — the frame eats into the art rather than
+surrounding it, which is why the popup rect and the bitmap are the same size.
+
+The drop shadow is separate and does sit outside: `14d0:0002` sets colour 0,
+then two horizontal runs at `y + h` and `y + h + 1` and two vertical runs at
+`x + w` and `x + w + 1`, taken from the popup rect grown by one — a 2-pixel
+black shadow down and to the right.
 
 ## What a remake needs, and what it does not
 
