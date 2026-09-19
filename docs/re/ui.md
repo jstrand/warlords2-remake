@@ -404,7 +404,7 @@ restore the screen behind them. A popup is an index into a rect table at
 |---|---|---|
 | 0 | (80, 60) 480×320 | the city dialog's area |
 | 1, 7 | (160, 90) 320×200 | |
-| 2 | (80, 60) 480×312 | |
+| 2 | (80, 60) 480×312 | the hero offer |
 | 3 | (96, 50) 200×200 | |
 | 4 | (120, 50) 400×360 | |
 | 5 | (144, 179) 352×64 | |
@@ -484,6 +484,94 @@ The drop shadow is separate and does sit outside: `14d0:0002` sets colour 0,
 then two horizontal runs at `y + h` and `y + h + 1` and two vertical runs at
 `x + w` and `x + w + 1`, taken from the popup rect grown by one — a 2-pixel
 black shadow down and to the right.
+
+### The hero offer
+
+`6563:0d5c` (`auto_ui_hero_emerges`) is the dialog a hero is offered through.
+It is the clearest worked example of the popup mechanism, because it uses
+**both** halves of the toolkit at once: popup 2 for the panel, and dialog 12's
+`BUTTON.DAT` controls on top of it.
+
+```
+FUN_54f6_0000(2)                      -- push popup 2: (80, 60) 480x312
+FUN_834b_0000(1, 1, 0, 0)             -- the map panel
+FUN_834b_1f5f(city.x, city.y, 1)      -- centred on the offering city
+FUN_834b_04d3(0, 0)
+load_hero_name()                      -- rolls the name and the sex
+   ... four lines of text chosen by turn and sex ...
+FUN_78a8_06ae(1, 15, 0, 3)            -- font 1, white
+FUN_7ecb_00d6(432, 63, "A Hero!")     -- get_string(0x5f, 0)
+FUN_1997_0129(0x21 or 0x22, rect, at) -- MHERO.PCK or FHERO.PCK
+FUN_78a8_06ae(2, 15, 14, 3)           -- font 2 for the body
+FUN_7ecb_00d6(432, 190 / 210 / 230 / 250, line)
+FUN_7ecb_0058(328, 287, 208, 20, name)  -- the editable name field
+FUN_216d_01fd(&rect)                  -- its frame
+FUN_1997_0129(8, ...)                 -- the two checkboxes, from ABITS.PCK
+FUN_69fa_056a(12)                     -- dialog 12: OK, Cancel
+```
+
+Popup 2 has **no bitmap** in `54f6:0000`'s switch, so it is not a picture with
+a frame painted into it the way the banner is. It is `MARBLE.PCK` — 480×360,
+which is why every bitmap-less popup is 480 wide or less — cropped to the
+rect, with a plain black outline round it.
+
+Measured off a screenshot of the running game, that outline sits at
+**(x - 1, y)** and is **w + 2 by h + 2**, which puts the popup's contents at
+**(x, y + 1)**: everything inside is a pixel below the coordinate it is given.
+The drop shadow is two pixels further out, right and below. The one-pixel
+drop is not obvious from the code and is easy to miss; it is visible in the
+name field's frame, the portrait's frame and the buttons alike.
+
+The coordinates are DGROUP statics from `4125:1112` on, and the controls in
+`BUTTON.DAT` group 9 agree with them exactly — which is the cross-check that
+the numbers were read correctly:
+
+| what | where | from |
+|---|---|---|
+| map panel | (80, 60) 224×312 | `AREA.DAT` screen 6, region 15 |
+| portrait | (320, 110) 224×170 | `4125:111a`; frame (319, 109) 226×172 |
+| title | centred on 432, y 63 | `4125:1126` |
+| four lines | centred on 432, y 190/210/230/250 | `4125:112a`…`1136` |
+| name field | (328, 287) 208×20 | `4125:113a`; frame (326, 285) 212×24 |
+| Male / Female labels | right-aligned at (376, 315) / (480, 315) | `4125:1152`, `1156` |
+| their boxes | (384, 313) / (488, 313) 24×20 | `4125:114a`, `114e` |
+| Cancel / OK | (320, 341) / (480, 341) 64×23 | `BUTTON.DAT` group 9 |
+
+224×312 is the whole 112×156 map at two pixels a tile — the strategic map's
+own scale. The spawn is marked with the white figure at (96, 0) in
+`ATRANS2.PCK`, a **mask** sheet: only its colour 15 is drawn, colours 1 and 2
+being the ground and the shading. It lands centred on the city's four pixels.
+
+`7ecb:00d6` draws centred, `7ecb:0103` right-aligned (which is why the labels'
+x values sit just left of their boxes) and `7ecb:0058` is the edit field.
+
+The four lines come from `STRING.DAT` group 0x61, and the sex chooses between
+two blocks of four — male at 0, female at 8:
+
+| | turn 1 | later |
+|---|---|---|
+| 0 / 8 | *(empty)* | `A Hero in %s offers to` |
+| 1 / 9 | *(empty)* | `join you for %d gold.` |
+| 2 / 10 | `A Hero emerges in` | `You have %d gold to spend.` |
+| 3 / 11 | `%s` *(the city)* | `Will you accept?` |
+
+The first two being empty on turn 1 is why the free hero's caption sits low on
+the picture rather than filling it — there is no special case, just two blank
+lines drawn at the top two positions.
+
+### Hero names
+
+`load_hero_name` (`6563:0c67`) reads `TERRAIN<set>\HERONAM<side>.DAT` — the
+name comes from `FILE.DAT` group 0x14, indexed by the side — and picks a line
+with `dice(1, 100, 0)`, walking the file for the n'th `#`. Each line is
+`#<sex> <name>`, sex 1 being female.
+
+The hundred is **hard-coded**, not read from the file: `HERONAM4.DAT` ships
+with 101 lines, so its last hero, Lady Jorinas, can never be drawn.
+`HERONAM0.DAT` has no `#1` line at all, so the Sirians never field a heroine.
+The roll settles the name and the sex together, and the dialog's checkboxes
+change only the portrait and the wording — ticking Male on a Mystichla leaves
+her name in the field.
 
 ## What a remake needs, and what it does not
 

@@ -170,6 +170,14 @@ function screen.drawDialogControls(self, view)
   end
 end
 
+--- One control of a loaded dialog, by id.
+function screen.dialogControl(view, id)
+  for _, c in ipairs(view.dialog.controls) do
+    if c.id == id then return c end
+  end
+  return nil
+end
+
 function screen.dialogControlAt(view, x, y)
   for _, c in ipairs(view.dialog.controls) do
     if c.w > 0 and c.h > 0

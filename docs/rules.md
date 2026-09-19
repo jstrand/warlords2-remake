@@ -535,8 +535,12 @@ A hero is an army of type 28 with **strength 5** and **14 movement**. The 14 is
 written to **both** the maximum (`+6`) and the moves left (`+7`), so a hero
 **can move on the turn it joins** — unlike a produced army, which arrives with
 0 moves left (see Start of a side's turn, step 5). Its name
-is a random entry from `TERRAIN<n>\HERONAM<side>.DAT` (`load_hero_name`); each
-entry also carries a flag, probably gender. Hero state lives in the `.SCN`
+is a random entry from `TERRAIN<n>\HERONAM<side>.DAT` (`load_hero_name`), one
+`1d100` roll picking the n'th line of `#<sex> <name>`; the flag **is** the sex,
+1 being female, and it settles the portrait and the wording, not the name. The
+hundred is hard-coded rather than counted, so `HERONAM4.DAT`'s 101st entry is
+unreachable, and `HERONAM0.DAT` lists no women at all. The player may rename
+the hero before accepting. Hero state lives in the `.SCN`
 image: name `0x223 + 20·hero` (40 slots), in-use flags `0x543`, experience
 byte `0x5e3`.
 

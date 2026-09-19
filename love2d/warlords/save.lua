@@ -87,6 +87,7 @@ function save.encode(g)
     end
     armies[i] = {
       x = a.x, y = a.y, owner = a.owner, type = a.type, name = a.name,
+      female = a.female or nil,
       strength = a.strength, moves = a.moves, maxMoves = a.maxMoves,
       upkeep = a.upkeep, homeCity = a.homeCity, atSea = a.atSea or nil,
       level = a.level, experience = a.experience, title = a.title,

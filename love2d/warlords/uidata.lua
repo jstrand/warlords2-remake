@@ -178,7 +178,17 @@ function uidata.load(dataDir)
     buttons = uidata.buttons(d .. "BUTTON.DAT"),
     bitmaps = bitmaps,
     files = files,
+    -- DATA/STRING.DAT: the game's whole text corpus, 169 groups. A group is
+    -- one dialog or enumeration; get_string(group, i) in the executable is
+    -- uidata.text(ui, group, i) here, with the same zero-based numbering.
+    text = uidata.strings(d .. "STRING.DAT"),
   }
+end
+
+--- One string, numbered as the executable numbers them (both zero-based).
+function uidata.text(ui, group, index)
+  local g = ui.text[group + 1]
+  return g and g[index + 1] or ""
 end
 
 --- The controls and regions of one dialog, following JOIN.DAT.

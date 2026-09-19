@@ -38,7 +38,7 @@ regions and fonts are the game's own, read from its data files at runtime
 | `space` | end the turn; the computer players then take theirs |
 | `c` | centre on the selection |
 | arrows / WASD | scroll one tile |
-| `y` / `n` | hire or refuse an offered hero |
+| the hero dialog | tick Male or Female, type a name, OK or Cancel |
 | `F5` / `F9` | save and load |
 | `esc` | quit |
 

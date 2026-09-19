@@ -156,6 +156,7 @@ function game.new(dataDir, scenario, opts)
   opts = opts or {}
   local g = {
     rng = rng.new(opts.seed or 0),
+    dataDir = dataDir,            -- hero.names still needs to read from it
     types = armytype.load(dataDir .. "/TERRAIN0/ARMYTYPE.DAT"),
     map = scn.load(dataDir .. "/" .. scenario, scenario),
     armies = {},

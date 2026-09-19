@@ -94,7 +94,12 @@ print(("  drew %d sprites"):format(drawCalls))
 -- Every human turn opens with the banner (8cc6:0259), which blocks on any
 -- input. It has to be dismissed before anything else reaches the game, so
 -- the harness clears it the way a player would.
+-- Dismissing it is also what lets the turn's first dialog through, so nothing
+-- may be waiting underneath while the banner is still up.
 local function dismissBanner(what)
+  if G.banner and G.offer then
+    fail("banner", "a hero was offered before the banner was dismissed")
+  end
   if G.banner then try(what or "dismiss the banner", love.keypressed, "return") end
   if G.banner then fail("banner", "a key did not dismiss it") end
 end
@@ -132,8 +137,29 @@ if not G then
 elseif not G.offer then
   fail("turn-1 hero", "no hero was offered on turn 1")
 else
+  -- The offer is a modal dialog (popup 2 with dialog 12's controls), so it
+  -- has to be driven the way a player drives it: type into the name field,
+  -- tick a box, press OK.
+  if not G.offer.name or G.offer.name == "" then
+    fail("turn-1 hero", "the offer carries no name")
+  end
+  try("draw the hero dialog", love.draw)
+  local wasFemale = G.offerFemale
+  try("tick the other box", love.mousepressed, wasFemale and 390 or 494, 320, 1)
+  if G.offerFemale == wasFemale then
+    fail("turn-1 hero", "the checkbox did not change the hero's sex")
+  end
+  try("draw the other portrait", love.draw)
+  try("type into the name", love.textinput, "x")
+  if not G.offerName:find("x$") then fail("turn-1 hero", "the name field does not type") end
+  try("rub it out again", love.keypressed, "backspace")
+
+  -- the first hero is free, so Cancel must be refused
+  try("press the disabled Cancel", love.mousepressed, 350, 350, 1)
+  if not G.offer then fail("turn-1 hero", "Cancel closed an offer that cannot be refused") end
+
   local before = heroesOf(G.g, G.player)
-  try("accept the turn-1 hero", love.keypressed, "y")
+  try("press OK", love.mousepressed, 510, 350, 1)
   local after = heroesOf(G.g, G.player)
   if after ~= before + 1 then
     fail("turn-1 hero", ("accepting gave %d heroes, wanted %d"):format(after, before + 1))
@@ -142,16 +168,22 @@ else
   end
 end
 
+--- Later offers can be refused; clear whichever dialog is up.
+local function dismissOffer()
+  if G.offer then
+    if G.offer.first then try("accept a free hero", love.keypressed, "return")
+    else try("refuse a hero", love.keypressed, "escape") end
+  end
+  if G.offer then fail("hero offer", "the dialog would not close") end
+end
+
 -- the turn sequence, several times over: this runs every computer player too
 for i = 1, 3 do
   try("end turn " .. i, love.keypressed, "space")
   dismissBanner("dismiss the banner on turn " .. i)
+  dismissOffer()
 end
 try("frame after the turns", love.draw)
-
--- a hero may have been offered on turn 1
-try("accept a hero", love.keypressed, "y")
-try("refuse a hero", love.keypressed, "n")
 
 -- selection and movement, by clicking around the middle of the view
 for _, button in ipairs({ 1, 2 }) do
@@ -177,6 +209,7 @@ if G and G.screen then
       -- one of these controls ends the turn, which raises the banner; it
       -- would otherwise eat the next control's press
       dismissBanner()
+      dismissOffer()
       try(("press control %d"):format(c.id), love.mousepressed, cx, cy, 1)
       if hit and G.screen.state[hit.id] ~= uidata.ACTIVE then
         fail("control press", ("control %d did not light up"):format(hit.id))
@@ -202,6 +235,7 @@ for _, key in ipairs({ "p", "p", "c", "home", "up", "down", "left", "right",
                        "w", "a", "s", "d", "f5", "f9", "space" }) do
   try("key " .. key, love.keypressed, key)
   dismissBanner()
+  dismissOffer()
 end
 try("frame after the keys", love.draw)
 
@@ -325,6 +359,7 @@ G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
 for _ = 1, 150 do
   try("long game", love.keypressed, "space")
   dismissBanner()
+  dismissOffer()
   if G.over then break end
 end
 try("final frame", love.draw)

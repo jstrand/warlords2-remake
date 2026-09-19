@@ -758,8 +758,26 @@ local function testHeroes(scenario)
   ok(offer ~= nil, "a hero offers itself on turn 1")
   eq(offer.price, 0, "the first hero is free")
   eq(offer.city, side.capital, "the first hero appears at the capital")
+  -- the name is rolled with the offer, out of the side's own hundred
+  local names = heroMod.names(g, side)
+  eq(#names, 100, "a side has a hundred candidate heroes")
+  ok(offer.name ~= nil and offer.name ~= "", "the offer carries a name")
+  local found = false
+  for _, n in ipairs(names) do
+    if n.name == offer.name then found = true end
+  end
+  ok(found, "and the name comes from that side's file")
+
+  -- side 0's list carries no #1 line at all, so the Sirians field no heroines
+  local anyFemale = false
+  for _, n in ipairs(heroMod.names(g, g.map.sides[1])) do
+    if n.female then anyFemale = true end
+  end
+  ok(not anyFemale, "side 0 has no heroines to offer")
+
   local h, allies = heroMod.recruit(g, side, offer)
   eq(h.type, armytype.HERO, "the recruit is a hero")
+  eq(h.name, offer.name, "the hero keeps the name it was offered under")
   eq(h.strength, 5, "a new hero has strength 5")
   eq(h.maxMoves, 14, "a new hero has 14 movement")
   -- hero_recruit writes the 14 to both +6 and +7, so the hero can ride on the

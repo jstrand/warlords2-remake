@@ -21,6 +21,55 @@ hero.PROMOTION_MOVES = 2
 hero.LEVELS = { "Hero", "Cavalier", "Champion", "Paladin" }
 hero.PROMOTION_AT = { 15, 30, 60 }
 
+---------------------------------------------------------------------- names
+--
+-- Each side has its own hundred candidate heroes in
+-- TERRAIN<set>/HERONAM<side>.DAT, a line apiece:
+--
+--     #0 Sir Nick          male
+--     #1 Mystichla         female
+--
+-- load_hero_name (6563:0c67) reads the whole file, rolls dice(1, 100, 0) and
+-- walks it for the n'th '#'. The count is not read from the file: 100 is
+-- hard-coded, and HERONAM4.DAT ships with 101 lines, so its last hero -- Lady
+-- Jorinas -- can never be drawn. Side 0's list is all male, which is why the
+-- Sirians never field a heroine.
+--
+-- The set number is a scenario word (.SCN 0x161); every shipped scenario uses
+-- 0, as every other TERRAIN0 path in the engine already assumes.
+hero.NAME_ROLL = 100
+
+local function nameFile(g, side)
+  return (g.dataDir or "original") .. "/TERRAIN0/HERONAM" .. side.index .. ".DAT"
+end
+
+--- The candidate list for a side, as { {name=, female=}, ... }. Cached: the
+--- original rereads the file for every hero, which we have no reason to copy.
+function hero.names(g, side)
+  g.heroNames = g.heroNames or {}
+  local got = g.heroNames[side.index]
+  if got then return got end
+
+  local list = {}
+  local ok, text = pcall(scn.readAll, nameFile(g, side))
+  for line in (ok and text or ""):gmatch("[^\r\n]+") do
+    local sex, name = line:match("^#(%d)%s+(.+)$")
+    if name then list[#list + 1] = { name = name, female = sex == "1" } end
+  end
+  g.heroNames[side.index] = list
+  return list
+end
+
+--- Roll the name and sex of a hero offering itself to `side`.
+function hero.rollName(g, side)
+  local list = hero.names(g, side)
+  local n = g.rng:dice(1, hero.NAME_ROLL, 0)
+  -- the original would walk off the end of a short file; we stay inside it
+  local pick = list[n] or list[#list]
+  if not pick then return "Hero", false end
+  return pick.name, pick.female
+end
+
 --------------------------------------------------------------------- offers
 
 local function countHeroes(g, side)
@@ -38,8 +87,17 @@ end
 -- Returns nil when none does. hero_offer_check, Ghidra 7563:0000.
 function hero.offer(g, side)
   local gameMod = require("warlords.game")
+
+  -- auto_ui_hero_emerges (6563:0d5c) calls load_hero_name as it opens the
+  -- dialog, so the roll happens once an offer exists, whether or not it is
+  -- taken up -- and the name is settled before the player ever sees it.
+  local function named(o)
+    o.name, o.female = hero.rollName(g, side)
+    return o
+  end
+
   if g.turn == 1 then
-    return { price = 0, city = side.capital, first = true }
+    return named { price = 0, city = side.capital, first = true }
   end
 
   local all, mine = countHeroes(g, side)
@@ -55,7 +113,7 @@ function hero.offer(g, side)
 
   local city = g.rng:pick(cities)
   if not city then return nil end
-  return { price = price, city = city }
+  return named { price = price, city = city }
 end
 
 --- The allies a hired hero brings: 1-3 of one random magical type.
@@ -101,7 +159,8 @@ function hero.recruit(g, side, offer)
 
   local h = {
     x = hx, y = hy, owner = side.index, type = armytype.HERO,
-    name = "Hero", strength = hero.START_STRENGTH,
+    name = offer.name or "Hero", female = offer.female or nil,
+    strength = hero.START_STRENGTH,
     -- A hero rides in ready: hero_recruit writes its full move allowance to
     -- both the maximum (+6) and the moves left (+7), so it can act on the turn
     -- it joins. Produced armies are the ones that wait a turn, not these.

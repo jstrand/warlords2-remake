@@ -34,7 +34,8 @@ local RING_W, RING_H = 32, 30      -- one ABITS ring
 
 local G = {}
 
-local presentOffer, stratDirty, openCity, closeCity, showBanner  -- defined below
+local presentOffer, stratDirty, openCity, closeCity  -- defined below
+local showBanner, dismissBanner                      -- and these two
 
 local function quadsFor(img, cols, cellW, cellH, stride, count)
   local qs = {}
@@ -101,6 +102,17 @@ function love.load(arg)
   G.bigArmy = pck.toImage(dataDir .. "/PICS/BIGARMY.PCK", palette)
   -- CITY.PCK is 320x312: the gatehouse behind the start-of-turn banner
   G.cityPic = pck.toImage(dataDir .. "/PICS/CITY.PCK", palette)
+  -- MHERO.PCK and FHERO.PCK are 224x170 each, exactly the rect the hero
+  -- offer blits them into; the checkbox picks between them.
+  G.heroPic = {
+    m = pck.toImage(dataDir .. "/PICS/MHERO.PCK", palette),
+    f = pck.toImage(dataDir .. "/PICS/FHERO.PCK", palette),
+  }
+  -- ATRANS2.PCK is 144x246 of map markers on a two-colour mask; the hero is
+  -- the white figure at (96, 0). Only colour 15 is his -- 1 is the sheet's
+  -- ground and 2 the shading, and the original draws neither.
+  G.atrans = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, { 1, 2 })
+  G.heroMark = love.graphics.newQuad(96, 0, 16, 20, 144, 246)
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   G.abits = pck.toImage(dataDir .. "/PICS/ABITS.PCK", palette, 3)
@@ -137,10 +149,8 @@ function love.load(arg)
 
   love.graphics.setBackgroundColor(0, 0, 0)
 
+  say("Click a stack, then click where to go.")
   showBanner(G.player)
-  if not presentOffer(G.player) then
-    say("Click a stack, then click where to go.")
-  end
 end
 
 --------------------------------------------------------------------- camera
@@ -242,15 +252,92 @@ function showBanner(side)
                colour = side.colour or 15, edge = side.edge or 0 }
 end
 
+--- Close the banner, and only then let the turn's first dialog through. The
+--- original's turn routine blocks on 7ecb:0142 until the banner is clicked
+--- away and reaches the hero offer afterwards, so the two are never both up.
+function dismissBanner()
+  G.banner = nil
+  presentOffer(G.player)
+end
+
+-- The hero offer is popup 2 -- (80, 60) 480x312, no bitmap of its own, so it
+-- is MARBLE.PCK cropped -- with dialog 12's controls laid on it. Every number
+-- below is read out of auto_ui_hero_emerges (6563:0d5c), which pushes the
+-- popup, draws the minimap, the picture and four lines of text, and then puts
+-- up the name field, the two checkboxes and the buttons.
+--
+-- Ghidra drops the arguments to the drawing calls, so the coordinates come
+-- from the disassembly: they are DGROUP statics at 4125:1112 onwards, and the
+-- control rects in BUTTON.DAT group 9 agree with them exactly.
+local HERO_POPUP = { x = 80, y = 60, w = 480, h = 312 }
+local HERO_DIALOG = 12                 -- JOIN.DAT: dialog 12 -> button group 9
+-- AREA.DAT screen 0 has no regions for this dialog, but screen 6's one region
+-- gives the map panel's size: 224x312 is the whole 112x156 map at 2 pixels a
+-- tile, the same scale as the strategic map on the main screen.
+local HERO_MAP = { x = 80, y = 60, w = 224, h = 312 }
+local HERO_PIC = { x = 320, y = 110, w = 224, h = 170 }   -- MHERO/FHERO, exactly
+local HERO_TITLE_Y = 63
+local HERO_CENTRE = 432                -- the centre line of the right-hand half
+local HERO_LINE_Y = { 190, 210, 230, 250 }
+-- the labels are drawn right-aligned, ending just short of their box
+local HERO_MALE_LABEL, HERO_FEMALE_LABEL = { x = 376, y = 315 }, { x = 480, y = 315 }
+local HERO_BOX_W, HERO_BOX_H = 24, 20  -- ABITS: checked at (320,0), clear below
+local HERO_CHECKED, HERO_CLEAR = { x = 320, y = 0 }, { x = 320, y = 20 }
+-- control ids in group 9
+local HERO_OK, HERO_CANCEL, HERO_FIELD = 287, 288, 289
+local HERO_MALE, HERO_FEMALE = 290, 291
+-- STRING.DAT groups: the title, the four caption lines, the two labels
+local HERO_TITLE_GROUP, HERO_LINE_GROUP, HERO_SEX_GROUP = 0x5f, 0x61, 0x62
+-- hero_recruit copies the name into a 20-byte slot (2c04:0223, stride 0x14)
+local HERO_NAME_MAX = 19
+
+--- The four lines over the picture, as 6563:0d5c assembles them. The first
+--- two are empty on turn 1, which is why the free hero's caption sits low.
+local function heroLines(offer, female)
+  local ui, side = G.screen.ui, G.player
+  local first = female and 8 or 0             -- the female wording is +8
+  local function s(i) return uidata.text(ui, HERO_LINE_GROUP, first + i) end
+  if offer.first then
+    return { s(0), s(1), s(2), s(3):format(offer.city.name) }
+  end
+  return { s(0):format(offer.city.name), s(1):format(offer.price),
+           s(2):format(side.gold), s(3) }
+end
+
 function presentOffer(side)
   if not side.heroOffer then return false end
-  G.offer = side.heroOffer
-  if G.offer.first then
-    say("A hero comes to %s and asks no pay. Y accept, N refuse.", G.offer.city.name)
-  else
-    say("A hero offers to serve for %d gold. Y hire, N refuse.", G.offer.price)
-  end
+  if not G.heroView then G.heroView = screen.dialog(G.screen, HERO_DIALOG) end
+  local offer = side.heroOffer
+  G.offer = offer
+  -- The name and sex were rolled with the offer; the checkboxes only change
+  -- the wording and the picture, never the name -- toggling one in the
+  -- original leaves a Mystichla standing there in a man's portrait.
+  G.offerFemale = offer.female or false
+  G.offerName = offer.name or "Hero"
+  -- the first hero is free and cannot be turned down, so Cancel is disabled
+  G.heroView.state[HERO_CANCEL] = offer.first and uidata.DISABLED or uidata.NORMAL
+  G.heroView.state[HERO_OK] = uidata.NORMAL
   return true
+end
+
+--- Take the offer: the hero joins under the name and sex now in the dialog.
+local function acceptOffer()
+  local offer = G.offer
+  offer.name, offer.female = G.offerName, G.offerFemale
+  local h, allies = hero.recruit(G.g, G.player, offer)
+  G.offer, G.player.heroOffer = nil, nil
+  centreOn(h.x, h.y)
+  if #allies > 0 then
+    say("%s joins at %s, with %d %s.", h.name,
+        G.g.map.cities[h.homeCity + 1].name, #allies, allies[1].name)
+  else
+    say("%s joins at %s.", h.name, G.g.map.cities[h.homeCity + 1].name)
+  end
+end
+
+local function refuseOffer()
+  G.offer, G.player.heroOffer = nil, nil
+  say("The hero rides away.")
 end
 
 local function endTurn()
@@ -267,10 +354,8 @@ local function endTurn()
   end
   G.player = side
   stratDirty()
+  say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   showBanner(side)
-  if not presentOffer(side) then
-    say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
-  end
 end
 
 -- The city dialog is dialog 6 (7204:0000 pushes 6 to the dialog opener). Its
@@ -741,6 +826,115 @@ local function drawBanner()
   f.draw(turn, R.x + math.floor((R.w - f.width(turn)) / 2), BANNER_TURN_Y)
 end
 
+--- The hero offer. Popup 2 has no bitmap of its own, so unlike the banner it
+--- is not a picture with a frame painted into it: the marble is blitted and a
+--- plain black outline drawn round it. Measured off the original's own
+--- screenshot, the outline sits at (x - 1, y) and is w + 2 by h + 2, which
+--- puts the contents at (x, y + 1) -- a pixel lower than the popup rect says.
+local function drawHeroOffer()
+  local R, b = HERO_POPUP, G.offer
+  local function setPal(i)
+    local c = G.palette[i + 1] or G.palette[1]        -- pal.lua is 1-based
+    love.graphics.setColor(c[1], c[2], c[3])
+  end
+
+  love.graphics.setColor(0, 0, 0)
+  love.graphics.rectangle("line", R.x - 0.5, R.y + 0.5, R.w + 1, R.h + 1)
+  -- the shadow: two pixels past the outline, down and to the right
+  love.graphics.rectangle("fill", R.x + 1, R.y + R.h + 2, R.w + 2, 2)
+  love.graphics.rectangle("fill", R.x + R.w + 1, R.y + 2, 2, R.h + 2)
+
+  -- Everything the popup draws lands a pixel below the coordinate it is given
+  -- -- the outline is at (x - 1, y) and the contents start at (x, y + 1), so
+  -- the whole inside shifts down by one. Rather than add 1 to twenty numbers,
+  -- shift once here and use the original's own coordinates throughout.
+  love.graphics.push()
+  love.graphics.translate(0, 1)
+
+  -- MARBLE.PCK is 480x360, so popup 2's 480x312 is its top-left corner
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.setScissor(R.x, R.y + 1, R.w, R.h)
+  love.graphics.draw(G.marble, R.x, R.y)
+
+  -- the whole map at the strategic map's own 2 pixels a tile
+  if not G.stratImage then
+    G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
+  end
+  love.graphics.draw(G.stratImage, HERO_MAP.x, HERO_MAP.y, 0, 2, 2)
+  for _, c in ipairs(G.g.map.cities) do
+    if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
+      love.graphics.rectangle("fill", HERO_MAP.x + c.x * 2, HERO_MAP.y + c.y * 2, 4, 4)
+    end
+  end
+  -- Where the hero would appear. The marker is the white figure near the top
+  -- right of ATRANS2.PCK -- a mask sheet, so only its white pixels are drawn
+  -- and the two darker ones are keyed out. It lands centred on the city's
+  -- four map pixels: with Ussyrus at tile (14, 137) the original puts the
+  -- cell's corner at (104, 329), which is that centre less (4, 6).
+  love.graphics.draw(G.atrans, G.heroMark,
+    HERO_MAP.x + b.city.x * 2 - 4, HERO_MAP.y + b.city.y * 2 - 6)
+
+  -- the portrait, in a one-pixel frame of its own
+  love.graphics.draw(G.heroPic[G.offerFemale and "f" or "m"], HERO_PIC.x, HERO_PIC.y)
+  love.graphics.setColor(0, 0, 0)
+  love.graphics.rectangle("line", HERO_PIC.x - 0.5, HERO_PIC.y - 0.5,
+                          HERO_PIC.w + 1, HERO_PIC.h + 1)
+  love.graphics.setScissor()
+
+  local ui = G.screen.ui
+  local function centred(f, s, y)
+    love.graphics.setColor(1, 1, 1)
+    f.draw(s, HERO_CENTRE - math.floor(f.width(s) / 2), y)
+  end
+  centred(G.titleFont, uidata.text(ui, HERO_TITLE_GROUP, 0), HERO_TITLE_Y)
+  for i, line in ipairs(heroLines(b, G.offerFemale)) do
+    if line ~= "" then centred(G.bigFont, line, HERO_LINE_Y[i]) end
+  end
+
+  -- The name field: a black outline two pixels clear of it (the rect at
+  -- 4125:1142), then the field itself sunk into the marble -- dark along its
+  -- top and left, light along its bottom and right. Nothing fills it; the
+  -- marble shows through.
+  local field = screen.dialogControl(G.heroView, HERO_FIELD)
+  if field then
+    local function line(x, y, w, h) love.graphics.rectangle("fill", x, y, w, h) end
+    love.graphics.setColor(0, 0, 0)
+    love.graphics.rectangle("line", field.x - 1.5, field.y - 1.5,
+                            field.w + 3, field.h + 3)
+    -- 4 is the palette's dark grey and 2 its light one, a shade either side
+    -- of the marble's 3 (the original's DAC renders them 81 / 146 / 113)
+    setPal(4)                                      -- the sunken shadow
+    line(field.x, field.y, field.w, 1)
+    line(field.x, field.y, 1, field.h)
+    setPal(2)                                      -- and its highlight
+    line(field.x, field.y + field.h - 1, field.w, 1)
+    line(field.x + field.w - 1, field.y, 1, field.h)
+
+    love.graphics.setColor(1, 1, 1)
+    G.bigFont.draw(G.offerName, field.x + 4,
+                   field.y + math.floor((field.h - G.bigFont.lineHeight) / 2))
+  end
+  local function label(f, at, s)
+    love.graphics.setColor(1, 1, 1)
+    f.draw(s, at.x - f.width(s), at.y)
+  end
+  label(G.bigFont, HERO_MALE_LABEL, uidata.text(ui, HERO_SEX_GROUP, 0))
+  label(G.bigFont, HERO_FEMALE_LABEL, uidata.text(ui, HERO_SEX_GROUP, 1))
+  local function box(id, on)
+    local c = screen.dialogControl(G.heroView, id)
+    if not c then return end
+    local s = on and HERO_CHECKED or HERO_CLEAR
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.abits,
+      love.graphics.newQuad(s.x, s.y, HERO_BOX_W, HERO_BOX_H, 480, 40), c.x, c.y)
+  end
+  box(HERO_MALE, not G.offerFemale)
+  box(HERO_FEMALE, G.offerFemale)
+
+  screen.drawDialogControls(G.screen, G.heroView)
+  love.graphics.pop()
+end
+
 function love.draw()
   screen.drawBackground(G.screen)
   drawMap()
@@ -750,6 +944,8 @@ function love.draw()
   drawBottomBar()
   if G.city then drawCity() end
   drawMenuBar()
+  -- the turn opens with the banner over the offer, and is dismissed first
+  if G.offer then drawHeroOffer() end
   if G.banner then drawBanner() end
 end
 
@@ -768,8 +964,21 @@ end
 function love.mousepressed(x, y, button)
   -- 7ecb:0142 blocks the turn routine until any input arrives: the banner
   -- eats the click that dismisses it rather than passing it on
-  if G.banner then G.banner = nil return end
-  if G.over or G.offer then return end
+  if G.banner then dismissBanner() return end
+  if G.over then return end
+
+  -- the hero offer is modal: nothing behind it takes a click
+  if G.offer then
+    local c = screen.dialogControlAt(G.heroView, x, y)
+    if not c then return end
+    if c.id == HERO_MALE then G.offerFemale = false
+    elseif c.id == HERO_FEMALE then G.offerFemale = true
+    elseif c.id == HERO_OK then acceptOffer()
+    -- the first hero is free, and its Cancel is disabled rather than absent
+    elseif c.id == HERO_CANCEL and not G.offer.first then refuseOffer()
+    end
+    return
+  end
 
   if G.city then
     local c = screen.dialogControlAt(G.cityView, x, y)
@@ -944,7 +1153,19 @@ MENU_DOES = {
 
 function love.keypressed(key)
   -- any key, escape included, only dismisses the banner
-  if G.banner then G.banner = nil return end
+  if G.banner then dismissBanner() return end
+
+  -- The dialog owns the keyboard while it is up -- escape included, or the
+  -- game would quit out from under it. The name field is editable, so a
+  -- letter types into it rather than running a command.
+  if G.offer then
+    if key == "return" or key == "kpenter" then acceptOffer()
+    elseif key == "backspace" then G.offerName = G.offerName:sub(1, -2)
+    elseif key == "escape" and not G.offer.first then refuseOffer()
+    end
+    return
+  end
+
   if key == "escape" then
     if G.openMenu then G.openMenu = nil return end
     if G.city then closeCity() return end
@@ -952,19 +1173,6 @@ function love.keypressed(key)
   end
   if G.over then return end
   if G.openMenu then G.openMenu = nil end
-
-  if G.offer then
-    if key == "y" then
-      local h = hero.recruit(G.g, G.player, G.offer)
-      say("A hero joins at %s.", G.g.map.cities[h.homeCity + 1].name)
-      centreOn(h.x, h.y)
-      G.offer, G.player.heroOffer = nil, nil
-    elseif key == "n" then
-      G.offer, G.player.heroOffer = nil, nil
-      say("The hero rides away.")
-    end
-    return
-  end
 
   if key == "space" then endTurn()
   -- Home shares its handler with the pad's centre button (8065:0f02)
@@ -978,6 +1186,15 @@ function love.keypressed(key)
   elseif key == "down" or key == "s" then G.cy = G.cy + 1; clampCamera()
   elseif key == "left" or key == "a" then G.cx = G.cx - 1; clampCamera()
   elseif key == "right" or key == "d" then G.cx = G.cx + 1; clampCamera()
+  end
+end
+
+-- Typing into the hero's name field. The original's is a real edit box, and
+-- the rolled name is only its suggestion.
+function love.textinput(text)
+  if not G.offer then return end
+  if #G.offerName < HERO_NAME_MAX and text:match("^[%w%s'%-%.]+$") then
+    G.offerName = G.offerName .. text
   end
 end
 

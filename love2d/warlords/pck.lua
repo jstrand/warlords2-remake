@@ -94,13 +94,22 @@ function pck.decode(path)
 end
 
 -- Decode straight to a LOVE image. keyIndex (optional) becomes transparent.
+--- Decode a .PCK into an image. `keyIndex` is the palette index to make
+--- transparent, or a table of them -- ATRANS2.PCK's map markers are white on
+--- a two-colour mask and need both dropped.
 function pck.toImage(path, palette, keyIndex)
   local w, h, px = pck.decode(path)
+  local keys = {}
+  if type(keyIndex) == "table" then
+    for _, k in ipairs(keyIndex) do keys[k] = true end
+  elseif keyIndex then
+    keys[keyIndex] = true
+  end
   local bytes = {}
   for i = 1, w * h do
     local idx = px[i]
     local c = palette[idx + 1]
-    if keyIndex and idx == keyIndex then
+    if keys[idx] then
       bytes[i] = string.char(0, 0, 0, 0)
     else
       bytes[i] = string.char(
