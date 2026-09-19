@@ -691,22 +691,23 @@ end
 local function drawBanner()
   local b, R = G.banner, BANNER
 
-  -- 54f6:0000 draws the frame first and blits the picture over it, so only
-  -- the parts that fall outside the picture ever show. It outlines the saved
-  -- area -- the picture grown by 16 either side and 1 above -- then an inner
-  -- rect 5 in and 10 down, then fills the gap between them (24d0:0497 is a
-  -- filled rect, called once per edge). There are 16 pixels of room to the
-  -- left and right but only one above, which is why the original's side
-  -- borders are a solid band and its top and bottom are a single line.
+  -- The frame is a plain band of the side's colour all the way round the
+  -- picture, backed by a black edge and a drop shadow down and to the right.
+  -- Ghidra loses the rect arguments 54f6:0000 passes to 24d0:0497, so the
+  -- widths here are measured off a screenshot rather than read out of the
+  -- code; only the colour and the picture's own rect come from the EXE.
+  local BAND, EDGE, SHADOW = 6, 1, 5
+  local o = BAND + EDGE
+  local function fill(x, y, w, h)
+    love.graphics.rectangle("fill", x, y, w, h)
+  end
+  love.graphics.setColor(0, 0, 0)
+  fill(R.x - o + SHADOW, R.y - o + SHADOW, R.w + o * 2, R.h + o * 2)
+  fill(R.x - o, R.y - o, R.w + o * 2, R.h + o * 2)
+
   local c = G.palette[b.colour + 1] or G.palette[16]   -- pal.lua is 1-based
   love.graphics.setColor(c[1], c[2], c[3])
-  local function frame(x, y, w, h)
-    love.graphics.rectangle("line", x + 0.5, y + 0.5, w - 1, h - 1)
-  end
-  frame(R.x - 16, R.y - 1, R.w + 32, R.h + 4)
-  frame(R.x - 11, R.y + 9, R.w + 22, R.h - 16)
-  love.graphics.rectangle("fill", R.x - 10, R.y, 10, R.h)
-  love.graphics.rectangle("fill", R.x + R.w, R.y, 10, R.h)
+  fill(R.x - BAND, R.y - BAND, R.w + BAND * 2, R.h + BAND * 2)
 
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.cityPic, R.x, R.y)

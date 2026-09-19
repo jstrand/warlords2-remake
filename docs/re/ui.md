@@ -452,12 +452,15 @@ eight in every scenario:
 | colour | 15 | 7 | 8 | 9 | 10 | 6 | 5 | 0 |
 | | white | yellow | orange | red | green | blue | cyan | black |
 
-`54f6:0000` frames popup 6 in that colour, and **draws the frame before the
-picture**, so only what falls outside the 320×312 shows. It outlines the saved
-area, outlines again 5 in and 10 down, then fills the gap with `24d0:0497`
-(a filled rect, one call an edge). There are 16 pixels of room to the left and
-right but only one above, which is why the banner's side borders are a solid
-band and its top and bottom are a single line.
+`54f6:0000` frames popup 6 in that colour: two outlines (`2012:0bb7` draws a
+horizontal run, `2012:0f08` a vertical one) and then four filled rects
+(`24d0:0497`, one an edge). **Ghidra recovers none of the rect arguments** —
+it drops the arguments to `216d:002e`, which is the rect constructor — so the
+frame's measurements are not readable from the decompilation, and the widths
+in the remake are taken off a screenshot instead: a plain band of the side's
+colour all the way round the picture, a black edge outside it, and a black
+drop shadow down and to the right. Only the colour and the picture's own rect
+come from the code.
 
 ## What a remake needs, and what it does not
 
