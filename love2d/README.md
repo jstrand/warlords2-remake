@@ -64,6 +64,24 @@ luajit love2d/test/ui.lua           # Tutoria
 luajit love2d/test/ui.lua original ERYTHEA
 ```
 
+**That it runs is not that it looks right.** The stub's `setColor` is a no-op
+and nothing asserts what reaches the screen, so a fault that is purely one of
+appearance — a border a pixel out, text drawn in the colour the thing before
+it left set — passes the harness cleanly. `test/shot` is the other half: a
+LÖVE project that runs the real front end on a real canvas, drives it through
+the same handlers a player uses, and writes a PNG per step, to be compared
+against a screenshot of the original:
+
+```sh
+love love2d/test/shot                                   # one shot of the screen
+W2_OUT=/tmp/shots W2_SCRIPT=love2d/test/shot/shots.lua \
+  love love2d/test/shot ERYTHEA original 12345
+```
+
+The arguments are the game's own, and passing the seed is what makes two runs
+comparable. `W2_SCRIPT` names a file of `{name, fn}` steps — see
+`test/shot/shots.lua`.
+
 **Write for Lua 5.1.** LÖVE embeds LuaJIT, so the engine avoids `//` and the
 `&`/`|` operators — they parse under a modern `lua` binary and then fail to
 load in the game. Use `math.floor`, and the `has`/`with` helpers in `move.lua`
