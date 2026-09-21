@@ -25,23 +25,28 @@ local screen   = require("warlords.screen")
 local uidata   = require("warlords.uidata")
 local font     = require("warlords.font")
 local menuMod  = require("warlords.menu")
+local slotsMod = require("warlords.slots")
 
 local TILE = screen.TILE
-local ARMY_CELL, ARMY_COLS = 32, 16
+-- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
+-- apart and 29 tall, which is what 8611:08be reads out of it -- not the 32
+-- the cell width suggests.
+local ARMY_CELL, ARMY_COLS, ARMY_ROW, ARMY_H = 32, 16, 30, 29
 local ROAD_STRIDE, ROAD_COLS = 48, 13
-local ROAD_KEY, ARMY_KEY = 1, 10
+local ROAD_KEY, ARMY_KEY, SHADOW_KEY = 1, 10, 15
 local RING_W, RING_H = 32, 30      -- one ABITS ring
 
 local G = {}
 
 local presentOffer, stratDirty, openCity, closeCity  -- defined below
+local reslot                                        -- and this one
 local showBanner, dismissBanner                      -- and these two
 
-local function quadsFor(img, cols, cellW, cellH, stride, count)
+local function quadsFor(img, cols, cellW, cellH, stride, count, rowStride)
   local qs = {}
   for i = 0, count - 1 do
     qs[i] = love.graphics.newQuad(
-      (i % cols) * (stride or cellW), math.floor(i / cols) * cellH,
+      (i % cols) * (stride or cellW), math.floor(i / cols) * (rowStride or cellH),
       cellW, cellH, img:getDimensions())
   end
   return qs
@@ -53,6 +58,9 @@ local function exists(path)
   return false
 end
 
+-- Where the game's running commentary collects. Nothing draws it: the
+-- original has no message line in the bottom bar, and says these things
+-- through popups and the advisor instead.
 local function say(fmt, ...)
   G.status = select("#", ...) > 0 and fmt:format(...) or fmt
 end
@@ -87,12 +95,17 @@ function love.load(arg)
   end
   G.roadImg = pck.toImage(dataDir .. "/TERRAIN0/ROAD.PCK", palette, ROAD_KEY)
   G.roadQuads = quadsFor(G.roadImg, ROAD_COLS, TILE, TILE, ROAD_STRIDE, 26)
+  -- A0-A8 are the sides' armies and ASHADOW the same sheet drawn as a ghost,
+  -- which is how an army that is not moving with the group is shown.
   G.armyImg, G.armyQuads = {}, {}
   for i = 0, 8 do
     local img = pck.toImage(dataDir .. "/TERRAIN0/A" .. i .. ".PCK", palette, ARMY_KEY)
     G.armyImg[i] = img
-    G.armyQuads[i] = quadsFor(img, ARMY_COLS, ARMY_CELL, ARMY_CELL, ARMY_CELL, 32)
+    G.armyQuads[i] = quadsFor(img, ARMY_COLS, ARMY_CELL, ARMY_H, ARMY_CELL, 32, ARMY_ROW)
   end
+  -- the shadow sheet keys on white, not on the sides' key colour: it is two
+  -- colours of ghost on a white ground
+  G.shadowImg = pck.toImage(dataDir .. "/TERRAIN0/ASHADOW.PCK", palette, SHADOW_KEY)
 
   -- MARBLE.PCK is 480 wide, exactly the city dialog's width
   G.marble = pck.toImage(dataDir .. "/PICS/MARBLE.PCK", palette)
@@ -183,6 +196,30 @@ local function selectableAt(x, y)
   return out
 end
 
+--- Pick up whatever the slots now say moves, and remember the grouping in
+--- the armies themselves. Everything else in the front end goes on reading
+--- `stack`, so it acts on the group and nothing else.
+local function syncSelection()
+  local sel = G.selection
+  if not sel then return end
+  slotsMod.commit(sel.slots, G.g)
+  sel.stack = slotsMod.selected(sel.slots)
+end
+
+--- Put the slots back over a new list of armies -- what is left after a
+--- battle, or whoever stands on the tile the group has walked to -- keeping
+--- the group that was moving. The original does the same: 89e0:0d30 runs
+--- again and keeps the selection when more than one army was in it.
+function reslot(armies)
+  local sel = G.selection
+  if not sel then return end
+  local s = armies and #armies > 0 and slotsMod.keep(sel.slots, G.g, armies)
+  if not s then G.selection = nil return end
+  sel.slots = s
+  sel.x, sel.y = s.army[1].x, s.army[1].y
+  syncSelection()
+end
+
 local function select(x, y)
   local stack = selectableAt(x, y)
   if #stack == 0 then
@@ -191,8 +228,13 @@ local function select(x, y)
     if city then openCity(city) end
     return
   end
-  G.selection = { x = x, y = y, stack = stack }
-  say("%d selected, %d movement", #stack, move.stackMoves(stack))
+  -- Clicking a tile selects one army, not the stack: the bar is where the
+  -- group that moves is put together. docs/re/ui.md > The army slots.
+  local s = slotsMod.build(G.g, stack, G.player.index)
+  G.selection = { x = x, y = y, slots = s }
+  syncSelection()
+  say("%d of %d, %d movement",
+      #G.selection.stack, s.n, slotsMod.moves(s))
 end
 
 --------------------------------------------------------------------- the turn
@@ -208,10 +250,11 @@ local function afterBattle(result)
   end
   if G.selection then
     local alive = {}
-    for _, a in ipairs(G.selection.stack) do
+    for i = 1, G.selection.slots.n do
+      local a = G.selection.slots.army[i]
       if not result.deadByArmy[a] then alive[#alive + 1] = a end
     end
-    G.selection = #alive > 0 and { x = alive[1].x, y = alive[1].y, stack = alive } or nil
+    reslot(alive)
   end
 end
 
@@ -227,6 +270,7 @@ local function moveSelection(x, y)
     say("They cannot move: %s.", r.stopped)
   else
     sel.x, sel.y = sel.stack[1].x, sel.stack[1].y
+    reslot(selectableAt(sel.x, sel.y))
     stratDirty()
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack))
     local found = game.searchHere(G.g, sel.stack)
@@ -588,43 +632,127 @@ local function drawMenuBar()
   end
 end
 
--- The bottom bar's eight army slots and the movement bar under each are real
--- controls, so their rects come from BUTTON.DAT rather than from us: ids
--- 224-231 are the slots and 232-239 the bars. They carry no art of their own
--- (bitmap 0), which is the layout's way of saying the game draws them.
+-- The bottom bar's eight army slots and the mark under each are real
+-- controls, so their hit rects come from BUTTON.DAT: ids 224-231 are the
+-- slots and 232-239 the marks, and 240/241 the Grp button (one rect, two
+-- controls -- the game shows whichever applies). They carry no art of their
+-- own (bitmap 0), which is the layout's way of saying the game draws them.
+--
+-- What it draws is all in ABITS.PCK and the army sheets, at the rects
+-- 89e0:0356 and 8611:08be use. Those are the original's own numbers, read
+-- out of its data segment; docs/re/ui.md > The army slots has the table.
 local SLOT_FIRST, BAR_FIRST, SLOT_COUNT = 224, 232, 8
+local GRP_ALL, GRP_NONE = 240, 241
+
+local SLOT_X, SLOT_Y, SLOT_STEP = 24, 405, 40   -- ring and army
+local SLOT_MOVES_X, SLOT_MOVES_Y = 8, 31        -- the moves left, within it
+local MARK_Y = 449                              -- the tick or cross
+local MARK_W, MARK_H = 32, 16
+local MARK_SRC = { [slotsMod.CROSS] = { 448, 0 }, [slotsMod.TICK] = { 448, 16 } }
+local DIGIT_SRC, DIGIT_W = { 64, 30 }, 8        -- "0123456789" in ABITS
+local GROUP_SRC, MOVE_SRC = { 0, 30, 32, 8 }, { 32, 30, 32, 8 }
+local GROUP_AT, MOVE_AT   = { 344, 420 }, { 344, 428 }
+local GROUP_MOVES_AT      = { 352, 436 }
+local GRP_SRC = { red = { 288, 0 }, green = { 288, 19 } }
+local GRP_AT, GRP_W, GRP_H = { 344, 447 }, 32, 19
+
+local abitsQuad             -- (x, y, w, h) -> a cached quad into ABITS.PCK
+do
+  local cache = {}
+  function abitsQuad(x, y, w, h)
+    local key = ("%d,%d,%d,%d"):format(x, y, w, h)
+    if not cache[key] then
+      cache[key] = love.graphics.newQuad(x, y, w, h, 480, 40)
+    end
+    return cache[key]
+  end
+end
+
+local function drawAbits(src, w, h, x, y)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.abits, abitsQuad(src[1], src[2], w, h), x, y)
+end
+
+--- A number in ABITS's own 8x8 digits, which is how the bar writes every
+--- number it shows. Always two digits: the format is "%02d" throughout.
+local function drawDigits(n, x, y)
+  local text = ("%02d"):format(math.max(0, math.min(99, n)))
+  for i = 1, #text do
+    local d = text:byte(i) - 48
+    drawAbits({ DIGIT_SRC[1] + d * DIGIT_W, DIGIT_SRC[2] }, DIGIT_W, DIGIT_W,
+              x + (i - 1) * DIGIT_W, y)
+  end
+end
+
+--- The ring a slot's army sits in. Ring 0 is grey and 1-8 are the sides'
+--- colours, and a slot takes the colour `group` steps round from the current
+--- player's -- so each group in the stack gets a colour of its own, rather
+--- than the ring saying who owns the army.
+local function groupRing(group)
+  if not group then return 0 end
+  return (G.player.index + group) % 8 + 1
+end
 
 local function drawArmySlots()
+  local s = G.selection and G.selection.slots
   for i = 0, SLOT_COUNT - 1 do
-    local a = G.selection.stack[i + 1]
-    if not a then break end
-    local slot = screen.control(G.screen, SLOT_FIRST + i)
-    local bar  = screen.control(G.screen, BAR_FIRST + i)
-    if slot then
-      local owner = a.owner or 8
-      love.graphics.setColor(1, 1, 1)
-      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][a.type % 32],
-        slot.x + math.floor((slot.w - ARMY_CELL) / 2), slot.y)
+    local x = SLOT_X + i * SLOT_STEP
+    local a = s and s.army[i + 1]
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.abits, G.ringQuads[a and groupRing(s.group[i + 1]) or 0],
+                       x, SLOT_Y)
+    if a then
+      -- the armies that are not moving with the group are drawn as ghosts
+      local img = s.inGroup[i + 1] and G.armyImg[G.player.index] or G.shadowImg
+      love.graphics.draw(img, G.armyQuads[G.player.index][a.type % 32], x, SLOT_Y)
+      drawDigits(a.moves or 0, x + SLOT_MOVES_X, SLOT_Y + SLOT_MOVES_Y)
+      local mark = MARK_SRC[s.mark[i + 1]]
+      if mark then drawAbits(mark, MARK_W, MARK_H, x, MARK_Y) end
     end
-    if bar then
-      local text = tostring(a.moves or 0)
-      G.font.draw(text, bar.x + math.floor((bar.w - G.font.width(text)) / 2), bar.y)
-    end
+  end
+
+  -- "Group Move", the group's own movement, and the Grp button: green once
+  -- the whole stack moves as one, red while it does not (89e0:0567).
+  drawAbits(GROUP_SRC, GROUP_SRC[3], GROUP_SRC[4], GROUP_AT[1], GROUP_AT[2])
+  drawAbits(MOVE_SRC, MOVE_SRC[3], MOVE_SRC[4], MOVE_AT[1], MOVE_AT[2])
+  drawDigits(s and slotsMod.moves(s) or 0, GROUP_MOVES_AT[1], GROUP_MOVES_AT[2])
+  drawAbits(s and slotsMod.grouped(s) and GRP_SRC.green or GRP_SRC.red,
+            GRP_W, GRP_H, GRP_AT[1], GRP_AT[2])
+end
+
+-- With nothing selected the bar shows the side's standing instead: cities,
+-- treasury, income and upkeep. 89e0:05a3 draws it as four 40 x 20 cells of
+-- ABITS.PCK -- the right-hand end of the sheet, past the rings -- each with a
+-- number beside it. The rects and both points are the original's own, read
+-- out of its data segment at 4125:3072, :3092 and :30a2, and the formats are
+-- the "%d" and three "%dgp" that follow them at :3128.
+local STATUS_W, STATUS_H = 40, 20
+local STATUS = {
+  { sx = 344, sy =  0, x =  32, tx =  72, fmt = "%d",
+    value = function() return #game.sideCities(G.g, G.player) end },
+  { sx = 344, sy = 20, x = 120, tx = 144, fmt = "%dgp",
+    value = function() return G.player.gold end },
+  { sx = 384, sy =  0, x = 200, tx = 232, fmt = "%dgp",
+    value = function() return game.income(G.g, G.player) end },
+  { sx = 384, sy = 20, x = 280, tx = 320, fmt = "%dgp",
+    value = function() return game.upkeep(G.g, G.player) end },
+}
+local STATUS_Y = 425                           -- icons and text share a row
+
+local function drawStatus()
+  for _, st in ipairs(STATUS) do
+    drawAbits({ st.sx, st.sy }, STATUS_W, STATUS_H, st.x, STATUS_Y)
+    G.font.draw(st.fmt:format(st.value()), st.tx, STATUS_Y)
   end
 end
 
 local function drawBottomBar()
-  local r = G.barRect
   love.graphics.setColor(1, 1, 1)
-  if G.selection and #G.selection.stack > 0 then
+  if G.selection then
     drawArmySlots()
   else
-    G.font.draw(("Cities %d    %d gp    income %d    upkeep %d"):format(
-      #game.sideCities(G.g, G.player), G.player.gold,
-      G.player.income or 0, G.player.upkeepTotal or 0),
-      r.x + 8, r.y + 6)
+    drawStatus()
   end
-  G.font.draw(G.status or "", r.x + 8, r.y + r.h - G.font.lineHeight - 4)
 end
 
 -- The window is exactly 640x480, so there is no transform: screen coordinates
@@ -1060,6 +1188,40 @@ end
 -- Wired here are only the ones whose meaning is established. The rest press
 -- and release but do nothing, rather than being guessed at.
 local ACTION = {}
+
+-- The army slots and the marks under them, ids 224-239: 89e0:0963 takes a
+-- slot and 89e0:0910 a mark, each with the id minus its row's base. Clicking
+-- an army adds it to the group that moves, or drops it out into a group of
+-- its own; clicking a mark makes that whole group the one that moves, and
+-- nothing else. 240/241 share a rect -- the Grp button -- and are the two
+-- directions of the same switch: group the lot, or break it up again.
+local function afterSlotChange()
+  syncSelection()
+  say("%d of %d, %d movement", #G.selection.stack, G.selection.slots.n,
+      slotsMod.moves(G.selection.slots))
+end
+
+for i = 0, SLOT_COUNT - 1 do
+  ACTION[SLOT_FIRST + i] = function()
+    if not G.selection then return end
+    slotsMod.toggle(G.selection.slots, G.g, i + 1)
+    afterSlotChange()
+  end
+  ACTION[BAR_FIRST + i] = function()
+    if not G.selection then return end
+    slotsMod.pickGroup(G.selection.slots, G.g, i + 1)
+    afterSlotChange()
+  end
+end
+
+ACTION[GRP_ALL] = function()
+  if not G.selection then return end
+  local s = G.selection.slots
+  if slotsMod.grouped(s) then slotsMod.single(s, G.g)
+  else slotsMod.all(s, G.g) end
+  afterSlotChange()
+end
+ACTION[GRP_NONE] = ACTION[GRP_ALL]
 
 -- The 3x3 pad, ids 320-327, all reach 8611:0723 with the id minus 320, and
 -- that routine steps the cursor by one in x, y or both. Laid out on screen

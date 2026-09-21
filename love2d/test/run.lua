@@ -967,6 +967,107 @@ local function testAIGame(scenario, turns)
   battles = battles
 end
 
+----------------------------------------------------------------- army slots
+
+-- The army slots: which armies a click puts in the moving group, and what
+-- the bar draws under them. docs/re/ui.md > The army slots.
+local function testSlots()
+  print("army slots")
+  local slots = require("warlords.slots")
+
+  -- a stand-in game: all the model wants is the fight-order table and the
+  -- army list, so a real scenario is not needed to pin the rules down
+  local function stack(n)
+    local g = { map = { fightOrder = { [0] = {} } }, armies = {} }
+    local armies = {}
+    for i = 1, n do
+      armies[i] = { type = i, moves = 10 + i, group = 0 }
+      g.map.fightOrder[0][i] = n - i          -- the first army ranks highest
+      g.armies[i] = armies[i]
+    end
+    return g, armies
+  end
+
+  do                                           -- a fresh pick-up
+    local g, a = stack(3)
+    local s = slots.build(g, a, 0)
+    eq(s.n, 3, "three armies fill three slots")
+    eq(s.army[1], a[1], "the highest in the fight order takes the first slot")
+    ok(s.inGroup[1] and not s.inGroup[2] and not s.inGroup[3],
+       "clicking a tile selects one army, not the stack")
+    eq(s.group[1], 0, "ungrouped armies are each their own group")
+    eq(s.group[3], 2, "numbered off down the bar")
+    eq(s.mark[1], slots.TICK, "the one that moves is ticked")
+    eq(s.mark[2], slots.CROSS, "the others are crossed")
+    eq(slots.moves(s), 11, "and Group Move is that army's own")
+    eq(slots.grouped(s), false, "so the Grp button is not green yet")
+    eq(#slots.selected(s), 1, "one army moves")
+  end
+
+  do                                           -- adding and dropping
+    local g, a = stack(3)
+    local s = slots.build(g, a, 0)
+    slots.toggle(s, g, 2)
+    ok(s.inGroup[2] and s.group[2] == s.group[1], "a click adds an army to the group")
+    eq(s.mark[2], nil, "only the head of a group is marked")
+    eq(slots.moves(s), 11, "the group moves at its slowest army's pace")
+    slots.toggle(s, g, 2)
+    ok(not s.inGroup[2], "clicking it again drops it out")
+    ok(s.group[2] ~= s.group[1], "into a group of its own")
+    slots.toggle(s, g, 1)
+    ok(s.inGroup[1], "the last army of a group cannot be dropped")
+  end
+
+  do                                           -- the bulk handlers
+    local g, a = stack(3)
+    local s = slots.build(g, a, 0)
+    slots.all(s, g)
+    eq(#slots.selected(s), 3, "Grp takes the whole stack")
+    eq(slots.grouped(s), true, "and turns the button green")
+    eq(s.mark[2], nil, "one mark for the one group")
+    slots.single(s, g)
+    eq(#slots.selected(s), 1, "and Grp again breaks it up")
+    eq(slots.grouped(s), false, "leaving the button red")
+    slots.pickGroup(s, g, 3)
+    ok(s.inGroup[3] and not s.inGroup[1], "a mark picks out that group alone")
+    eq(s.mark[3], slots.TICK, "which is then the ticked one")
+  end
+
+  do                                           -- a part-selected group
+    local g, a = stack(3)
+    local s = slots.build(g, a, 0)
+    slots.all(s, g)
+    s.inGroup[3] = false                       -- as no handler would leave it
+    slots.pickGroup(s, g, 1)
+    ok(s.inGroup[3], "picking a group takes all of it")
+  end
+
+  do                                           -- the grouping is remembered
+    local g, a = stack(3)
+    local s = slots.build(g, a, 0)
+    slots.all(s, g)
+    slots.commit(s, g)
+    ok(a[1].group ~= 0 and a[1].group == a[2].group,
+       "a group of more than one is written back into its armies")
+    local again = slots.build(g, a, 0)
+    eq(again.group[1], again.group[2], "so it is still one group when picked up")
+    eq(again.group[1], again.group[3], "all three of them")
+    slots.single(again, g)
+    slots.commit(again, g)
+    eq(a[1].group, slots.UNGROUPED, "and breaking it up clears the mark")
+  end
+
+  do                                           -- survivors
+    local g, a = stack(3)
+    local s = slots.build(g, a, 0)
+    slots.all(s, g)
+    local left = slots.keep(s, g, { a[1], a[3] })
+    eq(left.n, 2, "the dead leave the bar")
+    ok(left.inGroup[1] and left.inGroup[2], "the survivors keep moving together")
+    eq(slots.keep(s, g, {}), nil, "and a wiped-out stack is no selection at all")
+  end
+end
+
 ---------------------------------------------------------------------- sites
 
 -- The screen layout comes out of the game's own files, so these are the
@@ -1080,6 +1181,37 @@ local function testScreenLayout()
     end
     ok(stripRow > ringRow * 2,
        "row 38 is far denser than row 15, so it is not part of the rings")
+  end
+
+  -- and its right-hand end: the four 40x20 status-bar icons 89e0:05a3 blits,
+  -- past the rings. Each must have ink and stand clear of its neighbours.
+  do
+    local pckM = require("warlords.pck")
+    local w, h, px = pckM.decode(DATA .. "/PICS/ABITS.PCK")
+    local BG = 3
+    local want = {
+      { 344,  0, "cities" }, { 344, 20, "treasury" },
+      { 384,  0, "income" }, { 384, 20, "upkeep" },
+    }
+    for _, cell in ipairs(want) do
+      local sx, sy, name = cell[1], cell[2], cell[3]
+      ok(sx >= 288, ("the %s icon is past the nine rings"):format(name))
+      ok(sx + 40 <= w and sy + 20 <= h,
+         ("the %s icon is inside the sheet"):format(name))
+      local ink = 0
+      for y = sy, sy + 19 do
+        for x = sx, sx + 39 do
+          if px[y * w + x + 1] ~= BG then ink = ink + 1 end
+        end
+      end
+      ok(ink > 40, ("the %s icon has ink"):format(name))
+      -- nothing of the neighbouring cell leaks in: the column before it is bare
+      local edge = 0
+      for y = sy, sy + 19 do
+        if px[y * w + sx] ~= BG then edge = edge + 1 end
+      end
+      eq(edge, 0, ("the %s icon starts on a clear column"):format(name))
+    end
   end
 
   -- every control's three source rects must lie inside its own bitmap
@@ -1790,6 +1922,7 @@ testHiddenMap()
 testSave()
 testSites("ERYTHEA")
 testSites("DRAGON")
+testSlots()
 testScreenLayout()
 testCityCastles()
 testAIGame("TUTORIA", 30)

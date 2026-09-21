@@ -90,6 +90,10 @@ function save.encode(g)
       female = a.female or nil,
       strength = a.strength, moves = a.moves, maxMoves = a.maxMoves,
       upkeep = a.upkeep, homeCity = a.homeCity, atSea = a.atSea or nil,
+      -- the army's own record carries which group it moves with (+17 in the
+      -- original's, docs/re/ui.md > The army slots), so a grouped stack is
+      -- still grouped when the game is picked up again
+      group = (a.group or 0) ~= 0 and a.group or nil,
       level = a.level, experience = a.experience, title = a.title,
       items = items, blessings = a.blessings,
       transit = a.transit and { turns = a.transit.turns, dest = a.transit.dest } or nil,

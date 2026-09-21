@@ -208,11 +208,13 @@ interface:
 | 183, 184, 185 | 48 × 48 at (568, 415) | one button, three variants |
 | 320–327 + 177 | 16 × 16 at x 568–600, y 361–393 | **3 × 3 pad** |
 | 224–231 | 32 × 41 at y 404, x 24–304 | **eight army slots** |
-| 232–239 | 40 × 24 at y 445, x 24–304 | movement bar under each |
-| 240, 241 | 32 × 58 at (336, 409) | one indicator, two variants |
+| 232–239 | 40 × 24 at y 445, x 24–304 | the **tick or cross** under each |
+| 240, 241 | 32 × 58 at (336, 409) | the **Grp** button, two directions |
 
 Ids 224–241 have no bitmap and no text: they are the stack panel the game
 draws itself, inside `AREA.DAT`'s bottom-bar region `(16, 408, 360, 56)`.
+What it draws there, and what each of them does to the group that moves, is
+in [`../re/ui.md`](../re/ui.md) › The army slots.
 
 ### Cross-check against the running game
 

@@ -327,7 +327,7 @@ get an index — the id is still in DX:
 |---|---|---|
 | 320–327 | `8611:0723(id - 320)` | the **3 × 3 pad**: steps the cursor one tile |
 | 224–231 | `89e0:0963(id - 224)` | the **army slot**, 0–7 |
-| 232–239 | `89e0:0910(id - 232)` | the **movement bar** under slot 0–7 |
+| 232–239 | `89e0:0910(id - 232)` | the **mark** under slot 0–7 |
 | 179–182 | `545c:0072(id - 179)` | the four **configurable** buttons, 0–3 |
 
 Those four are also painted twice: `545c:030a` blits each one's icon from
@@ -337,7 +337,8 @@ the assigned menu item carries in `UDB.DAT` (`../formats/screens.md`).
 The rest of the main screen resolves to one handler each: 174–178 to five
 routines in `8065`, 183/184/185 (one button, three variants) to `484e:0346`
 in the diplomacy segment, 186/187/188 to `8065:0f3f`/`0fe9`/`104e`, and
-240/241 to `89e0:0a55`/`0a99`.
+240/241 to `89e0:0a55`/`0a99` — one rect, the **Grp** button, and the two
+directions of the same switch (see *The army slots* below).
 
 The pad's eight ids run **clockwise from north** when laid out by their screen
 positions — 320 is top-centre, 321 top-right, and so on round to 327 top-left
@@ -370,6 +371,107 @@ derived from the code above. The handlers this function reaches are known:
 `740d:0037` for the map itself (which goes on to `attack_tile`,
 `military_advisor`, the army-info panels and the tutorial hooks),
 `7204:033b` for cities, and `8065:0b3b` / `8065:0e04` for two drag modes.
+
+### The army slots
+
+With a stack selected the bottom bar shows that tile's armies instead of the
+side's standing, and it is where the player decides **which of them move**.
+Clicking a tile does not take the whole stack: `89e0:0d30` selects one army
+and leaves the rest waiting in the bar.
+
+Three arrays run in parallel over the slots, all at `451b:` and eight entries
+each, with the count in `4125:30f6`:
+
+| array | meaning |
+|---|---|
+| `2902` | far pointer to the army in the slot |
+| `28f2` | the **group** it belongs to, 0-7 |
+| `28e2` | whether that group is the one that moves |
+| `28d2` | the mark drawn under it: 0 cross, 1 tick, -1 none |
+
+The selection itself lives elsewhere and is rebuilt from these: `1ede[]` holds
+the armies that move (`1e9e` of them), `1f02` the first of them, and
+`4125:2bda` is simply `1e9e > 1`. `89e0:000a` writes all of that back after
+every change, and `1a8b:07f9` reads it when the stack walks — one army spends
+its own moves, a group spends the pool in `451b:1ea0`, which `1c8c:0912` sets
+to the **smallest** `moves left` in the group.
+
+**Drawing**, `89e0:0356` slot by slot at `(24 + 40n, 405)`:
+
+- the **ring**, a 32 × 30 cell of `ABITS.PCK` at `((n - 1) * 32, 0)`. Ring 0 is
+  grey and 1-8 are the side colours, and a slot takes the ring
+  `(current player + group) % 8 + 1` — so the ring says which **group** the
+  army is in, not who owns it, and an empty slot is the grey one.
+- the **army**, 32 × 29 from the side's own sheet at
+  `(type % 16 * 32, type / 16 * 30)` — note the 30, the sheet's rows are not
+  32 apart — or from **`ASHADOW.PCK`**, bitmap 42, when the army is not in the
+  moving group. That is the ghost in the bar.
+- its **moves left** as `%02d` in ABITS's own 8 × 8 digits at `(x + 8, y + 31)`,
+  the digits running from `(64, 30)`.
+- the **mark**, 32 × 16 at `(448, 0)` for the cross and `(448, 16)` for the
+  tick, drawn at `(24 + 40n, 449)`.
+
+and then, in the column at x = 344: the words **Group** `(0, 30)` and **Move**
+`(32, 30)`, both 32 × 8; the group's own movement as two more digits at
+`(352, 436)`; and the **Grp** button, 32 × 19, **red** at `(288, 0)` or
+**green** at `(288, 19)`.
+
+`89e0:17e7` decides the marks, and it is the part worth stating plainly:
+
+- only the **head of each group** is marked at all, the armies below it in the
+  same group taking nothing;
+- the head of the group that moves takes the **tick**, every other head the
+  **cross**;
+- but a group is the moving one only when the selection is *exactly* that
+  whole group, so a half-selected group shows no tick anywhere.
+
+`89e0:0567` picks the Grp colour: green when the whole stack is in the moving
+group (or there is only one army), red otherwise.
+
+**Changing it**, the four handlers behind the controls:
+
+| what | handler | does |
+|---|---|---|
+| click an army, 224-231 | `89e0:0963(n)` | add it to the moving group, or drop it out into a group of its own — the last army of a group cannot be dropped |
+| click a mark, 232-239 | `89e0:0910(n)` | make that army's group the moving one, and nothing else |
+| Grp / space, 240 | `89e0:0a55` | one group, the whole stack, all moving |
+| Grp, 241 | `89e0:0a99` | break it up again: every army its own group, the first one moving |
+
+All four re-mark afterwards, and the two that change groups re-sort first, so
+a group is always contiguous in the bar. The order is by group, and within a
+group by the owner's **fight order**, highest first — the same table that
+decides which army a tile shows.
+
+Finally, the grouping is **remembered in the army record**, at the `+17` byte
+`docs/formats/save.md` leaves unnamed: 0 for an army in no group, and a shared
+id for one that is. `89e0:000a` writes it and `89e0:0d30` reads it back, which
+is why a stack you grouped is still grouped when you pick it up again.
+
+### The bottom bar
+
+`89e0:0356` repaints it, and it has two faces. With a stack selected it draws
+the eight army slots; with nothing selected (`DAT_451b_1f02` null) it falls
+through to **`89e0:05a3`**, which draws the side's standing as four icons with
+a number beside each:
+
+| | icon | at | number at | format | from |
+|---|---|---|---|---|---|
+| cities | `(344, 0)` 40 × 20 | `(32, 425)` | `(72, 425)` | `%d` | `[side * 2 + 0x5dea]` |
+| treasury | `(344, 20)` | `(120, 425)` | `(144, 425)` | `%dgp` | `2c04:[side * 0x14 + 0x185]` |
+| income | `(384, 0)` | `(200, 425)` | `(232, 425)` | `%dgp` | `[side * 2 + 0x5dca]` |
+| upkeep | `(384, 20)` | `(280, 425)` | `(320, 425)` | `%dgp` | `[side * 2 + 0x5dda]` |
+
+The icons are blitted from bitmap **8** — `PICS/ABITS.PCK`, 480 × 40 — out of
+the strip past the nine 32 × 30 side rings: a castle, a chest, a pile of coins
+and a hand paying them out. The source rects live at `4125:3072`, the icon
+points at `4125:3092`, the text points at `4125:30a2` and the four format
+strings at `4125:3128`, each read as four, two and two `u16`.
+
+Both points are **top-left** — the text is not baselined — so the numbers sit
+flush with the top of their icons, which is the layout of the shipped screens.
+The three totals are read from per-side tables rather than recomputed, so they
+are as stale as their last update; recomputing them per frame is
+indistinguishable on the screens checked.
 
 ### Menus
 
