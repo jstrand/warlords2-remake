@@ -530,18 +530,25 @@ function stratDirty()
   G.stratImage = nil
 end
 
--- The four configurable buttons carry no icon in BUTTON.PCK; the original
--- draws whatever the assigned command uses. Until that art is found, name
--- them from UDB.DAT so they at least say what they do.
-local function drawShortcutLabels()
+-- The four configurable buttons are blank in BUTTON.PCK, because their art
+-- depends on what is assigned to them: 545c:030a paints each one a second
+-- time from MENUBUTT.PCK, at the rect the assigned menu item carries in
+-- UDB.DAT. The icon is a whole button, frame and all, so it covers the blank.
+local function drawShortcutIcons()
   local ui = G.screen.ui
+  local art = G.screen.art_for(uidata.SHORTCUT_BITMAP)
   for i = 0, uidata.SHORTCUT_COUNT - 1 do
     local c = screen.control(G.screen, uidata.SHORTCUT_FIRST + i)
-    local id = ui.shortcuts[i]
-    local name = id and ui.shortcutNames[id]
-    if c and name then
+    local item = ui.shortcutItems[ui.shortcuts[i] or -1]
+    if c and item and art then
+      local src = item.src[G.screen.state[c.id] or uidata.NORMAL]
       love.graphics.setColor(1, 1, 1)
-      local short = name:sub(1, 6)
+      love.graphics.draw(art.image,
+        love.graphics.newQuad(src.x, src.y, item.w, item.h, art.w, art.h),
+        c.x, c.y)
+    elseif c and item then                     -- no art: say what it does
+      local short = item.name:sub(1, 6)
+      love.graphics.setColor(1, 1, 1)
       G.font.draw(short,
         c.x + math.max(1, math.floor((c.w - G.font.width(short)) / 2)),
         c.y + math.floor((c.h - G.font.lineHeight) / 2))
@@ -940,7 +947,7 @@ function love.draw()
   drawMap()
   drawStrategic()
   screen.drawControls(G.screen)
-  drawShortcutLabels()
+  drawShortcutIcons()
   drawBottomBar()
   if G.city then drawCity() end
   drawMenuBar()

@@ -270,23 +270,54 @@ is exactly a key press by another route.
 | 2 | 181 | 517 | Heroes |
 | 3 | 182 | 535 | End Turn |
 
-**`UDB.DAT`** is 21 records of 68 bytes — two u16 then a NUL-terminated name —
-listing every item that may be assigned, and naming 21 of the game's menu
-commands:
+**`UDB.DAT`** is 21 records of 68 bytes, listing every item that may be
+assigned:
 
-| id | name | id | name | id | name |
-|---|---|---|---|---|---|
-| 507 | Move All | 516 | Quest Report | 527 | Vectoring |
-| 508 | Disband | 517 | Heroes | 528 | Ruins |
-| 510 | Army Rpt | 518 | Plant Flag | 529 | Stack |
-| 511 | City Rpt | 521 | Search | 530 | City History |
-| 512 | Gold Rpt | 524 | Build | 531 | Event History |
-| 513 | Prod Rpt | 525 | City Info | 534 | Triumphs |
-| 514 | Win Rpt | 526 | Production | 535 | End Turn |
+| offset | type | meaning |
+|---|---|---|
+| `+0` | u16 | 21 on the first record, 29 on the rest — unread |
+| `+2` | u16 | menu item id |
+| `+4` | `char[50]` | NUL-terminated name |
+| `+54` | u16 × 4 | the resting icon: x, y, w = **64**, h = **29** |
+| `+62` | u16 × 3 | the greyed-out icon: x, y, w = **32** |
+
+The rects are into **`PICS/MENUBUTT.PCK`**, 320 × 197 — a 10 × 7 grid of
+32 × 29 cells, 32 apart across and **28** apart down, so vertical neighbours
+share a border row. The resting rect is 64 wide because it spans a *pair*:
+the resting icon and, one cell to its right, the lit one. So an item's three
+states are at `(x, y)`, `(x + 32, y)` and the greyed pair.
+
+That accounts for the sheet exactly. The 21 items name 63 distinct cells, three
+each, and no cell twice; cells 42–48 — the gap between the 21 pairs and the 21
+greyed icons — are the flat blue filler you can see in the decoded sheet.
+
+`545c:030a` is what draws them: for each of the four buttons it looks the
+assigned item up in `UDB.DAT` and blits bitmap **43** (`MENUBUTT.PCK`, via
+`FILE.DAT` group 3) at that rect. The icon is a whole button, frame and all,
+which is why the `BUTTON.PCK` art the layout points at is blank — the icon is
+painted over it. An unassigned button falls back to a constant rect pair in
+`4125:049e`.
+
+The 21 names, and which cell each rests on:
+
+| id | name | cell | id | name | cell | id | name | cell |
+|---|---|---|---|---|---|---|---|---|
+| 507 | Move All | 4,3 | 516 | Quest Report | 4,1 | 527 | Vectoring | 8,0 |
+| 508 | Disband | 6,3 | 517 | Heroes | 0,1 | 528 | Ruins | 2,1 |
+| 510 | Army Rpt | 2,2 | 518 | Plant Flag | 8,1 | 529 | Stack | 8,3 |
+| 511 | City Rpt | 4,2 | 521 | Search | 0,2 | 530 | City History | 6,1 |
+| 512 | Gold Rpt | 6,2 | 524 | Build | 2,0 | 531 | Event History | 8,2 |
+| 513 | Prod Rpt | 0,3 | 525 | City Info | 4,0 | 534 | Triumphs | 0,4 |
+| 514 | Win Rpt | 2,3 | 526 | Production | 6,0 | 535 | End Turn | 0,0 |
+
+(column, row of the resting icon; the lit one is the next column.) The shipped
+four are the `?` of Search, the two chevrons of Move All, the armoured figure
+of Heroes and the shield of End Turn — which is how the assignment was checked
+against a screenshot of the original.
 
 These ids are **menu item** numbers, not the command codes of `docs/re/ui.md`
 and not control ids; `7ae8:0000` is what maps between them, and that mapping
-has not been read yet. The names are still useful on their own: five of them
+has not been read yet. The names are also useful on their own: five of them
 (Army, City, Gold, Prod, Win) confirm that the reports dialog has exactly the
 five tabs its `6ef3:0000(n)` argument implies.
 

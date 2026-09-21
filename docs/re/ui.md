@@ -328,7 +328,11 @@ get an index — the id is still in DX:
 | 320–327 | `8611:0723(id - 320)` | the **3 × 3 pad**: steps the cursor one tile |
 | 224–231 | `89e0:0963(id - 224)` | the **army slot**, 0–7 |
 | 232–239 | `89e0:0910(id - 232)` | the **movement bar** under slot 0–7 |
-| 179–182 | `545c:0072(id - 179)` | the four unlabelled buttons, 0–3 |
+| 179–182 | `545c:0072(id - 179)` | the four **configurable** buttons, 0–3 |
+
+Those four are also painted twice: `545c:030a` blits each one's icon from
+`MENUBUTT.PCK` over the blank `BUTTON.PCK` art the layout gives it, at the rect
+the assigned menu item carries in `UDB.DAT` (`../formats/screens.md`).
 
 The rest of the main screen resolves to one handler each: 174–178 to five
 routines in `8065`, 183/184/185 (one button, three variants) to `484e:0346`

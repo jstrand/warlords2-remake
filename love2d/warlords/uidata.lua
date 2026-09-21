@@ -118,8 +118,23 @@ end
 --------------------------------------------------------------- the shortcuts
 
 --- UDB/UDB.DAT: the menu items that may be put on the four configurable
---- buttons, as {id -> name}. 21 records of 68 bytes: two u16 then a name.
-function uidata.shortcutNames(path)
+--- buttons. 21 records of 68 bytes:
+---
+---     +0   u16       unknown flag: 21 on the first record, 29 on the rest
+---     +2   u16       menu item id
+---     +4   char[50]  NUL-terminated name
+---     +54  u16 x, u16 y, u16 w = 64, u16 h = 29   the resting icon
+---     +62  u16 x, u16 y, u16 w = 32               the greyed-out icon
+---
+--- The rects are into MENUBUTT.PCK, which is a 10 x 7 grid of 32 x 29 cells
+--- (28 apart: neighbours share a border row). The first rect is 64 wide
+--- because it spans a *pair* -- the resting icon and, 32 px to its right, the
+--- lit one -- so the three states are at (x, y), (x + 32, y) and the greyed
+--- pair. All 21 records together name 63 distinct cells, three each.
+---
+--- Returns {id -> {name = , src = {[0] = lit, [1] = resting, [2] = greyed},
+--- w = , h = }}, with src keyed the way BUTTON.DAT keys its states.
+function uidata.shortcutItems(path)
   local s = read(path)
   local out = {}
   local i = 0
@@ -128,9 +143,27 @@ function uidata.shortcutNames(path)
     local id = u16(s, at + 2)
     local stop = s:find("\0", at + 4, true) or (at + 4)
     local name = s:sub(at + 4, stop - 1)
-    if #name > 0 then out[id] = name end
+    local x, y = u16(s, at + 54), u16(s, at + 56)
+    if #name > 0 then
+      out[id] = {
+        name = name,
+        w = u16(s, at + 66), h = u16(s, at + 60),
+        src = {
+          [uidata.ACTIVE]   = { x = x + u16(s, at + 66), y = y },
+          [uidata.NORMAL]   = { x = x, y = y },
+          [uidata.DISABLED] = { x = u16(s, at + 62), y = u16(s, at + 64) },
+        },
+      }
+    end
     i = i + 1
   end
+  return out
+end
+
+--- The same file as {id -> name}.
+function uidata.shortcutNames(path)
+  local out = {}
+  for id, item in pairs(uidata.shortcutItems(path)) do out[id] = item.name end
   return out
 end
 
@@ -151,6 +184,11 @@ end
 -- path a key press takes. docs/re/ui.md.
 uidata.SHORTCUT_FIRST, uidata.SHORTCUT_COUNT = 179, 4
 
+-- Their art is not the blank in BUTTON.PCK the layout points at: 545c:030a
+-- paints each button a second time from bitmap 43 -- MENUBUTT.PCK -- using
+-- the rect the assigned item carries in UDB.DAT.
+uidata.SHORTCUT_BITMAP = 43
+
 --------------------------------------------------------------------- assembled
 
 --- Load every layout file under `dataDir`. Returns a table with `joins`,
@@ -163,15 +201,18 @@ function uidata.load(dataDir)
     bitmaps[i - 1] = name:lower()
   end
   -- The user's own shortcut assignments, if the game has a UDB directory.
-  local shortcuts, shortcutNames = {}, {}
+  local shortcuts, shortcutItems = {}, {}
   local ok = pcall(function()
-    shortcutNames = uidata.shortcutNames(dataDir .. "/UDB/UDB.DAT")
+    shortcutItems = uidata.shortcutItems(dataDir .. "/UDB/UDB.DAT")
     shortcuts = uidata.shortcuts(dataDir .. "/UDB/UDB.CUR")
   end)
-  if not ok then shortcuts, shortcutNames = {}, {} end
+  if not ok then shortcuts, shortcutItems = {}, {} end
+  local shortcutNames = {}
+  for id, item in pairs(shortcutItems) do shortcutNames[id] = item.name end
 
   return {
     shortcuts = shortcuts,
+    shortcutItems = shortcutItems,
     shortcutNames = shortcutNames,
     joins = uidata.joins(d .. "JOIN.DAT"),
     areas = uidata.areas(d .. "AREA.DAT"),

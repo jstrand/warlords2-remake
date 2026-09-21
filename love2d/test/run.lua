@@ -1018,6 +1018,36 @@ local function testScreenLayout()
        ("button %d (control %d) is %s"):format(i, 179 + i, want[i]))
   end
 
+  -- and their icons, which UDB.DAT gives as rects into MENUBUTT.PCK: a 10x7
+  -- grid of 32x29 cells 32 and 28 apart. Every one of the 21 items names
+  -- three cells -- resting, lit, greyed -- and no two items share a cell.
+  do
+    local w, h = require("warlords.pck").decode(DATA .. "/PICS/MENUBUTT.PCK")
+    eq(w, 320, "MENUBUTT.PCK is 320 wide")
+    eq(h, 197, "and 197 tall: 7 rows 28 apart, plus the last row's border")
+    local cells, n = {}, 0
+    for id, item in pairs(ui.shortcutItems) do
+      eq(item.w, 32, ("item %d icon width"):format(id))
+      eq(item.h, 29, ("item %d icon height"):format(id))
+      for st = 0, 2 do
+        local src = item.src[st]
+        eq(src.x % 32, 0, ("item %d state %d sits on a column"):format(id, st))
+        eq(src.y % 28, 0, ("item %d state %d sits on a row"):format(id, st))
+        ok(src.x + 32 <= w and src.y + 29 <= h,
+           ("item %d state %d is inside the sheet"):format(id, st))
+        local key = src.x .. "," .. src.y
+        ok(not cells[key], ("cell %s is used once"):format(key))
+        cells[key], n = true, n + 1
+      end
+    end
+    eq(n, 63, "21 items, three cells each")
+    -- End Turn is the shield in the top-left corner, lit to its right
+    local endTurn = ui.shortcutItems[535]
+    eq(endTurn.src[uidata.NORMAL].x, 0, "End Turn rests at the sheet's origin")
+    eq(endTurn.src[uidata.NORMAL].y, 0, "at the top of it")
+    eq(endTurn.src[uidata.ACTIVE].x, 32, "and lights up one cell right")
+  end
+
   -- ABITS.PCK's rings: nine 32x30 cells on a 32-pixel stride, grey then one
   -- per side. A 40x40 cell drags in the strip of other bits below them.
   do
