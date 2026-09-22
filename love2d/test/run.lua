@@ -608,9 +608,51 @@ local function testCapture(scenario)
     stack[#stack + 1] = a
   end
 
+  -- A city is assaulted from beside it, never walked into: the walk stops on
+  -- the last tile before it and asks for an attack. Any of the eight tiles
+  -- will do -- the path steps diagonally like any other move.
+  do
+    local far = { owner = side.index, type = 11, name = "Scouts", strength = 9,
+                  maxMoves = 20, moves = 20, upkeep = 1 }
+    g.armies[#g.armies + 1] = far
+    -- start a few tiles off, wherever the ground allows it
+    local walk
+    for _, off in ipairs({ { -3, -3 }, { 3, -3 }, { -3, 3 }, { 3, 3 },
+                           { 0, -3 }, { 0, 3 }, { -3, 0 }, { 3, 0 } }) do
+      far.x, far.y, far.moves = target.x + off[1], target.y + off[2], 20
+      walk = movement.moveTo(g, { far }, target.x, target.y)
+      if walk.stopped == "attack" then break end
+    end
+    eq(walk.stopped, "attack", "walking at a city ends in an assault")
+    eq(walk.attack.x, target.x, "on the city's own tile")
+    eq(walk.attack.y, target.y, "and row")
+    eq(walk.attack.city, target, "which is the city")
+    ok(math.max(math.abs(far.x - target.x), math.abs(far.y - target.y)) == 1,
+       "and the stack is left standing beside it, not in it")
+    ok(far.x ~= target.x or far.y ~= target.y, "it did not walk in")
+    eq(target.ownerIndex, nil, "and the city is still the defender's")
+    for i = #g.armies, 1, -1 do
+      if g.armies[i] == far then table.remove(g.armies, i) end
+    end
+  end
+
   local before = #game.sideCities(g, side)
   local r = game.resolveAttack(g, stack, target.x, target.y)
   ok(r.won, "the overwhelming stack took the city")
+  -- the battle window is drawn from the lines as they were drawn up, and
+  -- replays result.log over them
+  ok(r.lines ~= nil, "the attack reports the lines that fought")
+  eq(#r.lines.attackers, #stack, "every attacker is in the line")
+  eq(r.lines.city, target, "and the line knows it was a city")
+  do
+    local down = 0
+    for _, side_ in ipairs(r.log or {}) do
+      ok(side_ == 0 or side_ == 1, "the log says which side lost an army")
+      down = down + 1
+    end
+    eq(down, #r.deadAttackers + #r.deadDefenders,
+       "the log has one entry per army that fell")
+  end
   eq(target.ownerIndex, side.index, "the city changed hands")
   eq(#game.sideCities(g, side), before + 1, "the side owns one more city")
   eq(target.producing, nil, "a captured city is not building anything")
@@ -1047,14 +1089,30 @@ local function testSlots()
     local s = slots.build(g, a, 0)
     slots.all(s, g)
     slots.commit(s, g)
-    ok(a[1].group ~= 0 and a[1].group == a[2].group,
+    local id = a[1].group
+    ok(id ~= slots.UNGROUPED and id == a[2].group and id == a[3].group,
        "a group of more than one is written back into its armies")
+
+    -- picking the stack up again, this turn or the next, takes the group
     local again = slots.build(g, a, 0)
-    eq(again.group[1], again.group[2], "so it is still one group when picked up")
-    eq(again.group[1], again.group[3], "all three of them")
-    slots.single(again, g)
+    eq(#slots.selected(again), 3, "so picking it up again takes the whole group")
+    eq(slots.grouped(again), true, "with the Grp button still green")
+    eq(again.group[1], again.group[3], "and all three in one group in the bar")
     slots.commit(again, g)
-    eq(a[1].group, slots.UNGROUPED, "and breaking it up clears the mark")
+    eq(a[1].group, id, "picking it up does not renumber it")
+
+    slots.toggle(again, g, 3)
+    slots.commit(again, g)
+    local third = slots.build(g, a, 0)
+    eq(#slots.selected(third), 2, "dropping one out leaves the rest grouped")
+    eq(a[3].group, slots.UNGROUPED, "and the one dropped out is on its own")
+    eq(a[1].group, id, "while the group keeps its id")
+
+    slots.single(third, g)
+    slots.commit(third, g)
+    eq(a[1].group, slots.UNGROUPED, "and breaking it up clears the grouping")
+    eq(#slots.selected(slots.build(g, a, 0)), 1,
+       "so a click picks up one army again")
   end
 
   do                                           -- survivors
@@ -1724,6 +1782,9 @@ local function testSave()
   h.items = { g.map.items[1] }
   g.map.items[1].status = 3
 
+  -- a grouped stack must come back grouped, so the group survives a save
+  g.armies[1].group, g.armies[2].group = 4, 4
+
   local text = saveMod.encode(g)
   ok(#text > 1000, "the save has content")
   local h2 = saveMod.decode(text, DATA)
@@ -1740,6 +1801,7 @@ local function testSave()
     eq(b.strength, a.strength, "army " .. i .. " keeps its strength")
     eq(b.moves, a.moves, "army " .. i .. " keeps its movement")
     eq(b.owner, a.owner, "army " .. i .. " keeps its owner")
+    eq(b.group or 0, a.group or 0, "army " .. i .. " keeps the group it moves with")
   end
 
   for i, c in ipairs(g.map.cities) do

@@ -388,6 +388,9 @@ function game.resolveAttack(g, stack, x, y)
   local heroMod = require("warlords.hero")
   local attackers, defenders, defOwner, city = combat.lines(g, stack, x, y)
   local result = combat.resolve(g, attackers, defenders, x, y)
+  -- the lines as they were drawn up, which is what the battle window shows:
+  -- `result.log` then kills them off in the order the fight went
+  result.lines = { attackers = attackers, defenders = defenders, city = city }
 
   -- a dead hero drops what it carried where it fell
   for _, a in ipairs(result.deadAttackers) do

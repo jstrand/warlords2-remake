@@ -481,6 +481,12 @@ The greeting (group 124) and lead-in (group 125) are picked at random.
 
 ## Capturing a city
 
+A city is taken by **assault from a tile beside it** — any of the eight,
+diagonals included — never by walking in. The walk stops the moment its next
+step would be the city and `attack_tile` fights from where it stands; the
+survivors move in afterwards. What the assault looks like on screen is in
+[`re/ui.md`](re/ui.md) › The assault.
+
 ### Loot (automatic, `67cc:0a6b`)
 
 Winning a city from another side (not a neutral one):

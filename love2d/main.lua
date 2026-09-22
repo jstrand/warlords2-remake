@@ -34,12 +34,15 @@ local TILE = screen.TILE
 local ARMY_CELL, ARMY_COLS, ARMY_ROW, ARMY_H = 32, 16, 30, 29
 local ROAD_STRIDE, ROAD_COLS = 48, 13
 local ROAD_KEY, ARMY_KEY, SHADOW_KEY = 1, 10, 15
+-- WAR.PCK sits on colour 1 and BSHIELD.PCK on the green it is drawn over
+local WAR_KEY, SHIELD_KEY = 1, 12
 local RING_W, RING_H = 32, 30      -- one ABITS ring
 
 local G = {}
 
 local presentOffer, stratDirty, openCity, closeCity  -- defined below
 local reslot                                        -- and this one
+local startAssault, pressAssault, presentVictory, takeCity   -- the assault
 local showBanner, dismissBanner                      -- and these two
 
 local function quadsFor(img, cols, cellW, cellH, stride, count, rowStride)
@@ -115,6 +118,11 @@ function love.load(arg)
   G.bigArmy = pck.toImage(dataDir .. "/PICS/BIGARMY.PCK", palette)
   -- CITY.PCK is 320x312: the gatehouse behind the start-of-turn banner
   G.cityPic = pck.toImage(dataDir .. "/PICS/CITY.PCK", palette)
+  -- The assault: WAR.PCK's fire cloud over the map, BSHIELD.PCK's big shields
+  -- beside the two battle lines, and VICTORY.PCK behind the spoils dialog.
+  G.warPic = pck.toImage(dataDir .. "/PICS/WAR.PCK", palette, WAR_KEY)
+  G.shieldImg = pck.toImage(dataDir .. "/TERRAIN0/BSHIELD.PCK", palette, SHIELD_KEY)
+  G.victoryPic = pck.toImage(dataDir .. "/PICS/VICTORY.PCK", palette)
   -- MHERO.PCK and FHERO.PCK are 224x170 each, exactly the rect the hero
   -- offer blits them into; the checkbox picks between them.
   G.heroPic = {
@@ -263,7 +271,11 @@ local function moveSelection(x, y)
   if not sel then return end
   local r = move.moveTo(G.g, sel.stack, x, y)
   if r.stopped == "attack" then
-    afterBattle(game.resolveAttack(G.g, sel.stack, r.attack.x, r.attack.y))
+    -- The stack has walked as far as the tile beside the target; the assault
+    -- is fought from there. The fight is resolved first and then shown.
+    local result = game.resolveAttack(G.g, sel.stack, r.attack.x, r.attack.y)
+    startAssault(r.attack.x, r.attack.y, result)
+    afterBattle(result)
   elseif r.stopped == "no route" then
     say("There is no way there.")
   elseif r.steps == 0 then
@@ -1070,6 +1082,316 @@ local function drawHeroOffer()
   love.graphics.pop()
 end
 
+------------------------------------------------------------------ the assault
+
+-- A city is not walked into, it is assaulted. `walk_path` stops the moment
+-- the next step is a city the mover does not own and hands that tile to
+-- `attack_tile` (67cc:0000), so a stack always fights from one of the eight
+-- tiles around it -- diagonals included, the path stepping diagonally like
+-- any other move.
+--
+-- What the player sees then, in order:
+--
+--   67cc:1836  the fire cloud from WAR.PCK over the tile
+--   6a35:0160  the battle window: both lines drawn up, each beside its side's
+--              shield from BSHIELD.PCK
+--   6a35:0094  the fight played back, one army struck off at a time in the
+--              order combat_resolve logged; space runs it through
+--   6a35:04c5  how it ended, written under the lines
+--   63fa:0000  and, if a city fell, what is to be done with it
+--
+-- The fight is decided before any of it is drawn -- combat_resolve runs first
+-- and the window only replays its log -- so nothing here can change the
+-- outcome. docs/re/ui.md > The assault.
+
+-- Every number here is the original's own, read out of its data segment:
+-- popup 8 and the rect at 4125:0cfa, the row heights at 4125:0d14 and the two
+-- rows of places at 4125:0d1e and :0d2e.
+local AS = {
+  window   = { x = 160, y = 60, w = 320, h = 312 },   -- popup 8
+  cloudW   = 128, cloudH = 120,                       -- the rect at 4125:0cfa
+  warW     = 240, warH = 180,
+  shieldW  = 32, shieldH = 36, shieldSheet = 288, shieldSheetH = 59,
+  shieldDef = { 176, 86 }, shieldAtk = { 176, 246 },
+  rows     = { 86, 116, 146, 176 },                   -- the defender's rows
+  atkRow   = 246,                                     -- the attacker's
+  xEven    = { 216, 248, 280, 312, 344, 376, 408, 440 },
+  xOdd     = { 232, 264, 296, 328, 360, 392, 424 },
+  sea      = { 0, 162, 32, 18 }, seaDrop = 10,        -- WAR.PCK's water
+  textY    = 290, textStep = 20,                      -- 6a35:04c5 steps 20
+  cloudTime = 0.7,                                    -- before the window
+  fellTime = 0.22, fellFast = 0.04,                   -- one army struck off
+  -- STRING.DAT groups: how a fight ends, and what the spoils dialog says
+  fled = 141, wonCityHero = 142, wonCity = 143,
+  wonHero = 144, won = 145, lost = 146, loot = 147,
+  vText = 65, vWho = 66, vWhere = 67,
+  -- dialog 11 behind popup 7, which is exactly VICTORY.PCK
+  vPopup = { x = 160, y = 90, w = 320, h = 200 },
+  vDialog = 11,
+  occupy = 285, pillage = 283, sack = 286, raze = 284,
+  vTitleY = 93, vLineY = { 140, 160, 180, 200 },
+}
+
+local function now()
+  return (love.timer and love.timer.getTime and love.timer.getTime()) or 0
+end
+
+--- The plain popup look 54f6:0000 gives a window that carries no side colour:
+--- a black outline, and a two-pixel shadow down and to the right.
+local function popupFrame(R)
+  love.graphics.setColor(0, 0, 0)
+  love.graphics.rectangle("line", R.x - 0.5, R.y - 0.5, R.w + 1, R.h + 1)
+  love.graphics.rectangle("fill", R.x + 1, R.y + R.h + 1, R.w + 2, 2)
+  love.graphics.rectangle("fill", R.x + R.w + 1, R.y + 1, 2, R.h + 2)
+end
+
+--- Where slot k of a line of n sits across the window: a full row takes all
+--- eight places, a shorter one is centred, and an odd one takes the places
+--- between them so that it centres on the same middle (6a35:0160).
+local function slotX(n, k)
+  if n >= 8 then return AS.xEven[k] end
+  local from = 4 - math.floor((n + 1) / 2)
+  local t = (n % 2 == 1) and AS.xOdd or AS.xEven
+  return t[from + k]
+end
+
+--- A whole line laid out: rows of eight from the top, the last row centred.
+local function lineSlots(n, rows)
+  local out, i, row = {}, 1, 1
+  while n - i + 1 >= 8 and rows[row + 1] do
+    for k = 1, 8 do out[i + k - 1] = { x = AS.xEven[k], y = rows[row] } end
+    i, row = i + 8, row + 1
+  end
+  local y = rows[row] or rows[#rows]
+  for k = 1, n - i + 1 do out[i + k - 1] = { x = slotX(n - i + 1, k), y = y } end
+  return out
+end
+
+--- The name the spoils dialog calls the victor by: the hero who led the
+--- assault if one did, otherwise the best army in the line (attack_tile
+--- reads 451b:1efe, the selection's hero, and falls back to the army).
+local function victorName(line)
+  for _, a in ipairs(line) do
+    if a.type == armytype.HERO and a.name then return a.name end
+  end
+  local best = line[1]
+  local rec = best and G.g.types.byId[best.type]
+  return rec and rec.name or "Your armies"
+end
+
+--- How the fight ended, in the original's own words.
+local function outcomeLines(result, city, fled)
+  local ui = G.screen.ui
+  local out = {}
+  if not result.won then
+    out[#out + 1] = uidata.text(ui, AS.lost, 0)
+    return out
+  end
+  local hero = nil
+  for _, a in ipairs(result.lines.attackers) do
+    if a.type == armytype.HERO and a.name then hero = a.name break end
+  end
+  if city then
+    if fled then
+      out[#out + 1] = uidata.text(ui, AS.fled, G.g.rng:dice(1, 4, -1))
+    end
+    if hero then
+      out[#out + 1] = uidata.text(ui, AS.wonCityHero, 0):format(hero)
+    else
+      out[#out + 1] = uidata.text(ui, AS.wonCity, 0)
+    end
+  elseif hero then
+    out[#out + 1] = uidata.text(ui, AS.wonHero, 0):format(hero)
+    out[#out + 1] = uidata.text(ui, AS.wonHero, 1)
+  else
+    out[#out + 1] = uidata.text(ui, AS.won, 0)
+  end
+  if result.loot and result.loot > 0 then
+    out[#out + 1] = uidata.text(ui, AS.loot, 0):format(result.loot)
+  end
+  return out
+end
+
+--- Begin the assault the player has just ordered. The fight is already
+--- decided; this only sets up the showing of it.
+function startAssault(x, y, result)
+  local lines = result.lines or { attackers = {}, defenders = {} }
+  local fled = #lines.defenders == 0
+  G.assault = {
+    x = x, y = y, result = result,
+    def = lines.defenders, atk = lines.attackers,
+    defSlots = lineSlots(#lines.defenders, AS.rows),
+    atkSlots = lineSlots(#lines.attackers, { AS.atkRow }),
+    defSide = lines.defenders[1] and lines.defenders[1].owner or 8,
+    atkSide = lines.attackers[1] and lines.attackers[1].owner or 8,
+    step = 0, defDown = 0, atkDown = 0,
+    phase = "cloud", at = now(),
+    captured = result.captured,
+    victor = victorName(lines.attackers),
+    message = outcomeLines(result, lines.city, fled),
+  }
+end
+
+--- Carry the playback on by the clock. The draw calls it, so the animation
+--- needs no update of its own.
+local function advanceAssault()
+  local a = G.assault
+  local t = now()
+  if a.phase == "cloud" then
+    if t - a.at >= AS.cloudTime then a.phase, a.at = "battle", t end
+    return
+  end
+  if a.phase ~= "battle" then return end
+  local each = a.fast and AS.fellFast or AS.fellTime
+  local log = a.result.log or {}
+  while a.step < #log and t - a.at >= each do
+    a.step = a.step + 1
+    if log[a.step] == 1 then a.atkDown = a.atkDown + 1
+    else a.defDown = a.defDown + 1 end
+    a.at = a.at + each
+  end
+  if a.step >= #log then a.phase = "over" end
+end
+
+--- A key or a click: run the playback through, and when it is through, close
+--- the window and ask what is to be done with the city.
+function pressAssault()
+  local a = G.assault
+  if not a then return end
+  if a.phase ~= "over" then
+    a.fast, a.at = true, 0                     -- run it out to the end
+    advanceAssault()
+    return
+  end
+  G.assault = nil
+  if a.captured then presentVictory(a.captured, a.victor) end
+end
+
+local function drawCloud()
+  local a, r = G.assault, G.mapRect
+  local sx = r.x + (a.x - G.cx) * TILE + math.floor((TILE - AS.cloudW) / 2)
+  local sy = r.y + (a.y - G.cy) * TILE + math.floor((TILE - AS.cloudH) / 2)
+  love.graphics.setScissor(r.x, r.y, r.w, r.h)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.warPic,
+    love.graphics.newQuad(0, 0, AS.cloudW, AS.cloudH, AS.warW, AS.warH), sx, sy)
+  love.graphics.setScissor()
+end
+
+--- One line of armies. They are struck off from the front, which is the order
+--- combat_setup drew them up in and the order they fall.
+local function drawBattleLine(armies, slots, side, down)
+  local sheet = G.armyImg[side] or G.armyImg[8]
+  local quads = G.armyQuads[side] or G.armyQuads[8]
+  for i, army in ipairs(armies) do
+    local at = slots[i]
+    if at then
+      love.graphics.setColor(1, 1, 1)
+      if army.atSea then
+        love.graphics.draw(G.warPic,
+          love.graphics.newQuad(AS.sea[1], AS.sea[2], AS.sea[3], AS.sea[4], AS.warW, AS.warH),
+          at.x, at.y + AS.seaDrop)
+      end
+      if i > down then
+        love.graphics.draw(sheet, quads[army.type % 32], at.x, at.y)
+      end
+    end
+  end
+end
+
+local function drawBattle()
+  local a, R = G.assault, AS.window
+  popupFrame(R)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.marble, R.x, R.y, 0, 1, 1)
+
+  local function shield(side, at)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.shieldImg,
+      love.graphics.newQuad((side or 8) * AS.shieldW, 0, AS.shieldW, AS.shieldH,
+                            AS.shieldSheet, AS.shieldSheetH), at[1], at[2])
+  end
+  shield(a.defSide, AS.shieldDef)
+  shield(a.atkSide, AS.shieldAtk)
+
+  drawBattleLine(a.def, a.defSlots, a.defSide, a.defDown)
+  drawBattleLine(a.atk, a.atkSlots, a.atkSide, a.atkDown)
+
+  if a.phase == "over" then
+    local f, y = G.bigFont, AS.textY
+    love.graphics.setColor(1, 1, 1)
+    for _, line in ipairs(a.message) do
+      f.draw(line, R.x + math.floor((R.w - f.width(line)) / 2), y)
+      y = y + AS.textStep
+    end
+  end
+end
+
+local function drawAssault()
+  advanceAssault()
+  if G.assault.phase == "cloud" then drawCloud() else drawBattle() end
+end
+
+---------------------------------------------------------- the spoils of a city
+
+-- Dialog 11, behind popup 7 at (160, 90) -- exactly VICTORY.PCK -- and four
+-- buttons cut from DBUTTON.PCK. Pillage needs a production type to strip and
+-- sack needs two, so 63fa:0000 greys out whichever cannot be had.
+function presentVictory(city, victor)
+  local ui = G.screen.ui
+  if not G.victoryView then G.victoryView = screen.dialog(G.screen, AS.vDialog) end
+  G.victory = {
+    city = city,
+    -- both lines pick at random from their group, as get_string(g, -1) does
+    who = uidata.text(ui, AS.vWho, G.g.rng:dice(1, 4, -1)):format(victor),
+    where = uidata.text(ui, AS.vWhere, G.g.rng:dice(1, 3, -1)):format(city.name),
+  }
+  local v = G.victoryView
+  v.state[AS.occupy] = uidata.NORMAL
+  v.state[AS.raze] = uidata.NORMAL
+  v.state[AS.pillage] = #city.slots >= 1 and uidata.NORMAL or uidata.DISABLED
+  v.state[AS.sack] = #city.slots >= 2 and uidata.NORMAL or uidata.DISABLED
+end
+
+local function drawVictory()
+  local R, v, ui = AS.vPopup, G.victory, G.screen.ui
+  popupFrame(R)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.victoryPic, R.x, R.y)
+
+  local function centred(f, text, y)
+    f.draw(text, R.x + math.floor((R.w - f.width(text)) / 2), y)
+  end
+  centred(G.titleFont, uidata.text(ui, AS.vText, 0), AS.vTitleY)
+  centred(G.bigFont, v.who, AS.vLineY[1])
+  centred(G.bigFont, v.where, AS.vLineY[2])
+  centred(G.bigFont, uidata.text(ui, AS.vText, 1), AS.vLineY[3])
+  centred(G.bigFont, uidata.text(ui, AS.vText, 2), AS.vLineY[4])
+
+  screen.drawDialogControls(G.screen, G.victoryView)
+end
+
+--- What the player chose to do with the city they have just taken.
+function takeCity(what)
+  local v = G.victory
+  if not v then return end
+  local c, stack = v.city, G.selection and G.selection.stack or {}
+  G.victory = nil
+  if what == AS.pillage then
+    local gold = game.pillage(G.g, G.player, c, stack)
+    say("%s is pillaged: %d gold.", c.name, gold)
+  elseif what == AS.sack then
+    local gold = game.sack(G.g, G.player, c, stack)
+    say("%s is sacked: %d gold.", c.name, gold)
+  elseif what == AS.raze then
+    game.raze(G.g, G.player, c, stack)
+    say("%s is burned to the ground.", c.name)
+    stratDirty()
+  else
+    say("%s is ours.", c.name)
+  end
+end
+
 function love.draw()
   screen.drawBackground(G.screen)
   drawMap()
@@ -1081,6 +1403,8 @@ function love.draw()
   drawMenuBar()
   -- the turn opens with the banner over the offer, and is dismissed first
   if G.offer then drawHeroOffer() end
+  if G.assault then drawAssault() end
+  if G.victory then drawVictory() end
   if G.banner then drawBanner() end
 end
 
@@ -1101,6 +1425,15 @@ function love.mousepressed(x, y, button)
   -- eats the click that dismisses it rather than passing it on
   if G.banner then dismissBanner() return end
   if G.over then return end
+
+  -- The assault is modal while it plays: a click runs it through, and the
+  -- click that ends it opens the question of what to do with the city.
+  if G.assault then pressAssault() return end
+  if G.victory then
+    local c = screen.dialogControlAt(G.victoryView, x, y)
+    if c and G.victoryView.state[c.id] ~= uidata.DISABLED then takeCity(c.id) end
+    return
+  end
 
   -- the hero offer is modal: nothing behind it takes a click
   if G.offer then
@@ -1323,6 +1656,14 @@ MENU_DOES = {
 function love.keypressed(key)
   -- any key, escape included, only dismisses the banner
   if G.banner then dismissBanner() return end
+
+  -- The assault holds the keyboard the way the original does: space runs the
+  -- playback through (6a35:0094 watches for it), and any key ends it.
+  if G.assault then pressAssault() return end
+  if G.victory then
+    if key == "return" or key == "kpenter" then takeCity(AS.occupy) end
+    return
+  end
 
   -- The dialog owns the keyboard while it is up -- escape included, or the
   -- game would quit out from under it. The name field is editable, so a

@@ -88,14 +88,36 @@ end
 
 --------------------------------------------------------------------- building
 
+--- Which armies a click on the tile picks up (8c07:06eb): the one the tile
+--- shows -- the highest in the fight order -- and, if it is in a group, every
+--- army beside it in the same group. An ungrouped army is picked up alone.
+function slots.clicked(g, armies, side)
+  local row = g.map.fightOrder[side or 8]
+  local anchor
+  for _, a in ipairs(armies) do
+    if not anchor or (row and (row[a.type] or 0) > (row[anchor.type] or 0)) then
+      anchor = a
+    end
+  end
+  if not anchor then return {} end
+
+  local key, out = anchor.group or slots.UNGROUPED, { [anchor] = true }
+  if key ~= slots.UNGROUPED then
+    for _, a in ipairs(armies) do
+      if (a.group or slots.UNGROUPED) == key then out[a] = true end
+    end
+  end
+  return out
+end
+
 --- The slots for the armies standing on one tile, at most eight of them.
---- `selected` is the set of armies that should be moving; left out, only the
---- first slot moves -- the army the tile itself shows -- and the rest wait in
---- the bar to be added.
+--- `selected` is the set of armies that should be moving; left out, it is
+--- whatever a click on the tile picks up.
 function slots.build(g, armies, side, selected)
   local s = { n = math.min(#armies, slots.MAX), side = side,
               army = {}, group = {}, inGroup = {}, mark = {} }
   for i = 1, s.n do s.army[i] = armies[i] end
+  selected = selected or slots.clicked(g, s.army, side)
 
   -- 1b62:0a03's order: the remembered groups first, and within a group the
   -- army highest in the fight order.
@@ -120,7 +142,7 @@ function slots.build(g, armies, side, selected)
       n = n + 1
     end
     s.group[i] = n
-    s.inGroup[i] = selected and selected[s.army[i]] == true or (not selected and i == 1)
+    s.inGroup[i] = selected[s.army[i]] == true
     previous = key
   end
   return refresh(s, g)
@@ -238,19 +260,36 @@ function slots.commit(s, g)
   for i = 1, s.n do
     members[s.group[i]] = (members[s.group[i]] or 0) + 1
   end
-  -- the original hands out ids from a counter of its own (1b62:0cde); the
-  -- lowest id no army is using does as well and cannot drift.
-  local used = {}
-  for _, a in ipairs(g.armies) do used[a.group or 0] = true end
-  local fresh = 2
-  while used[fresh] do fresh = fresh + 1 end
 
+  -- The ids the stack already carries are reused before any new one is
+  -- handed out, so a group keeps the id it had and clicking a stack does not
+  -- renumber it. Only when the stack has none left does a fresh id come from
+  -- the counter (1b62:0cde); the lowest id no army is using does the same job
+  -- and cannot drift.
+  local spare = {}
   for i = 1, s.n do
-    local id
-    if members[s.group[i]] == 1 then id = slots.UNGROUPED
-    elseif s.group[i] == s.active then id = fresh
-    else id = 1 end
-    s.army[i].group = id
+    local id = s.army[i].group or slots.UNGROUPED
+    if id > 1 and not spare[id] then spare[id], spare[#spare + 1] = true, id end
+  end
+  local function claim()
+    local id = table.remove(spare, 1)
+    if id then return id end
+    local used = {}
+    for _, a in ipairs(g.armies) do used[a.group or slots.UNGROUPED] = true end
+    local fresh = 2
+    while used[fresh] do fresh = fresh + 1 end
+    return fresh
+  end
+
+  local id = {}                                -- one id per group of slots
+  for i = 1, s.n do
+    local gp = s.group[i]
+    if id[gp] == nil then
+      if members[gp] == 1 then id[gp] = slots.UNGROUPED
+      elseif gp == s.active then id[gp] = claim()
+      else id[gp] = 1 end
+    end
+    s.army[i].group = id[gp]
   end
   return s
 end

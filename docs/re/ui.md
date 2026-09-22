@@ -372,12 +372,87 @@ derived from the code above. The handlers this function reaches are known:
 `military_advisor`, the army-info panels and the tutorial hooks),
 `7204:033b` for cities, and `8065:0b3b` / `8065:0e04` for two drag modes.
 
+### The assault
+
+A city is **not walked into**. `walk_path` stops the moment the next step is a
+city the mover does not own and hands that tile to **`attack_tile`**
+(`67cc:0000`), so the stack always fights from one of the eight tiles around
+it, diagonals included. `attack_tile` refuses outright unless the target is a
+city or a tile with armies on it, and unless the mover has a movement point
+left to spend.
+
+What the player then sees is a **replay**: `combat_resolve` decides the whole
+fight first and records a byte per casualty in `combat_log` — **1** an
+attacker fell, **0** a defender — and the window plays that log back. Nothing
+on screen can change the outcome.
+
+| step | what |
+|---|---|
+| `67cc:1836` | the fire cloud from `WAR.PCK` over the tile — the rect at `4125:0cfa` is `(0, 0) 128 × 120`, three tiles across — with `WAR.8SN`. Skipped when no human can see the tile |
+| `6a35:041c` | opens **popup 8**, `(160, 60) 320 × 312`, and draws the two sides' shields from `BSHIELD.PCK` (32 × 36 cells, one per side across the sheet): the defender's at `(176, 86)`, the attacker's at `(176, 246)` |
+| `6a35:0160` | draws both lines |
+| `6a35:0094` | plays the log back, one army struck off at a time, with a sound and a wait each; **space** runs it through (it polls `kbhit`) |
+| `6a35:04c5` | writes how it ended, centred on x = 320, each line 20 below the last |
+| `6a35:04f6` | closes the popup |
+| `67cc:04f7` | and, if a city fell, opens the spoils dialog |
+
+**The lines.** The defender's is on top and may wrap to four rows —
+`4125:0d14` gives them as y = 86, 116, 146, 176 — and the attacker's is the
+single row at y = 246. Across a row there are eight places 32 apart from
+x = 216 (`4125:0d1e`), and seven more sitting between them (`4125:0d2e`), so a
+line shorter than eight is centred: it takes `4 - (n + 1) / 2` as its first
+place, out of the in-between table when *n* is odd. Both lines centre on the
+same middle. Armies are drawn by `8611:08be` with its ring and text arguments
+zero — the sprite alone, no ring, no movement number — and an army at sea gets
+a patch of `WAR.PCK`'s water at `(0, 162) 32 × 18` under it.
+
+The strings are `STRING.DAT` groups 141-147: a random one of 141 when the
+garrison had already fled, then 142 or 143 for a city (with or without a hero
+to name), 144/145 for a tile, 146 for a loss, and 147 for the loot.
+
+### The spoils of a city
+
+**Dialog 11**, behind **popup 7** — `(160, 90) 320 × 200`, which is exactly
+`VICTORY.PCK` — and four 64 × 23 buttons cut from `DBUTTON.PCK` in order along
+y = 250:
+
+| x | control | src | |
+|---|---|---|---|
+| 168 | 285 | `(0, 0)` | **Occupy** |
+| 248 | 283 | `(64, 0)` | **Pillage** |
+| 328 | 286 | `(128, 0)` | **Sack** |
+| 408 | 284 | `(192, 0)` | **Raze** |
+
+`63fa:0000` greys out Pillage when `city_pillage_value` is 0 and Sack when
+`city_sack_value` is — that is, when the city has no production type to strip
+and fewer than two to strip down to. Occupy and Raze are always live.
+
+Five lines are drawn centred on x = 320, at y = 93, 140, 160, 180 and 200:
+`get_string(65, 0)` — "Victory!" — in the big font, then a **random** line of
+group 66 with the victor's name in it, a random line of group 67 with the
+city's, and then groups 65's "The city is yours!" and "Will you...". The
+victor is the hero leading the assault if there is one (`451b:1efe`, the
+selection's hero) and otherwise the name of its best army.
+
+What each choice does to the city is in
+[`../rules.md`](../rules.md) › Capturing a city.
+
 ### The army slots
 
 With a stack selected the bottom bar shows that tile's armies instead of the
 side's standing, and it is where the player decides **which of them move**.
-Clicking a tile does not take the whole stack: `89e0:0d30` selects one army
-and leaves the rest waiting in the bar.
+
+What a click on the map picks up is `8c07:06eb`, and the rule is the whole
+point of the grouping. It reads the **group id** of the army the tile shows —
+byte `+17` of its record — and selects every army on the tile that is the
+current player's *and* carries the same id, as long as that id is not 0. An
+ungrouped army is picked up alone. So a stack you grouped comes back grouped
+the next time you touch it, this turn or ten turns later; a stack you never
+grouped hands you one army and leaves the rest waiting in the bar.
+
+It then makes the highest of them in the fight order the anchor (`451b:1f02`),
+calls `stack_movement_mode` to recount the selection, and `89e0:0d30` to build
+the slots.
 
 Three arrays run in parallel over the slots, all at `451b:` and eight entries
 each, with the count in `4125:30f6`:
@@ -442,10 +517,22 @@ a group is always contiguous in the bar. The order is by group, and within a
 group by the owner's **fight order**, highest first — the same table that
 decides which army a tile shows.
 
-Finally, the grouping is **remembered in the army record**, at the `+17` byte
-`docs/formats/save.md` leaves unnamed: 0 for an army in no group, and a shared
-id for one that is. `89e0:000a` writes it and `89e0:0d30` reads it back, which
-is why a stack you grouped is still grouped when you pick it up again.
+The grouping is **remembered in the army record**, at the `+17` byte
+`docs/formats/save.md` leaves unnamed. `1b62:0309` gives a newly built army
+**0**, meaning no group; `8c07:03a6` writes **1**, which is what an army that
+was selected but not really grouped carries; and a real group takes an id of
+**2 or more**, shared by its members.
+
+`89e0:000a` writes them after every change, one per group of slots:
+
+- a group of one member becomes 0 — a group of one is not a group;
+- the group that is moving takes a real id, **reusing one the stack already
+  carries** before asking `1b62:0cde` for a new one, so clicking a stack does
+  not renumber it;
+- any other group of more than one is written as 1.
+
+That id is what `8c07:06eb` reads back on the next click, and it is what makes
+the grouping persist.
 
 ### The bottom bar
 

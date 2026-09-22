@@ -74,6 +74,8 @@ love = {
     newImageData = function(w, h) return stubImage(w, h) end,
   },
   event = { quit = function() end },
+  -- the assault plays itself out on the clock, so it needs one
+  timer = { getTime = os.clock },
 }
 
 --------------------------------------------------------------------- running
