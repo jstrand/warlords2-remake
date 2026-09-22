@@ -49,4 +49,4 @@ is the tile index. The code uses the **high byte** for state:
 | `+15` | byte: upper 7 bits = destination city while in transit, bit 0 unidentified |
 | `+16` | byte: transit state — `0x65` just left, `0x66` arriving next turn, `0xff` none |
 | `+17` | byte: the group the army moves with — 0 none, 1 selected but ungrouped, 2+ a real group (`docs/re/ui.md` › The army slots) |
-| `+18`, `+20` | `u16` move target x, y (`-1` = none); cleared when reached |
+| `+18`, `+20` | `u16` move target x, y (`-1` = none); cleared when reached. What the map draws the route to, and what Move All walks (`docs/re/ui.md` › Walking) |

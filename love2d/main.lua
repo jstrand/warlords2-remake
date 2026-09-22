@@ -55,6 +55,12 @@ local function quadsFor(img, cols, cellW, cellH, stride, count, rowStride)
   return qs
 end
 
+--- Wall time, for the things that play out on their own: the walk and the
+--- battle window. The test harness has a clock of its own.
+local function now()
+  return (love.timer and love.timer.getTime and love.timer.getTime()) or 0
+end
+
 local function exists(path)
   local f = io.open(path, "rb")
   if f then f:close() return true end
@@ -187,6 +193,119 @@ local function centreOn(x, y)
   clampCamera()
 end
 
+--------------------------------------------------------------------- walking
+
+-- A stack walks one tile at a time, and the map shows where it is going.
+--
+-- The destination is kept in the army record itself -- the move target at
+-- +0x12/+0x14 -- so it outlives the walk that could not finish: the stack
+-- goes as far as its movement allows and the rest of the route stays on
+-- screen. Order > Move All (1c8c:04c4) takes every stack that still has one
+-- and walks it on.
+--
+-- 1c8c:0963 turns the pathfinder's directions into a list of tiles, and
+-- 8611:2ef5 marks them into the on-screen tile cache: a ring on every tile of
+-- the route but the last, plain while the stack can still reach it this turn
+-- (index < 4125:2eaa, the steps it can afford) and crossed once it cannot.
+-- The last tile takes a ghost of the leading army instead. Both come out of
+-- ASHADOW.PCK, which is also where the bar's shadowed armies come from.
+--
+-- Walking, 1a8b:04c8 steps the stack one tile per pass, re-centres the view
+-- on it (8611:0565 -> 8611:0629) and waits a couple of ticks, and bumps
+-- 4125:2ea8 so the route drawn behind it shortens as it goes.
+-- docs/re/ui.md > Walking.
+
+local WALK = {
+  ring     = { 496, 31 },                      -- ASHADOW.PCK, 16 x 14
+  crossed  = { 496, 48 },
+  ringW    = 16, ringH = 14,
+  ringAt   = { 16, 13 },                       -- within the tile
+  ghostAt  = { 4, 4 },                         -- as our own armies sit
+  stepTime = 0.1,                              -- one tile of the walk
+}
+
+--- Work out the route the selection is showing, if it has anywhere to be.
+local function refreshRoute()
+  G.route = nil
+  local sel = G.selection
+  if not sel or #sel.stack == 0 then return end
+  local target = sel.stack[1].target
+  if not target then return end
+  if sel.stack[1].x == target.x and sel.stack[1].y == target.y then
+    for _, a in ipairs(sel.stack) do a.target = nil end
+    return
+  end
+  G.route = move.preview(G.g, sel.stack, target.x, target.y)
+end
+
+--- Give the selection somewhere to be, or take it away again.
+local function orderTo(stack, x, y)
+  for _, a in ipairs(stack) do
+    a.target = (x and { x = x, y = y }) or nil
+  end
+end
+
+--- Play the walk back a tile at a time, centring on the stack as it goes.
+--- The armies are already where they finished -- this only decides where they
+--- are drawn until it catches up.
+local function startWalk(armies, tiles)
+  if #tiles == 0 then return end
+  G.walk = { armies = {}, tiles = tiles, i = 1, at = now(), top = armies[1] }
+  for _, a in ipairs(armies) do G.walk.armies[a] = true end
+  centreOn(tiles[1].x, tiles[1].y)
+end
+
+local function advanceWalk()
+  local w = G.walk
+  if not w then return end
+  local t = now()
+  while w.i < #w.tiles and t - w.at >= WALK.stepTime do
+    w.i = w.i + 1
+    w.at = w.at + WALK.stepTime
+    centreOn(w.tiles[w.i].x, w.tiles[w.i].y)
+  end
+  if w.i >= #w.tiles and t - w.at >= WALK.stepTime then
+    G.walk = nil
+    refreshRoute()
+  end
+end
+
+--- Where the walking stack is drawn while the walk plays out.
+local function walkingAt()
+  local w = G.walk
+  return w and w.tiles[w.i] or nil
+end
+
+--- The route, as rings on the map: 8611:2ef5's two marks and the ghost it
+--- puts on the far end.
+local function drawRoute()
+  local r, route = G.mapRect, G.route
+  if not route then return end
+  local ghost = G.selection and G.selection.stack[1]
+  -- while the walk plays out, the route is drawn from where it has got to,
+  -- which is what 4125:2ea8 does as 1a8b:04c8 bumps it step by step
+  local first = G.walk and G.walk.i or 1
+  for i = first, #route.path do
+    local step = route.path[i]
+    local col, row = step.x - G.cx, step.y - G.cy
+    if col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
+      local sx, sy = r.x + col * TILE, r.y + row * TILE
+      love.graphics.setColor(1, 1, 1)
+      if i == #route.path then
+        if ghost then
+          love.graphics.draw(G.shadowImg, G.armyQuads[8][ghost.type % 32],
+                             sx + WALK.ghostAt[1], sy + WALK.ghostAt[2])
+        end
+      else
+        local src = (i <= route.reach) and WALK.ring or WALK.crossed
+        love.graphics.draw(G.shadowImg,
+          love.graphics.newQuad(src[1], src[2], WALK.ringW, WALK.ringH, 512, 64),
+          sx + WALK.ringAt[1], sy + WALK.ringAt[2])
+      end
+    end
+  end
+end
+
 --- Screen point to map tile, or nil when it is outside the viewport.
 local function tileAtPoint(sx, sy)
   local r = G.mapRect
@@ -241,6 +360,7 @@ local function select(x, y)
   local s = slotsMod.build(G.g, stack, G.player.index)
   G.selection = { x = x, y = y, slots = s }
   syncSelection()
+  refreshRoute()
   say("%d of %d, %d movement",
       #G.selection.stack, s.n, slotsMod.moves(s))
 end
@@ -269,6 +389,11 @@ end
 local function moveSelection(x, y)
   local sel = G.selection
   if not sel then return end
+  local from = { x = sel.stack[1].x, y = sel.stack[1].y }
+  -- the destination is remembered, so a walk that runs out of movement can be
+  -- taken up again -- by Move All, or by hand next turn
+  orderTo(sel.stack, x, y)
+  G.route = move.preview(G.g, sel.stack, x, y)
   local r = move.moveTo(G.g, sel.stack, x, y)
   if r.stopped == "attack" then
     -- The stack has walked as far as the tile beside the target; the assault
@@ -281,17 +406,20 @@ local function moveSelection(x, y)
   elseif r.steps == 0 then
     say("They cannot move: %s.", r.stopped)
   else
+    local walked = sel.stack
     sel.x, sel.y = sel.stack[1].x, sel.stack[1].y
     reslot(selectableAt(sel.x, sel.y))
     stratDirty()
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack))
     local found = game.searchHere(G.g, sel.stack)
     if found then say("%s", game.describeSearch(found)) end
+    startWalk(walked, r.walked or {})
   end
   if G.selection and #G.selection.stack > 0 then
     G.selection.x, G.selection.y = G.selection.stack[1].x, G.selection.stack[1].y
-    centreOn(G.selection.x, G.selection.y)
+    if not G.walk then centreOn(G.selection.x, G.selection.y) end
   end
+  if not G.walk then refreshRoute() end
 end
 
 -- The start-of-turn banner (8cc6:0259). Popup 6 of the table at 4125:06a8 is
@@ -531,6 +659,15 @@ local function drawMap()
           if rd ~= 0 then love.graphics.draw(G.roadImg, G.roadQuads[rd - 1], sx, sy) end
 
           local stack = game.armiesAt(G.g, mx, my)
+          -- a stack still walking is drawn where the walk has got to, not
+          -- where it has already arrived
+          if G.walk then
+            local left = {}
+            for _, a in ipairs(stack) do
+              if not G.walk.armies[a] then left[#left + 1] = a end
+            end
+            stack = left
+          end
           if #stack > 0 then
             local a = topArmy(stack)
             local owner = a.owner or 8
@@ -544,9 +681,25 @@ local function drawMap()
       end
     end
   end
-  -- the selection box
+  drawRoute()
+
+  -- the stack itself, wherever the walk has got to
+  local at = walkingAt()
+  if at then
+    local col, row = at.x - G.cx, at.y - G.cy
+    local a = G.walk.top
+    if a and col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
+      local owner = a.owner or 8
+      love.graphics.setColor(1, 1, 1)
+      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][a.type % 32],
+                         r.x + col * TILE + 4, r.y + row * TILE + 4)
+    end
+  end
+
+  -- the selection box, which follows the walk
   if G.selection then
-    local col, row = G.selection.x - G.cx, G.selection.y - G.cy
+    local col, row = (at and at.x or G.selection.x) - G.cx,
+                     (at and at.y or G.selection.y) - G.cy
     if col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
       love.graphics.setColor(1, 1, 1)
       love.graphics.rectangle("line", r.x + col * TILE + 0.5, r.y + row * TILE + 0.5,
@@ -1132,10 +1285,6 @@ local AS = {
   vTitleY = 93, vLineY = { 140, 160, 180, 200 },
 }
 
-local function now()
-  return (love.timer and love.timer.getTime and love.timer.getTime()) or 0
-end
-
 --- The plain popup look 54f6:0000 gives a window that carries no side colour:
 --- a black outline, and a two-pixel shadow down and to the right.
 local function popupFrame(R)
@@ -1393,6 +1542,7 @@ function takeCity(what)
 end
 
 function love.draw()
+  advanceWalk()
   screen.drawBackground(G.screen)
   drawMap()
   drawStrategic()
@@ -1500,9 +1650,11 @@ function love.mousepressed(x, y, button)
   if r.id == screen.REGION.MAP then
     local tx, ty = tileAtPoint(x, y)
     if not tx then return end
+    -- A left click on a tile of our own picks that stack up (8c07:06eb);
+    -- anywhere else it is an order to go there. Right click inspects.
     if button == 2 then
       select(tx, ty)
-    elseif G.selection then
+    elseif G.selection and #selectableAt(tx, ty) == 0 then
       moveSelection(tx, ty)
     else
       select(tx, ty)
@@ -1576,7 +1728,49 @@ end
 -- the menu item assigned to button n from UDB/UDB.CUR, turns it into a command
 -- code and runs it through the same dispatcher a key press uses. The shipped
 -- assignment is Search, Move All, Heroes, End Turn.
+--- Order > Move All (1c8c:04c4): every stack that still has somewhere to be
+--- walks on as far as it can. The original steps through the armies with a
+--- cursor of its own and never looks at one twice, which is what keeps a
+--- stack that has run out of movement from holding the loop up.
+local function moveAll()
+  local seen, moved = {}, 0
+  while true do
+    local lead
+    for _, a in ipairs(G.g.armies) do
+      if a.owner == G.player.index and a.target and not a.transit and not seen[a] then
+        lead = a break
+      end
+    end
+    if not lead then break end
+
+    local stack = {}
+    for _, a in ipairs(game.armiesAt(G.g, lead.x, lead.y)) do
+      if a.owner == G.player.index and a.target and not a.transit
+         and a.target.x == lead.target.x and a.target.y == lead.target.y then
+        stack[#stack + 1] = a
+        seen[a] = true
+      end
+    end
+    local target = { x = lead.target.x, y = lead.target.y }
+    local r = move.moveTo(G.g, stack, target.x, target.y)
+    if r.steps and r.steps > 0 then
+      moved = moved + 1
+      for _, a in ipairs(stack) do
+        if a.x == target.x and a.y == target.y then a.target = nil end
+      end
+      stratDirty()
+    end
+  end
+  if moved == 0 then say("Nothing is under orders.")
+  else say("%d stack%s moved on.", moved, moved == 1 and "" or "s") end
+  if G.selection then
+    reslot(selectableAt(G.selection.stack[1].x, G.selection.stack[1].y))
+  end
+  refreshRoute()
+end
+
 local SHORTCUT_DOES = {
+  ["Move All"] = function() moveAll() end,
   ["Search"] = function()
     if not G.selection then say("Nothing is selected.") return end
     local found = game.searchHere(G.g, G.selection.stack)
@@ -1622,6 +1816,7 @@ end
 -- than failing quietly.
 MENU_DOES = {
   ["alt E"] = function() endTurn() end,
+  ["m"] = function() moveAll() end,
   ["^Q"]    = function() love.event.quit() end,
   ["alt S"] = function()
     saveMod.write(G.g, G.savePath)
@@ -1688,6 +1883,8 @@ function love.keypressed(key)
   -- Home shares its handler with the pad's centre button (8065:0f02)
   elseif key == "home" then ACTION[177]()
   elseif key == "c" and G.selection then centreOn(G.selection.x, G.selection.y)
+  -- Order > Move All, the same key the original gives it
+  elseif key == "m" then moveAll()
   elseif key == "f5" then
     saveMod.write(G.g, G.savePath)
     say("Saved to %s.", G.savePath)

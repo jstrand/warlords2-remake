@@ -372,6 +372,51 @@ derived from the code above. The handlers this function reaches are known:
 `military_advisor`, the army-info panels and the tutorial hooks),
 `7204:033b` for cities, and `8065:0b3b` / `8065:0e04` for two drag modes.
 
+### Walking
+
+A stack walks **one tile at a time**, and the map shows where it is going.
+
+The destination is kept in the army record itself — the move target at
+`+0x12`/`+0x14`, `-1` for none — so it outlives a walk that could not finish.
+`1c8c:041f` clears it for the whole selection when the player steps the stack
+by hand; **Order › Move All** (`1c8c:04c4`) does the opposite, walking every
+stack that still has one, stepping through the armies with a cursor of its own
+so a stack that has run out of movement cannot hold the loop up.
+
+**The route.** `stack_movement_mode` pathfinds to the target and
+`1c8c:0963(x, y, dirs)` turns the pathfinder's direction bytes into tiles,
+writing them to `451b:2515` (x) and `451b:2517` (y), `4125:2ea6` of them, with
+the destination also at `451b:2511`/`2513`. Three counters drive what is
+drawn:
+
+| | |
+|---|---|
+| `4125:2ea6` | how many tiles the route has |
+| `4125:2ea8` | how far along it the stack already is — the rings start here |
+| `4125:2eaa` | how many steps this turn's movement can afford (`1555:18be`) |
+
+`8611:2ef5` marks them into the on-screen tile cache, and `8611:1a79` blits
+them:
+
+- every route tile from `2ea8` up to but **not including the last** takes a
+  ring at the tile's `(+16, +13)`: **plain** while its index is below `2eaa`,
+  **crossed** once it is not — that is the "I cannot get that far this turn"
+  mark;
+- the last tile takes a **ghost of the leading army** instead, its type's
+  ordinary cell at the tile's `(+8, +5)`.
+
+All three come out of **`ASHADOW.PCK`**, the same ghost sheet the army slots
+use: the plain ring is the 16 × 14 cell at `(496, 31)` and the crossed one at
+`(496, 48)`, at the right-hand end past the army cells.
+
+**The walk itself**, `1a8b:04c8`: one tile per pass, and each pass moves the
+armies, bumps `4125:2ea8` so the route drawn behind the stack shortens as it
+goes, **re-centres the view on the stack** (`8611:0565` → `8611:0629`) and
+waits a couple of clock ticks. `8611:0629` is the centring everything uses:
+it clamps the tile to 4..107 and 4..151, puts the scroll origin four tiles up
+and left of it, and remembers it as the cursor tile at `3c04:017d`/`017f` —
+which is what the white box is drawn around.
+
 ### The assault
 
 A city is **not walked into**. `walk_path` stops the moment the next step is a

@@ -227,7 +227,25 @@ function move.stackMoves(stack)
   return least == math.huge and 0 or least
 end
 
------------------------------------------------------------------- pathfinding
+------ The route a stack would take to (x, y) and how much of it it can walk
+--- now: every tile of the path in order, and how many of them are within
+--- this turn's movement. That is what the map draws as rings -- plain while
+--- the stack can still get there this turn, crossed once it cannot
+--- (8611:2ef5, docs/re/ui.md > Walking).
+function move.preview(g, stack, x, y)
+  if #stack == 0 then return nil end
+  local path = move.findPath(g, stack, stack[1].x, stack[1].y, x, y)
+  if not path or #path == 0 then return nil end
+  local left, reach = move.stackMoves(stack), 0
+  for i, step in ipairs(path) do
+    if left < move.MIN_MOVE_LEFT or step.cost > left then break end
+    left = left - step.cost
+    reach = i
+  end
+  return { path = path, reach = reach }
+end
+
+--------------------------------------------------------------- pathfinding
 
 --- Cheapest path from (sx,sy) to (dx,dy) for a stack, as a list of
 --- { x, y, cost } steps, or nil if there is no route.
@@ -417,6 +435,9 @@ function move.walk(g, stack, path)
   end
 
   result.steps, result.spent = lastOk, cost
+  -- the tiles actually walked, in order, so the map can play the walk back
+  result.walked = {}
+  for i = 1, lastOk do result.walked[i] = { x = path[i].x, y = path[i].y } end
   if lastOk < #path and result.stopped == "arrived" then result.stopped = "blocked" end
   return result
 end

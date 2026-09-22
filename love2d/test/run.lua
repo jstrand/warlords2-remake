@@ -426,6 +426,53 @@ local function testMovement(scenario)
     eq(grid2[enemy.y * g.map.width + enemy.x] % 8, 0,
        "an enemy city is impassable in the cost grid")
   end
+
+  -- What the map draws while a stack is under orders: the route, and how far
+  -- along it this turn's movement reaches. docs/re/ui.md > Walking.
+  do
+    local a = { x = army.x, y = army.y, owner = side.index, type = 11,
+                name = "Scouts", strength = 9, maxMoves = 20, moves = 20, upkeep = 1 }
+    g.armies[#g.armies + 1] = a
+    -- somewhere far enough that one turn cannot finish it
+    local far, route
+    for d = 12, 30, 2 do
+      far = { x = math.min(g.map.width - 2, a.x + d), y = a.y }
+      route = movement.preview(g, { a }, far.x, far.y)
+      if route and route.reach < #route.path then break end
+    end
+    if route then
+      ok(#route.path > 0, "a stack under orders has a route to draw")
+      ok(route.reach <= #route.path, "it can walk no more of it than there is")
+      eq(route.path[#route.path].x, far.x, "the route ends where it was sent")
+      eq(route.path[#route.path].y, far.y, "on that row")
+      -- every tile of the route is a step from the one before it
+      local px, py = a.x, a.y
+      local straight = true
+      for _, step in ipairs(route.path) do
+        if math.max(math.abs(step.x - px), math.abs(step.y - py)) ~= 1 then straight = false end
+        px, py = step.x, step.y
+      end
+      ok(straight, "and it is a chain of single steps")
+
+      -- the walk reports the tiles it actually covered, which is what the
+      -- map plays back as the stack moves
+      local r = movement.moveTo(g, { a }, far.x, far.y)
+      ok(r.walked ~= nil, "a walk reports the tiles it covered")
+      eq(#r.walked, r.steps, "one per step taken")
+      if r.steps > 0 then
+        eq(r.walked[#r.walked].x, a.x, "ending where the stack now stands")
+        eq(r.walked[#r.walked].y, a.y, "on that row")
+      end
+      -- and with the movement spent, nothing more of the route is in reach
+      local left = movement.preview(g, { a }, far.x, far.y)
+      if left then
+        ok(left.reach < #left.path, "what is left of it is out of reach this turn")
+      end
+    end
+    for i = #g.armies, 1, -1 do
+      if g.armies[i] == a then table.remove(g.armies, i) end
+    end
+  end
 end
 
 local function testStackLimit(scenario)

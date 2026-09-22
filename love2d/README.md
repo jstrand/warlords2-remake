@@ -32,11 +32,13 @@ regions and fonts are the game's own, read from its data files at runtime
 | any key or click | dismiss the start-of-turn banner, and nothing else |
 | the menu bar | open a menu; pick an item to run it |
 | left click a city | open it and choose what it builds |
-| left click the map | select a stack, or walk the selection there |
+| left click the map | pick up a stack of yours, or send the selection there |
+| | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
 | right click the map | inspect a tile |
 | click the strategic map | recentre the view |
 | `space` | end the turn; the computer players then take theirs |
 | `c` | centre on the selection |
+| `m` | Move All: every stack under orders walks on as far as it can |
 | arrows / WASD | scroll one tile |
 | the hero dialog | tick Male or Female, type a name, OK or Cancel |
 | `F5` / `F9` | save and load |

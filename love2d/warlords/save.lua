@@ -94,6 +94,8 @@ function save.encode(g)
       -- original's, docs/re/ui.md > The army slots), so a grouped stack is
       -- still grouped when the game is picked up again
       group = (a.group or 0) ~= 0 and a.group or nil,
+      -- where it has been told to go, the army record's own move target
+      target = a.target and { x = a.target.x, y = a.target.y } or nil,
       level = a.level, experience = a.experience, title = a.title,
       items = items, blessings = a.blessings,
       transit = a.transit and { turns = a.transit.turns, dest = a.transit.dest } or nil,
