@@ -29,6 +29,7 @@ local slotsMod = require("warlords.slots")
 local kit      = require("ui.kit")
 local cityUi   = require("ui.city")
 local reportsUi = require("ui.reports")
+local heroInfo  = require("ui.heroinfo")
 
 local TILE = screen.TILE
 -- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
@@ -773,7 +774,7 @@ end
 --- pixel at a time, for a planar blit that can only start on a byte; drawing
 --- the unshifted one where it belongs comes to the same thing. A razed city
 --- has no shield. `mark` gets a white box round its shield, one pixel clear.
-function G.drawStrategicMap(x, y, mark)
+function G.drawStrategicMap(x, y, mark, noCities)
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
@@ -781,7 +782,7 @@ function G.drawStrategicMap(x, y, mark)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.stratImage, x, y)
   local w, h = G.atransShields:getDimensions()
-  for _, c in ipairs(G.g.map.cities) do
+  for _, c in ipairs(noCities and {} or G.g.map.cities) do
     if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
       local side = c.ownerIndex or 8
       love.graphics.draw(G.atransShields, love.graphics.newQuad(side * 16, 30, 8, 8, w, h),
@@ -1179,6 +1180,16 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
       line(src, city, 8)
     end
   end
+  love.graphics.setScissor()
+end
+
+--- A hero's figure on the strategic map (834b:1f5f): ATRANS2.PCK's (96, 0)
+--- 16x15 at the hero's 2y - 6, and at 2x - 2 rounded down to a multiple of 8.
+function G.drawHeroFigure(x, y, tx, ty)
+  love.graphics.setScissor(x, y, 224, 312)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.atransShields, G.heroMark,
+    x + math.max(0, math.floor((tx * 2 - 2) / 8) * 8), y + math.max(0, ty * 2 - 6))
   love.graphics.setScissor()
 end
 
@@ -2016,6 +2027,8 @@ MENU_DOES = {
   ["b"] = function() viewCity(cityUi.CITY) end,
   ["p"] = function() viewCity(cityUi.PRODUCTION) end,
   ["v"] = function() viewCity(cityUi.VECTOR) end,
+  -- Hero > Inspect (6c1b:0000)
+  [","] = function() heroInfo.open() end,
   -- Report > Army, City, Gold, Production, Winning: 6ef3:0000(0-4)
   ["a"] = function() reportsUi.open(0) end,
   ["k"] = function() reportsUi.open(1) end,

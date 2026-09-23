@@ -445,6 +445,31 @@ local function testReports(scenario)
      "the Production report counts what was built")
 end
 
+local function testHeroItems(scenario)
+  print("hero items: " .. scenario)
+  local hero = require("warlords.hero")
+  local g = game.new(DATA, scenario, { seed = 29 })
+  local side = game.begin(g)
+  local h = hero.recruit(g, side, side.heroOffer)
+  eq(h.items[1], g.map.items[side.index + 1], "the first hero carries the side's own standard record")
+  eq(h.items[1].status, 3, "which is carried")
+  eq(#hero.itemsHere(g, h), 1, "nothing else is listed yet")
+
+  local it = g.map.items[9]
+  it.status, it.x, it.y = 1, h.x, h.y
+  local list = hero.itemsHere(g, h)
+  eq(#list, 2, "an item on the hero's tile is listed")
+  eq(list[2], it, "after what the hero carries")
+
+  hero.takeItem(g, h, it)
+  eq(it.status, 3, "taking an item carries it")
+  eq(#h.items, 2, "the hero has it")
+  hero.dropItem(g, h, it)
+  eq(it.status, 1, "dropping puts it on the ground")
+  eq(it.x, h.x, "where the hero stands")
+  eq(#h.items, 1, "and the hero no longer has it")
+end
+
 ------------------------------------------------------------------- movement
 
 local function testMovement(scenario)
@@ -2165,6 +2190,7 @@ testTurnLoop("ERYTHEA")
 testVectoring("ERYTHEA")
 testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
+testHeroItems("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")

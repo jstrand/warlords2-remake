@@ -168,10 +168,15 @@ function hero.recruit(g, side, offer)
     homeCity = city.index, level = 1, experience = 0, items = {},
   }
   if offer.first then
-    -- turn 1: the hero carries its side's standard
-    h.items[#h.items + 1] =
-      { name = side.name .. " Standard", type = rules.ITEM_STANDARD, value = 1,
-        standardOf = side.index }
+    -- Turn 1: the hero carries its side's standard -- the scenario's own item
+    -- record, number = side (hero_recruit), not a new one. Items 0-7 are the
+    -- eight standards.
+    local std = g.map.items[side.index + 1]
+    if std then
+      std.status, std.x, std.y = 3, nil, nil
+      std.standardOf = side.index
+      h.items[#h.items + 1] = std
+    end
   end
   g.armies[#g.armies + 1] = h
 
@@ -240,6 +245,45 @@ function hero.battleExperience(g, attackers, defenders, result, wasCity)
       if counts and d.type == armytype.HERO then hero.addExperience(g, d, 1) end
     end
   end
+end
+
+--------------------------------------------------------------------- items
+
+--- What the hero info dialog lists for a hero (list_carried_items, mode 6,
+--- 796c:03d9): the items the hero carries, then the items lying on the tile
+--- the hero stands on, each in item order.
+function hero.itemsHere(g, h)
+  local carried, ground = {}, {}
+  for _, it in ipairs(h.items or {}) do carried[#carried + 1] = it end
+  for _, it in ipairs(g.map.items) do
+    if it.status == 1 and it.x == h.x and it.y == h.y then ground[#ground + 1] = it end
+  end
+  local function byIndex(a, b) return (a.index or 0) < (b.index or 0) end
+  table.sort(carried, byIndex)
+  table.sort(ground, byIndex)
+  for _, it in ipairs(ground) do carried[#carried + 1] = it end
+  return carried
+end
+
+--- Put an item down on the hero's tile (7563:0943) -- or lose it there, if
+--- the hero is at sea.
+function hero.dropItem(g, h, it)
+  for i, c in ipairs(h.items or {}) do
+    if c == it then table.remove(h.items, i) break end
+  end
+  if scn.terrainAt(g.map, h.x, h.y) == move.WATER then
+    it.status, it.x, it.y = 0, nil, nil
+  else
+    it.status, it.x, it.y = 1, h.x, h.y
+  end
+end
+
+--- Pick an item up off the hero's tile (7563:08c7). A standard picked up is no
+--- longer planted.
+function hero.takeItem(g, h, it)
+  it.status, it.x, it.y, it.planted = 3, nil, nil, nil
+  h.items = h.items or {}
+  h.items[#h.items + 1] = it
 end
 
 --------------------------------------------------------------------- death

@@ -187,6 +187,11 @@ function game.new(dataDir, scenario, opts)
 
   scn.refreshCityTiles(g.map)
 
+  -- items 0-7 are the eight sides' standards (docs/rules.md > Heroes)
+  for i, it in ipairs(g.map.items) do
+    if i <= 8 and it.type == rules.ITEM_STANDARD then it.standardOf = i - 1 end
+  end
+
   require("warlords.diplomacy").init(g)
   setupGarrisons(g)
   require("warlords.site").setup(g)

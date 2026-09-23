@@ -1171,6 +1171,33 @@ five at a time: its number at (312, 176 + 30·i), the army on a grey ring at
 (328, 170 + 30·i), and at (368, 176 + 30·i) the city, `%s ...` for one sent
 away or `... %s` for one that arrived. 206-209 scroll a row or five.
 
+## The hero info dialog
+
+Hero › Inspect (`6c1b:0000`) lists the side's heroes, last army first, and
+opens dialog 8 over popup 2 on the one nearest the cursor; with no hero it does
+nothing. `6c1b:00f9` draws the map with no city shields but every hero's
+figure (`6c1b:10ac`), a black outline at (308, 206) 248 × 129 in a (4, 2)
+bevel, the name (font 1) centred on (432, 62), the hero and its stack on grey
+rings along y = 110 from x = 304, and — right-aligned at x = 384 and 528, the
+figures 8 further on — *In:* or *Near:* the nearest city, *Battle:* the battle
+items, *Command:* `4125:0ce4`[min(9, strength + battle)] plus the command items
+(a standard counting 1), *Level:* and *Exp:*; *n of m* at (312, 347).
+
+`6c1b:0724` draws the items: the hero's carried ones then those on its tile,
+in item order (`list_carried_items` mode 6), three at a time at
+(376, 238 + 22·i) in a sunk colour-3 box at (367, 236) 184 × 66, the chosen one
+in a raised box at (369, 258) 180 × 21 — colour 7 carried, 10 on the ground,
+5 lost — with what it does centred on (340, 260): `com +n`, `bat +n`, `fly`,
+`move`, `gld +n`. The title says which kind is chosen; the two `ABITS` boxes
+at (312, 311) *Carried* and (400, 311) *Ground* are ticked accordingly and
+choose the first of their kind (250, 249). 245/246 step through the list,
+247 **Drop It** (`7563:0943`: onto the tile, or lost at sea), 248 **Take It**
+(`7563:08c7`), 243/244 the next and previous hero, 242 Done, which recomputes
+income and checks the item quest.
+
+Item records 0-7 are the eight standards, and the hero a side is given on turn
+1 carries its own.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the
