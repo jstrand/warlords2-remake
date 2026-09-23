@@ -475,6 +475,14 @@ local function testDisband(scenario)
   g.map.fightOrder[side.index][3] = 26
   back = saveMod.decode(saveMod.encode(g), DATA)
   eq(back.map.fightOrder[side.index][3], 26, "so does an edited fight order")
+
+  -- resigning burns every city and sends every army home
+  local diplo = side.diploScore
+  game.resign(g, side)
+  eq(#game.sideCities(g, side), 0, "a side that resigns holds no city")
+  eq(#game.sideArmies(g, side), 0, "and has no army")
+  ok(side.capital.razed, "its capital is ruins")
+  eq(side.diploScore, diplo, "burning its own on resigning costs nothing")
 end
 
 local function testSage(scenario)

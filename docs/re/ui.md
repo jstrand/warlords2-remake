@@ -1315,6 +1315,21 @@ and the fields' hit areas 422 and 423. A click on a field types a new line
 into it, as the text-entry dialog does, up to 29 characters and 216 pixels
 (`540d:03dd`, `0432`). The file is written back when the dialog closes.
 
+## Order › Resign
+
+`7721:150d` (only for a human side) is popup 1: *Resign!* (group 165) in font
+1 centred on (320, 92) and three lines of font 2 on 320 at y = 140, 160, 180;
+dialog 33 has three buttons down the middle — *Resign Graciously* (487),
+*Resign Ungraciously* (488) and *Keep Playing* (489, default and cancel).
+Both resignations end in `7721:1608`: every city of the side is made ruins
+(`649c:016b`, the bare routine, with no atrocity score), every army goes, a
+hero's items dropping, and with a hidden map the whole map is uncovered. The
+gracious way first asks three times, a one-line message box each
+(`8065:10fb`, popup 5 with the line centred on (320, 201)), then says *I
+don't think so!* / *I'm going to burn the cities anyway!*; the other says
+*Ha! Now I've burned everything!* / *Let the enemy come!* after. The turn
+goes on; the side is out when it next counts.
+
 ## Order › Fight Order
 
 `6a89:0de1` edits the side's row of the fight-order table (`.SCN` 0x60b, 29

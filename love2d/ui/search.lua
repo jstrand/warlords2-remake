@@ -56,6 +56,21 @@ function M.message(line1, line2, after)
   return kit.push(d)
 end
 
+--- A one-line message (8065:10fb): popup 5 with the line centred on
+--- (320, 201), gone at any key or click.
+function M.say(line, after)
+  local d = {}
+  local function close() kit.pop(d) if after then after() end end
+  function d.draw()
+    kit.popup(MSG)
+    love.graphics.setColor(1, 1, 1)
+    kit.centred(kit.font(2), line, 320, 201)
+  end
+  function d.mousepressed() close() end
+  function d.keypressed() close() end
+  return kit.push(d)
+end
+
 --------------------------------------------------------------------- ruins
 
 local RUIN = { x = 120, y = 50, w = 400, h = 360 } -- popup 4

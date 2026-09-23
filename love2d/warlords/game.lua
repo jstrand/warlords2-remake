@@ -551,13 +551,8 @@ function game.sack(g, side, city, stack)
   return gold
 end
 
---- Burn the city to the ground: it becomes neutral ruins and produces nothing.
----
---- There are two ways to do it and they are not scored alike. Razing a city
---- as it falls (63fa:0000) costs the side 1d15+10 on its atrocity score and
---- counts towards a raze quest; razing one of its own from the city dialog
---- (649c:0061, `ownCity` set) costs 1d25+25 and is nobody's quest.
-function game.raze(g, side, city, stack, ownCity)
+--- The city becomes ruins (649c:016b), with nothing else said or scored.
+local function makeRuins(g, city)
   local move = require("warlords.move")
   city.razed = true
   -- city_make_ruins reads the owner before clearing it: the ruins keep the
@@ -574,12 +569,38 @@ function game.raze(g, side, city, stack, ownCity)
   end
   scn.setCityTiles(g.map, city)
   move.invalidate(g)
+end
+
+--- Burn the city to the ground: it becomes neutral ruins and produces nothing.
+---
+--- There are two ways to do it and they are not scored alike. Razing a city
+--- as it falls (63fa:0000) costs the side 1d15+10 on its atrocity score and
+--- counts towards a raze quest; razing one of its own from the city dialog
+--- (649c:0061, `ownCity` set) costs 1d25+25 and is nobody's quest.
+function game.raze(g, side, city, stack, ownCity)
+  makeRuins(g, city)
   if ownCity then
     game.addDiploScore(g, side, g.rng:dice(1, 25, 25))
     return
   end
   game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   require("warlords.quest").event(g, side, "raze", { city = city, stack = stack or {} })
+end
+
+--- Order > Resign (7721:1608): every city the side holds is burned, its
+--- armies go -- heroes dropping what they carry -- and with a hidden map the
+--- whole map is uncovered for it, so it can watch the end.
+function game.resign(g, side)
+  for _, c in ipairs(g.map.cities) do
+    if not c.razed and c.ownerIndex == side.index then makeRuins(g, c) end
+  end
+  game.disband(g, side, game.sideArmies(g, side))
+  if g.map.options.hiddenMap ~= 0 then
+    g.explored = g.explored or {}
+    local mask = {}
+    for k = 0, g.map.width * g.map.height - 1 do mask[k] = true end
+    g.explored[side.index] = mask
+  end
 end
 
 --------------------------------------------------------------- the hidden map
