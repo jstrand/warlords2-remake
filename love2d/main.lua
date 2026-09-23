@@ -1953,6 +1953,14 @@ end
 -- back: it centres on the stack's destination unless the view is already
 -- there, and on the stack otherwise. 187 (8065:0fe9) forgets the
 -- destination, so the route goes from the map.
+-- the "?" (8065:104e): the mouse's help page, then the keys'
+ACTION[188] = function()
+  local help = require("ui.help")
+  help.open("HELP\\HMOUSE.GFX", function()
+    help.open("HELP\\HKEYS.GFX", nil, help.POPUP4)
+  end, help.POPUP4)
+end
+
 ACTION[186] = function()
   local sel = G.selection
   if not sel or #sel.stack == 0 then return end
@@ -2114,6 +2122,8 @@ MENU_DOES = {
   ["i"] = function() require("ui.fightorder").open() end,
   -- Order > Resign (7721:150d)
   ["r"] = function() require("ui.resign").open() end,
+  -- View > Items (66d4:0c21)
+  ["t"] = function() require("ui.items").open() end,
   -- Order > Signpost (540d:01a4)
   ["x"] = function()
     if G.selection then require("ui.signpost").open(G.selection.stack) end

@@ -1349,6 +1349,24 @@ greyed at the ends and with nothing chosen), and the places 430–456: a click
 chooses one, lets the chosen one go, or swaps it with another
 (`6a89:1379`).
 
+## View › Items, and the help pages
+
+`66d4:0c21` is popup 4, (120, 50) 400 × 360: *Items* (group 166) in font 1
+centred on (320, 52), *Items in this scenario* (group 167) in font 2 on
+(320, 382), and a row per item from record 8 to 21 — the standards left out —
+sorted by kind and then value (an insertion sort, `66d4:0c50`), 20 apart from
+y = 90, in colour 7: the name ending at x = 304 and what it does from x = 336
+(group 167: battle, command, flight, movement, gold per city). An item of a
+kind it does not know reuses the row before's line. Dialog 35: Done (495,
+default and cancel) and Bonus (496), which shows `HELP\HITEM.GFX` — the file
+name is FILE.DAT group 0x45 (`7ecb:0505` reads FILE.DAT as `7ecb:04f0` reads
+STRING.DAT).
+
+A help page is a `.GFX` file (see docs/formats/gfx.md) laid out in a popup
+and put away with any key or click. The control panel's small "?" (188,
+`8065:104e`) shows `HELP\HMOUSE.GFX` and then `HELP\HKEYS.GFX`, both in
+popup 4.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the
