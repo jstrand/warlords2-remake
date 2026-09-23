@@ -569,9 +569,11 @@ end
 -- per-city "not seen yet" flag instead; the engine keeps a mask per side,
 -- which comes to the same thing for one human and works for hotseat too.
 
---- Has this side seen the tile? Always true with Hidden Map off.
+--- Has this side (the side or its index) seen the tile? Always true with
+--- Hidden Map off.
 function game.seen(g, side, x, y)
   if g.map.options.hiddenMap == 0 then return true end
+  if type(side) == "table" then side = side.index end
   local mask = g.explored and g.explored[side]
   if not mask then return false end
   return mask[y * g.map.width + x] or false

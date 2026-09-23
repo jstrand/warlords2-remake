@@ -327,4 +327,91 @@ function site.search(g, stack, x, y, human)
   return { site = s, kind = "empty", hero = h, guardian = beaten }
 end
 
+-------------------------------------------------------------------- sages
+
+-- What a sage can tell a side, for its hero at (hx, hy) (6536:1610): a rich
+-- site the side has not been shown, within 35 tiles as the crow flies -- one
+-- entry for gold and one for allies, however many there are, and one for
+-- each item by name. An entry is { kind = "gold" | "allies" | "item",
+-- item = item, name = text }.
+site.SAGE_RANGE = 35
+
+local function sageDistance(s, hx, hy)
+  return math.floor(math.sqrt((s.x - hx) ^ 2 + (s.y - hy) ^ 2))   -- 2012:1199
+end
+
+local function shownTo(s, side)
+  return math.floor((s.revealed or 0) / 2 ^ side.index) % 2 == 1
+end
+
+local function unshown(g, side, s, hx, hy)
+  return s.rich and not s.searched and not shownTo(s, side)
+         and sageDistance(s, hx, hy) < site.SAGE_RANGE
+end
+
+function site.sageList(g, side, hx, hy)
+  local list, gold, allies = {}, false, false
+  for _, s in ipairs(g.map.sites) do
+    if unshown(g, side, s, hx, hy) then
+      if s.content == site.GOLD and not gold then
+        gold = true
+        list[#list + 1] = { kind = "gold", name = "Gold" }
+      elseif s.content == site.ALLIES and not allies then
+        allies = true
+        list[#list + 1] = { kind = "allies", name = "Allies" }
+      elseif s.content == site.ITEM then
+        for _, it in ipairs(g.map.items) do
+          if it.index == s.item then
+            list[#list + 1] = { kind = "item", item = it, name = it.name }
+          end
+        end
+      end
+    end
+  end
+  return list
+end
+
+--- Show the side where an entry of sageList lies (6536:0e85): for gold or
+--- allies the nearest such site, for an item the site that holds it. The
+--- site is marked as shown to the side and the tiles round it uncovered.
+function site.sageShow(g, side, entry, hx, hy)
+  local found, best
+  for _, s in ipairs(g.map.sites) do
+    if entry.kind == "item" then
+      if s.content == site.ITEM and s.item == entry.item.index then found = s break end
+    elseif unshown(g, side, s, hx, hy)
+           and s.content == (entry.kind == "gold" and site.GOLD or site.ALLIES) then
+      local d = sageDistance(s, hx, hy)
+      if not best or d < best then found, best = s, d end
+    end
+  end
+  if not found then return nil end
+  if not shownTo(found, side) then found.revealed = (found.revealed or 0) + math.floor(2 ^ side.index) end
+  require("warlords.game").reveal(g, side.index, found.x, found.y, false)
+  return found
+end
+
+--- The sage's gem (6536:0b1a): 3d500 + 500 gold.
+function site.sageGem(g, side)
+  local n = g.rng:dice(3, 500, 500)
+  side.gold = side.gold + n
+  return n
+end
+
+--- Uncover a patch of the map round the tile pointed at (6536:0cd6): from
+--- 9-13 tiles up and left of it, 16-25 tiles wide and high, kept on the
+--- map. Returns the patch, x, y, w, h in tiles.
+function site.sageMap(g, side, cx, cy)
+  local game = require("warlords.game")
+  local x0 = math.max(0, cx - g.rng:dice(1, 5, 8))
+  local y0 = math.max(0, cy - g.rng:dice(1, 5, 8))
+  local w, h = g.rng:dice(1, 10, 15), g.rng:dice(1, 10, 15)
+  if x0 + w >= g.map.width then w = g.map.width - x0 - 1 end
+  if y0 + h >= g.map.height then h = g.map.height - y0 - 1 end
+  for x = x0, x0 + w - 1 do
+    for y = y0, y0 + h - 1 do game.reveal(g, side.index, x, y, false) end
+  end
+  return x0, y0, w, h
+end
+
 return site

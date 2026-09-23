@@ -160,6 +160,36 @@ function kit.shield(side, x, y)
     love.graphics.newQuad(side * 40, 0, 40, 40, G.shieldsImg:getDimensions()), x, y)
 end
 
+--- The way to a place, on a strategic map drawn at (mx, my): a line in
+--- colour 8 from the hero's tile to the target's, both at (2x - 2, 2y - 2)
+--- (828e:0a3f), a little shield in colour 8 edged in black at the target
+--- (828e:08cd), and a colour-8 box round it, 8 x 8 (828e:099e).
+function kit.mapTarget(mx, my, hx, hy, tx, ty)
+  love.graphics.setScissor(mx, my, 224, 312)
+  kit.setPal(8)
+  local x0, y0, x1, y1 = hx * 2 - 2, hy * 2 - 2, tx * 2 - 2, ty * 2 - 2
+  local dx, dy = math.abs(x1 - x0), -math.abs(y1 - y0)
+  local sx, sy = x0 < x1 and 1 or -1, y0 < y1 and 1 or -1
+  local err = dx + dy
+  while true do
+    love.graphics.rectangle("fill", mx + x0, my + y0, 1, 1)
+    if x0 == x1 and y0 == y1 then break end
+    local e2 = 2 * err
+    if e2 >= dy then err = err + dy x0 = x0 + sx end
+    if e2 <= dx then err = err + dx y0 = y0 + sy end
+  end
+  local bx, by = mx + tx * 2, my + ty * 2 - 1
+  love.graphics.rectangle("fill", bx, by, 4, 5)
+  kit.setPal(0)
+  love.graphics.rectangle("fill", bx - 1, by, 6, 1)
+  love.graphics.rectangle("fill", bx, by + 5, 4, 1)
+  love.graphics.rectangle("fill", bx - 1, by, 1, 5)
+  love.graphics.rectangle("fill", bx + 4, by, 1, 5)
+  kit.setPal(8)
+  kit.outline(mx + tx * 2 - 2, my + ty * 2 - 2, 8, 8)
+  love.graphics.setScissor()
+end
+
 --------------------------------------------------------------------- controls
 
 --- A dialog's BUTTON.DAT controls, each in its own state.

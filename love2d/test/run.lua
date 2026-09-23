@@ -445,6 +445,54 @@ local function testReports(scenario)
      "the Production report counts what was built")
 end
 
+local function testSage(scenario)
+  print("sage: " .. scenario)
+  local site = require("warlords.site")
+  local g = game.new(DATA, scenario, { seed = 31 })
+  local side = game.begin(g)
+  local hx, hy = side.capital.x, side.capital.y
+  for _, s in ipairs(g.map.sites) do s.rich, s.revealed, s.searched = false, 0xff, false end
+  eq(#site.sageList(g, side, hx, hy), 0, "no rich site unshown: nothing to tell")
+
+  -- two gold sites and an item site near, one gold site far
+  local near = {}
+  for _, s in ipairs(g.map.sites) do
+    local d = math.sqrt((s.x - hx) ^ 2 + (s.y - hy) ^ 2)
+    if d < site.SAGE_RANGE then near[#near + 1] = s end
+  end
+  table.sort(near, function(a, b)
+    return (a.x - hx) ^ 2 + (a.y - hy) ^ 2 < (b.x - hx) ^ 2 + (b.y - hy) ^ 2
+  end)
+  ok(#near >= 3, "three sites within reach")
+  local g1, g2, isite = near[3], near[1], near[2]
+  for _, s in ipairs({ g1, g2, isite }) do s.rich, s.revealed = true, 0 end
+  g1.content, g2.content = site.GOLD, site.GOLD
+  isite.content, isite.item = site.ITEM, g.map.items[10].index
+  local list = site.sageList(g, side, hx, hy)
+  eq(#list, 2, "gold once however many, and the item")
+  local gold
+  for _, e in ipairs(list) do if e.kind == "gold" then gold = e end end
+  ok(gold, "a gold entry")
+  eq(site.sageShow(g, side, gold, hx, hy), g2, "the nearest gold site is shown")
+  ok(math.floor(g2.revealed / 2 ^ side.index) % 2 == 1, "and marked shown to the side")
+  eq(site.sageShow(g, side, gold, hx, hy), g1, "then the next one")
+  local items = site.sageList(g, side, hx, hy)
+  eq(#items, 1, "only the item is left")
+  eq(items[1].item, g.map.items[10], "by its record")
+
+  local before = side.gold
+  local n = site.sageGem(g, side)
+  ok(n >= 503 and n <= 2000, "a gem is 3d500 + 500")
+  eq(side.gold, before + n, "and is paid")
+
+  g.map.options.hiddenMap = 1
+  g.explored = nil
+  local x0, y0, w, h = site.sageMap(g, side, 3, 3)
+  eq(x0, 0, "the patch is kept on the map")
+  ok(w >= 16 and w <= 25 and h >= 16 and h <= 25, "16-25 tiles a side")
+  ok(game.seen(g, side, x0 + w - 1, y0 + h - 1), "and uncovered")
+end
+
 local function testHeroItems(scenario)
   print("hero items: " .. scenario)
   local hero = require("warlords.hero")
@@ -2221,6 +2269,7 @@ testVectoring("ERYTHEA")
 testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")
+testSage("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")

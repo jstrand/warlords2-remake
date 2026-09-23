@@ -1256,6 +1256,46 @@ unless the popup has one of its own (6 `CITY.PCK`, 7 `VICTORY.PCK`, 9
 `TEMPLE.PCK`, …) — at the popup's rect, then outlines it a pixel out and
 shadows it; popup 2 draws the strategic map in its left 224 pixels itself.
 
+### Sages
+
+A hero who finds a sage (`sage_visit`, `6536:0aa0`) gets the searching popup
+with one line, *%s has found a Sage!* (group 58), and after a click the sage
+himself (`6536:146f`): popup 2 with the strategic map, *A Sage!* in font 1
+centred on (432, 62), the greeting (group 63) centred on x = 432 from y = 120,
+20 apart, and dialog 10: **Items** (279), **Money** (280) and **Maps** (281),
+and **Done** (282, both default and cancel) hidden until one has been taken.
+Items is greyed when the sage has nothing to tell, Maps when the map is not
+hidden. What the sage says goes on from y = 240, 20 apart, centred on 432.
+
+- **Items** (`6536:0bf5`) opens the list chooser, titled *Items*, on what
+  `6536:1610` finds: every rich site the side has not been shown, less than
+  35 tiles from the hero as the crow flies (`2012:1199`) — an item by name,
+  and *Gold* and *Allies* once each however many. Chosen (`6536:0e85`), it
+  says *The %s* / *A huge pile of treasure* / *Powerful allies*, *can be
+  found*, *at %s!* (group 62) — the nearest such site for gold and allies —
+  marks the site shown to the side, uncovers round it and draws the way
+  there as the Quest screen does, from the hero. Cancel brings the three
+  buttons back.
+- **Money** (`6536:0b1a`): a gem worth `dice(3, 500, 500)`, paid at once,
+  *The sage gives you a gem* / *worth %d gp!* (group 59).
+- **Maps** (`6536:0c50`) greys the three and says group 60's three lines; the
+  map is then region 15, and the tile clicked (`6536:0cd6`) has a patch
+  uncovered from 9–13 tiles up and left of it (`dice(1, 5, 8)` each way),
+  16–25 tiles wide and high (`dice(1, 10, 15)`), kept on the map, every tile
+  of it through `8611:1298`. The patch is outlined in white on the popup's map.
+
+The site's tile is flagged searched either way, so a sage is visited once.
+
+### The list chooser
+
+`796c:0000` is the game's own list box: popup 3, (96, 50) 200 × 200, dialog
+2. Its title in font 2 centred on (196, 52), a colour-3 box at (106, 70)
+180 × 110 sunk with a (4, 2) bevel, and five names at (112, 74 + 20 i), the
+chosen one in colour 15 and the others in 2. 114–118 choose a row; 121 and
+122 scroll a row up and down and 119 and 120 five, the four hidden when the
+list fits in five rows; OK (123, default) and Cancel (124, cancel) hand the
+chosen entry, or −1, to a callback.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

@@ -108,8 +108,6 @@ function M.open()
   d.noQuest = kit.text(0x14, G.g.rng:dice(1, 4, -1))
 
   local function mapMarks(tx, ty)
-    local c8 = G.palette[9]
-    local function pal(i) local c = G.palette[i + 1] love.graphics.setColor(c[1], c[2], c[3]) end
     love.graphics.setScissor(MAP.x, MAP.y, 224, 312)
     if q.type == quest.SLAY_TYPE or q.type == quest.SLAUGHTER then
       local iw, ih = G.atransShields:getDimensions()
@@ -126,35 +124,11 @@ function M.open()
             MAP.x + math.max(0, a.x * 2 - 1), MAP.y + math.max(0, a.y * 2 - 1))
         end
       end
-    elseif tx then
-      local h = q.hero
-      pal(8)
-      local function pix(x, y) love.graphics.rectangle("fill", MAP.x + x, MAP.y + y, 1, 1) end
-      -- the line, Bresenham between the two points
-      local x0, y0, x1, y1 = h.x * 2 - 2, h.y * 2 - 2, tx * 2 - 2, ty * 2 - 2
-      local dx, dy = math.abs(x1 - x0), -math.abs(y1 - y0)
-      local sx, sy = x0 < x1 and 1 or -1, y0 < y1 and 1 or -1
-      local err = dx + dy
-      while true do
-        pix(x0, y0)
-        if x0 == x1 and y0 == y1 then break end
-        local e2 = 2 * err
-        if e2 >= dy then err = err + dy x0 = x0 + sx end
-        if e2 <= dx then err = err + dx y0 = y0 + sy end
-      end
-      -- the small shield at the target, and the box round it
-      local bx, by = MAP.x + tx * 2, MAP.y + ty * 2 - 1
-      pal(8)
-      love.graphics.rectangle("fill", bx, by, 4, 5)
-      pal(0)
-      love.graphics.rectangle("fill", bx - 1, by, 6, 1)
-      love.graphics.rectangle("fill", bx, ty * 2 + 4 + MAP.y, 4, 1)
-      love.graphics.rectangle("fill", bx - 1, by, 1, 5)
-      love.graphics.rectangle("fill", bx + 4, by, 1, 5)
-      pal(8)
-      kit.outline(MAP.x + tx * 2 - 2, MAP.y + ty * 2 - 2, 8, 8)
     end
     love.graphics.setScissor()
+    if tx and q.type ~= quest.SLAY_TYPE and q.type ~= quest.SLAUGHTER then
+      kit.mapTarget(MAP.x, MAP.y, q.hero.x, q.hero.y, tx, ty)
+    end
   end
 
   function d.draw()
