@@ -1349,6 +1349,32 @@ greyed at the ends and with nothing chosen), and the places 430–456: a click
 chooses one, lets the chosen one go, or swaps it with another
 (`6a89:1379`).
 
+## View › Army Bonus
+
+`89e0:1e3b` lists the army types by the side's fight order — only the first
+27 places — six at a time. Popup 0, (80, 60) 480 × 320 (`89e0:1fd2`): *Army
+Bonus* (group 164) in font 1 centred on (320, 62); a box (124, 146) 434 × 186
+with a (4, 2) bevel and a black outline a pixel in; the column heads, the
+216 × 22 at `STACK.PCK` (188, 0), at (256, 125). Each row, 30 apart from
+y = 148: the army on a ring of the side's colour at (128, y); name, strength
+and moves (`7087:14ac`, the ARMYTYPE.DAT record) at x = 168, 280, 328,
+y + 5; how it moves at (352, y + 8) from `ABITS.PCK` — (184, 30) flies,
+(216, 30) woods and hills, (248, 30) woods, (152, 30) hills, from the table
+at `4125:45c4` that `7563:1b20` fills from ARMYTYPE.DAT +54, +56, +58; and its
+bonus at (400, y + 6).
+
+The bonus (`89e0:1a07`, group 163) is the first that applies, in this order:
++52 = 2 *+1 & cancel hero*, +52 = 3 *+1 & cancel non-hero*, +48 set
+*+%d special* (with +42's value), +46, +44, +42 and +40 all set *+%d to
+stack* (+40), +52 = 1 *Cancel city bonus*, then the first set of +50 *%d
+enemy stack*, +46/+44/+42/+40 *+%d stack in* hills/woods/open/city,
++38/+36/+34/+32 *+%d str in* hills/woods/open/city, else *-*. For a real army
+the boat flag (0x1000) gives *Boat strength of 4* and a hero its command.
+
+Dialog 34: Done (490, default and cancel), 491/492 one row up and down,
+493/494 six (stopping at 0 and 21); the up pair greys at the top, the down
+pair when the last row is place 27.
+
 ## View › Items, and the help pages
 
 `66d4:0c21` is popup 4, (120, 50) 400 × 360: *Items* (group 166) in font 1

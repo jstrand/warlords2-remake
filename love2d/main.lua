@@ -2122,6 +2122,8 @@ MENU_DOES = {
   ["i"] = function() require("ui.fightorder").open() end,
   -- Order > Resign (7721:150d)
   ["r"] = function() require("ui.resign").open() end,
+  -- View > Army Bonus (89e0:1e3b)
+  ["o"] = function() require("ui.armybonus").open() end,
   -- View > Items (66d4:0c21)
   ["t"] = function() require("ui.items").open() end,
   -- Order > Signpost (540d:01a4)
