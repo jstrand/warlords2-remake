@@ -43,6 +43,7 @@ local RING_W, RING_H = 32, 30      -- one ABITS ring
 local G = {}
 
 local presentOffer, stratDirty, openCity, closeCity  -- defined below
+local viewCity                                      -- and this one
 local reslot                                        -- and this one
 local startAssault, pressAssault, presentVictory, takeCity   -- the assault
 local refreshControls                               -- and the button states
@@ -1791,8 +1792,10 @@ ACTION[176] = function() fortify() end
 ACTION[178] = function() deselect() end
 
 -- The 3x3 pad, ids 320-327, all reach 8611:0723 with the id minus 320, and
--- that routine steps the cursor by one in x, y or both. Laid out on screen
--- the eight ids run clockwise from north, which is what fixes the order.
+-- that routine steps the *cursor* -- the tile the view is centred on -- by
+-- one in x, y or both, then recentres (8611:0629). It moves the view, not
+-- the stack: the digit keys do that. Laid out on screen the eight ids run
+-- clockwise from north, which is what fixes the order.
 local PAD_STEP = {
   [0] = { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 },
          { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 },
@@ -1800,8 +1803,8 @@ local PAD_STEP = {
 for i = 0, 7 do
   local step = PAD_STEP[i]
   ACTION[320 + i] = function()
-    if not G.selection then say("Nothing is selected.") return end
-    moveSelection(G.selection.x + step[1], G.selection.y + step[2])
+    G.cx, G.cy = G.cx + step[1], G.cy + step[2]
+    clampCamera()
   end
 end
 
@@ -1875,6 +1878,31 @@ for i = 0, uidata.SHORTCUT_COUNT - 1 do
   end
 end
 
+-- 186 and 187, the two wide buttons under the cycle's row, are Tab and
+-- Backspace's twins. 186 (8065:0f3f) looks at where the stack is going, and
+-- back: it centres on the stack's destination unless the view is already
+-- there, and on the stack otherwise. 187 (8065:0fe9) forgets the
+-- destination, so the route goes from the map.
+ACTION[186] = function()
+  local sel = G.selection
+  if not sel or #sel.stack == 0 then return end
+  local t = sel.stack[1].target
+  local vx, vy = G.cx + 4, G.cy + 4
+  if t and not (vx == math.max(4, math.min(107, t.x)) and vy == math.max(4, math.min(151, t.y)))
+     and sel.x >= G.cx and sel.x < G.cx + screen.VIEW_COLS
+     and sel.y >= G.cy and sel.y < G.cy + screen.VIEW_ROWS then
+    centreOn(t.x, t.y)
+  else
+    centreOn(sel.x, sel.y)
+  end
+end
+ACTION[187] = function()
+  local sel = G.selection
+  if not sel or not sel.stack[1] or not sel.stack[1].target then return end
+  for _, a in ipairs(sel.stack) do a.target = nil end
+  G.route = nil
+end
+
 -- The pad's centre, id 177, shares its handler (8065:0f02) with the Home key.
 ACTION[177] = function()
   if G.selection then centreOn(G.selection.x, G.selection.y)
@@ -1945,6 +1973,23 @@ function love.mousereleased(x, y, button)
   refreshControls()
 end
 
+--- The city nearest the cursor -- the tile the view is centred on -- that
+--- the side has seen, and of its own for any mode but Info; then the city
+--- dialog on it in that mode.
+viewCity = function(mode)
+  local cx, cy = G.cx + 4, G.cy + 4
+  local best, bestD
+  for _, c in ipairs(G.g.map.cities) do
+    local ok = game.seen(G.g, G.player, c.x, c.y)
+               and (mode == cityUi.INFO or c.ownerIndex == G.player.index)
+    if ok then
+      local d = math.max(math.abs(c.x - cx), math.abs(c.y - cy))
+      if not bestD or d < bestD then best, bestD = c, d end
+    end
+  end
+  if best then cityUi.open(best, mode) end
+end
+
 -- Each menu accelerator, as far as this engine can honour it. The names are
 -- the original's (docs/re/ui.md > The menu); what is missing says so rather
 -- than failing quietly.
@@ -1962,24 +2007,14 @@ MENU_DOES = {
     local found = game.searchHere(G.g, G.selection.stack)
     say("%s", found and game.describeSearch(found) or "There is nothing here to search.")
   end,
-  [","] = function()
-    if not G.selection then say("Nothing is selected.") return end
-    local a = G.selection.stack[1]
-    say("%s: strength %d, %d of %d moves.", a.name, a.strength, a.moves or 0, a.maxMoves)
-  end,
-  ["g"] = function()
-    say("Gold %d, income %d, upkeep %d.", G.player.gold,
-        G.player.income or 0, G.player.upkeepTotal or 0)
-  end,
-  ["c"] = function()
-    say("You hold %d cities.", #game.sideCities(G.g, G.player))
-  end,
-  ["s"] = function()
-    if not G.selection then say("Nothing is selected.") return end
-    local names = {}
-    for _, a in ipairs(G.selection.stack) do names[#names + 1] = a.name end
-    say("Stack: %s.", table.concat(names, ", "))
-  end,
+  -- View > Cities, Build, Production and Vectoring open the city dialog in
+  -- one of its modes on the city nearest the cursor -- any city for Cities,
+  -- one of the side's own for the rest (17be:0064's inline cases, through
+  -- 7204:0000 and 828e:04fa).
+  ["c"] = function() viewCity(cityUi.INFO) end,
+  ["b"] = function() viewCity(cityUi.CITY) end,
+  ["p"] = function() viewCity(cityUi.PRODUCTION) end,
+  ["v"] = function() viewCity(cityUi.VECTOR) end,
 }
 
 -- A menu item this engine cannot do yet is greyed, the way the original greys
@@ -1996,7 +2031,8 @@ function love.keypressed(key)
   -- playback through (6a35:0094 watches for it), and any key ends it.
   if G.assault then pressAssault() return end
   if G.victory then
-    if key == "return" or key == "kpenter" then takeCity(AS.occupy) end
+    -- Occupy heads both the default and the cancel lists
+    if key == "return" or key == "kpenter" or key == "escape" then takeCity(AS.occupy) end
     return
   end
 
@@ -2017,27 +2053,60 @@ function love.keypressed(key)
     return
   end
 
-  if key == "escape" then
-    if G.openMenu then G.openMenu = nil return end
-    love.event.quit() return
-  end
+  if G.openMenu then G.openMenu = nil return end
   if G.over then return end
-  if G.openMenu then G.openMenu = nil end
 
-  if key == "space" then endTurn()
-  -- Home shares its handler with the pad's centre button (8065:0f02)
-  elseif key == "home" then ACTION[177]()
-  elseif key == "c" and G.selection then centreOn(G.selection.x, G.selection.y)
-  -- Order > Move All, the same key the original gives it
-  elseif key == "m" then moveAll()
+  -- The main screen's keys, as 17be:0064 and 17be:0444 give them. Enter and
+  -- Escape are the first live control of the default and cancel lists --
+  -- Next Army and Quit Army here -- and a letter is its menu item.
+  local alt = love.keyboard and love.keyboard.isDown and love.keyboard.isDown("lalt", "ralt")
+  local ctrl = love.keyboard and love.keyboard.isDown and love.keyboard.isDown("lctrl", "rctrl")
+  local shift = love.keyboard and love.keyboard.isDown and love.keyboard.isDown("lshift", "rshift")
+  local function press(id)
+    if G.screen.state[id] ~= uidata.DISABLED and ACTION[id] then ACTION[id]() end
+    refreshControls()
+  end
+  local digit = key:match("^kp(%d)$") or key:match("^(%d)$")
+
+  if key == "return" or key == "kpenter" then press(174)
+  elseif key == "escape" then press(175)
+  elseif key == "space" then press(240)           -- group the stack (89e0:0a55)
+  elseif key == "tab" then press(186)
+  elseif key == "backspace" then press(187)
+  elseif key == "home" then press(177)
+  elseif key == "end" then deselect()             -- 1b62:08b3, as 178 is
+  elseif key == "delete" then press(173)          -- walk on along the route
+  elseif digit == "5" then
+    -- 5 centres on the stack, or on the cursor (8611:0565)
+    if G.selection then centreOn(G.selection.x, G.selection.y) end
+  elseif digit then
+    -- 1-9 step the stack the way the numeric pad lies (1c8c:0197): 8 north,
+    -- then clockwise; 1c8c:041f forgets its destination as it goes
+    local STEP = { ["8"] = { 0, -1 }, ["9"] = { 1, -1 }, ["6"] = { 1, 0 },
+                   ["3"] = { 1, 1 }, ["2"] = { 0, 1 }, ["1"] = { -1, 1 },
+                   ["4"] = { -1, 0 }, ["7"] = { -1, -1 } }
+    local st = STEP[digit]
+    if st and G.selection then
+      for _, a in ipairs(G.selection.stack) do a.target = nil end
+      moveSelection(G.selection.x + st[1], G.selection.y + st[2])
+    end
+  -- the arrows step the cursor, as the pad does (8611:0723)
+  elseif key == "up" then press(320)
+  elseif key == "right" then press(322)
+  elseif key == "down" then press(324)
+  elseif key == "left" then press(326)
+  -- not the original's: quick save and load
   elseif key == "f5" then
     saveMod.write(G.g, G.savePath)
     say("Saved to %s.", G.savePath)
   elseif key == "f9" then loadGame()
-  elseif key == "up" or key == "w" then G.cy = G.cy - 1; clampCamera()
-  elseif key == "down" or key == "s" then G.cy = G.cy + 1; clampCamera()
-  elseif key == "left" or key == "a" then G.cx = G.cx - 1; clampCamera()
-  elseif key == "right" or key == "d" then G.cx = G.cx + 1; clampCamera()
+  else
+    local accel
+    if ctrl and key == "q" then accel = "^Q"
+    elseif alt and #key == 1 then accel = "alt " .. key:upper()
+    elseif shift and key == "/" then accel = "?"
+    elseif #key == 1 then accel = key end
+    if accel and MENU_DOES[accel] then MENU_DOES[accel]() end
   end
 end
 

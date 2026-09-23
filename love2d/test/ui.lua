@@ -258,10 +258,17 @@ if G and G.screen then
   print("  exercised every control on the main screen")
 end
 
--- the rest of the keys
-for _, key in ipairs({ "p", "p", "c", "home", "up", "down", "left", "right",
-                       "w", "a", "s", "d", "f5", "f9", "space" }) do
+-- the rest of the keys: the original's own (17be:0064, 17be:0444), and the
+-- letters that open a dialog -- which is closed again with its Done
+local kitMod = require("ui.kit")
+for _, key in ipairs({ "p", "c", "b", "v", "home", "up", "down", "left", "right",
+                       "tab", "backspace", "delete", "end", "return", "escape",
+                       "8", "6", "2", "4", "kp5", "space", "m", "f5", "f9" }) do
   try("key " .. key, love.keypressed, key)
+  for _ = 1, 3 do
+    if kitMod.top() then try("close what " .. key .. " opened", love.keypressed, "escape") end
+  end
+  if kitMod.top() then fail("keys", key .. " left a dialog open") end
   dismissBanner()
   dismissOffer()
 end
@@ -284,6 +291,11 @@ if G and G.menuLayout then
             love.mousepressed, r.x + 2, r.y + 1, 1)
         if G.openMenu ~= nil then
           fail("menu", ("picking %s left the menu open"):format(r.label))
+        end
+        -- an item that opens a dialog: draw it, then close it again
+        if kitMod.top() then try("draw " .. r.label, love.draw) end
+        for _ = 1, 3 do
+          if kitMod.top() then try("close " .. r.label, love.keypressed, "escape") end
         end
         picked = picked + 1
       end

@@ -30,20 +30,23 @@ regions and fonts are the game's own, read from its data files at runtime
 | input | does |
 |---|---|
 | any key or click | dismiss the start-of-turn banner, and nothing else |
-| the menu bar | open a menu; pick an item to run it |
+| the menu bar, or a letter | open a menu and pick an item; a letter is its accelerator, `Alt`-letter the Game menu's, `Ctrl-Q` Quit |
 | left click a city | open it: Info, City (rename, raze, buy production), Production, Vector |
 | left click the map | pick up a stack of yours, or send the selection there |
 | | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
 | right click the map | inspect a tile |
 | click the strategic map | recentre the view |
-| `space` | end the turn; the computer players then take theirs |
-| `c` | centre on the selection |
+| `Enter` / `Esc` | next army / quit army (done for this turn) — the first live button of the original's default and cancel lists |
+| `1`–`9` | step the stack one tile, laid out like the numeric pad; `5` centres on it |
+| arrows, the 3×3 pad | move the view a tile |
+| `Space` | group the whole stack |
+| `Tab` / `Backspace` | look at where the stack is going, and back / forget its destination |
+| `Home` / `End` / `Del` | centre on the stack / put it down / walk on along its route |
 | `m` | Move All: every stack under orders walks on as far as it can |
-| the five buttons above the pad | walk on, next army, quit army (done for this turn), fortify (dug in until picked up again), deselect |
-| arrows / WASD | scroll one tile |
-| the hero dialog | tick Male or Female, type a name, OK or Cancel |
-| `F5` / `F9` | save and load |
-| `esc` | quit |
+| `c` `b` `p` `v` | the city dialog on the city nearest the view's centre, in Info, City, Production or Vector |
+| the five buttons above the pad | walk on, next army, quit army, fortify (dug in until picked up again), deselect |
+| `Alt-E` | end the turn; the computer players then take theirs |
+| `F5` / `F9` | quick save and load (not the original's) |
 
 ## The rules core
 

@@ -272,6 +272,35 @@ The history selector's *n* = 4 takes a different path from the rest, which fits:
 Triumphs is its own screen (`auto_ui_triumphs`, `6d51:0a21`) rather than one of
 the four graphs.
 
+### The keyboard on the main screen
+
+Besides the command table, `17be:0064` hands two more ranges to
+`17be:0444` while the main screen is up (a 13-entry table at `17be:04a4`):
+
+| key | handler | does |
+|---|---|---|
+| `1`–`9` | `1c8c:0197` | step the selected stack one tile, laid out like the numeric pad (`8` north, then clockwise); `1c8c:041f` forgets its destination. `5` centres on it (`8611:0565`) |
+| arrows | `8611:0723(0/2/4/6)` | the 3 × 3 pad's handler: step the **cursor** and recentre the view on it — it moves the view, not the stack |
+
+and the six keys that are on no menu are known now: **Tab** is control 186
+(`8065:0f3f`: centre on where the stack is going, or back on the stack),
+**Backspace** 187 (`8065:0fe9`: forget the destination), **Home** 177 (centre),
+**Space** 240 (group the whole stack), **End** puts the stack down
+(`1b62:08b3`, as 178 does) and **Del** walks on along the route
+(`1c8c:01fd`, as 173 does). Enter and Escape are Next Army (174) and Quit Army
+(175) through the default and cancel lists; **nothing on the main screen quits
+the game but Game › Quit, Ctrl-Q.**
+
+The cursor (`3c04:017d`) is always the tile the view is centred on:
+`8611:0629` clamps it to 4–107 and 4–151 and puts the scroll origin four tiles
+up and left of it.
+
+The View menu's **Cities, Build, Production and Vectoring** (`c b p v`) are
+inline cases that open the city dialog on the city nearest the cursor, in
+modes 0, 1, 2 and 3 — any city the side has seen for Cities, one of its own
+for the rest (`828e:04fa`) — and **Ruins** (`.`) does the same in mode 4 for
+the nearest ruin or temple.
+
 ### Reading the flat image
 
 For this build, a Ghidra address `S:O` is at file offset
@@ -1133,10 +1162,6 @@ What is worth taking is the part that is **observable to the player**:
 
 ## Open questions
 
-- Six commands still have a handler but no name, because they are not on any
-  menu: Backspace, Tab, Space, Home, End and Del. Four of those are already
-  known by other means — Tab, Backspace, Home and Space are the twins of
-  controls 186, 187, 177 and 240.
 - Where `7ae8:0000`'s item-to-command table is assembled, which would join
   `UDB.DAT`'s item ids to the command codes.
 - Which control ids get their text from which `STRING.DAT` group — assigned by
