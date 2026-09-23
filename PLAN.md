@@ -50,7 +50,7 @@ Order, easiest first (each win makes the next easier):
 2. ~~`DATA/STRING.DAT`~~ **Done** — 169 groups / 651 strings, whole UI corpus; see `docs/formats/string.md`. `.CTY` and `SOUND/*.TXT` are plain text.
 3. `.8SN` → WAV (`u8` PCM; sample rate is the unknown — try 11025, confirm by ear against DOSBox).
 4. ~~`.MAP` / `.RD`~~ **Done** — 112×156 u16 tile grid + 1-byte/tile road overlay, rendered via `tools/mapren.py`. Note the 156×112 guess was wrong; see `docs/formats/map.md`.
-5. ~~`.SCN` / `.SGN` / `.SPC`~~ **Mostly done** — sides (incl. starting gold and capitals), cities, sites, items, monsters and signposts all parse and verify against the map and against the running game. Still open: city owner/defence, and the 16-byte per-city block. See `docs/formats/scenario.md`. `.ITM` untouched.
+5. ~~`.SCN` / `.SGN` / `.SPC`~~ **Mostly done** — sides (incl. starting gold and capitals), cities, sites, items, monsters and signposts all parse and verify against the map and against the running game. City owner and defence are derived at game start (`docs/rules.md`); still open: the 16-byte per-city block and the `160..2062` per-side region. See `docs/formats/scenario.md`. `.ITM` is decoded (`docs/formats/itm.md`) and read by `love2d/warlords/scn.lua`.
 6. ~~`ARMYTYPE.DAT`~~ **Done** — 29 x 62-byte records; strength/time/upkeep/move/cost solved, 6 of 15 bonus fields still open. See `docs/formats/armytype.md`.
 7. ~~**`.PCK`**~~ **Done** — see `docs/formats/pck.md`. Kept for the record, the original strategy was:
    - Known-plaintext attack: `CURS.PCK` (1274 B for 240×80 = 19200 px) is tiny and heavily compressed → mostly transparent. `BLACK.PCK` in `START/` is probably a solid fill → its byte stream will show the raw run-length primitive.
@@ -76,8 +76,19 @@ diplomacy, setup and difficulty, and end-of-game. `docs/formats/save.md` has
 the save layout; `docs/re/` documents the method, the computer players and the
 random map generator, both now decoded in full. Start at `docs/re/README.md`.
 
-Still open: one unverified army stat (`docs/rules.md` › Still unknown), and
-graphics/sound/UI plumbing (deliberately skipped).
+The user interface has since been decoded too: the screens, controls, command
+set, menu and dialogs are in `docs/re/ui.md` and `docs/formats/screens.md`.
+
+Still open:
+- one unverified army stat — Heavy Infantry "Move 16/20" (`docs/rules.md` ›
+  Still unknown); settle it in DOSBox.
+- `ARMYTYPE.DAT` `+18`/`+20` and whether negative costs are hire prices
+  (`docs/formats/armytype.md` › Open questions).
+- the save layout's unmapped globals block and second byte-per-tile map, and a
+  check against a real save made in DOSBox (`docs/formats/save.md`).
+- the UI open questions in `docs/re/ui.md` (`UDB.DAT` item-to-command table,
+  `.FIN` spacing fields).
+- sound plumbing (deliberately skipped until Phase 4).
 
 ### Phase 2.5 — Headless loader — **DONE**
 
@@ -94,7 +105,7 @@ table) are all resolved from the executable; see `docs/rules.md`.
 ### Phase 3 — Engine — **in progress**
 
 **Lua, in `love2d/warlords/`.** The rules core is headless: it never touches
-`love.*`, so `lua love2d/test/run.lua` checks it without a window (~5500
+`love.*`, so `lua love2d/test/run.lua` checks it without a window (~8000
 assertions). `tools/` stays Python and stays the format lab.
 
 Done: game state and the turn loop, movement, combat, city capture and
@@ -105,11 +116,61 @@ A scenario plays to victory on its own.
 `rules.bugs` reproduces the original's faults, one flag per fault the engine
 actually reads.
 
-Left: the interface for what the engine can already do (city dialog, stack
-splitting, diplomacy and quest screens), sound, and a computer player that
-explores as well as the original's does.
+Left in the engine itself: a computer player that explores as well as the
+original's (with *Hidden Map* on it expands far too slowly), and flags for the
+two decoded AI faults whose phases have no counterpart here yet.
 
-### Phase 4 — Audio
+### Phase 3.5 — Interface — **in progress**
+
+The front end (`love2d/main.lua`, with the dialogs in `love2d/ui/`) is rebuilt
+on the original's own 640×480 screen, read from `AREA.DAT`/`BUTTON.DAT`/
+`JOIN.DAT` at runtime (`docs/formats/screens.md`, `docs/re/ui.md`).
+`love2d/test/ui.lua` drives it headless; `love2d/test/shot` renders PNGs.
+Checking against the original: native captures in
+`original-screenshots/native/` (made with `tools/dosbox/`, kept out of git),
+compared pixel for pixel. The main screen under the turn banner and the hero
+offer now differ from the original only where the two games differ.
+
+Done: the main screen — menu bar and dropdowns, turn strip, strategic map
+(four-pixel tiles, roads, city shields, view box), bottom bar, control panel;
+the army slots and Grp switch; the cycle's buttons and the 3×3 pad; the
+configurable buttons; the start-of-turn banner; the hero offer; the assault
+and the spoils dialog; **the city dialog in all four modes** — Info, City
+(Rename, Raze, Build Production), Production and Vector (send, redirect, See
+All); **the five reports**; **the original's keyboard**; the fonts' true
+metrics (ink widths, advances, the space).
+
+Left, roughly in order of what blocks playing a full game from the interface:
+
+1. **Stack splitting proper** — the slots toggle armies in and out of the
+   moving group; check this covers every way the original splits and merges.
+2. **Hero screens**: Inspect / army info (`,`, `6c1b`), Plant Flag (`f`) and
+   vectoring to the standard, Levels (`u`), items (`t`, pick up / drop), and
+   dialogs for search results at ruins, temples and sages (`z`).
+3. **Quest screen** (`=`, `4976:0167`).
+4. **Diplomacy screen** (`d`, `484e`).
+5. **Orders**: Fight Order (`i`, `6a89`), Disband (`q`), Signpost (`x`),
+   Resign (`r`).
+6. **View**: Army Bonus (`o`), Items (`t`), Ruins (`.` — the city dialog's
+   mode 4, a site's info), Stack (`s`).
+7. **History**: City, Events, Gold, Winners, Triumphs (`h e j y l`, `6d51`).
+8. **Game menu**: Settings, Shortcuts (`UDB.DAT`), New game and side setup,
+   Save/Load game and map with the original's dialogs, About.
+9. **Help screens**: control 188 and the `.GFX` pages (`HELP\HMOUSE.GFX`).
+10. **End of game**: a proper win/lose screen (today the loop just stops).
+11. Right-click tile info (`740d:131a`, the 256 × 75 popup).
+
+Every unimplemented menu item is greyed. Each new dialog gets a step in a
+`test/shot` script, and is compared with the original wherever a capture
+exists.
+
+Engine notes found on the way: the long ERYTHEA run of `test/ui.lua`
+(150 rounds) takes hours in the computer players' pathfinding; the engine does
+not yet vector to a planted standard (`STANDARD_DEST` is treated as none).
+
+### Phase 4 — Audio — **not started**
+
+Nothing plays yet; `.8SN` → WAV (Phase 1, item 3) is still undone too.
 - XMI → MIDI conversion (or direct playback). Port ScummVM's XMIDI parser; it's the reference implementation.
 - Playback via FluidSynth with a soundfont, or emulate OPL2/AdLib (Nuked-OPL3) for period-accurate sound. The `.ADV` driver files tell you which devices were supported.
 - `.8SN` digitised sounds + advisor voice: straight PCM playback.
@@ -155,14 +216,17 @@ python3 -m pip install --user pillow numpy construct
 - **The Warlords II fan/scenario-design community** — decades of forum posts documenting exact combat odds and AI quirks. Often cheaper than disassembly.
 - **ScummVM / DevilutionX / OpenTTD** — models for "reimplement a 90s engine, load original assets."
 
-## 5. Open decision: engine language
+## 5. Engine language — **decided: Lua on LÖVE 11**
 
-Not needed until Phase 3, but it shapes the codebase:
+Chosen for Phase 2.6 and kept: the rules core is plain Lua 5.1 (runs under
+both `lua` and LuaJIT), the front end is LÖVE. The options weighed before that
+are kept below for the record.
+
 - **C++ / C with SDL2** — you already have SDL2 installed; closest to the original's model; largest body of reference code (ScummVM, DevilutionX).
 - **Rust** (`macroquad` / `bevy`) — memory safety and a genuinely pleasant build story for a from-scratch turn-based game.
 - **TypeScript + Canvas/WebGL** — makes it playable in a browser instantly, which is a large distribution win for a 1993 strategy game; but "natively runnable" was the stated goal.
 
-Recommendation: **Rust + macroquad**, unless you want the ScummVM reference code to be directly copy-pasteable, in which case C++/SDL2.
+(Original recommendation was Rust + macroquad or C++/SDL2; superseded.)
 
 ## 6. Legal
 
