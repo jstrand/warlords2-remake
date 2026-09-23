@@ -32,6 +32,7 @@ local reportsUi = require("ui.reports")
 local heroInfo  = require("ui.heroinfo")
 local levelsUi  = require("ui.levels")
 local searchUi  = require("ui.search")
+local questUi   = require("ui.quest")
 
 local TILE = screen.TILE
 -- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
@@ -40,6 +41,7 @@ local TILE = screen.TILE
 local ARMY_CELL, ARMY_COLS, ARMY_ROW, ARMY_H = 32, 16, 30, 29
 local ROAD_STRIDE, ROAD_COLS = 48, 13
 local ROAD_KEY, ARMY_KEY, SHADOW_KEY = 1, 10, 15
+local SCROLL_KEY = 10                  -- SCROLL.PCK stands on green, as the armies do
 -- WAR.PCK sits on colour 1 and BSHIELD.PCK on the green it is drawn over
 local WAR_KEY, SHIELD_KEY = 1, 12
 local RING_W, RING_H = 32, 30      -- one ABITS ring
@@ -176,6 +178,8 @@ function love.load(arg)
   -- the pictures of Hero > Search: a ruin, and a temple
   G.searchPic = pck.toImage(dataDir .. "/PICS/SEARCH.PCK", palette)
   G.templePic = pck.toImage(dataDir .. "/PICS/TEMPLE.PCK", palette)
+  -- the quest's parchment, blitted through a mask (1997:027e)
+  G.scrollPic = pck.toImage(dataDir .. "/PICS/SCROLL.PCK", palette, SCROLL_KEY)
   kit.init(G)
 
   G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
@@ -848,6 +852,7 @@ function stratDirty()
   G.stratImage = nil
 end
 G.stratDirty = function() stratDirty() end
+G.openQuest = function() questUi.open() end
 
 -- The four configurable buttons are blank in BUTTON.PCK, because their art
 -- depends on what is assigned to them: 545c:030a paints each one a second
@@ -2084,6 +2089,8 @@ MENU_DOES = {
       end
     end
   end,
+  -- Report > Quest (4976:0167)
+  ["="] = function() questUi.open() end,
   -- Hero > Levels (7563:1652)
   ["u"] = function() levelsUi.open() end,
   -- Hero > Inspect (6c1b:0000)

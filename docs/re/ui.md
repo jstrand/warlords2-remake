@@ -1256,6 +1256,22 @@ unless the popup has one of its own (6 `CITY.PCK`, 7 `VICTORY.PCK`, 9
 `TEMPLE.PCK`, …) — at the popup's rect, then outlines it a pixel out and
 shadows it; popup 2 draws the strategic map in its left 224 pixels itself.
 
+## Report › Quest
+
+`auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the
+map with no city shields: *Quest* (font 1) centred on (432, 62), and with no
+quest — or its hero gone — a random line of group 20 on (432, 134). With one,
+`SCROLL.PCK` blitted through its mask at (304, 95), and on it in font 2, black
+on yellow (`78a8:06ae(2, 0, 7, 1)`), *%s's Quest* on (432, 145), a black rule
+at (360, 165) 160 long, and the quest's lines centred on x = 432 at
+y = 175, 195, 215, 235, 245, 265, 285 as each type uses them (`4976:0320`,
+groups 21-27), with the compass point to the target from `828e:0b51` (the
+eight words at `4125:2b7c`). The map shows an orange (8) line from the hero to
+the target, both at (2x − 2, 2y − 2), a little orange shield in black at the
+target (`828e:08cd`) inside an orange 8 × 8 box (`828e:099e`); a quest to slay
+a kind of army, or a side's armies, puts a banner on every such stack
+instead. The hero's figure goes on top.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the
