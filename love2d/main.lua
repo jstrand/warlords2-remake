@@ -834,6 +834,38 @@ function G.drawStrategicMap(x, y, mark, noCities)
   love.graphics.setScissor()
 end
 
+--- Every site shown to the side, marked on a strategic map drawn at (x, y)
+--- (834b:05e4): ATRANS2.PCK's 16x10 -- (112, 20) a temple, (112, 10) a site
+--- searched, (128, 0) a rich one, (112, 0) any other -- at 2y - 1 and at
+--- 2x - 1 rounded to the nearest multiple of 8, the blit's byte grid. With a
+--- hidden map only on a tile the side has seen. The site `highlight` gets a
+--- white 12x10 box.
+function G.drawSiteMarkers(x, y, highlight)
+  local site = require("warlords.site")
+  local w, h = G.atransShields:getDimensions()
+  love.graphics.setScissor(x, y, 224, 312)
+  for _, s in ipairs(G.g.map.sites) do
+    local shown = math.floor((s.revealed or 0) / 2 ^ G.player.index) % 2 == 1
+    if shown and game.seen(G.g, G.player, s.x, s.y) then
+      local src
+      if s.content == site.TEMPLE then src = { 112, 20 }
+      elseif s.searched then src = { 112, 10 }
+      elseif s.rich then src = { 128, 0 }
+      else src = { 112, 0 } end
+      local mx = math.floor((s.x * 2 - 1 + 4) / 8) * 8
+      local my = s.y * 2 - 1
+      love.graphics.setColor(1, 1, 1)
+      love.graphics.draw(G.atransShields, love.graphics.newQuad(src[1], src[2], 16, 10, w, h),
+                         x + mx, y + my)
+      if s == highlight then
+        kit.setPal(15)
+        kit.outline(x + mx, y + my, 12, 10)
+      end
+    end
+  end
+  love.graphics.setScissor()
+end
+
 local function drawStrategic()
   local r = G.stratRect
   G.drawStrategicMap(r.x, r.y)
@@ -2123,6 +2155,11 @@ MENU_DOES = {
   ["i"] = function() require("ui.fightorder").open() end,
   -- Order > Resign (7721:150d)
   ["r"] = function() require("ui.resign").open() end,
+  -- View > Ruins (17be's inline case: 7204:0000 in mode 4 at the cursor)
+  ["."] = function()
+    local ruin = require("ui.ruin")
+    ruin.open(ruin.nearest(G.cx + 4, G.cy + 4))
+  end,
   -- View > Stack (89e0:0c9c)
   ["s"] = function() require("ui.stack").open() end,
   -- View > Army Bonus (89e0:1e3b)

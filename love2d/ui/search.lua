@@ -237,6 +237,9 @@ local function openSage(r)
   function d.draw()
     kit.popup(SAGE)
     G.drawStrategicMap(SAGE_MAP.x, SAGE_MAP.y)
+    -- 834b:05e4 marks the sites, this one boxed, until Items redraws the
+    -- map for the way to what it names (834b:0000)
+    if not d.target then G.drawSiteMarkers(SAGE_MAP.x, SAGE_MAP.y, r.site) end
     if d.target then
       kit.mapTarget(SAGE_MAP.x, SAGE_MAP.y, h.x, h.y, d.target.x, d.target.y)
       G.drawHeroFigure(SAGE_MAP.x, SAGE_MAP.y, h.x, h.y)

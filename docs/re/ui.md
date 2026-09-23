@@ -1375,6 +1375,31 @@ Dialog 34: Done (490, default and cancel), 491/492 one row up and down,
 493/494 six (stopping at 0 and 21); the up pair greys at the top, the down
 pair when the last row is place 27.
 
+## View › Ruins
+
+`.` is an inline case of `17be:0064`: the city dialog (`7204:0000`) in mode 4
+at the cursor, on the nearest site — by straight-line distance, `1a8b:0acc` —
+that is shown to the side (its bit in the site's mask at +0x1d) and, with a
+hidden map, seen (`828e:06fd`). Dialog 6 with the mode buttons 193–196
+hidden, so only Done (192) is left.
+
+The map is `834b:05e4`'s, which also draws the sage's: every site shown to
+the side, with a hidden map only where seen, gets an `ATRANS2.PCK` 16 × 10 —
+(112, 20) a temple, (112, 10) searched (tile flag 0x40), (128, 0) rich
+("Stronghold", +0x1b), else (112, 0) — at y = 2y − 1 and x = 2x − 1 rounded
+to the nearest multiple of 8; the site asked about gets a white 12 × 10 box
+(`2012:0bb7`/`0f08` lines).
+
+The right half is `auto_ui_city_info`'s case 4 (`7204:0cdf`): the name in
+font 1 centred on (432, 62); `SPECBITS.PCK`'s 96 × 63 at (328, 104) — (0, 0)
+for a temple, else one of five by site number mod 5 (`4125:0ee8`) — framed in
+black at (327, 103) 98 × 65 inside a (4, 2) bevel; *Type: …* (group 113, by
+content) at (432, 112) and *Explored: …* (group 114) at (432, 136); a colour-2
+box at (312, 180) 240 × 48 outlined in black with the four markers at
+(320, 188), (432, 188), (320, 208), (432, 208) and their words (group 115) at
+16 right and 3 up; and the site's three `.SPC` lines at (310, 259), 20 apart
+(`7204:1f06`).
+
 ## View › Stack
 
 `89e0:0c9c` lays the selected stack out at length on a copy of the bar's slot
