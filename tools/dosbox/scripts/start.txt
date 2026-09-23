@@ -1,0 +1,26 @@
+# From the title screen to the Sirians' first turn in Erythea, with the other
+# seven sides played by the computer. Run at the default pace (0.6s a step).
+# The waits are generous: how long a screen takes to come up varies from run
+# to run, and a click that lands early is lost.
+click 156 397          # Begin
+wait 12
+click 322 64           # Dark Elves: Human -> Knight, a computer player
+wait 2
+click 137 154
+wait 2
+click 322 154
+wait 2
+click 137 244
+wait 2
+click 322 244
+wait 2
+click 137 334
+wait 2
+click 322 334
+wait 2
+click 511 238          # Begin
+wait 80                # "Setting Up Game"
+key space              # the turn banner
+wait 6
+click 511 352          # OK: take the free hero
+wait 4
