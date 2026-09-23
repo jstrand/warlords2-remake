@@ -88,15 +88,17 @@ end
 
 --------------------------------------------------------------------- building
 
---- Which armies a click on the tile picks up (8c07:06eb): the one the tile
---- shows -- the highest in the fight order -- and, if it is in a group, every
---- army beside it in the same group. An ungrouped army is picked up alone.
-function slots.clicked(g, armies, side)
+--- Which armies a click on the tile picks up (8c07:06eb): the army named, or
+--- the one the tile shows -- the highest in the fight order -- and, if it is
+--- in a group, every army beside it in the same group. An ungrouped army is
+--- picked up alone.
+function slots.clicked(g, armies, side, anchor)
   local row = g.map.fightOrder[side or 8]
-  local anchor
-  for _, a in ipairs(armies) do
-    if not anchor or (row and (row[a.type] or 0) > (row[anchor.type] or 0)) then
-      anchor = a
+  if not anchor then
+    for _, a in ipairs(armies) do
+      if not anchor or (row and (row[a.type] or 0) > (row[anchor.type] or 0)) then
+        anchor = a
+      end
     end
   end
   if not anchor then return {} end

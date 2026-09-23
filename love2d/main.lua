@@ -169,6 +169,8 @@ function love.load(arg)
   G.seed = seed
   G.g = game.new(dataDir, scenario, { seed = seed })
   G.player = game.begin(G.g)
+  G.cursor = G.player.capital and
+             { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
   G.selection = nil
   -- centre the 9x9 viewport on the capital
   G.cx = math.max(0, math.min(G.player.capital.x - 4, G.g.map.width - screen.VIEW_COLS))
@@ -331,6 +333,11 @@ local function syncSelection()
   if not sel then return end
   slotsMod.commit(sel.slots, G.g)
   sel.stack = slotsMod.selected(sel.slots)
+  -- Being in the group that moves puts an army back in the cycle and marks it
+  -- offered for this pass, which is what 89e0:000a and 8c07:06eb do between
+  -- them. It is the group, not the tile: an army left out of it keeps
+  -- whatever it was.
+  for _, a in ipairs(sel.stack) do a.fortified, a.offered = nil, true end
 end
 
 --- Put the slots back over a new list of armies -- what is left after a
@@ -347,7 +354,10 @@ function reslot(armies)
   syncSelection()
 end
 
-local function select(x, y)
+--- Pick up what is on a tile. `pick` names the army to take, for when the
+--- cycle hands one over rather than the player clicking; without it the tile
+--- offers up whichever army it shows.
+local function select(x, y, pick)
   local stack = selectableAt(x, y)
   if #stack == 0 then
     G.selection = nil
@@ -357,12 +367,111 @@ local function select(x, y)
   end
   -- Clicking a tile selects one army, not the stack: the bar is where the
   -- group that moves is put together. docs/re/ui.md > The army slots.
-  local s = slotsMod.build(G.g, stack, G.player.index)
+  local s = slotsMod.build(G.g, stack, G.player.index,
+                           slotsMod.clicked(G.g, stack, G.player.index, pick))
   G.selection = { x = x, y = y, slots = s }
   syncSelection()
   refreshRoute()
   say("%d of %d, %d movement",
       #G.selection.stack, s.n, slotsMod.moves(s))
+end
+
+------------------------------------------------------------- the army cycle
+
+-- The five buttons above the pad are the turn's rhythm: they walk you through
+-- your armies one stack at a time until none is left to move.
+--
+-- Three bits of the army's flags word at +0xc decide who is still to be
+-- offered (8c07:040e):
+--
+--   0x0001  in the cycle. Selecting a stack sets it (89e0:000a); **fortify**
+--           clears it, and nothing at the turn's start puts it back -- which
+--           is what makes fortifying outlast the turn.
+--   0x0040  done for this turn. **Quit army** sets it (8c07:08fb) and the
+--           start of the side's turn clears it (8c07:0113).
+--   0x0200  already offered this pass. Selecting a stack sets it, and when
+--           the cycle runs out of unoffered armies it clears them all and
+--           starts round again.
+--
+-- The next army is the **nearest** of the eligible ones to where the cycle
+-- last stopped, which begins each turn at the side's capital. An army exactly
+-- there counts as far away instead of near, so "next" never hands you back
+-- the stack you are already standing on. docs/re/ui.md > The army cycle.
+local function cycleReset()
+  G.cursor = G.player.capital and
+             { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
+end
+
+--- Manhattan distance to where the cycle last stopped, with 0 pushed to the
+--- back of the queue (8c07:040e's 0x2328).
+local function cycleRank(a)
+  local d = math.abs(a.x - G.cursor.x) + math.abs(a.y - G.cursor.y)
+  return d == 0 and 9000 or d
+end
+
+--- The stack the cycle offers next, or nil when every army is done.
+local function nextArmy()
+  if not G.cursor then cycleReset() end
+  local fresh, used
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and not a.transit and not a.fortified and not a.done then
+      if a.offered then
+        if not used or cycleRank(a) < cycleRank(used) then used = a end
+      else
+        if not fresh or cycleRank(a) < cycleRank(fresh) then fresh = a end
+      end
+    end
+  end
+  if not fresh then
+    -- round again: everything left has been offered once already
+    if not used then return nil end
+    for _, a in ipairs(G.g.armies) do
+      if a.owner == G.player.index then a.offered = nil end
+    end
+    fresh = used
+  end
+  G.cursor = { x = fresh.x, y = fresh.y }
+  return fresh
+end
+
+--- Offer the next stack, centring on it. Nothing left to offer ends the turn's
+--- business rather than leaving a stale selection up.
+local function selectNext()
+  local a = nextArmy()
+  if not a then
+    G.selection, G.route = nil, nil
+    say("Every army has moved.")
+    return
+  end
+  select(a.x, a.y, a)
+  centreOn(a.x, a.y)
+end
+
+--- Whatever is selected is out of the cycle for the rest of this turn, and on
+--- to the next stack (control 175, 8c07:0393).
+local function quitArmy()
+  if not G.selection then selectNext() return end
+  for _, a in ipairs(G.selection.stack) do a.done = true end
+  G.route = nil
+  selectNext()
+end
+
+--- Dig in: out of the cycle until it is picked up again, this turn and every
+--- turn after (control 176, 8c07:03a6).
+local function fortify()
+  if not G.selection then selectNext() return end
+  local n = #G.selection.stack
+  for _, a in ipairs(G.selection.stack) do
+    a.fortified, a.target = true, nil
+  end
+  say("%d armies dig in.", n)
+  G.route = nil
+  selectNext()
+end
+
+--- Put the selection down (control 178, 8065:0f26 -> 1b62:08b3).
+local function deselect()
+  G.selection, G.route, G.walk = nil, nil, nil
 end
 
 --------------------------------------------------------------------- the turn
@@ -538,6 +647,7 @@ local function endTurn()
   end
   G.player = side
   stratDirty()
+  cycleReset()
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   showBanner(side)
 end
@@ -1707,6 +1817,23 @@ ACTION[GRP_ALL] = function()
   afterSlotChange()
 end
 ACTION[GRP_NONE] = ACTION[GRP_ALL]
+
+-- The five buttons above the pad, ids 173-178. 173 walks the selection on
+-- along the route it already has (1c8c:01fd with the army's own move target);
+-- the other four are the army cycle -- next, done for this turn, fortify, and
+-- put it down -- reaching 8065:0ec9 / 0ed7 / 0ef4 / 0f26, which is the row
+-- docs/re/ui.md > The army cycle sets out.
+ACTION[173] = function()
+  local sel = G.selection
+  if not sel or #sel.stack == 0 then say("Nothing is selected.") return end
+  local target = sel.stack[1].target
+  if not target then say("They have nowhere to be.") return end
+  moveSelection(target.x, target.y)
+end
+ACTION[174] = function() selectNext() end
+ACTION[175] = function() quitArmy() end
+ACTION[176] = function() fortify() end
+ACTION[178] = function() deselect() end
 
 -- The 3x3 pad, ids 320-327, all reach 8611:0723 with the id minus 320, and
 -- that routine steps the cursor by one in x, y or both. Laid out on screen

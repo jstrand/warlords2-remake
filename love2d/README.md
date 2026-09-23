@@ -39,6 +39,7 @@ regions and fonts are the game's own, read from its data files at runtime
 | `space` | end the turn; the computer players then take theirs |
 | `c` | centre on the selection |
 | `m` | Move All: every stack under orders walks on as far as it can |
+| the five buttons above the pad | walk on, next army, quit army (done for this turn), fortify (dug in until picked up again), deselect |
 | arrows / WASD | scroll one tile |
 | the hero dialog | tick Male or Female, type a name, OK or Cancel |
 | `F5` / `F9` | save and load |

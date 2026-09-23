@@ -96,6 +96,9 @@ function save.encode(g)
       group = (a.group or 0) ~= 0 and a.group or nil,
       -- where it has been told to go, the army record's own move target
       target = a.target and { x = a.target.x, y = a.target.y } or nil,
+      -- dug in, and so out of the army cycle until it is picked up again.
+      -- "Done for this turn" is not saved: the turn's start clears it.
+      fortified = a.fortified or nil,
       level = a.level, experience = a.experience, title = a.title,
       items = items, blessings = a.blessings,
       transit = a.transit and { turns = a.transit.turns, dest = a.transit.dest } or nil,

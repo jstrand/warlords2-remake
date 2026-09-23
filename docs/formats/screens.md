@@ -202,7 +202,7 @@ interface:
 
 | ids | rect | what |
 |---|---|---|
-| 173–178 | 24 × 22 at y 367, x 408–536 | five-button toolbar |
+| 173–178 | 24 × 22 at y 367, x 408–536 | **the army cycle**: walk on, next, quit army, fortify, deselect (`../re/ui.md` › The army cycle) |
 | 186, 187, 188 | 56 × 22 and 24 × 22 at y 396 | three wider buttons |
 | 179–182 | 32 × 29 at y 426, x 408–528 | four buttons |
 | 183, 184, 185 | 48 × 48 at (568, 415) | one button, three variants |

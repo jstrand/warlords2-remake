@@ -225,6 +225,20 @@ local function testTurnLoop(scenario)
   eq(side.income, side.capital.income, "income is the capital's income")
   ok(side.gold == math.max(0, gold0), "gold was applied")
 
+  -- The army cycle's per-turn marks. 8c07:0113 wipes "done for this turn"
+  -- and "already offered this pass" for the side whose turn is starting, and
+  -- leaves being fortified alone -- which is what makes digging in outlast
+  -- the turn. docs/re/ui.md > The army cycle.
+  do
+    local one = game.sideArmies(g, side)[1]
+    one.done, one.offered, one.fortified = true, true, true
+    for _ = 1, #g.sides do game.endTurn(g) end
+    eq(one.done, nil, "done for this turn wears off with the turn")
+    eq(one.offered, nil, "and so does having been offered this pass")
+    eq(one.fortified, true, "but digging in outlasts it")
+    one.fortified = nil
+  end
+
   -- carry-over: at most 2 unused points come across
   local a = game.sideArmies(g, side)[1]
   a.moves = 5
@@ -1831,6 +1845,8 @@ local function testSave()
 
   -- a grouped stack must come back grouped, so the group survives a save
   g.armies[1].group, g.armies[2].group = 4, 4
+  -- and a dug-in army is still dug in when the game is picked up again
+  g.armies[1].fortified = true
 
   local text = saveMod.encode(g)
   ok(#text > 1000, "the save has content")
@@ -1849,6 +1865,7 @@ local function testSave()
     eq(b.moves, a.moves, "army " .. i .. " keeps its movement")
     eq(b.owner, a.owner, "army " .. i .. " keeps its owner")
     eq(b.group or 0, a.group or 0, "army " .. i .. " keeps the group it moves with")
+    eq(b.fortified or false, a.fortified or false, "army " .. i .. " stays dug in")
   end
 
   for i, c in ipairs(g.map.cities) do

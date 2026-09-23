@@ -372,6 +372,49 @@ derived from the code above. The handlers this function reaches are known:
 `military_advisor`, the army-info panels and the tutorial hooks),
 `7204:033b` for cities, and `8065:0b3b` / `8065:0e04` for two drag modes.
 
+### The army cycle
+
+The five buttons above the pad are the turn's rhythm. The first walks the
+selection on along the route it already has — `1c8c:01fd` with the army's own
+move target — and the other four work the cycle that hands you your armies one
+stack at a time:
+
+| x | control | icon | handler | what |
+|---|---|---|---|---|
+| 408 | 173 | legs | `1c8c:01fd(target)` | **walk on** along the planned route |
+| 440 | 174 | arrow | `8065:0ec9` → `8c07:019b` | **next** army |
+| 472 | 175 | `!` | `8065:0ed7` → `8c07:0393` | **quit army**: done for this turn, then next |
+| 504 | 176 | crossed swords | `8065:0ef4` → `8c07:03a6` | **fortify**, then next |
+| 536 | 178 | flag with an x | `8065:0f26` → `1b62:08b3` | **deselect** |
+
+Three bits of the army's flags word at `+0xc` decide who is still to be
+offered, and the difference between the middle two buttons is **which bit they
+set**:
+
+| bit | meaning | set by | cleared by |
+|---|---|---|---|
+| `0x0001` | in the cycle | selecting a stack (`89e0:000a`) | **fortify** (`8c07:03a6`) |
+| `0x0040` | done for this turn | **quit army** (`8c07:08fb`) | the start of the side's turn (`8c07:0113`) |
+| `0x0200` | already offered this pass | selecting (`8c07:06eb`), and Move All | a full wrap of the cycle, and the turn's start |
+
+`8c07:0113` — run from the start-of-turn path in `8cc6` — clears `0x40` and
+`0x200` for every army of the side and puts the cycle's cursor back at the
+capital. It does **not** touch `0x0001`, and that is the whole difference:
+"done" wears off with the turn, while an army that has dug in stays out of the
+cycle until it is picked up again, which is what puts the bit back.
+
+Fortify also writes `1` to the army's group byte at `+0x11`, the same byte the
+slot bar groups on (› The army slots).
+
+**Choosing the next one**, `8c07:040e`: among the side's armies that are on
+the map, in the cycle and not done, it takes the **nearest** to where the
+cycle last stopped — Manhattan distance from `4125:3250`/`3252`, which starts
+each turn at the capital and moves to each stack as it is offered. An army at
+exactly that spot scores `0x2328` instead of 0, so "next" never hands back the
+stack you are standing on. Armies already offered this pass are held in
+reserve: when nothing unoffered is left, the nearest of them is taken, the
+`0x200` marks are wiped, and the cycle goes round again.
+
 ### Walking
 
 A stack walks **one tile at a time**, and the map shows where it is going.

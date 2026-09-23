@@ -279,6 +279,11 @@ end
 local function resetMovement(g, side)
   local doubleMove = game.itemBonus(g, side, rules.ITEM_DOUBLE_MOVE) > 0
   for _, a in ipairs(g.armies) do
+    -- 8c07:0113 wipes both of the cycle's per-turn marks for every army of
+    -- the side whose turn it is: the one that says "done, do not offer me
+    -- again this turn" and the one that says "already offered this pass".
+    -- Being fortified is not one of them -- that outlives the turn.
+    if a.owner == side.index then a.done, a.offered = nil, nil end
     if a.owner == side.index and not a.transit then
       local carry = math.min(a.moves or 0, rules.MOVE_CARRY)
       local base = a.atSea and rules.SEA_MOVES or a.maxMoves
