@@ -675,21 +675,6 @@ function closeCity()
 end
 G.openCity = function(city) openCity(city) end
 
---- Send what a city builds to the city at this tile of the strategic map.
---- Clicking the city itself sends it nowhere, which is how a vector is lifted.
-function G.vectorTo(c, mx, my)
-  local dest = game.cityAt(G.g, mx, my)
-  if not dest then say("There is no city there.") return end
-  if dest.ownerIndex ~= G.player.index then say("%s is not yours.", dest.name) return end
-  if dest == c then
-    game.vector(G.g, c, nil)
-    say("%s keeps what it builds.", c.name)
-  else
-    game.vector(G.g, c, dest)
-    say("%s sends what it builds to %s.", c.name, dest.name)
-  end
-end
-
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
   if not ok then say("Nothing to load.") return end
@@ -1088,6 +1073,113 @@ end
 -- and window coordinates are the same. That matters beyond tidiness --
 -- love.graphics.setScissor takes window pixels and ignores any transform, so
 -- scaling here would clip the map and the strategic map to the wrong place.
+-- The city dialog's Vector mode paints the map its own way (834b:08df, and
+-- 834b:1817 for See All): no owner shields, but a marker on each of the
+-- side's cities from ATRANS2.PCK's row at y = 94, 16x10, and lines for the
+-- vectors. The markers, by the table at 4125:2c76:
+--
+--   0 white, filled   a city building something      3 white, empty   idle
+--   4 black, filled   the dialog's city, building    6 black, empty   idle
+--   1 yellow, filled  a destination, building        5 yellow, empty  idle
+--   2 orange          a city vectoring here
+--
+-- A marker sits at (2x - 2, 2y - 1); a line runs between (2x + 2, 2y + 2) of
+-- its two cities, colour 7 to where a city sends its armies and colour 8 from
+-- a city sending them here.
+local VMARK_X = { [0] = 0, 32, 48, 16, 64, 80, 96 }
+
+local function linePixels(x0, y0, x1, y1)
+  -- 2133:00b8 draws a plain Bresenham line, both ends included
+  local dx, dy = math.abs(x1 - x0), -math.abs(y1 - y0)
+  local sx, sy = x0 < x1 and 1 or -1, y0 < y1 and 1 or -1
+  local err = dx + dy
+  while true do
+    love.graphics.rectangle("fill", x0, y0, 1, 1)
+    if x0 == x1 and y0 == y1 then break end
+    local e2 = 2 * err
+    if e2 >= dy then err = err + dy; x0 = x0 + sx end
+    if e2 <= dx then err = err + dx; y0 = y0 + sy end
+  end
+end
+
+--- Draw the map as the city dialog's Vector mode shows it. `filter` hides the
+--- cities that could not take more vectors: -1 when choosing where `city`
+--- sends its armies, n when moving the n cities vectoring to it, nil for all.
+function G.drawVectorMap(x, y, city, filter, seeAll)
+  if not G.stratImage then
+    G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
+  end
+  love.graphics.setScissor(x, y, 224, 312)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.stratImage, x, y)
+  local iw, ih = G.atransShields:getDimensions()
+  local function marker(c, k)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.atransShields, love.graphics.newQuad(VMARK_X[k], 94, 16, 10, iw, ih),
+                       x + c.x * 2 - 2, y + c.y * 2 - 1)
+  end
+  local function line(a, b, colour)
+    local c = G.palette[colour + 1]
+    love.graphics.setColor(c[1], c[2], c[3])
+    linePixels(x + a.x * 2 + 2, y + a.y * 2 + 2, x + b.x * 2 + 2, y + b.y * 2 + 2)
+  end
+  local mine = game.sideCities(G.g, G.player)
+  local function building(c) return c.producing and 0 or 3 end
+
+  if seeAll then
+    local done = {}
+    for _, c in ipairs(mine) do
+      if not done[c] then
+        done[c] = true
+        local incoming = game.vectoredTo(G.g, c)
+        local k = building(c)
+        if c.vectorTo then k = 2 end
+        if #incoming > 0 then k = c.producing and 1 or 5 end
+        marker(c, k)
+        local dest = c.vectorTo and G.g.map.cities[c.vectorTo + 1]
+        if dest then
+          done[dest] = true
+          marker(dest, dest.producing and 1 or 5)
+          line(dest, c, 7)
+        end
+        for _, src in ipairs(incoming) do
+          done[src] = true
+          marker(src, 2)
+          line(src, c, 8)
+        end
+      end
+    end
+    local c = G.palette[16]
+    love.graphics.setColor(c[1], c[2], c[3])
+    local bx, by = x + city.x * 2 - 3, y + city.y * 2 - 2
+    love.graphics.rectangle("fill", bx, by, 11, 1)
+    love.graphics.rectangle("fill", bx, by + 11, 11, 1)
+    love.graphics.rectangle("fill", bx, by, 1, 11)
+    love.graphics.rectangle("fill", bx + 11, by, 1, 11)
+  else
+    for _, c in ipairs(mine) do
+      local n = #game.vectoredTo(G.g, c)
+      local full = (filter == -1 and n + 1 > game.MAX_VECTORED_TO)
+                   or (filter and filter >= 0 and n + filter > game.MAX_VECTORED_TO)
+      if c == city or not full then
+        local k = building(c)
+        if c == city then k = c.producing and 4 or 6 end
+        marker(c, k)
+      end
+    end
+    local dest = city.vectorTo and G.g.map.cities[city.vectorTo + 1]
+    if dest then
+      marker(dest, dest.producing and 1 or 5)
+      line(city, dest, 7)
+    end
+    for _, src in ipairs(game.vectoredTo(G.g, city)) do
+      marker(src, 2)
+      line(src, city, 8)
+    end
+  end
+  love.graphics.setScissor()
+end
+
 --- The strategic map in a dialog's left-hand panel -- the city dialog's --
 --- with the city marked.
 function G.drawStrategicPanel(x, y, city)

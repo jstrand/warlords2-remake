@@ -358,6 +358,32 @@ if G and G.g then
       if G.cityMode ~= 1 then fail("build production", "Done did not return to City mode") end
     end
 
+    -- Vector mode: send this city's armies to another of ours, with the
+    -- send button and then a click on the map; then See All; then a plain
+    -- click on the other city moves the dialog there
+    local other
+    for _, c in ipairs(G.g.map.cities) do
+      if c ~= mine and not c.razed then other = c break end
+    end
+    local wasOwner = other.ownerIndex
+    other.ownerIndex = G.player.index
+    press(view, 195, "Production mode")
+    press(view, 197, "build something to vector")
+    press(view, 196, "Vector mode")
+    press(view, 210, "send the armies elsewhere")
+    try("click the other city on the map", love.mousepressed,
+        80 + other.x * 2 + 1, 60 + other.y * 2 + 1, 1)
+    try("draw the vector map", love.draw)
+    if mine.vectorTo ~= other.index then fail("vector", "the click did not set the vector") end
+    press(view, 212, "See All")
+    press(view, 216, "See All off")
+    try("click the other city again", love.mousepressed,
+        80 + other.x * 2 + 1, 60 + other.y * 2 + 1, 1)
+    if G.city ~= other then fail("vector", "a plain click did not move the dialog") end
+    try("back to our city", function() love.keypressed("escape") G.openCity(mine) end)
+    mine.vectorTo = nil
+    other.ownerIndex = wasOwner
+
     -- Stop in Production, then Done
     press(view, 195, "Production mode")
     press(view, 202, "Stop")

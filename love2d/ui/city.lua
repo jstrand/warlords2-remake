@@ -37,13 +37,18 @@ local DONE, DONE_PROD, STOP = 192, 201, 202
 local MODE_FIRST = 193
 local SLOT_FIRST = 197                              -- 197-200, Production only
 local RENAME, BUILD, RAZE = 203, 204, 205
-local VECTOR_CTLS = { 210, 211, 212 }
+-- Vector mode's three buttons, each with a lit twin at the same rect:
+-- 210/214 send this city's armies somewhere new, 211/215 send the armies of
+-- every city vectoring here somewhere new, 212/216 See All.
+local V_SEND, V_MOVE, V_ALL = 210, 211, 212
+local V_SEND_LIT, V_MOVE_LIT, V_ALL_LIT = 214, 215, 216
 
 -- STRING.DAT groups
 local S_STATS = 0x74       -- Income, Defence, and the three kinds of owner
 local S_CURRENT = 0x75     -- "Current:", ", then to", "Standard!", "Nowhere!"
 local S_RENAME, S_RAZE, S_BUILD = 0x77, 0x78, 0x79
 local S_VECTOR = 0x9a      -- "Current:", "%dt", "Next turn:", "Turn after:"
+local S_HELP1, S_HELP2 = 0x9b, 0x9c    -- what 210 and 211 do, idle and waiting
 
 -- Rename and Raze put their words in the executable, not in STRING.DAT
 -- (4125:1003-1025 and 4125:0a6c-0a9d).
@@ -224,8 +229,12 @@ local function drawProduction(d)
   end
 end
 
--- 3: Vector (7204:12b7). What is being built and its countdown, then the two
--- rows of what is on its way here: next turn, and the turn after.
+-- 3: Vector (7204:12b7). What is being built and its countdown, and the two
+-- armies of it already on the road -- the one out this turn at (432, 103),
+-- the one arriving next turn at (472, 103) -- then two rows of what is on
+-- its way here from other cities, next turn and the turn after, four at
+-- most in each. Below them the two buttons each say what they do
+-- (7087:0638), and say it differently while a click on the map is awaited.
 local function drawVector(d)
   local G, city = kit.G, d.city
   local f = kit.font(2)
@@ -237,14 +246,21 @@ local function drawVector(d)
   love.graphics.setColor(1, 1, 1)
   f.draw(city.producing and kit.text(S_VECTOR, 1):format(city.countdown or 0) or "-", 408, 109)
 
-  -- armies in transit to this city, by the turns they have left
-  local next, after = {}, {}
+  local out, onRoad, next, after = nil, nil, {}, {}
   for _, a in ipairs(G.g.armies) do
-    if a.transit and a.transit.dest == city.index and a.owner == G.player.index then
-      local row = a.transit.turns <= 1 and next or after
-      if #row < 4 then row[#row + 1] = a end
+    if a.transit and a.owner == G.player.index then
+      if a.homeCity == city.index and a.transit.dest == city.vectorTo then
+        if a.transit.turns >= 2 then out = a else onRoad = a end
+      end
+      if a.transit.dest == city.index and a.homeCity ~= city.index then
+        local row = a.transit.turns >= 2 and after or next
+        if #row < 4 then row[#row + 1] = a end
+      end
     end
   end
+  kit.army(out and out.type, owner, 432, 103, 1)
+  kit.army(onRoad and onRoad.type, owner, 472, 103, 1)
+
   love.graphics.setColor(1, 1, 1)
   kit.right(f, kit.text(S_VECTOR, 2), 392, 155)
   kit.right(f, kit.text(S_VECTOR, 3), 392, 188)
@@ -253,6 +269,14 @@ local function drawVector(d)
     kit.army(next[i] and next[i].type, G.player.index, x, 149, 1)
     kit.army(after[i] and after[i].type, G.player.index, x, 182, 1)
   end
+
+  love.graphics.setColor(1, 1, 1)
+  local a0 = d.sub == 1 and 2 or 0
+  f.draw(kit.text(S_HELP1, a0), 368, 221)
+  f.draw(kit.text(S_HELP1, a0 + 1), 368, 241)
+  local b0 = d.sub == 2 and 2 or 0
+  f.draw(kit.text(S_HELP2, b0), 368, 272)
+  f.draw(kit.text(S_HELP2, b0 + 1), 368, 292)
 end
 
 local DRAW = {
@@ -288,8 +312,16 @@ local function refresh(d)
     for _, id in ipairs({ RENAME, RAZE, BUILD }) do shown[id], st[id] = true, uidata.NORMAL end
   end
   if d.mode == M.VECTOR then
-    for _, id in ipairs(VECTOR_CTLS) do shown[id], st[id] = true, uidata.NORMAL end
-    st[210] = d.city.producing and uidata.NORMAL or uidata.DISABLED
+    local G = kit.G
+    local all = G.vectorSeeAll and V_ALL_LIT or V_ALL
+    shown[all], st[all] = true, uidata.NORMAL
+    local send = d.sub == 1 and V_SEND_LIT or V_SEND
+    shown[send] = true
+    st[send] = (d.sub == 1 or d.city.producing) and uidata.NORMAL or uidata.DISABLED
+    local move = d.sub == 2 and V_MOVE_LIT or V_MOVE
+    shown[move] = true
+    st[move] = (d.sub == 2 or #game.vectoredTo(G.g, d.city) > 0)
+               and uidata.NORMAL or uidata.DISABLED
   end
 
   d.hidden = {}
@@ -316,6 +348,7 @@ function M.open(city, mode)
       d.chosen = b and b.type or nil
     end
     d.mode = m
+    d.sub = 0
     G.cityMode = m
     refresh(d)
   end
@@ -372,7 +405,14 @@ function M.open(city, mode)
 
   function d.draw()
     kit.popup(R)
-    if G.drawStrategicPanel then G.drawStrategicPanel(MAP.x, MAP.y, city) end
+    if d.mode == M.VECTOR and G.drawVectorMap then
+      local filter
+      if d.sub == 1 then filter = -1
+      elseif d.sub == 2 then filter = #game.vectoredTo(G.g, city) end
+      G.drawVectorMap(MAP.x, MAP.y, city, filter, G.vectorSeeAll and d.sub == 0)
+    elseif G.drawStrategicPanel then
+      G.drawStrategicPanel(MAP.x, MAP.y, city)
+    end
     love.graphics.setColor(1, 1, 1)
     kit.centred(kit.font(1), city.name, 432, 62)
     DRAW[d.mode](d)
@@ -389,14 +429,59 @@ function M.open(city, mode)
       elseif c.id == RENAME then d.rename()
       elseif c.id == RAZE then d.raze()
       elseif c.id == BUILD then d.build()
+      -- 7087:050e: each of the first two toggles its waiting state; See All
+      -- toggles for good, and is remembered from city to city
+      elseif c.id == V_SEND or c.id == V_SEND_LIT then
+        d.sub = (d.sub == 1) and 0 or 1
+        refresh(d)
+      elseif c.id == V_MOVE or c.id == V_MOVE_LIT then
+        d.sub = (d.sub == 2) and 0 or 2
+        refresh(d)
+      elseif c.id == V_ALL or c.id == V_ALL_LIT then
+        G.vectorSeeAll = not G.vectorSeeAll
+        refresh(d)
       end
       return
     end
-    -- Vector mode: a click on the map sends production to the city there
     if d.mode == M.VECTOR and x >= MAP.x and x < MAP.x + MAP.w
-       and y >= MAP.y and y < MAP.y + MAP.h and G.vectorTo then
-      G.vectorTo(city, math.floor((x - MAP.x) / 2), math.floor((y - MAP.y) / 2))
+       and y >= MAP.y and y < MAP.y + MAP.h then
+      d.mapClick(math.floor((x - MAP.x) / 2), math.floor((y - MAP.y) / 2))
     end
+  end
+
+  --- A click on the map in Vector mode (7087:072e, 7087:028b). It means the
+  --- side's city nearest the click. With Shift held, or while waiting to
+  --- send this city's armies somewhere, that city becomes the destination --
+  --- if this city is building, and the destination takes fewer than four,
+  --- and clicking this city itself lifts the vector. While waiting to move
+  --- the armies coming here, every city sending them is redirected to it, if
+  --- it could take them all. Otherwise -- and afterwards, unless it was a
+  --- send -- the dialog moves to the city clicked.
+  function d.mapClick(mx, my)
+    local target = game.nearestCity(G.g, mx, my, G.player)
+    if not target then return end
+    local shift = love.keyboard and love.keyboard.isDown
+                  and love.keyboard.isDown("lshift", "rshift")
+    local sub = d.sub
+    if shift or sub == 1 then
+      if city.producing then game.vector(G.g, city, target) end
+      if shift then d.sub = 0 refresh(d) return end
+    elseif sub == 2 then
+      local incoming = game.vectoredTo(G.g, city)
+      local there = game.vectoredTo(G.g, target)
+      local ok = #incoming > 0 and #incoming + #there <= game.MAX_VECTORED_TO
+      for _, c in ipairs(incoming) do if c == target then ok = false end end
+      if ok then
+        for _, c in ipairs(incoming) do c.vectorTo = target.index end
+      end
+    end
+    d.sub = 0
+    if sub ~= 1 and target ~= city then
+      d.close()
+      M.open(target, M.VECTOR)
+      return
+    end
+    refresh(d)
   end
 
   -- Done heads both the cancel and the default lists (4125:1514, :155c)

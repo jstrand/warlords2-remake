@@ -313,6 +313,26 @@ local function testVectoring(scenario)
   -- stopping production clears the vector
   game.setProduction(g, from, nil)
   ok(from.vectorTo == nil, "vectoring only sticks while the city is building")
+
+  -- no destination takes more than four (7087:028b)
+  local senders = {}
+  for _, c in ipairs(g.map.cities) do
+    if c ~= dest and #senders < 5 then
+      c.ownerIndex = side.index
+      senders[#senders + 1] = c
+    end
+  end
+  for i = 1, 4 do ok(game.vector(g, senders[i], dest), "vector " .. i .. " is taken") end
+  ok(not game.vector(g, senders[5], dest), "a fifth is refused")
+  eq(senders[5].vectorTo, nil, "and the fifth city keeps no vector")
+  eq(#game.vectoredTo(g, dest), 4, "four cities send to the destination")
+  ok(game.vector(g, senders[1], dest), "a city already sending there may be set again")
+  ok(game.vector(g, senders[1], senders[1]), "vectoring a city to itself lifts the vector")
+  eq(senders[1].vectorTo, nil, "and leaves it with none")
+
+  -- the map picks the side's nearest city to a click
+  eq(game.nearestCity(g, dest.x, dest.y, side), dest, "a click on a city picks it")
+  eq(game.nearestCity(g, dest.x + 1, dest.y - 1, side), dest, "and a click next to it too")
 end
 
 ------------------------------------------------------------- buying types

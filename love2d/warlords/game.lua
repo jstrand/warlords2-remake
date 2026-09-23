@@ -677,9 +677,44 @@ function game.setProduction(g, city, slotIndex)
   if not slotIndex then city.vectorTo = nil end   -- vectoring only sticks while building
 end
 
---- Send what a city builds to another city. Free, and with no range limit.
+-- No more than four cities may send their armies to one destination
+-- (7087:028b refuses a fifth).
+game.MAX_VECTORED_TO = 4
+
+--- The cities sending what they build to `dest` (7087:0410).
+function game.vectoredTo(g, dest)
+  local out = {}
+  for _, c in ipairs(g.map.cities) do
+    if c.vectorTo == dest.index and c ~= dest then out[#out + 1] = c end
+  end
+  return out
+end
+
+--- Send what a city builds to another city. Free, and with no range limit;
+--- `destCity` nil (or the city itself) stops it. Returns false, and changes
+--- nothing, when the destination already takes four.
 function game.vector(g, city, destCity)
+  if destCity == city then destCity = nil end
+  if destCity and city.vectorTo ~= destCity.index
+     and #game.vectoredTo(g, destCity) >= game.MAX_VECTORED_TO then
+    return false
+  end
   city.vectorTo = destCity and destCity.index or nil
+  return true
+end
+
+--- The side's city nearest a tile, by map distance -- the larger of the two
+--- steps -- and the first of equals (828e:04fa). The map in the city dialog
+--- picks a city this way, so a click near one is as good as a click on it.
+function game.nearestCity(g, x, y, side)
+  local best, bestD
+  for _, c in ipairs(g.map.cities) do
+    if c.ownerIndex == side.index then
+      local d = math.max(math.abs(c.x - x), math.abs(c.y - y))
+      if not bestD or d < bestD then best, bestD = c, d end
+    end
+  end
+  return best
 end
 
 --- The army types a side may buy for a city, in ARMYTYPE.DAT's own order --

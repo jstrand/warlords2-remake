@@ -1025,6 +1025,47 @@ built, which is why the ring and the numbers follow a click. **Stop**
 Info. **Build Prod** (204, `7087:0978`) opens Build Production and returns to
 City mode.
 
+### Vector mode
+
+The map changes with the mode (`834b:08df`; `834b:1817` for See All): no
+owner shields, but a marker from `ATRANS2.PCK`'s row at y = 94, 16 × 10, on
+each of the side's cities, at (2x − 2, 2y − 1):
+
+| marker (table `4125:2c76`) | means |
+|---|---|
+| 0 white, filled / 3 white, empty | one of the side's cities, building / idle |
+| 4 black, filled / 6 black, empty | the dialog's city |
+| 1 yellow, filled / 5 yellow, empty | where the dialog's city sends its armies |
+| 2 orange | a city sending its armies here |
+
+and lines between the cities' (2x + 2, 2y + 2) — colour 7 to the destination,
+colour 8 from each city sending here. See All marks every city by what it is
+doing and draws every vector, and boxes the dialog's city in white.
+
+The mode has three states (`4125:0e94`), each with its buttons and the two
+lines of help beside them (`7087:0638`, groups 155 and 156, at (368, 221) and
+(368, 272)):
+
+- **idle** — 210 *vector to a new city* (greyed unless the city is building),
+  211 *change the destination of armies* (greyed unless some city sends here),
+  212 See All (216 while it is on);
+- **choosing a destination** — 214 lit in 210's place; the map shows only the
+  cities that could take one more;
+- **moving the incoming** — 215 lit in 211's place; the map shows only the
+  cities that could take them all.
+
+A click on the map (`7087:072e`) means the side's city **nearest** the click
+(`828e:04fa`, by map distance). With Shift, or while choosing a destination,
+that city becomes the destination (`7087:028b`): only if this city is building,
+clicking the city itself lifts the vector, and **no city takes more than four**.
+While moving the incoming, every city sending here is redirected to it, if it
+could take them all. Otherwise — and after any click but a send — the dialog
+moves to the city clicked, still in Vector mode.
+
+The **Current** row shows the city's two armies on the road: the one sent out
+this turn at (432, 103), the one arriving next turn at (472, 103). The rows
+below are armies coming here from other cities.
+
 ### Build Production
 
 Popup 11, **(80, 60) 480 × 350**, dialog 23; `auto_ui_build_production`
