@@ -497,7 +497,12 @@ function game.sack(g, side, city, stack)
 end
 
 --- Burn the city to the ground: it becomes neutral ruins and produces nothing.
-function game.raze(g, side, city, stack)
+---
+--- There are two ways to do it and they are not scored alike. Razing a city
+--- as it falls (63fa:0000) costs the side 1d15+10 on its atrocity score and
+--- counts towards a raze quest; razing one of its own from the city dialog
+--- (649c:0061, `ownCity` set) costs 1d25+25 and is nobody's quest.
+function game.raze(g, side, city, stack, ownCity)
   local move = require("warlords.move")
   city.razed = true
   -- city_make_ruins reads the owner before clearing it: the ruins keep the
@@ -513,8 +518,12 @@ function game.raze(g, side, city, stack)
     if c.vectorTo == city.index then c.vectorTo = nil end
   end
   scn.setCityTiles(g.map, city)
-  game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   move.invalidate(g)
+  if ownCity then
+    game.addDiploScore(g, side, g.rng:dice(1, 25, 25))
+    return
+  end
+  game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
   require("warlords.quest").event(g, side, "raze", { city = city, stack = stack or {} })
 end
 
@@ -671,6 +680,84 @@ end
 --- Send what a city builds to another city. Free, and with no range limit.
 function game.vector(g, city, destCity)
   city.vectorTo = destCity and destCity.index or nil
+end
+
+--- The army types a side may buy for a city, in ARMYTYPE.DAT's own order --
+--- every type with a price of 0 or more. auto_ui_build_production
+--- (7087:09da) lists exactly these, four to a row.
+function game.buyableTypes(g)
+  local out = {}
+  for _, a in ipairs(g.types.list) do
+    if a.price >= 0 then out[#out + 1] = a end
+  end
+  return out
+end
+
+--- Why a type cannot be bought for this city right now, or nil if it can:
+--- the city already builds it, or the side cannot afford it. 7087:0dae greys
+--- the type's button out for either reason.
+function game.cannotBuy(g, side, city, a)
+  for _, slot in ipairs(city.slots) do
+    if slot.type == a.id then return "has it" end
+  end
+  if side.gold < a.price then return "too dear" end
+  return nil
+end
+
+--- The slot the Build Production screen starts on (7087:0978): the first
+--- empty one, or the first of all when all four are full.
+function game.buySlot(city)
+  if #city.slots < rules.PRODUCTION_SLOTS then return #city.slots + 1 end
+  return 1
+end
+
+--- Buy an army type into a city's production slot `n` -- a new slot when n is
+--- one past the last, otherwise replacing what is there. The slot takes the
+--- type's ARMYTYPE.DAT stats unmodified, with none of the nudging a city's
+--- starting production gets, and the price comes off the side's gold.
+--- buy_production_type, 7087:1299, and ui_buy_production_type, 7087:0ee3.
+---
+--- The original keeps what a city is building as a type id, so if the type it
+--- was building is the one bought over, production stops and the vectoring
+--- goes with it -- which is what 0ee3 does when the type is gone from the list.
+function game.buyProduction(g, side, city, n, typeId)
+  local a = g.types.byId[typeId]
+  local building = city.producing and city.slots[city.producing]
+  city.slots[n] = {
+    type = a.id, name = a.name, strength = a.strength,
+    time = a.time, cost = a.cost, move = a.move, price = math.abs(a.price),
+  }
+  city.defence = rules.cityDefence(#city.slots)
+  side.gold = side.gold - a.price
+  if building and city.slots[city.producing] ~= building then
+    city.producing, city.countdown, city.vectorTo = nil, 0, nil
+  end
+end
+
+--- Put a city's production back in price order, cheapest first, the way
+--- sort_city_production (7087:1544) does when the Build Production screen is
+--- closed -- an insertion sort, so equal prices keep their order. What the
+--- city builds follows its type to wherever it lands.
+function game.sortProduction(city)
+  local building = city.producing and city.slots[city.producing]
+  local s = city.slots
+  for i = 2, #s do
+    local j = i
+    while j > 1 and s[j].price < s[j - 1].price do
+      s[j], s[j - 1] = s[j - 1], s[j]
+      j = j - 1
+    end
+  end
+  if building then
+    for i, slot in ipairs(s) do
+      if slot == building then city.producing = i end
+    end
+  end
+end
+
+--- Give a city a new name (Rename, 7204:204d copies it over the old one).
+function game.renameCity(g, city, name)
+  city.name = name
 end
 
 return game

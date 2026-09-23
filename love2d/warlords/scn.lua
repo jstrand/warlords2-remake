@@ -79,6 +79,24 @@ function scn.loadItemPool(path)
   return pool
 end
 
+--- A .CTY or .SPC file: the three lines of description the info dialog shows
+--- for each city or site, as `#NNN|line|line|line|`. 7204:1f06 finds an
+--- entry by its "#%03d" and takes the next three fields. Returns
+--- {[index] = {line, line, line}}, or {} when the file is missing.
+function scn.loadDescriptions(path)
+  local out = {}
+  if not fileExists(path) then return out end
+  for line in readAll(path):gmatch("([^\r\n]+)") do
+    local n, rest = line:match("^#(%d+)|(.*)$")
+    if n then
+      local parts = {}
+      for field in rest:gmatch("([^|]*)|") do parts[#parts + 1] = field end
+      out[tonumber(n)] = { parts[1] or "", parts[2] or "", parts[3] or "" }
+    end
+  end
+  return out
+end
+
 function scn.load(dir, name)
   local base = dir .. "/" .. name
   local s = readAll(base .. ".SCN")
@@ -209,6 +227,8 @@ function scn.load(dir, name)
     name = name, sides = sides, cities = cities, cityAt = byPos, cityTile = cityTile,
     sites = sites, items = items, monsters = monsters, crossing = crossing,
     itemPool = scn.loadItemPool(base .. ".ITM"),
+    cityText = scn.loadDescriptions(base .. ".CTY"),
+    siteText = scn.loadDescriptions(base .. ".SPC"),
     options = options, terrainType = terrainType, fightOrder = fightOrder,
     combatCap = u16(s, COMBAT_CAP),
     tiles = tiles, roads = roads,

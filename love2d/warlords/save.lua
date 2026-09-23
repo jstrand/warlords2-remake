@@ -129,7 +129,7 @@ function save.encode(g)
   local cities = {}
   for _, c in ipairs(g.map.cities) do
     cities[#cities + 1] = {
-      index = c.index, ownerIndex = c.ownerIndex, producing = c.producing,
+      index = c.index, name = c.name, ownerIndex = c.ownerIndex, producing = c.producing,
       countdown = c.countdown, vectorTo = c.vectorTo, razed = c.razed or nil,
       defence = c.defence, income = c.income, previousOwner = c.previousOwner,
       razedBy = c.razedBy, slots = c.slots,
@@ -208,6 +208,7 @@ function save.decode(text, dataDir)
     c.vectorTo, c.razed, c.defence = saved.vectorTo, bool(saved.razed), saved.defence
     c.income, c.previousOwner, c.slots = saved.income, saved.previousOwner, saved.slots
     c.razedBy = saved.razedBy
+    c.name = saved.name or c.name            -- renamed; older saves lack it
   end
   -- the map comes back off disk with every city as tile 96, so restamp the
   -- castles from the ownership we have just restored

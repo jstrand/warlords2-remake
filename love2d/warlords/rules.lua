@@ -31,6 +31,7 @@ rules.bugs = {
 
 rules.NEUTRAL = 15          -- the owner byte used for neutral cities
 rules.MAX_STACK = 8         -- armies on one tile
+rules.PRODUCTION_SLOTS = 4  -- army types a city can build (city record +22)
 rules.MAX_MOVE = 99         -- movement points are capped here at turn start
 rules.MOVE_CARRY = 2        -- unused moves carried into the next turn, at most
 rules.SEA_MOVES = 20        -- an army at sea gets this instead of its maximum

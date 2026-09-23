@@ -315,6 +315,72 @@ local function testVectoring(scenario)
   ok(from.vectorTo == nil, "vectoring only sticks while the city is building")
 end
 
+------------------------------------------------------------- buying types
+
+local function testBuyProduction(scenario)
+  print("buying production: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 17 })
+  local side = game.begin(g)
+  local city = side.capital
+  side.gold = 5000
+
+  -- the list is every type with a price, in the file's order
+  local list = game.buyableTypes(g)
+  ok(#list > 0 and #list <= 20, "the Build Production screen has room for every type")
+  for _, a in ipairs(list) do ok(a.price >= 0, a.name .. " is for sale") end
+
+  -- a type the city already builds cannot be bought again
+  eq(game.cannotBuy(g, side, city, g.types.byId[city.slots[1].type]), "has it",
+     "a type already built is greyed out")
+
+  -- the screen starts on the first empty slot, or the first when all are full
+  local n0 = #city.slots
+  eq(game.buySlot(city), n0 < 4 and n0 + 1 or 1, "the starting slot")
+
+  -- buy the dearest affordable type the city lacks into a new slot
+  local pick
+  for _, a in ipairs(list) do
+    if not game.cannotBuy(g, side, city, a) and (not pick or a.price > pick.price) then pick = a end
+  end
+  ok(pick ~= nil, "something to buy")
+  if n0 == 4 then table.remove(city.slots) n0 = 3 end
+  game.setProduction(g, city, 1)
+  local building = city.slots[1]
+  local gold = side.gold
+  game.buyProduction(g, side, city, n0 + 1, pick.id)
+  eq(side.gold, gold - pick.price, "the price comes off the treasury")
+  local slot = city.slots[n0 + 1]
+  eq(slot.type, pick.id, "the bought type fills the slot")
+  eq(slot.strength, pick.strength, "a bought type takes ARMYTYPE's strength unmodified")
+  eq(slot.time, pick.time, "and its time")
+  eq(slot.move, pick.move, "and its move")
+  eq(city.defence, rules.cityDefence(#city.slots), "defence follows the number of types")
+  eq(city.producing, 1, "buying into a new slot leaves production alone")
+
+  -- sorting puts the list in price order and production follows its type
+  game.sortProduction(city)
+  for i = 2, #city.slots do
+    ok(city.slots[i - 1].price <= city.slots[i].price, "sorted by price, cheapest first")
+  end
+  eq(city.slots[city.producing], building, "the city builds the same type after sorting")
+
+  -- buying over the type being built stops production and the vector
+  game.vector(g, city, g.map.cities[1] ~= city and g.map.cities[1] or g.map.cities[2])
+  local other
+  for _, a in ipairs(list) do if not game.cannotBuy(g, side, city, a) then other = a break end end
+  game.buyProduction(g, side, city, city.producing, other.id)
+  eq(city.producing, nil, "production stops when its type is bought over")
+  eq(city.vectorTo, nil, "and the vector goes with it")
+
+  -- a new name survives a save
+  local saveMod = require("warlords.save")
+  game.renameCity(g, city, "Newtown")
+  local h = saveMod.decode(saveMod.encode(g), DATA)
+  eq(h.map.cities[city.index + 1].name, "Newtown", "a renamed city keeps its name")
+  eq(h.map.cities[city.index + 1].slots[#city.slots].type, city.slots[#city.slots].type,
+     "bought production survives a save")
+end
+
 ------------------------------------------------------------------- movement
 
 local function testMovement(scenario)
@@ -2033,6 +2099,7 @@ for _, s in ipairs(SCENARIOS) do
 end
 testTurnLoop("ERYTHEA")
 testVectoring("ERYTHEA")
+testBuyProduction("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")
