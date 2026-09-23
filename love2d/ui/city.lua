@@ -202,9 +202,17 @@ local function drawProduction(d)
   local text = countdown(city)
   love.graphics.setColor(1, 1, 1)
   if city.vectorTo then
-    local dest = G.g.map.cities[city.vectorTo + 1]
+    -- a city by name; the standard as "Standard!", or "Nowhere!" once it is
+    -- no longer planted (7204:0ef8)
+    local where
+    if city.vectorTo == game.STANDARD then
+      where = kit.text(S_CURRENT, game.standardAt(G.g, G.player) and 2 or 3)
+    else
+      local dest = G.g.map.cities[city.vectorTo + 1]
+      where = dest and dest.name or kit.text(S_CURRENT, 3)
+    end
     f.draw(text .. kit.text(S_CURRENT, 1), 456, 102)
-    f.draw(dest and dest.name or kit.text(S_CURRENT, 3), 456, 122)
+    f.draw(where, 456, 122)
   else
     f.draw(text, 456, 110)
   end
@@ -460,11 +468,19 @@ function M.open(city, mode)
   function d.mapClick(mx, my)
     local target = game.nearestCity(G.g, mx, my, G.player)
     if not target then return end
+    -- the planted standard, if it is nearer the click than the city is
+    -- (828e:0651)
+    local sx, sy = game.standardAt(G.g, G.player)
+    local toStandard = sx and math.max(math.abs(sx - mx), math.abs(sy - my))
+                       < math.max(math.abs(target.x - mx), math.abs(target.y - my))
     local shift = love.keyboard and love.keyboard.isDown
                   and love.keyboard.isDown("lshift", "rshift")
     local sub = d.sub
     if shift or sub == 1 then
-      if city.producing then game.vector(G.g, city, target) end
+      if city.producing then
+        if toStandard then game.vectorToStandard(G.g, city, G.player)
+        else game.vector(G.g, city, target) end
+      end
       if shift then d.sub = 0 refresh(d) return end
     elseif sub == 2 then
       local incoming = game.vectoredTo(G.g, city)

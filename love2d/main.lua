@@ -30,6 +30,7 @@ local kit      = require("ui.kit")
 local cityUi   = require("ui.city")
 local reportsUi = require("ui.reports")
 local heroInfo  = require("ui.heroinfo")
+local levelsUi  = require("ui.levels")
 
 local TILE = screen.TILE
 -- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
@@ -147,6 +148,7 @@ function love.load(arg)
   -- (1997:027e, from 8cc6:0952).
   G.atransShields = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, 1)
   G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6
+  G.bagQuad = love.graphics.newQuad(64, 0, 32, 29, 144, 246)
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   -- Drawn opaque, as 1997:0129 blits every bitmap it is given: a cell's own
@@ -701,6 +703,15 @@ end
 
 local function drawMap()
   local r = G.mapRect
+  -- one item a tile is enough to draw: the last in item order, as 8611:2d7c
+  -- walks them from the end
+  G.itemsOnTile = {}
+  for i = #G.g.map.items, 1, -1 do
+    local it = G.g.map.items[i]
+    if it.status == 1 and it.x and not G.itemsOnTile[it.x + it.y * 1000] then
+      G.itemsOnTile[it.x + it.y * 1000] = it
+    end
+  end
   love.graphics.setScissor(r.x, r.y, r.w, r.h)
   for row = 0, screen.VIEW_ROWS - 1 do
     for col = 0, screen.VIEW_COLS - 1 do
@@ -714,6 +725,19 @@ local function drawMap()
           love.graphics.draw(G.sheets[sheet], G.tileQuads[sheet][t % 96], sx, sy)
           local rd = scn.roadAt(G.g.map, mx, my)
           if rd ~= 0 then love.graphics.draw(G.roadImg, G.roadQuads[rd - 1], sx, sy) end
+          -- Items on the ground (8611:2d7c, drawn by 8611:1a79 before the
+          -- stacks, at the tile's corner): a planted standard as its side's
+          -- flag, army cell 29 of the side's sheet; anything else as the bag,
+          -- ATRANS2.PCK's (64, 0) 32x29.
+          local here = G.itemsOnTile and G.itemsOnTile[mx + my * 1000]
+          if here then
+            if here.planted and here.standardOf then
+              local side = here.standardOf
+              love.graphics.draw(G.armyImg[side], G.armyQuads[side][29], sx, sy)
+            else
+              love.graphics.draw(G.atransShields, G.bagQuad, sx, sy)
+            end
+          end
 
           local stack = game.armiesAt(G.g, mx, my)
           -- a stack still walking is drawn where the walk has got to, not
@@ -1128,6 +1152,15 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
   end
   local mine = game.sideCities(G.g, G.player)
   local function building(c) return c.producing and 0 or 3 end
+  -- The side's planted standard: its flag (ATRANS2.PCK's (96, 15), 16x15,
+  -- 834b:1f5f with figure 0), and a line from each city sending armies there
+  -- to the standard's (2x, 2y).
+  local sx, sy = game.standardAt(G.g, G.player)
+  local function toStandard(c, colour)
+    local k = G.palette[colour + 1]
+    love.graphics.setColor(k[1], k[2], k[3])
+    linePixels(x + c.x * 2 + 2, y + c.y * 2 + 2, x + sx * 2, y + sy * 2)
+  end
 
   if seeAll then
     local done = {}
@@ -1139,11 +1172,13 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
         if c.vectorTo then k = 2 end
         if #incoming > 0 then k = c.producing and 1 or 5 end
         marker(c, k)
-        local dest = c.vectorTo and G.g.map.cities[c.vectorTo + 1]
+        local dest = c.vectorTo and c.vectorTo >= 0 and G.g.map.cities[c.vectorTo + 1]
         if dest then
           done[dest] = true
           marker(dest, dest.producing and 1 or 5)
           line(dest, c, 7)
+        elseif c.vectorTo == game.STANDARD and sx then
+          toStandard(c, 8)
         end
         for _, src in ipairs(incoming) do
           done[src] = true
@@ -1170,15 +1205,22 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
         marker(c, k)
       end
     end
-    local dest = city.vectorTo and G.g.map.cities[city.vectorTo + 1]
+    local dest = city.vectorTo and city.vectorTo >= 0 and G.g.map.cities[city.vectorTo + 1]
     if dest then
       marker(dest, dest.producing and 1 or 5)
       line(city, dest, 7)
+    elseif city.vectorTo == game.STANDARD and sx then
+      toStandard(city, 7)
     end
     for _, src in ipairs(game.vectoredTo(G.g, city)) do
       marker(src, 2)
       line(src, city, 8)
     end
+  end
+  if sx then
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.atransShields, love.graphics.newQuad(96, 15, 16, 15, iw, ih),
+      x + math.max(0, math.floor((sx * 2 - 2) / 8) * 8), y + math.max(0, sy * 2 - 6))
   end
   love.graphics.setScissor()
 end
@@ -2027,6 +2069,19 @@ MENU_DOES = {
   ["b"] = function() viewCity(cityUi.CITY) end,
   ["p"] = function() viewCity(cityUi.PRODUCTION) end,
   ["v"] = function() viewCity(cityUi.VECTOR) end,
+  -- Hero > Plant Flag (7563:09f7): the selected stack's hero plants the
+  -- side's standard where it stands
+  ["f"] = function()
+    if not G.selection then return end
+    for _, a in ipairs(G.selection.stack) do
+      if a.type == armytype.HERO and game.plantFlag(G.g, G.player, a) then
+        stratDirty()
+        return
+      end
+    end
+  end,
+  -- Hero > Levels (7563:1652)
+  ["u"] = function() levelsUi.open() end,
   -- Hero > Inspect (6c1b:0000)
   [","] = function() heroInfo.open() end,
   -- Report > Army, City, Gold, Production, Winning: 6ef3:0000(0-4)

@@ -274,7 +274,7 @@ function hero.dropItem(g, h, it)
   if scn.terrainAt(g.map, h.x, h.y) == move.WATER then
     it.status, it.x, it.y = 0, nil, nil
   else
-    it.status, it.x, it.y = 1, h.x, h.y
+    it.status, it.x, it.y, it.planted = 1, h.x, h.y, nil
   end
 end
 

@@ -468,6 +468,36 @@ local function testHeroItems(scenario)
   eq(it.status, 1, "dropping puts it on the ground")
   eq(it.x, h.x, "where the hero stands")
   eq(#h.items, 1, "and the hero no longer has it")
+
+  -- Plant Flag: not in the city, but a step out of it on dry land
+  ok(not game.plantFlag(g, side, h), "no flag in a city")
+  local move = require("warlords.move")
+  local scn = require("warlords.scn")
+  local fx, fy
+  for dy = -3, 4 do for dx = -3, 4 do
+    local x, y = h.x + dx, h.y + dy
+    local t = scn.terrainAt(g.map, x, y)
+    if not fx and (t == move.PLAIN or t == move.ROAD) and not game.cityAt(g, x, y) then fx, fy = x, y end
+  end end
+  ok(fx ~= nil, "found open ground near the capital")
+  h.x, h.y = fx, fy
+  ok(game.plantFlag(g, side, h), "the flag is planted")
+  local sx, sy = game.standardAt(g, side)
+  eq(sx, fx, "where the hero stands")
+  ok(not game.plantFlag(g, side, h), "and only once")
+
+  -- a city vectoring there sends its armies to the flag
+  local city = side.capital
+  game.setProduction(g, city, 1)
+  city.countdown = 1
+  ok(game.vectorToStandard(g, city, side), "a city may vector to the standard")
+  local before = #game.armiesAt(g, fx, fy)
+  for _ = 1, 3 * #g.sides + 1 do game.endTurn(g) end
+  ok(#game.armiesAt(g, fx, fy) > before, "a vectored army arrives at the standard")
+
+  -- picking the flag up again takes it off the map
+  hero.takeItem(g, h, g.map.items[side.index + 1])
+  eq(game.standardAt(g, side), nil, "a standard picked up is no longer planted")
 end
 
 ------------------------------------------------------------------- movement

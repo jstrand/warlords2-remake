@@ -13,6 +13,7 @@ local game = {}
 
 local TRANSIT_TURNS = 2       -- a vectored army arrives two turns later
 local STANDARD_DEST = -2      -- vector destination meaning "the side's standard"
+game.STANDARD = STANDARD_DEST
 
 --------------------------------------------------------------------- helpers
 
@@ -247,7 +248,6 @@ local function runProduction(g, side)
       c.countdown = c.countdown - 1
       if c.countdown <= 0 then
         local vectored = c.vectorTo and c.vectorTo ~= c.index
-                         and c.vectorTo ~= STANDARD_DEST
         local x, y = game.freeTileIn(g, c, true)
         if side.gold <= 0 then
           c.countdown = 0               -- no gold: it waits, built but unpaid
@@ -276,11 +276,27 @@ local function runProduction(g, side)
     if a.transit and a.owner == side.index then
       a.transit.turns = a.transit.turns - 1
       if a.transit.turns <= 0 then
-        local dest = g.map.cities[a.transit.dest + 1]
-        a.transit = nil
-        if not deliver(g, a, dest) then a.disbanded = true
-        elseif not a.transit then
-          arrived[#arrived + 1] = { kind = "arrived", type = a.type, city = dest.index }
+        if a.transit.dest == STANDARD_DEST then
+          -- To the side's planted standard (6f8c:0000): it stands there if the
+          -- tile has room, and otherwise goes home, two turns more. The
+          -- original also asks whether the army can stand on the tile; a
+          -- standard is only ever planted on dry land, so here it always can.
+          local sx, sy = game.standardAt(g, side)
+          a.transit = nil
+          if sx and #game.armiesAt(g, sx, sy) < rules.MAX_STACK then
+            a.x, a.y, a.moves, a.returning = sx, sy, 0, nil
+            arrived[#arrived + 1] = { kind = "arrived", type = a.type, standard = true }
+          else
+            a.returning = true
+            a.transit = { turns = TRANSIT_TURNS, dest = a.homeCity }
+          end
+        else
+          local dest = g.map.cities[a.transit.dest + 1]
+          a.transit = nil
+          if not deliver(g, a, dest) then a.disbanded = true
+          elseif not a.transit then
+            arrived[#arrived + 1] = { kind = "arrived", type = a.type, city = dest.index }
+          end
         end
       end
     end
@@ -700,13 +716,64 @@ end
 -- (7087:028b refuses a fifth).
 game.MAX_VECTORED_TO = 4
 
---- The cities sending what they build to `dest` (7087:0410).
-function game.vectoredTo(g, dest)
+--- The cities sending what they build to `dest` (7087:0410) -- a city, or
+--- game.STANDARD for the cities of `side` sending theirs to its standard.
+function game.vectoredTo(g, dest, side)
   local out = {}
   for _, c in ipairs(g.map.cities) do
-    if c.vectorTo == dest.index and c ~= dest then out[#out + 1] = c end
+    if dest == STANDARD_DEST then
+      if c.vectorTo == STANDARD_DEST and side and c.ownerIndex == side.index then
+        out[#out + 1] = c
+      end
+    elseif c.vectorTo == dest.index and c ~= dest then
+      out[#out + 1] = c
+    end
   end
   return out
+end
+
+--- Where the side's standard is planted, or nil (7563:0b47): its item record
+--- -- number = side -- lying on the ground, and planted there.
+function game.standardAt(g, side)
+  local it = g.map.items[side.index + 1]
+  if it and it.status == 1 and it.planted and it.x then return it.x, it.y end
+  return nil
+end
+
+--- Hero > Plant Flag (7563:09f7): the hero puts its side's standard down,
+--- planted, where it stands -- if it carries it, and the tile is dry land
+--- that is neither a city nor a ruin or temple, and has no flag already.
+--- Returns true if it was planted.
+function game.plantFlag(g, side, h)
+  local move = require("warlords.move")
+  local t = scn.terrainAt(g.map, h.x, h.y)
+  if t == move.WATER or t == move.SHORE or t == move.CITY or t == move.SITE then
+    return false
+  end
+  for _, it in ipairs(g.map.items) do
+    if it.planted and it.x == h.x and it.y == h.y then return false end
+  end
+  local std = g.map.items[side.index + 1]
+  for i, it in ipairs(h.items or {}) do
+    if it == std then
+      table.remove(h.items, i)
+      it.status, it.x, it.y, it.planted = 1, h.x, h.y, true
+      return true
+    end
+  end
+  return false
+end
+
+--- Send what a city builds to its side's planted standard. Four at most, as
+--- for a city; false if the standard is not planted or already takes four.
+function game.vectorToStandard(g, city, side)
+  if not game.standardAt(g, side) then return false end
+  if city.vectorTo ~= STANDARD_DEST
+     and #game.vectoredTo(g, STANDARD_DEST, side) >= game.MAX_VECTORED_TO then
+    return false
+  end
+  city.vectorTo = STANDARD_DEST
+  return true
 end
 
 --- Send what a city builds to another city. Free, and with no range limit;

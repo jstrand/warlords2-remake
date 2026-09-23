@@ -132,8 +132,8 @@ local function drawProduction(d)
     love.graphics.setColor(1, 1, 1)
     font.draw(("%d"):format(d.top + i + 1), 312, y)
     kit.army(e.type, G.player.index, 328, 170 + 30 * i, 1)
-    local city = G.g.map.cities[e.city + 1]
-    local name = city and city.name or ""
+    local city = e.city and G.g.map.cities[e.city + 1]
+    local name = e.standard and "Standard" or (city and city.name or "")
     local text
     if e.kind == "sent" then text = ("%s ..."):format(name)
     elseif e.kind == "arrived" then text = ("... %s"):format(name)

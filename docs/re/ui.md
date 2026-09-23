@@ -1198,6 +1198,32 @@ income and checks the item quest.
 Item records 0-7 are the eight standards, and the hero a side is given on turn
 1 carries its own.
 
+## Plant Flag, standards on the map, and Hero Levels
+
+**Plant Flag** (`7563:09f7`) puts the selected stack's hero's own standard
+(item record = side) on the ground, **planted** — map-tile flag `0x40` — if the
+tile is not water, shore, a city or a ruin or temple and has no flag already.
+A city can then vector to it: in Vector mode a click nearer the planted flag
+than to any city means the flag (`828e:0651`), the city's panel says
+*Standard!* (*Nowhere!* once it is gone), and the map draws the flag —
+`ATRANS2.PCK`'s (96, 15) — with a line to it. An army sent there
+(`6f8c:0000`) stands on the flag's tile if it has room, and otherwise goes home,
+two turns more. Taking the standard up again unplants it.
+
+On the main map (`8611:2d7c`, drawn by `8611:1a79` before the stacks, at the
+tile's corner) an item on the ground shows as a bag, `ATRANS2.PCK`'s (64, 0)
+32 × 29, and a planted standard as its side's flag, army cell 29 of the side's
+sheet.
+
+**Hero › Levels** (`7563:1652`) is popup 0 — (80, 60) 480 × 320 — with dialog
+28's Done (469): *Hero Levels* in font 1 centred on (320, 63); the heads
+(group 104) in the side's colours at y = 105 — Hero and Level from x = 128 and
+272, Exp, Needs, Str, Move centred on 392, 440, 488, 536; and a row per hero,
+30 apart from y = 128, highest level first: the hero at (88, y) on its side's
+ring at the top level and a grey one below it, the name at (128, y + 6), the
+title from group 99 or 100 by sex, and its experience, the next level's need
+(15, 30, 60, or `-`), strength and moves; grey rings fill the rows to six.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the

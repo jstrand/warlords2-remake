@@ -149,7 +149,7 @@ function save.encode(g)
   for _, it in ipairs(g.map.items) do
     items[#items + 1] = {
       index = it.index, name = it.name, type = it.type, value = it.value,
-      status = it.status, x = it.x, y = it.y,
+      status = it.status, x = it.x, y = it.y, planted = it.planted,
     }
   end
 
@@ -197,6 +197,7 @@ function save.decode(text, dataDir)
       if it.index == saved.index then
         it.name, it.type, it.value = saved.name, saved.type, saved.value
         it.status, it.x, it.y = saved.status, saved.x, saved.y
+        it.planted = saved.planted
         itemByIndex[it.index] = it
       end
     end
