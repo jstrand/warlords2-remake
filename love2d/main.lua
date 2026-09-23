@@ -2170,6 +2170,8 @@ MENU_DOES = {
   ["x"] = function()
     if G.selection then require("ui.signpost").open(G.selection.stack) end
   end,
+  -- Report > Diplomacy (484e:0000)
+  ["d"] = function() require("ui.diplomacy").open() end,
   -- Report > Quest (4976:0167)
   ["="] = function() questUi.open() end,
   -- Hero > Levels (7563:1652)

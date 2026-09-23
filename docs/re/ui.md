@@ -1447,6 +1447,39 @@ and put away with any key or click. The control panel's small "?" (188,
 `8065:104e`) shows `HELP\HMOUSE.GFX` and then `HELP\HKEYS.GFX`, both in
 popup 4.
 
+## Report › Diplomacy
+
+`484e:0000` does nothing with the Diplomacy option (`2c04:011c`) off. Both of
+its screens are popup 11, (80, 60) 480 × 350, and draw from `DIPLOM.PCK`
+(bitmap 47) and `SHIELDS.PCK` — the 16 × 16 at (side × 40 + 24, 46) is
+`8611:0bf7`'s size 3, the 40 × 40 at (side × 40, 0) its size 0.
+
+**The Diplomatic Report** (`484e:0039`, dialog 21): *Diplomatic Report*
+(group 107) in font 1 centred on (320, 64). A grid in colour 1: vertical
+lines at x = 88 (from y = 139, 232 long) and x = 120 + 32 i (from y = 110,
+261 long), horizontal at y = 110 (from x = 120, 256 long) and
+y = 139 + 29 i (from x = 88, 288 long). Each side in play has its 16 × 16
+at (128 + 32 i, 117) and (96, 146 + 29 i); the cell (120 + 32 c, 139 + 29 r)
+shows side c's state toward side r — (384, 0) war, (320, 0) peace, nothing
+for uneasy — and the diagonal (384, 29), for every side. Beside it, a black
+outline at (392, 110) 160 × 262, *Diplomatic Rating* (group 109) centred on
+(472, 116), and the sides in rating order (`484e:0aed`), each a 16 × 16 at
+(400, 146 + 29 i) and its title (group 106) at (432, 146 + 29 i). Done (368,
+default and cancel) and Action (369).
+
+**The Diplomatic Action** screen (`484e:0382`, dialog 22): *Diplomatic
+Action* (group 108) centred on (320, 64); the side's 40 × 40 at (96, 111) and
+name at (144, 122); group 110's seven lines at x = 104, y = 165, 205, 251,
+271, 291, 311, 331. Then for each other side, in order, a column at
+x = 272 + 40 i: its 40 × 40 at y = 111; the state between you (its byte
+toward you) at y = 151 and its proposal at 191, as `DIPLOM.PCK`
+(80 + 120 state, 45) 40 × 40 — a blank box (black outline, colour 2 inside)
+when the proposal is the state, and in every row for a side not playing —
+and your proposal to it as three buttons at y = 245, 285, 325: (0, 45) peace,
+(120, 45) uneasy, (240, 45) war, the one chosen lit, 40 to the right.
+372–378, 380–386 and 388–394 set it (`484e:0a69`, the column mapped past
+your own side). OK (370, default and cancel) closes; Report (371) goes back.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the
