@@ -28,6 +28,7 @@ local menuMod  = require("warlords.menu")
 local slotsMod = require("warlords.slots")
 local kit      = require("ui.kit")
 local cityUi   = require("ui.city")
+local reportsUi = require("ui.reports")
 
 local TILE = screen.TILE
 -- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
@@ -1152,7 +1153,7 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
     end
     local c = G.palette[16]
     love.graphics.setColor(c[1], c[2], c[3])
-    local bx, by = x + city.x * 2 - 3, y + city.y * 2 - 2
+    local bx, by = x + (city and city.x or -10) * 2 - 3, y + (city and city.y or -10) * 2 - 2
     love.graphics.rectangle("fill", bx, by, 11, 1)
     love.graphics.rectangle("fill", bx, by + 11, 11, 1)
     love.graphics.rectangle("fill", bx, by, 1, 11)
@@ -2015,6 +2016,12 @@ MENU_DOES = {
   ["b"] = function() viewCity(cityUi.CITY) end,
   ["p"] = function() viewCity(cityUi.PRODUCTION) end,
   ["v"] = function() viewCity(cityUi.VECTOR) end,
+  -- Report > Army, City, Gold, Production, Winning: 6ef3:0000(0-4)
+  ["a"] = function() reportsUi.open(0) end,
+  ["k"] = function() reportsUi.open(1) end,
+  ["g"] = function() reportsUi.open(2) end,
+  ["n"] = function() reportsUi.open(3) end,
+  ["w"] = function() reportsUi.open(4) end,
 }
 
 -- A menu item this engine cannot do yet is greyed, the way the original greys

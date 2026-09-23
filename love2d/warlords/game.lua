@@ -230,7 +230,13 @@ local function deliver(g, army, city)
 end
 
 --- Step 5: run every producing city the side owns.
+---
+--- What happened is logged in `side.produced`, for the Production report:
+--- the armies that arrived from vectoring this turn, then each army built,
+--- kept at home or sent on its way -- the log city_production_turn
+--- (6f8c:0000) keeps, in its order.
 local function runProduction(g, side)
+  local arrived, built = {}, {}
   for _, c in ipairs(game.sideCities(g, side)) do
     if c.producing then
       c.countdown = c.countdown - 1
@@ -252,6 +258,8 @@ local function runProduction(g, side)
             a.x, a.y = nil, nil
           end
           placeArmy(g, a)
+          built[#built + 1] = { kind = vectored and "sent" or "built", type = a.type,
+                                city = c.index }
           c.countdown = slot.time       -- the city starts the next one
         end
       end
@@ -265,7 +273,10 @@ local function runProduction(g, side)
       if a.transit.turns <= 0 then
         local dest = g.map.cities[a.transit.dest + 1]
         a.transit = nil
-        if not deliver(g, a, dest) then a.disbanded = true end
+        if not deliver(g, a, dest) then a.disbanded = true
+        elseif not a.transit then
+          arrived[#arrived + 1] = { kind = "arrived", type = a.type, city = dest.index }
+        end
       end
     end
   end
@@ -273,6 +284,9 @@ local function runProduction(g, side)
   for i = #g.armies, 1, -1 do
     if g.armies[i].disbanded then table.remove(g.armies, i) end
   end
+
+  side.produced = arrived
+  for _, e in ipairs(built) do arrived[#arrived + 1] = e end
 end
 
 --- Step 6: movement reset.

@@ -112,7 +112,7 @@ function save.encode(g)
     sides[#sides + 1] = {
       index = s.index, gold = s.gold, alive = s.alive, computer = s.computer,
       level = s.level, enhanced = s.enhanced, diploScore = s.diploScore,
-      income = s.income, upkeepTotal = s.upkeepTotal,
+      income = s.income, upkeepTotal = s.upkeepTotal, produced = s.produced,
       ai = s.ai and { roles = s.ai.roles } or nil,
       quest = s.quest and {
         type = s.quest.type, hero = ids[s.quest.hero], done = s.quest.done,
@@ -245,6 +245,7 @@ function save.decode(text, dataDir)
     s.gold, s.alive, s.computer = saved.gold, saved.alive, saved.computer
     s.level, s.enhanced, s.diploScore = saved.level, saved.enhanced, saved.diploScore
     s.income, s.upkeepTotal = saved.income, saved.upkeepTotal
+    s.produced = saved.produced
     s.ai = saved.ai
     s.quest = nil
     if saved.quest then

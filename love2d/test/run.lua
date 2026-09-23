@@ -401,6 +401,50 @@ local function testBuyProduction(scenario)
      "bought production survives a save")
 end
 
+------------------------------------------------------------------ reports
+
+local function testReports(scenario)
+  print("reports: " .. scenario)
+  local report = require("warlords.report")
+  local g = game.new(DATA, scenario, { seed = 23 })
+  local side = game.begin(g)
+
+  local f = report.figures(g, side, report.CITY)
+  eq(f.result, #game.sideCities(g, side), "the City report counts the side's cities")
+  eq(f.max % 2, 0, "the top of the scale is even")
+  local unused = 0
+  for i = 0, 7 do if f.out[i] then unused = unused + 1 end end
+  eq(unused, 8 - #g.sides, "only the sides in the game get a bar")
+
+  local a = report.figures(g, side, report.ARMY)
+  local mine = 0
+  for _, army in ipairs(g.armies) do if army.owner == side.index then mine = mine + 1 end end
+  eq(a.result, mine, "the Army report counts the side's armies")
+
+  eq(report.figures(g, side, report.GOLD).result, side.gold, "the Gold report is the treasury")
+
+  local w = report.figures(g, side, report.WINNING)
+  eq(w.max, 100, "the Winning report's scale is fixed")
+  ok(w.result >= 0 and w.result <= 7, "and says where the side comes")
+  side.gold = 100000
+  eq(report.figures(g, side, report.WINNING).result, 0, "a rich enough side comes first")
+  eq(report.score(g, side), 500, "and its score stops at 500")
+
+  -- the production log: build something, end enough turns, and it is there
+  local city = side.capital
+  game.setProduction(g, city, 1)
+  city.countdown = 1
+  local turns = 0
+  repeat game.endTurn(g); turns = turns + 1 until g.side == side or turns > 20
+  ok(side.produced and #side.produced >= 1, "the side's production is logged")
+  if side.produced and side.produced[1] then
+    eq(side.produced[1].city, city.index, "with the city that built it")
+    eq(side.produced[1].kind, "built", "kept at home")
+  end
+  eq(report.figures(g, side, report.PRODUCTION).result, #side.produced,
+     "the Production report counts what was built")
+end
+
 ------------------------------------------------------------------- movement
 
 local function testMovement(scenario)
@@ -2120,6 +2164,7 @@ end
 testTurnLoop("ERYTHEA")
 testVectoring("ERYTHEA")
 testBuyProduction("ERYTHEA")
+testReports("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")

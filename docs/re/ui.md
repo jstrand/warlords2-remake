@@ -1142,6 +1142,35 @@ new character); Backspace removes one; Enter keeps the line and Escape puts
 the old one back. The cursor is a "`" — the font's block glyph — blinking
 between colours 15 and 9.
 
+## The reports
+
+`6ef3:0000(n)` opens dialog 7 over popup 2 on report *n* — Army, City, Gold,
+Production, Winning — with the five as tabs (218-222) along y = 103 and Done
+(223). The title (group 73, font 1) is centred on (432, 62), what the report
+measures (group 74) on (432, 149), and a summary (groups 75-79) on (432, 322)
+in the side's own colours. The left half is the strategic map; the Army
+report adds a banner — `ATRANS2.PCK` (owner × 16, 164) — on each stack outside
+a city (`834b:158d`), and the Production report shows See All's vectors.
+
+`6ef3:02fb` works out the figures: armies per side, cities, gold, or a
+**Winning score** of (gold + 5 × income + upkeep + Σ defence × income over the
+side's cities) / 30, kept to 1-500 and shown as a fifth of that against a
+fixed scale of 100; the summary gives the side's rank. For the others the
+scale is the largest figure, raised by one if it is odd.
+
+`6ef3:05ff` draws a bar per side still in the game at (312, 200 + 14·i), 240
+pixels at the top of the scale, tiled 8 pixels at a time from the side's 8 × 8
+in `SHIELDS.PCK` at (320 + 8·(i % 4), 40 + 8·(i / 4)) and sunk with a (0, 1)
+bevel. The scale is a colour-1 axis at y = 196 with ticks every 60 pixels,
+shadowed in black a pixel up and left, and 0, half and the top at (308, 172),
+(432, 172) and (556, 172).
+
+The **Production report** (`6f8c:086e`) lists what `city_production_turn`
+logged this turn — armies that arrived from vectoring, then each one built —
+five at a time: its number at (312, 176 + 30·i), the army on a grey ring at
+(328, 170 + 30·i), and at (368, 176 + 30·i) the city, `%s ...` for one sent
+away or `... %s` for one that arrived. 206-209 scroll a row or five.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the
