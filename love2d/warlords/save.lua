@@ -153,6 +153,9 @@ function save.encode(g)
     }
   end
 
+  local signs = {}
+  for i, sg in ipairs(g.map.signs or {}) do signs[i] = { sg[1], sg[2] } end
+
   local state = {
     version = save.VERSION,
     scenario = g.map.name,
@@ -162,6 +165,7 @@ function save.encode(g)
     options = g.map.options,
     diplomacy = g.diplomacy,
     sides = sides, cities = cities, sites = sites, items = items, armies = armies,
+    signs = signs,
     log = g.log,
   }
 
@@ -222,6 +226,11 @@ function save.decode(text, dataDir)
     s.searched, s.band = bool(saved.searched), saved.band
     s.templeIndex = saved.templeIndex
   end
+  for i, saved in ipairs(state.signs or {}) do    -- older saves lack them
+    local sg = g.map.signs[i]
+    if sg then sg[1], sg[2] = saved[1], saved[2] end
+  end
+
   g.map.siteAt = {}
   for _, s in ipairs(g.map.sites) do g.map.siteAt[s.y * g.map.width + s.x] = s end
 

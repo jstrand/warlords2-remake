@@ -51,6 +51,36 @@ local function now()
   return (love.timer and love.timer.getTime and love.timer.getTime()) or 0
 end
 
+--- A line being typed into a field (7b4c:03a6). It starts EMPTY; a
+--- character from 0x20 to 0x7a goes in while the line is shorter than
+--- `maxChars` - 1 and, measured before it goes in, narrower than `maxWidth`.
+--- key() answers "keep" for Enter, "undo" for Escape.
+function M.editor(maxChars, maxWidth)
+  local e = { text = "" }
+  function e.key(key)
+    if key == "return" or key == "kpenter" then return "keep"
+    elseif key == "escape" then return "undo"
+    elseif key == "backspace" then e.text = e.text:sub(1, -2)
+    end
+  end
+  function e.input(t)
+    for ch in t:gmatch(".") do
+      local b = ch:byte()
+      if b >= 0x20 and b < 0x7b and #e.text < maxChars - 1
+         and kit.font(2).width(e.text) < maxWidth then
+        e.text = e.text .. ch
+      end
+    end
+  end
+  --- the cursor, after the text in a field at (x, y), blinking 15 and 9
+  function e.drawCursor(x, y)
+    local f = kit.font(2)
+    if math.floor(now() / BLINK) % 2 == 0 then kit.setPal(9) else love.graphics.setColor(1, 1, 1) end
+    f.draw(CURSOR, x + f.width(e.text) + 5, y + 2)
+  end
+  return e
+end
+
 --- Ask for a line of text.
 ---   opts.title, opts.lines   the title and up to two lines of prompt
 ---   opts.text                what the field holds to start with
@@ -92,36 +122,27 @@ function M.open(opts)
     end
 
     if opts.confirm then kit.drawControls(d.view, { [FIELD] = true }) return end
-    local f = kit.font(2)
-    local shown = d.editing or d.text
-    kit.field(BOX.x, BOX.y, BOX.w, BOX.h, shown, f)
-    if d.editing and math.floor(now() / BLINK) % 2 == 0 then
-      kit.setPal(9)
-      f.draw(CURSOR, BOX.x + f.width(shown) + 5, BOX.y + 2)
-    elseif d.editing then
-      love.graphics.setColor(1, 1, 1)
-      f.draw(CURSOR, BOX.x + f.width(shown) + 5, BOX.y + 2)
-    end
+    kit.field(BOX.x, BOX.y, BOX.w, BOX.h, d.editing and d.editing.text or d.text, kit.font(2))
+    if d.editing then d.editing.drawCursor(BOX.x, BOX.y) end
 
     kit.drawControls(d.view)
   end
 
   function d.mousepressed(x, y)
-    if d.editing then d.text, d.editing = d.editing, nil end
+    if d.editing then d.text, d.editing = d.editing.text, nil end
     local c = kit.controlAt(d.view, x, y, opts.confirm and { [FIELD] = true } or nil)
     if not c then return end
     if c.id == OK then finish(true)
     elseif c.id == CANCEL then finish(false)
-    elseif c.id == FIELD then d.editing = ""
+    elseif c.id == FIELD then d.editing = M.editor(maxChars, maxWidth)
     end
   end
 
   function d.keypressed(key)
     if d.editing then
-      if key == "return" or key == "kpenter" then d.text, d.editing = d.editing, nil
-      elseif key == "escape" then d.editing = nil
-      elseif key == "backspace" then d.editing = d.editing:sub(1, -2)
-      end
+      local r = d.editing.key(key)
+      if r == "keep" then d.text, d.editing = d.editing.text, nil
+      elseif r == "undo" then d.editing = nil end
       return
     end
     if key == "return" or key == "kpenter" then finish(true)
@@ -130,15 +151,7 @@ function M.open(opts)
   end
 
   function d.textinput(t)
-    if not d.editing then return end
-    for ch in t:gmatch(".") do
-      local b = ch:byte()
-      -- the width is measured before the character goes in, as 03a6 does
-      if b >= 0x20 and b < 0x7b and #d.editing < maxChars - 1
-         and kit.font(2).width(d.editing) < maxWidth then
-        d.editing = d.editing .. ch
-      end
-    end
+    if d.editing then d.editing.input(t) end
   end
 
   return kit.push(d)

@@ -460,6 +460,9 @@ end
 
 --- Offer the next stack, centring on it. Nothing left to offer ends the turn's
 --- business rather than leaving a stale selection up.
+-- for the shot harness and tests: select what stands on a tile
+G.selectAt = function(x, y) select(x, y) end
+
 local function selectNext()
   local a = nextArmy()
   if not a then
@@ -2088,6 +2091,28 @@ MENU_DOES = {
         return
       end
     end
+  end,
+  -- Order > Disband (1b62:06bf): the selected armies, after asking -- the
+  -- fourth line says whether a hero is among them
+  ["q"] = function()
+    if not G.selection or #G.selection.stack == 0 then return end
+    local stack = G.selection.stack
+    local heroes = false
+    for _, a in ipairs(stack) do if a.type == armytype.HERO then heroes = true end end
+    require("ui.input").open({
+      title = "Disband", confirm = true,                       -- 4125:2bf8
+      lines = { "Are you sure you", "want to disband this", "group?",
+                heroes and "It contains heroes" or "" },
+      ok = function()
+        game.disband(G.g, G.player, stack)
+        G.selection = nil
+        stratDirty()
+      end,
+    })
+  end,
+  -- Order > Signpost (540d:01a4)
+  ["x"] = function()
+    if G.selection then require("ui.signpost").open(G.selection.stack) end
   end,
   -- Report > Quest (4976:0167)
   ["="] = function() questUi.open() end,

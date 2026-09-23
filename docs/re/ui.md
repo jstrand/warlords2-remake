@@ -1296,6 +1296,25 @@ chosen one in colour 15 and the others in 2. 114–118 choose a row; 121 and
 list fits in five rows; OK (123, default) and Cancel (124, cancel) hand the
 chosen entry, or −1, to a callback.
 
+## Order › Disband and Signpost
+
+**Disband** (`1b62:06bf`) asks through the yes-or-no form of the text-entry
+dialog (`7b4c:0088`): *Disband* / *Are you sure you* / *want to disband this*
+/ *group?* and a fourth line, *It contains heroes* or empty — the dialog
+counts its lines by pointer, so there are always four, at y = 140, 163, 186,
+209. OK (`1b62:076a`) drops each hero's items where it stood (`67cc:16cd`),
+takes the side's quest away if its hero goes (the side's 12-byte record at
+`2c04:1103`), deletes the armies, and clears the selection.
+
+**Signpost** (`540d:01a4`) works only on a tile of terrain 9 with a sign in
+`CURRENT.SGN`. Popup 1 with *A Signpost!* in font 1 centred on (320, 94),
+*Type the new message for* / *this signpost!* in font 2 centred on 320 at
+y = 140 and 160, and the sign's two lines in fields at (200, 190) and
+(200, 215), 240 × 22 (`540d:02d7`). Dialog 24: Done (421, default and cancel)
+and the fields' hit areas 422 and 423. A click on a field types a new line
+into it, as the text-entry dialog does, up to 29 characters and 216 pixels
+(`540d:03dd`, `0432`). The file is written back when the dialog closes.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

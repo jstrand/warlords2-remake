@@ -97,6 +97,21 @@ function scn.loadDescriptions(path)
   return out
 end
 
+--- The signposts (.SGN, copied to CURRENT.SGN at the start, 540d:0103): a
+--- u16 count, then 104-byte records -- x, y, and two lines of 50 bytes.
+function scn.loadSigns(path)
+  local out = {}
+  if not fileExists(path) then return out end
+  local s = readAll(path)
+  for i = 0, u16(s, 0) - 1 do
+    local o = 2 + 104 * i
+    if o + 104 > #s then break end
+    out[#out + 1] = { index = i, x = u16(s, o), y = u16(s, o + 2),
+                      cstr(s, o + 4, 50), cstr(s, o + 54, 50) }
+  end
+  return out
+end
+
 function scn.load(dir, name)
   local base = dir .. "/" .. name
   local s = readAll(base .. ".SCN")
@@ -229,6 +244,7 @@ function scn.load(dir, name)
     itemPool = scn.loadItemPool(base .. ".ITM"),
     cityText = scn.loadDescriptions(base .. ".CTY"),
     siteText = scn.loadDescriptions(base .. ".SPC"),
+    signs = scn.loadSigns(base .. ".SGN"),
     options = options, terrainType = terrainType, fightOrder = fightOrder,
     combatCap = u16(s, COMBAT_CAP),
     tiles = tiles, roads = roads,

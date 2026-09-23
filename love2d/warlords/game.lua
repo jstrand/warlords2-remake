@@ -410,6 +410,26 @@ local function removeArmies(g, dead)
   end
 end
 
+--- The signpost on a tile, if there is one: { x, y, [1] = line, [2] = line }.
+function game.signAt(g, x, y)
+  for _, s in ipairs(g.map.signs or {}) do
+    if s.x == x and s.y == y then return s end
+  end
+end
+
+--- Order > Disband (1b62:076a): the armies go, a hero's items drop where
+--- it stood, and a side whose quest hero goes loses the quest.
+function game.disband(g, side, armies)
+  local heroMod = require("warlords.hero")
+  for _, a in ipairs(armies) do
+    if a.type == armytype.HERO then
+      heroMod.dropItems(g, a, a.x, a.y)
+      if side.quest and side.quest.hero == a then side.quest = nil end
+    end
+  end
+  removeArmies(g, armies)
+end
+
 --- Gold taken with a city won from another side. Neutral cities pay nothing.
 -- docs/rules.md > Capturing a city (67cc:0a6b).
 function game.loot(g, loser)

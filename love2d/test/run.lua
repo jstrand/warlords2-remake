@@ -445,6 +445,34 @@ local function testReports(scenario)
      "the Production report counts what was built")
 end
 
+local function testDisband(scenario)
+  print("disband: " .. scenario)
+  local hero = require("warlords.hero")
+  local quest = require("warlords.quest")
+  local g = game.new(DATA, scenario, { seed = 29 })
+  local side = game.begin(g)
+  local h = hero.recruit(g, side, side.heroOffer)
+  local stack = game.armiesAt(g, h.x, h.y)
+  local n = #g.armies
+  side.quest = { type = quest.OCCUPY, hero = h }
+  local std = h.items[1]
+  game.disband(g, side, stack)
+  eq(#g.armies, n - #stack, "the stack is gone")
+  eq(#game.armiesAt(g, h.x, h.y), 0, "from its tile")
+  eq(std.status, 1, "the hero's standard lies on the ground")
+  eq(side.quest, nil, "and the quest is lost with the hero")
+
+  -- signposts: read from the .SGN, two lines each, and saved when edited
+  local sg = game.signAt(g, 18, 12)
+  ok(sg, "a sign at (18, 12)")
+  eq(sg[1], "Traveller! Pray excuse the ", "its first line")
+  eq(sg[2], "sulphur fumes. Keep On!", "and its second")
+  sg[1] = "Hello there"
+  local saveMod = require("warlords.save")
+  local back = saveMod.decode(saveMod.encode(g), DATA)
+  eq(game.signAt(back, 18, 12)[1], "Hello there", "an edited sign survives a save")
+end
+
 local function testSage(scenario)
   print("sage: " .. scenario)
   local site = require("warlords.site")
@@ -2270,6 +2298,7 @@ testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")
 testSage("ERYTHEA")
+testDisband("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")

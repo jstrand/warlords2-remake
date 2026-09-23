@@ -226,13 +226,17 @@ ownership and defence must live in the per-side block.
 u16 count, then count x 104-byte records:
   +0   u16      x
   +2   u16      y
-  +4   char[100] text, NUL-terminated
+  +4   char[50] first line, NUL-terminated
+  +54  char[50] second line, NUL-terminated
 ```
 
-The tail after the NUL is **uninitialised memory** — you can read leftover
-strings like `Erythea\Erythea.spc`, `Erythea\Erythea.scn` and `Road` in it. The
-game wrote a 100-byte buffer without clearing it, so each record leaks a slice
-of whatever was on the heap. Harmless, but don't mistake it for data.
+The two lines are what the game shows and what Order › Signpost edits
+(`540d:02d7` draws the fields from +4 and +0x36): *Traveller! Pray excuse
+the* / *sulphur fumes. Keep On!*. After each NUL the rest of the line is
+**uninitialised memory** — you can read leftover strings like
+`Erythea\Erythea.spc` in it. Harmless, but don't mistake it for data.
+The game copies the scenario's `.SGN` to `CURRENT.SGN` at the start
+(`540d:0103`) and edits that copy; a saved game carries it.
 
 ## `.SPC` / `.CTY` — descriptions
 
