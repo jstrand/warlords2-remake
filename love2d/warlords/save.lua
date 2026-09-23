@@ -165,7 +165,7 @@ function save.encode(g)
     options = g.map.options,
     diplomacy = g.diplomacy,
     sides = sides, cities = cities, sites = sites, items = items, armies = armies,
-    signs = signs,
+    signs = signs, fightOrder = g.map.fightOrder,
     log = g.log,
   }
 
@@ -226,6 +226,7 @@ function save.decode(text, dataDir)
     s.searched, s.band = bool(saved.searched), saved.band
     s.templeIndex = saved.templeIndex
   end
+  if state.fightOrder then g.map.fightOrder = state.fightOrder end
   for i, saved in ipairs(state.signs or {}) do    -- older saves lack them
     local sg = g.map.signs[i]
     if sg then sg[1], sg[2] = saved[1], saved[2] end

@@ -2110,6 +2110,8 @@ MENU_DOES = {
       end,
     })
   end,
+  -- Order > Fight Order (6a89:0de1)
+  ["i"] = function() require("ui.fightorder").open() end,
   -- Order > Signpost (540d:01a4)
   ["x"] = function()
     if G.selection then require("ui.signpost").open(G.selection.stack) end

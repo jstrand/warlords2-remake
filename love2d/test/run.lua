@@ -471,6 +471,10 @@ local function testDisband(scenario)
   local saveMod = require("warlords.save")
   local back = saveMod.decode(saveMod.encode(g), DATA)
   eq(game.signAt(back, 18, 12)[1], "Hello there", "an edited sign survives a save")
+
+  g.map.fightOrder[side.index][3] = 26
+  back = saveMod.decode(saveMod.encode(g), DATA)
+  eq(back.map.fightOrder[side.index][3], 26, "so does an edited fight order")
 end
 
 local function testSage(scenario)

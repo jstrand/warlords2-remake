@@ -1315,6 +1315,25 @@ and the fields' hit areas 422 and 423. A click on a field types a new line
 into it, as the text-entry dialog does, up to 29 characters and 216 pixels
 (`540d:03dd`, `0432`). The file is written back when the dialog closes.
 
+## Order › Fight Order
+
+`6a89:0de1` edits the side's row of the fight-order table (`.SCN` 0x60b, 29
+bytes a side: each army type's rank) in place, keeping a copy for Cancel.
+Popup 11, (80, 60) 480 × 350 (`6a89:0e4a`): *Fighting Order* (group 127) in
+font 1 centred on (320, 64) between the side's big shields at (88, 64) and
+(512, 64); *Order of combat for %s* centred on (320, 104) and the three lines
+of help on 320 at y = 348, 368, 388, in font 2; then the 27 places four to a
+row, the type holding rank i on a ring at (88 + 120 (i mod 4),
+128 + 31 (i div 4)) — the side's colour for the chosen one, grey otherwise —
+and *%d.* at (128 + 120 (i mod 4), 134 + 31 (i div 4)).
+
+Dialog 26: OK (425, default), Cancel (426, cancel; `6a89:111c` puts the copy
+back), Reset (427: the neutral row, `2c04:06f3`, copied in), the arrows 428
+and 429 (swap the chosen place with the one before or after, and follow it;
+greyed at the ends and with nothing chosen), and the places 430–456: a click
+chooses one, lets the chosen one go, or swaps it with another
+(`6a89:1379`).
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the
