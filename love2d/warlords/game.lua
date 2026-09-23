@@ -674,9 +674,9 @@ end
 
 --- Search whatever the stack is standing on, if anything. Returns the result
 --- table from site.search, or nil.
-function game.searchHere(g, stack)
+function game.searchHere(g, stack, human)
   if #stack == 0 then return nil end
-  return require("warlords.site").search(g, stack, stack[1].x, stack[1].y)
+  return require("warlords.site").search(g, stack, stack[1].x, stack[1].y, human)
 end
 
 --- A line of prose for a search result, for the interface to show.

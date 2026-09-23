@@ -31,6 +31,7 @@ local cityUi   = require("ui.city")
 local reportsUi = require("ui.reports")
 local heroInfo  = require("ui.heroinfo")
 local levelsUi  = require("ui.levels")
+local searchUi  = require("ui.search")
 
 local TILE = screen.TILE
 -- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
@@ -172,6 +173,9 @@ function love.load(arg)
   -- show whose something is; CITYBACK.PCK the ground a city's picture sits on
   G.shieldsImg = pck.toImage(dataDir .. "/TERRAIN0/SHIELDS.PCK", palette)
   G.cityBack = pck.toImage(dataDir .. "/TERRAIN0/CITYBACK.PCK", palette)
+  -- the pictures of Hero > Search: a ruin, and a temple
+  G.searchPic = pck.toImage(dataDir .. "/PICS/SEARCH.PCK", palette)
+  G.templePic = pck.toImage(dataDir .. "/PICS/TEMPLE.PCK", palette)
   kit.init(G)
 
   G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
@@ -536,8 +540,6 @@ local function moveSelection(x, y)
     reslot(selectableAt(sel.x, sel.y))
     stratDirty()
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack))
-    local found = game.searchHere(G.g, sel.stack)
-    if found then say("%s", game.describeSearch(found)) end
     startWalk(walked, r.walked or {})
   end
   if G.selection and #G.selection.stack > 0 then
@@ -1908,13 +1910,19 @@ local function moveAll()
   refreshRoute()
 end
 
+--- Hero > Search (6536:0000) with the selected stack. The search is decided
+--- at once, so the selection is put back over whoever is still standing.
+local function search()
+  if not G.selection then return end
+  local x, y = G.selection.x, G.selection.y
+  searchUi.open(G.selection.stack)
+  reslot(selectableAt(x, y))
+  stratDirty()
+end
+
 local SHORTCUT_DOES = {
   ["Move All"] = function() moveAll() end,
-  ["Search"] = function()
-    if not G.selection then say("Nothing is selected.") return end
-    local found = game.searchHere(G.g, G.selection.stack)
-    say("%s", found and game.describeSearch(found) or "There is nothing here to search.")
-  end,
+  ["Search"] = function() search() end,
   ["End Turn"] = function() endTurn() end,
 }
 
@@ -2056,11 +2064,7 @@ MENU_DOES = {
     say("Saved to %s.", G.savePath)
   end,
   ["alt L"] = function() loadGame() end,
-  ["z"] = function()
-    if not G.selection then say("Nothing is selected.") return end
-    local found = game.searchHere(G.g, G.selection.stack)
-    say("%s", found and game.describeSearch(found) or "There is nothing here to search.")
-  end,
+  ["z"] = function() search() end,
   -- View > Cities, Build, Production and Vectoring open the city dialog in
   -- one of its modes on the city nearest the cursor -- any city for Cities,
   -- one of the side's own for the rest (17be:0064's inline cases, through

@@ -1224,6 +1224,38 @@ ring at the top level and a grey one below it, the name at (128, y + 6), the
 title from group 99 or 100 by sex, and its experience, the next level's need
 (15, 30, 60, or `-`), strength and moves; grey rings fill the rows to six.
 
+## Hero › Search
+
+`site_search` (`6536:0000`) is reached only from Hero › Search and its
+configurable button — walking onto a ruin searches nothing — and says nothing
+where there is nothing to search: no site, a site already searched (tile flag
+`0x40`), or a ruin with no hero in the stack.
+
+**A ruin** (`ruin_search`, `6536:01ab`) opens popup 4, (120, 50) 400 × 360:
+*Searching* (font 1) centred on (320, 53) and `SEARCH.PCK` at (160, 92) in a
+black frame a pixel out (`6536:175b`). The story comes a line at a time at
+(128, 300), 20 apart (`6536:17c9`), each waiting for a key or a click
+(`8065:10fb`): *It appears to be uninhabited!* or *%s encounters a %s...* and
+*and is slain by it!* / *and is victorious!* (groups 50, 51), then what was
+found (52 an item, 53 gold, 54 allies). Dialog 13 ends it: Done (292) and,
+after an item, Take (293). **A found item is left on the ground** at the ruin
+for a human player — Take (`6536:186e`) picks up all that lies there; a
+computer player's hero takes it at once.
+
+**A temple** (`auto_ui_temple`, `4976:0000`) is popup 9, `TEMPLE.PCK` at
+(160, 60), with its name and two lines of group 19 centred on x = 320 at
+y = 270, 290 and 310 in font 2 coloured 7 on 6, over dialog 15: Bless (328) —
+`temple_bless` (`6536:08a1`), then a message box with group 55 or 56 — and
+Quest (329), greyed with quests off, a quest already running, or no hero.
+
+**The message box** (`8065:1160`) is popup 5, (144, 179) 352 × 64, two lines
+centred on (320, 190) and (320, 212), gone at any key or click.
+
+`54f6:0000` blits each popup's picture from its own (0, 0) — `MARBLE.PCK`
+unless the popup has one of its own (6 `CITY.PCK`, 7 `VICTORY.PCK`, 9
+`TEMPLE.PCK`, …) — at the popup's rect, then outlines it a pixel out and
+shadows it; popup 2 draws the strategic map in its left 224 pixels itself.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the

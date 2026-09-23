@@ -221,7 +221,12 @@ end
 --- Search the site a stack is standing on. Returns a table describing what
 --- happened, or nil if there is nothing to search here.
 -- site_search, Ghidra 6536:0000.
-function site.search(g, stack, x, y)
+--- Search the site under a stack (site_search, 6536:0000). A human player
+--- (`human` set) chooses at a temple what to do -- the blessing and the
+--- quest are the temple dialog's buttons -- and a found item is left on the
+--- ground at the ruin, for the Take button to pick up (6536:01ab); the
+--- computer players are blessed and given the item there and then.
+function site.search(g, stack, x, y, human)
   local gameMod = require("warlords.game")
   local heroMod = require("warlords.hero")
   local s = g.map.siteAt and g.map.siteAt[y * g.map.width + x]
@@ -230,6 +235,7 @@ function site.search(g, stack, x, y)
   local h = heroIn(stack)
 
   if s.content == site.TEMPLE then
+    if human then return { site = s, kind = "temple", hero = h } end
     local blessed = site.bless(g, s, stack)
     local out = { site = s, kind = "temple", blessed = blessed }
     -- a stack with a hero may also take a quest here
@@ -251,15 +257,18 @@ function site.search(g, stack, x, y)
 
   heroMod.addExperience(g, h, 3)
 
-  -- the guardian fights once
+  -- the guardian fights once; a guardian beaten is reported with whatever
+  -- is found, as the popup tells it ("... and is victorious!")
+  local beaten
   if s.guardian and s.guardian > 0 then
     local strength = site.guardianStrength(g, s)
+    beaten = g.map.monsters[s.guardian]
     if not site.survivesGuardian(g, h, stack, strength) then
       heroMod.dropItems(g, h, x, y)
       for i, a in ipairs(g.armies) do
         if a == h then table.remove(g.armies, i) break end
       end
-      return { site = s, kind = "killed", monster = g.map.monsters[s.guardian] }
+      return { site = s, kind = "killed", monster = g.map.monsters[s.guardian], hero = h }
     end
   end
 
@@ -268,20 +277,22 @@ function site.search(g, stack, x, y)
     for _, it in ipairs(g.map.items) do
       if it.index == s.item then found = it end
     end
-    if found then
+    if found and human then
+      found.status, found.x, found.y = 1, x, y    -- on the ground, to take
+    elseif found then
       found.status = 3                            -- carried
       h.items = h.items or {}
       h.items[#h.items + 1] = found
     end
     local side = g.map.sides[h.owner + 1]
     local q = require("warlords.quest").event(g, side, "item", { hero = h })
-    return { site = s, kind = "item", item = found, hero = h, quest = q }
+    return { site = s, kind = "item", item = found, hero = h, quest = q, guardian = beaten }
 
   elseif s.content == site.GOLD then
     local gold = s.rich and g.rng:dice(3, 1000, 1000) or g.rng:dice(3, 500, 500)
     local side = g.map.sides[h.owner + 1]
     side.gold = side.gold + gold
-    return { site = s, kind = "gold", gold = gold }
+    return { site = s, kind = "gold", gold = gold, hero = h, guardian = beaten }
 
   elseif s.content == site.ALLIES then
     local type = g.types.byId[s.allyType] or g.types.byId[armytype.SCOUTS]
@@ -309,10 +320,11 @@ function site.search(g, stack, x, y)
         joined[#joined + 1] = a
       end
     end
-    return { site = s, kind = "allies", armies = joined, type = type }
+    return { site = s, kind = "allies", armies = joined, type = type, hero = h,
+             guardian = beaten }
   end
 
-  return { site = s, kind = "empty" }
+  return { site = s, kind = "empty", hero = h, guardian = beaten }
 end
 
 return site
