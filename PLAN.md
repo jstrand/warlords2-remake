@@ -135,38 +135,40 @@ Done: the main screen — menu bar and dropdowns, turn strip, strategic map
 (four-pixel tiles, roads, city shields, view box), bottom bar, control panel;
 the army slots and Grp switch; the cycle's buttons and the 3×3 pad; the
 configurable buttons; the start-of-turn banner; the hero offer; the assault
-and the spoils dialog; **the city dialog in all four modes** — Info, City
-(Rename, Raze, Build Production), Production and Vector (send, redirect, See
-All); **the five reports**; **the original's keyboard**; the fonts' true
-metrics (ink widths, advances, the space).
+and the spoils dialog; **the city dialog in all five modes** — Info, City
+(Rename, Raze, Build Production), Production, Vector (send, redirect, See
+All) and a site's (View › Ruins); **the five reports**; **the original's
+keyboard**; the fonts' true metrics (ink widths, advances, the space);
+**the hero screens** — Inspect with its items, Plant Flag and vectoring to
+the standard, Levels, Search with the ruin's story, the temple and the
+sage (Items through the list chooser, Money, Maps); **Report › Quest**;
+**Orders** — Fight Order, Disband, Signpost (signs load from `.SGN` and
+save), Resign; **View** — Army Bonus, Items, Ruins, Stack; **help pages**
+(`.GFX`, the control panel's help button and Items' Bonus).
 
 Left, roughly in order of what blocks playing a full game from the interface:
 
 1. **Stack splitting proper** — the slots toggle armies in and out of the
    moving group; check this covers every way the original splits and merges.
-2. **Hero screens**: Inspect / army info (`,`, `6c1b`), Plant Flag (`f`) and
-   vectoring to the standard, Levels (`u`), items (`t`, pick up / drop), and
-   dialogs for search results at ruins, temples and sages (`z`).
-3. **Quest screen** (`=`, `4976:0167`).
-4. **Diplomacy screen** (`d`, `484e`).
-5. **Orders**: Fight Order (`i`, `6a89`), Disband (`q`), Signpost (`x`),
-   Resign (`r`).
-6. **View**: Army Bonus (`o`), Items (`t`), Ruins (`.` — the city dialog's
-   mode 4, a site's info), Stack (`s`).
-7. **History**: City, Events, Gold, Winners, Triumphs (`h e j y l`, `6d51`).
-8. **Game menu**: Settings, Shortcuts (`UDB.DAT`), New game and side setup,
+2. **Diplomacy screen** (`d`, `484e`).
+3. **History**: City, Events, Gold, Winners, Triumphs (`h e j y l`, `6d51`).
+4. **Game menu**: Settings, Shortcuts (`UDB.DAT`), New game and side setup,
    Save/Load game and map with the original's dialogs, About.
-9. **Help screens**: control 188 and the `.GFX` pages (`HELP\HMOUSE.GFX`).
-10. **End of game**: a proper win/lose screen (today the loop just stops).
-11. Right-click tile info (`740d:131a`, the 256 × 75 popup).
+5. **End of game**: a proper win/lose screen (today the loop just stops).
+6. Right-click tile info (`740d:131a`, the 256 × 75 popup).
+7. The tutorial and first-time help pages the game shows once
+   (`2c04:0134` flags, FILE.DAT group 0x19).
 
 Every unimplemented menu item is greyed. Each new dialog gets a step in a
 `test/shot` script, and is compared with the original wherever a capture
 exists.
 
 Engine notes found on the way: the long ERYTHEA run of `test/ui.lua`
-(150 rounds) takes hours in the computer players' pathfinding; the engine does
-not yet vector to a planted standard (`STANDARD_DEST` is treated as none).
+(150 rounds) takes hours in the computer players' pathfinding; medals
+(`67cc:2274`, army +0x0a) are not modelled, so View › Stack shows none; the
+Stack view sums every hero's bonus where the battle takes the strongest —
+check which the battle really does; `quest.lua` sets a revealed site's mask
+to 0, which reads as "shown to nobody" — check against the original.
 
 ### Phase 4 — Audio — **not started**
 
