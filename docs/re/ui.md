@@ -825,12 +825,18 @@ a frame painted into it the way the banner is. It is `MARBLE.PCK` — 480×360,
 which is why every bitmap-less popup is 480 wide or less — cropped to the
 rect, with a plain black outline round it.
 
-Measured off a screenshot of the running game, that outline sits at
-**(x - 1, y)** and is **w + 2 by h + 2**, which puts the popup's contents at
-**(x, y + 1)**: everything inside is a pixel below the coordinate it is given.
-The drop shadow is two pixels further out, right and below. The one-pixel
-drop is not obvious from the code and is easy to miss; it is visible in the
-name field's frame, the portrait's frame and the buttons alike.
+Measured off the original running at its own 640 × 480 (a DOSBox-X capture,
+not a scaled window grab), that outline is **one pixel outside the rect on
+every side** — at (x − 1, y − 1), w + 2 by h + 2 — and the popup's contents sit
+exactly at the rect. The drop shadow is two more pixels, right and below:
+rows y + h + 1 and + 2, columns x + w + 1 and + 2. An earlier reading off a
+scaled screenshot put the contents a pixel low; the native capture shows no
+such offset in the frame, the portrait's frame, the name field or the
+buttons.
+
+The name field is 7ecb:0058, the one routine every text field goes through:
+it **fills** the rect with colour 3 (so the marble does not show through),
+sinks it with a (4, 2) bevel, and draws the text at (x + 3, y + 2).
 
 The coordinates are DGROUP statics from `4125:1112` on, and the controls in
 `BUTTON.DAT` group 9 agree with them exactly — which is the cross-check that
@@ -882,6 +888,148 @@ with 101 lines, so its last hero, Lady Jorinas, can never be drawn.
 The roll settles the name and the sex together, and the dialog's checkboxes
 change only the portrait and the wording — ticking Male on a Mystichla leaves
 her name in the field.
+
+### Choosing a font, and colouring it
+
+`78a8:06ae(font, glyph, outline, ground)` selects the font for everything drawn
+after it. **0 is `TEXT`, 1 is `CHANCE36` and 2 is `CHANCE17`**: titles are
+font 1, nearly every other line in the game is font 2, and the bottom bar's
+numbers are font 2 as well (`89e0:05a3`), not `TEXT`. The other three
+arguments remap the sheet's three colours — glyph 15, outline 0, ground 3 —
+through `78a8:0839`, so `(2, 15, 0, 3)` is the font as drawn and `(2, 9, 0, 3)`
+draws it in red. The three looks are cached per font, six bytes an entry.
+
+### Opaque art
+
+`1997:0129`, the blit nearly everything goes through, is a **plain copy**: a
+bitmap's colour-3 ground replaces what was under it. `ABITS.PCK` is drawn that
+way everywhere — the rings, the checkboxes, the bar's icons and digits — and a
+capture of the original confirms it pixel for pixel: inside the castle icon's
+40 × 20 cell the screen is exactly the cell, flat grey and all. Only the army
+sheets, the shadow sheet and the few other bitmaps `8611:08be` and friends
+blit through `451b:2a68` with a mask are see-through.
+
+The bottom bar is not the screen's own art either. `8065:0aeb` blits
+`MARBLE.PCK` over the rect at `4125:2a9c` — **(16, 403) 360 × 66**, from the
+marble's (0, 60) — before `89e0:05a3` draws the side's standing or
+`89e0:0356` the army slots.
+
+### Default and cancel buttons
+
+Enter and Escape reach the first live control in one of two lists of control
+ids (`4125:155c` and `4125:1514`), whichever dialog is up; "live" is state 1.
+Among them: the city dialog's Done (192, 201), Build Production's Done (396),
+the text-entry dialog's OK (189) and Cancel (190), the hero offer's OK (287)
+and Cancel (288), and Occupy (285) on the spoils dialog, which is on **both**.
+On the main screen Enter is **Next army** (174) and Escape **Quit army** (175).
+
+## The city dialog
+
+Dialog 6 over popup 2, **(80, 60) 480 × 312** — the same rect as the hero
+offer. The left half is the strategic map; the right is
+`auto_ui_city_info` (`7204:06de`), a case per mode. `7204:0000(mode, x, y)` is
+every way in: a click on your own city opens it in mode 2, any other city in
+mode 0 (`740d:0037`). The mode buttons are 193-196:
+
+| mode | button | for | draws |
+|---|---|---|---|
+| 0 Info | 193 | any city | shields, income/defence/owner, the production list (or a picture), the capital's shield, three lines from `.CTY` |
+| 1 City | 194 | own | shields, income/defence/owner, Rename (203), Raze (205), Build Prod (204), two lines of text each |
+| 2 Production | 195 | own | what it builds and its countdown, the list (197-200), Stop (202), the chosen type's numbers |
+| 3 Vector | 196 | own | what it builds, then what is on its way here next turn and the turn after |
+| 4 | — | a ruin or temple | the site's own info, in the same frame |
+
+`7204:03a9` sets the buttons after every change: the current mode's button
+lit, 194-196 greyed on a city that is not yours, Done is 192 except in
+Production where it is 201, and Stop greyed while nothing is being built.
+
+Every position is in the table from `4125:0ea0`; text is font 2 except the
+name, font 1 centred on (432, 62) in every mode:
+
+| what | where |
+|---|---|
+| owner's shield, twice (SHIELDS.PCK, 40 × 40) | (312, 102), (512, 102) |
+| `Income: %d gold`, `Defence: %d`, `Owner: …` (group 116) | (356, 106), (356, 126), (356, 150) |
+| Info: the production list, grey rings | (320, 190), (376, 190), (432, 190), (488, 190) |
+| Info: the capital's small shield (BSHIELD.PCK bottom row) | (408, 170) |
+| Info: three lines of `.CTY` | (310, 259), (310, 279), (310, 299) |
+| City: the two lines for Rename, Raze, Build (groups 119-121) | x 376, y 183/203, 231/251, 279/299 |
+| Production: the capital's small shield | (312, 110) |
+| Production: `Current:` right-aligned, the army, `%dt` or `-` | (408, 110), (416, 104), (456, 110) |
+| … when vectored: `%dt, then to` and where | (456, 102), (456, 122) |
+| Production: the list; the chosen type on its side's ring | (312, 142) 48 apart |
+| Production: BIGARMY.PCK, then name, Time, Cost, Strength, Move | (320, 182); x 456, y 182/212/232/252/272 |
+| Vector: `Current:` right-aligned, the army, `%dt` | (360, 109), (368, 103), (408, 109) |
+| Vector: `Next turn:` / `Turn after:` right-aligned | (392, 155), (392, 188) |
+| Vector: up to four armies in each row | x 400 + 40n, y 149 / 182 |
+
+Info shows a **picture** instead of the list when the city is razed, or when
+*View Production* (`.SCN` `0x132`) is on and the city is not yours: a black
+outline at (311, 169) 242 × 88, a (4, 2) bevel round it, `CITYBACK.PCK`'s
+240 × 86 at (312, 170), and the city's own four map tiles at (392, 176) 40
+apart.
+
+**Choosing production** (`7087:00c8`): the slot's type becomes the chosen one
+and the city builds it, the countdown starting again even if it was already
+building that. The chosen type is remembered separately from what is being
+built, which is why the ring and the numbers follow a click. **Stop**
+(`7087:0185`) clears production, the vector and the choice.
+
+**Rename** (203, `7204:2013`) is the text-entry dialog with "Rename City",
+"Type the new name for" / "this city", at most 15 characters and 128 pixels.
+**Raze** (205, `649c:0000`) asks first — "Raze City", "Are you sure that you",
+"want to", "raze %s?", "You won't be popular!" — and costs the side **1d25 +
+25** on its atrocity score (`649c:0061`), where razing a city as it falls costs
+1d15 + 10; it needs no army in the city. Cancel returns to City mode, OK to
+Info. **Build Prod** (204, `7087:0978`) opens Build Production and returns to
+City mode.
+
+### Build Production
+
+Popup 11, **(80, 60) 480 × 350**, dialog 23; `auto_ui_build_production`
+(`7087:09da`):
+
+| what | where |
+|---|---|
+| "Build Production" (group 112), font 1 | centred on (320, 64) |
+| the side's shield, twice | (88, 64), (512, 64) |
+| "The %s city of %s" | centred on (320, 104) |
+| every type with a price ≥ 0, in ARMYTYPE order, on grey rings | (88 + 120·col, 136 + 31·row), four to a row |
+| its price, `%d gp` | 40 right and 6 down of the army |
+| "Currently Producing" | centred on (176, 348) |
+| the city's four slots, each on its side's ring | (104 + 40n, 370) |
+| "Thou hast %d gold" | centred on (352, 365) |
+| Done (396) | (480, 380) |
+
+A type is **ghosted** (drawn from `ASHADOW.PCK`) and its button greyed when
+the city already builds it or the side cannot pay for it (`7087:0dae`). The
+slot being bought into is framed: a colour-0 box at (x − 2, 368) 37 × 35 and a
+colour-9 one a pixel up and left; the others get the same two boxes in
+colour 3. The screen starts on the first empty slot, or the first of all when
+the city has four (`7087:0978`), and the slot buttons (397-400) are live only
+then — until the list is full a type always goes into the first gap. Buying
+(`7087:0ee3`) copies the type's unmodified stats in, takes the price, moves on
+to the next empty slot, and — because the original tracks what a city builds
+by **type**, not by slot — stops production and the vector if the type being
+built was the one bought over. Done sorts the list by price (`7087:1544`, an
+insertion sort) and goes back to the city dialog.
+
+### The text-entry dialog
+
+`7b4c:0000` asks for a line of text and `7b4c:0088` a yes-or-no question, over
+popup 1 — **(160, 90) 320 × 200** — and dialog 5: OK (189) at (400, 260),
+Cancel (190) at (176, 260), the field's hit area (191). The title is font 1
+centred on (320, 92); the prompt is font 2 centred on x = 320 at the y the
+table at `4125:2316` gives for the line count (1: 150; 2: 150, 173; 3: 150,
+173, 196; 4: 140, 163, 186, 209 — a text entry counts its field as two more
+lines). The field is 7ecb:0058 at (184, 197) 256 × 20.
+
+Clicking the field starts an edit (`7b4c:03a6`) **from an empty line**, not
+from the old text. A character from 0x20 to 0x7a is taken while the line is
+shorter than the limit and narrower than the width limit (measured before the
+new character); Backspace removes one; Enter keeps the line and Escape puts
+the old one back. The cursor is a "`" — the font's block glyph — blinking
+between colours 15 and 9.
 
 ## What a remake needs, and what it does not
 

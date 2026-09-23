@@ -326,8 +326,9 @@ five tabs its `6ef3:0000(n)` argument implies.
 ## Dialog 6 — the city screen
 
 `7204:0000` pushes **6** to the dialog opener when a click lands on a city, so
-dialog 6 is the city screen: button group 6 and area screen 3. Checked against
-a screenshot of the running game, its rect is `(80, 60)` 480 × 320.
+dialog 6 is the city screen: button group 6 and area screen 3. It sits on
+popup 2, `(80, 60)` 480 × 312 — an earlier reading off a scaled screenshot
+said 320. What it draws in each mode is in `../re/ui.md` › The city dialog.
 
 | what | rect | from |
 |---|---|---|
@@ -367,6 +368,9 @@ The name is drawn in `CHANCE36`, centred over the right panel; everything
 else on the dialog is `CHANCE17`.
 
 ### The dialog's four modes
+
+(The code numbers them 0-3 — Info, City, Production, Vector — and has a fifth,
+4, for a ruin or temple shown in the same frame.)
 
 The row of buttons along the foot (193–196) does not act on the city: it
 **switches the dialog between four modes**, each showing a different set of

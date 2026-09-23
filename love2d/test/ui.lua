@@ -293,82 +293,96 @@ if G and G.menuLayout then
   print(("  opened %d menus and picked %d items"):format(#G.menuLayout, picked))
 end
 
--- the city dialog: open one of our own cities, pick each slot, close again
+-- the city dialog: open one of our own cities and drive every mode, the
+-- dialogs it opens, and the ways out
 if G and G.g then
   local game = require("warlords.game")
-  local scr  = require("warlords.screen")
+  local kit  = require("ui.kit")
   local mine = game.sideCities(G.g, G.player)[1]
+
+  local function control(view, id)
+    for _, k in ipairs(view.dialog.controls) do if k.id == id then return k end end
+  end
+  local function press(view, id, what)
+    local c = control(view, id)
+    if not c then fail("city dialog", ("no control %d"):format(id)) return end
+    try(what or ("press %d"):format(id), love.mousepressed, c.x + 2, c.y + 2, 1)
+    try("draw after " .. (what or id), love.draw)
+  end
+
   if not mine then
     fail("city dialog", "the player holds no city to open")
   else
-    -- put the city in view, then click its tile
-    G.cx = math.max(0, math.min(mine.x - 4, G.g.map.width - 9))
-    G.cy = math.max(0, math.min(mine.y - 4, G.g.map.height - 9))
-    local r = scr.region(G.screen, scr.REGION.MAP)
-    local sx = r.x + (mine.x - G.cx) * scr.TILE + 2
-    local sy = r.y + (mine.y - G.cy) * scr.TILE + 2
-    -- a city tile usually holds our garrison, so open it directly instead
-    try("open the city dialog", function() G.city = nil end)
-    local ok2 = pcall(function()
-      love.mousepressed(sx, sy, 1)
-    end)
-    if not ok2 then fail("city dialog", "clicking the city tile errored") end
-
-    -- drive it regardless of whether the click landed on armies
-    G.city = mine
-    G.cityView = G.cityView or scr.dialog(G.screen, 6)
+    try("open the city dialog", G.openCity, mine)
+    if G.city ~= mine then fail("city dialog", "it did not open") end
+    if G.cityMode ~= 2 then fail("city dialog", "our own city should open on Production") end
     try("draw the city dialog", love.draw)
-    for i = 1, 4 do
-      local c
-      for _, k in ipairs(G.cityView.dialog.controls) do
-        if k.id == 196 + i then c = k end
-      end
-      if c then
-        G.city = mine
-        try(("pick slot %d"):format(i), love.mousepressed,
-            c.x + 2, c.y + 2, 1)
-      end
-    end
-    -- every mode of the dialog, with its own controls
-    for mode = 1, 4 do
-      G.city = mine
-      local btn
-      for _, k in ipairs(G.cityView.dialog.controls) do
-        if k.id == 192 + mode then btn = k end
-      end
-      if btn then
-        try(("city mode %d"):format(mode), love.mousepressed, btn.x + 2, btn.y + 2, 1)
-        if G.cityMode ~= mode then
-          fail("city dialog", ("button %d did not select mode %d"):format(btn.id, mode))
-        end
-        try(("draw city mode %d"):format(mode), love.draw)
-      end
-    end
-    G.cityMode = 3
+    local view = G.cityView
 
-    -- Stop, then Done: both are real controls of dialog 6
-    for _, id in ipairs({ 202, 192 }) do
-      G.city = mine
-      local c
-      for _, k in ipairs(G.cityView.dialog.controls) do
-        if k.id == id then c = k end
-      end
-      if c then
-        try(("city button %d"):format(id), love.mousepressed, c.x + 2, c.y + 2, 1)
+    for id = 197, 200 do press(view, id, ("pick slot %d"):format(id - 196)) end
+    for mode = 0, 3 do
+      press(view, 193 + mode, ("city mode %d"):format(mode))
+      if G.cityMode ~= mode then
+        fail("city dialog", ("button %d did not select mode %d"):format(193 + mode, mode))
       end
     end
+
+    -- City mode: rename, and back out of razing
+    press(view, 194, "City mode")
+    press(view, 203, "Rename")
+    local ask = kit.top()
+    if ask == nil or ask.close ~= nil then fail("rename", "no text entry came up") end
+    press(ask.view, 191, "click the name field")
+    try("type a name", love.textinput, "Newburg")
+    try("end the edit", love.keypressed, "return")
+    press(ask.view, 189, "OK")
+    if mine.name ~= "Newburg" then fail("rename", ("the city is called %q"):format(mine.name)) end
+    press(view, 205, "Raze")
+    ask = kit.top()
+    press(ask.view, 190, "Cancel the raze")
+    if mine.razed then fail("raze", "Cancel razed the city") end
+    if G.cityMode ~= 1 then fail("raze", "Cancel did not go back to City mode") end
+
+    -- Build Prod: buy whatever is for sale, then Done
+    G.player.gold = 5000
+    press(view, 204, "Build Prod")
+    local b = kit.top()
+    if not b or not b.types then fail("build production", "the screen did not open") end
+    if b then
+      local before = #mine.slots
+      for n = 1, #b.types do
+        if b.view.state[400 + n] ~= 2 then press(b.view, 400 + n, "buy a type") break end
+      end
+      if #mine.slots == before and before < 4 then fail("build production", "nothing was bought") end
+      press(b.view, 396, "Done")
+      if G.cityMode ~= 1 then fail("build production", "Done did not return to City mode") end
+    end
+
+    -- Stop in Production, then Done
+    press(view, 195, "Production mode")
+    press(view, 202, "Stop")
+    if mine.producing ~= nil then fail("city dialog", "Stop did not stop production") end
+    press(view, 201, "Done")
     if G.city ~= nil then fail("city dialog", "Done did not close it") end
 
-    -- a click outside the dialog dismisses it; one inside must not
-    G.city = mine
-    try("click inside the panel", love.mousepressed, 300, 350, 1)
-    if G.city == nil then fail("city dialog", "a click inside closed it") end
+    -- a click outside does nothing: the original's dialog is modal
+    G.openCity(mine)
     try("click outside the panel", love.mousepressed, 10, 460, 1)
-    if G.city ~= nil then fail("city dialog", "a click outside did not close it") end
-
-    G.city = mine
+    if G.city == nil then fail("city dialog", "a click outside closed it") end
     try("close with escape", love.keypressed, "escape")
     if G.city ~= nil then fail("city dialog", "escape did not close it") end
+
+    -- someone else's city opens on Info, with the other modes greyed
+    for _, c in ipairs(G.g.map.cities) do
+      if c.ownerIndex ~= G.player.index then
+        G.openCity(c)
+        if G.cityMode ~= 0 then fail("city dialog", "a foreign city should open on Info") end
+        press(view, 195, "Production on a foreign city")
+        if G.cityMode ~= 0 then fail("city dialog", "a foreign city let Production in") end
+        try("close it", love.keypressed, "escape")
+        break
+      end
+    end
     print("  drove the city dialog")
   end
 end
@@ -379,6 +393,7 @@ try("click the status bar", love.mousepressed, 100, 750, 1)
 -- make sure no dialog is left open: while one is, clicks are swallowed, the
 -- player never moves and the game below never reaches an end
 G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
+for i = #G.modals, 1, -1 do G.modals[i] = nil end
 
 -- play on until the game ends, so the end-of-game path runs too
 -- 150 rounds is enough to reach the end in the small scenarios, and to run

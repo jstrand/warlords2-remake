@@ -20,8 +20,10 @@
 --                as name.png. fn may be nil to just capture.
 --
 -- It drives the game only through love.keypressed and love.mousepressed, the
--- way a player does -- main.lua keeps its state in a local, and reaching past
--- the handlers would be testing something the player cannot do anyway.
+-- way a player does; reaching past the handlers would be testing something
+-- the player cannot do anyway. A script may read the front end's state as
+-- `W2` -- to find a city to click, say -- and may open a dialog through the
+-- entry points main.lua puts on it (W2.openCity) to set up a shot.
 
 local OUT    = os.getenv("W2_OUT") or "shots"
 local SCRIPT = os.getenv("W2_SCRIPT")
@@ -29,7 +31,9 @@ local SCRIPT = os.getenv("W2_SCRIPT")
 -- we live in love2d/test/shot; the game is two directories up
 local ROOT = love.filesystem.getSource() .. "/../.."
 package.path = ROOT .. "/?.lua;" .. package.path
-assert(loadfile(ROOT .. "/main.lua"))()
+-- main.lua hands back its state; a script may read it (`W2`) to find where
+-- to click, though it should still act only through the handlers
+W2 = assert(loadfile(ROOT .. "/main.lua"))()
 
 local steps = SCRIPT and assert(loadfile(SCRIPT))() or { { "screen" } }
 

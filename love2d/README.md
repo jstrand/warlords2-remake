@@ -31,7 +31,7 @@ regions and fonts are the game's own, read from its data files at runtime
 |---|---|
 | any key or click | dismiss the start-of-turn banner, and nothing else |
 | the menu bar | open a menu; pick an item to run it |
-| left click a city | open it and choose what it builds |
+| left click a city | open it: Info, City (rename, raze, buy production), Production, Vector |
 | left click the map | pick up a stack of yours, or send the selection there |
 | | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
 | right click the map | inspect a tile |
@@ -110,6 +110,18 @@ for the cost grid's flags.
 | `menu.lua` | the menu bar and its items, laid out the original's way |
 | `ai.lua` | a computer player |
 
+The dialogs sit in `ui/`, on top of the front end rather than inside the rules
+core. `ui/kit.lua` is what they are made of — the popup frame, the fonts by the
+original's numbers, armies on their rings, shields, fields, and the stack that
+makes a dialog modal — and each other module is one of the original's dialogs,
+with the routine it was read out of cited beside every number:
+
+| module | dialog |
+|---|---|
+| `ui/city.lua` | the city dialog and its four modes |
+| `ui/buyprod.lua` | Build Production |
+| `ui/input.lua` | the text-entry and yes-or-no dialog (Rename, Raze) |
+
 Every rule cites where it came from: `docs/rules.md` for the rule itself, and
 a Ghidra address for the routine it was read out of. If the two ever disagree,
 `docs/rules.md` is the spec and this is the bug.
@@ -129,9 +141,9 @@ here.
 ## What is not here yet
 
 Sound, and the interface for much of what the rules core can already do:
-there is no way to split a stack, no diplomacy screen and no quest log — those
-systems run, but only the engine drives them. The city dialog sets production
-and nothing else; the original's also vectors, razes and rearranges garrisons.
+there is no diplomacy screen and no quest log, and most of the menu's reports
+and views are not built yet — those systems run, but only the engine drives
+them. PLAN.md › Phase 3.5 has the list.
 
 The computer player is honest about its limits. Its phase order, city roles,
 production purposes and garrison sizes come from the original; its target

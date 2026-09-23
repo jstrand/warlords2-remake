@@ -26,6 +26,8 @@ local uidata   = require("warlords.uidata")
 local font     = require("warlords.font")
 local menuMod  = require("warlords.menu")
 local slotsMod = require("warlords.slots")
+local kit      = require("ui.kit")
+local cityUi   = require("ui.city")
 
 local TILE = screen.TILE
 -- An army sheet is 16 cells across on a 32-pixel stride; its rows are 30
@@ -143,7 +145,10 @@ function love.load(arg)
   G.heroMark = love.graphics.newQuad(96, 0, 16, 20, 144, 246)
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
-  G.abits = pck.toImage(dataDir .. "/PICS/ABITS.PCK", palette, 3)
+  -- Drawn opaque, as 1997:0129 blits every bitmap it is given: a cell's own
+  -- grey ground replaces whatever was under it. Checked pixel for pixel
+  -- against the status bar of the original running.
+  G.abits = pck.toImage(dataDir .. "/PICS/ABITS.PCK", palette)
   G.ringQuads = {}
   for i = 0, 8 do
     G.ringQuads[i] = love.graphics.newQuad(i * RING_W, 0, RING_W, RING_H, 480, 40)
@@ -157,7 +162,11 @@ function love.load(arg)
 
   G.menuLayout = menuMod.layout(G.font, 18, screen.WIDTH)
   G.openMenu = nil
-  G.cityMode = 3            -- the dialog opens on production
+  -- SHIELDS.PCK: every side's shield, 40x40 in a frame, for the dialogs that
+  -- show whose something is; CITYBACK.PCK the ground a city's picture sits on
+  G.shieldsImg = pck.toImage(dataDir .. "/TERRAIN0/SHIELDS.PCK", palette)
+  G.cityBack = pck.toImage(dataDir .. "/TERRAIN0/CITYBACK.PCK", palette)
+  kit.init(G)
 
   G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
   G.stratRect = screen.region(G.screen, screen.REGION.STRATEGIC)
@@ -653,73 +662,21 @@ local function endTurn()
   showBanner(side)
 end
 
--- The city dialog is dialog 6 (7204:0000 pushes 6 to the dialog opener). Its
--- four 32x70 slots, ids 197-200, are the city's production choices; they carry
--- no art of their own, so the game draws the army in each.
--- docs/formats/screens.md.
-local CITY_DIALOG, CITY_SLOT_FIRST, CITY_SLOTS = 6, 197, 4
--- 192 and 201 are the two variants of Done, 202 is Stop -- the octagonal
--- button beside the production row. All three are cut from CITYBU.PCK.
-local CITY_DONE, CITY_DONE_ALT, CITY_STOP = 192, 201, 202
-
--- The dialog has four modes, chosen by the row of buttons along its foot
--- (193-196), and each shows a different set of controls. Read off screenshots
--- of the running game; docs/formats/screens.md > Dialog 6.
-local CITY_MODE_FIRST = 193
-local MODE_INFO, MODE_CITY, MODE_PRODUCTION, MODE_VECTOR = 1, 2, 3, 4
-
--- Controls belonging to each mode, beyond the ones always shown.
-local MODE_CONTROLS = {
-  [MODE_INFO]       = {},
-  [MODE_CITY]       = { 203, 205, 204 },   -- Rename, Raze, Build Prod
-  [MODE_PRODUCTION] = { 202 },             -- Stop
-  [MODE_VECTOR]     = { 210, 211, 212 },   -- vector, change destination, See All
-}
--- Always present: the mode buttons and Done.
-local MODE_ALWAYS = { 193, 194, 195, 196, 192 }
--- The production list is shown by two of the modes only.
-local LIST_MODES = { [MODE_INFO] = true, [MODE_PRODUCTION] = true }
-
+-- The city dialog lives in ui/city.lua; these are the front end's ways in.
 function openCity(city)
-  if not G.cityView then G.cityView = screen.dialog(G.screen, CITY_DIALOG) end
-  G.city = city
-  G.cityMode = G.cityMode or MODE_PRODUCTION
-  say("%s: %s", city.name,
-      city.ownerIndex == G.player.index and "choose what to build" or "not yours")
+  cityUi.open(city)
+  say("%s", city.name)
 end
 
 function closeCity()
-  G.city = nil
+  local top = kit.top()
+  if top and top.close then top.close() end
 end
+G.openCity = function(city) openCity(city) end
 
---- Set the city building slot n (1-based), if it is ours.
-local function pickProduction(n)
-  local c = G.city
-  if not c then return end
-  if c.ownerIndex ~= G.player.index then say("%s is not yours.", c.name) return end
-  local slot = c.slots and c.slots[n]
-  if not slot then say("There is no such slot.") return end
-  game.setProduction(G.g, c, n)
-  say("%s will build %s: strength %d, %d turns, upkeep %d.",
-      c.name, slot.name, slot.strength, slot.time, math.floor(slot.cost / 2))
-end
-
---- Burn the city down. Only ours, and only with a stack standing in it.
-local function razeCity()
-  local c = G.city
-  if c.ownerIndex ~= G.player.index then say("%s is not yours.", c.name) return end
-  local stack = selectableAt(c.x, c.y)
-  if #stack == 0 then say("Nobody of ours stands in %s.", c.name) return end
-  game.raze(G.g, G.player, c, stack)
-  say("%s is burned to nothing.", c.name)
-  stratDirty()
-  closeCity()
-end
-
---- Send what this city builds to the city at this point on the strategic map.
-local function vectorTo(mx, my)
-  local c = G.city
-  if c.ownerIndex ~= G.player.index then say("%s is not yours.", c.name) return end
+--- Send what a city builds to the city at this tile of the strategic map.
+--- Clicking the city itself sends it nowhere, which is how a vector is lifted.
+function G.vectorTo(c, mx, my)
   local dest = game.cityAt(G.g, mx, my)
   if not dest then say("There is no city there.") return end
   if dest.ownerIndex ~= G.player.index then say("%s is not yours.", dest.name) return end
@@ -849,6 +806,7 @@ end
 function stratDirty()
   G.stratImage = nil
 end
+G.stratDirty = function() stratDirty() end
 
 -- The four configurable buttons are blank in BUTTON.PCK, because their art
 -- depends on what is assigned to them: 545c:030a paints each one a second
@@ -1018,12 +976,20 @@ local STATUS_Y = 425                           -- icons and text share a row
 local function drawStatus()
   for _, st in ipairs(STATUS) do
     drawAbits({ st.sx, st.sy }, STATUS_W, STATUS_H, st.x, STATUS_Y)
-    G.font.draw(st.fmt:format(st.value()), st.tx, STATUS_Y)
+    G.bigFont.draw(st.fmt:format(st.value()), st.tx, STATUS_Y)   -- font 2 (89e0:05a3)
   end
 end
 
+-- The bar is not the screen's own art: 8065:0aeb blits MARBLE.PCK over it,
+-- the rect at 4125:2a9c -- (16, 403) 360x66 -- from the marble's (0, 60),
+-- before either face is drawn. Checked against the original running.
+local BAR_GROUND = { x = 16, y = 403, w = 360, h = 66, sx = 0, sy = 60 }
+
 local function drawBottomBar()
   love.graphics.setColor(1, 1, 1)
+  local b = BAR_GROUND
+  love.graphics.draw(G.marble,
+    love.graphics.newQuad(b.sx, b.sy, b.w, b.h, G.marble:getDimensions()), b.x, b.y)
   if G.selection then
     drawArmySlots()
   else
@@ -1035,152 +1001,24 @@ end
 -- and window coordinates are the same. That matters beyond tidiness --
 -- love.graphics.setScissor takes window pixels and ignores any transform, so
 -- scaling here would clip the map and the strategic map to the wrong place.
---- The city dialog, laid out as the original's: its rect is (80,60) 480x320,
---- with the strategic map filling the left 224x312 -- which is exactly the
---- 112x156 map at two pixels a tile -- and the city panel on the right. The
---- buttons are its own controls, cut from CITYBU.PCK.
-local CITY_RECT = { x = 80, y = 60, w = 480, h = 320 }
-
-local function cityControl(id)
-  for _, k in ipairs(G.cityView.dialog.controls) do
-    if k.id == id then return k end
-  end
-  return nil
-end
-
--- Ring cell 0 is grey and cells 1-8 are the side colours, so a side's ring is
--- its index plus one. Checked against a screenshot where the second shield's
--- side had the yellow ring, which is cell 2.
-local function ringFor(sideIndex)
-  if not sideIndex then return 0 end
-  return math.max(0, math.min(8, sideIndex + 1))
-end
-
---- Draw only the controls this mode shows. The original does the same: the
---- dialog is one screen whose contents change with the foot buttons.
-local function drawCityControls()
-  G.cityMode = G.cityMode or MODE_PRODUCTION
-  local show = {}
-  for _, id in ipairs(MODE_ALWAYS) do show[id] = true end
-  for _, id in ipairs(MODE_CONTROLS[G.cityMode] or {}) do show[id] = true end
-  love.graphics.setColor(1, 1, 1)
-  for _, c in ipairs(G.cityView.dialog.controls) do
-    if show[c.id] and c.bitmap ~= 0 and c.w > 0 then
-      local art = G.screen.art_for(c.bitmap)
-      -- the mode you are in shows its button lit
-      local st = (c.id == CITY_MODE_FIRST + G.cityMode - 1)
-                 and uidata.ACTIVE or uidata.NORMAL
-      local sr = c.src[st]
-      if art and sr.x + c.w <= art.w and sr.y + c.h <= art.h then
-        love.graphics.draw(art.image,
-          love.graphics.newQuad(sr.x, sr.y, c.w, c.h, art.w, art.h), c.x, c.y)
-      end
-    end
-  end
-end
-
-local function drawCity()
-  G.cityMode = G.cityMode or MODE_PRODUCTION
-  local c = G.city
-  local R = CITY_RECT
-
-  love.graphics.setColor(1, 1, 1)
-  love.graphics.setScissor(R.x, R.y, R.w, R.h)
-  love.graphics.draw(G.marble, R.x, R.y)
-  love.graphics.setScissor()
-
+--- The strategic map in a dialog's left-hand panel, 224x312 at two pixels a
+--- tile -- the city dialog's and the hero offer's -- with a box round `city`.
+function G.drawStrategicPanel(x, y, city)
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
-  love.graphics.setScissor(R.x, R.y, 224, 312)
-  love.graphics.draw(G.stratImage, R.x, R.y, 0, 2, 2)
   love.graphics.setColor(1, 1, 1)
-  love.graphics.rectangle("line", R.x + c.x * 2 - 1.5, R.y + c.y * 2 - 1.5, 5, 5)
+  love.graphics.setScissor(x, y, 224, 312)
+  love.graphics.draw(G.stratImage, x, y, 0, 2, 2)
+  for _, c in ipairs(G.g.map.cities) do
+    if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
+      love.graphics.rectangle("fill", x + c.x * 2, y + c.y * 2, 4, 4)
+    end
+  end
+  if city then
+    love.graphics.rectangle("line", x + city.x * 2 - 1.5, y + city.y * 2 - 1.5, 5, 5)
+  end
   love.graphics.setScissor()
-
-  love.graphics.setColor(1, 1, 1)
-  G.titleFont.draw(c.name, 432 - math.floor(G.titleFont.width(c.name) / 2), R.y + 2)
-
-  local owner = c.ownerIndex or 8
-  local building = c.slots and c.producing and c.slots[c.producing]
-
-  if G.cityMode == MODE_PRODUCTION then
-    -- The "Current" ring is always grey; only the chosen entry in the list
-    -- below takes the owner's colour.
-    G.bigFont.draw("Current:", 350, R.y + 53)
-    if building then
-      love.graphics.draw(G.abits, G.ringQuads[0], 444, R.y + 46)
-      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][building.type % 32],
-                         444, R.y + 45)
-      G.bigFont.draw(("%dt"):format(c.countdown or building.time), 492, R.y + 53)
-    else
-      G.bigFont.draw("nothing", 444, R.y + 53)
-    end
-    if building then
-      love.graphics.setColor(1, 1, 1)
-      love.graphics.draw(G.bigArmy, 320, R.y + 123)
-      local tx, ty = 459, R.y + 126
-      G.bigFont.draw(building.name, tx, ty)
-      for k, line in ipairs({
-        ("Time: %d"):format(building.time),
-        ("Cost: %d"):format(building.cost),
-        ("Strength: %d"):format(building.strength),
-        ("Move: %d"):format(building.move),
-      }) do
-        G.bigFont.draw(line, tx, ty + 14 + k * (G.bigFont.lineHeight + 4))
-      end
-    end
-
-  elseif G.cityMode == MODE_INFO then
-    love.graphics.setColor(1, 1, 1)
-    local tx, ty = 350, R.y + 40
-    for k, line in ipairs({
-      ("Income: %d gold"):format(c.income),
-      ("Defence: %d"):format(c.defence),
-      ("Owner: %s"):format(c.ownerIndex and G.g.map.sides[c.ownerIndex + 1].name
-                           or "nobody"),
-    }) do
-      G.bigFont.draw(line, tx, ty + (k - 1) * (G.bigFont.lineHeight + 4))
-    end
-
-  elseif G.cityMode == MODE_VECTOR then
-    love.graphics.setColor(1, 1, 1)
-    G.bigFont.draw("Current:", 340, R.y + 46)
-    local dest = c.vectorTo and G.g.map.cities[c.vectorTo + 1]
-    G.bigFont.draw(dest and ("vectored to " .. dest.name) or "kept here",
-                   340, R.y + 46 + G.bigFont.lineHeight + 4)
-    G.bigFont.draw("click a city on the map to vector there",
-                   340, R.y + 46 + (G.bigFont.lineHeight + 4) * 3)
-
-  elseif G.cityMode == MODE_CITY then
-    love.graphics.setColor(1, 1, 1)
-    local labels = { "Give the city a new name", "Burn it to nothing",
-                     "Buy new army types" }
-    for k, id in ipairs({ 203, 205, 204 }) do
-      local ctl = cityControl(id)
-      if ctl then G.bigFont.draw(labels[k], ctl.x + ctl.w + 10, ctl.y + 8) end
-    end
-  end
-
-  -- the production list: the chosen entry rings in the owner's colour
-  if LIST_MODES[G.cityMode] then
-    for i = 1, CITY_SLOTS do
-      local ctl = cityControl(CITY_SLOT_FIRST + i - 1)
-      local slot = c.slots and c.slots[i]
-      if ctl then
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.draw(G.abits,
-          G.ringQuads[(slot and c.producing == i) and ringFor(c.ownerIndex) or 0],
-          ctl.x, ctl.y + 1)
-        if slot then
-          love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][slot.type % 32],
-                             ctl.x, ctl.y)
-        end
-      end
-    end
-  end
-
-  drawCityControls()
 end
 
 --- The start-of-turn banner: CITY.PCK framed in the side's colour, with the
@@ -1238,33 +1076,17 @@ local function drawBanner()
 end
 
 --- The hero offer. Popup 2 has no bitmap of its own, so unlike the banner it
---- is not a picture with a frame painted into it: the marble is blitted and a
---- plain black outline drawn round it. Measured off the original's own
---- screenshot, the outline sits at (x - 1, y) and is w + 2 by h + 2, which
---- puts the contents at (x, y + 1) -- a pixel lower than the popup rect says.
+--- is not a picture with a frame painted into it: the marble is blitted and
+--- the ordinary popup frame drawn round it -- which, checked against the
+--- original running at its own 640x480, puts the outline one pixel outside
+--- the rect on every side and the contents exactly at the rect.
 local function drawHeroOffer()
   local R, b = HERO_POPUP, G.offer
-  local function setPal(i)
-    local c = G.palette[i + 1] or G.palette[1]        -- pal.lua is 1-based
-    love.graphics.setColor(c[1], c[2], c[3])
-  end
-
-  love.graphics.setColor(0, 0, 0)
-  love.graphics.rectangle("line", R.x - 0.5, R.y + 0.5, R.w + 1, R.h + 1)
-  -- the shadow: two pixels past the outline, down and to the right
-  love.graphics.rectangle("fill", R.x + 1, R.y + R.h + 2, R.w + 2, 2)
-  love.graphics.rectangle("fill", R.x + R.w + 1, R.y + 2, 2, R.h + 2)
-
-  -- Everything the popup draws lands a pixel below the coordinate it is given
-  -- -- the outline is at (x - 1, y) and the contents start at (x, y + 1), so
-  -- the whole inside shifts down by one. Rather than add 1 to twenty numbers,
-  -- shift once here and use the original's own coordinates throughout.
-  love.graphics.push()
-  love.graphics.translate(0, 1)
+  kit.popupFrame(R)
 
   -- MARBLE.PCK is 480x360, so popup 2's 480x312 is its top-left corner
   love.graphics.setColor(1, 1, 1)
-  love.graphics.setScissor(R.x, R.y + 1, R.w, R.h)
+  love.graphics.setScissor(R.x, R.y, R.w, R.h)
   love.graphics.draw(G.marble, R.x, R.y)
 
   -- the whole map at the strategic map's own 2 pixels a tile
@@ -1303,27 +1125,13 @@ local function drawHeroOffer()
   end
 
   -- The name field: a black outline two pixels clear of it (the rect at
-  -- 4125:1142), then the field itself sunk into the marble -- dark along its
-  -- top and left, light along its bottom and right. Nothing fills it; the
-  -- marble shows through.
+  -- 4125:1142), then the field itself as 7ecb:0058 draws every field --
+  -- filled flat with colour 3 and sunk into the marble.
   local field = screen.dialogControl(G.heroView, HERO_FIELD)
   if field then
-    local function line(x, y, w, h) love.graphics.rectangle("fill", x, y, w, h) end
     love.graphics.setColor(0, 0, 0)
-    love.graphics.rectangle("line", field.x - 1.5, field.y - 1.5,
-                            field.w + 3, field.h + 3)
-    -- 4 is the palette's dark grey and 2 its light one, a shade either side
-    -- of the marble's 3 (the original's DAC renders them 81 / 146 / 113)
-    setPal(4)                                      -- the sunken shadow
-    line(field.x, field.y, field.w, 1)
-    line(field.x, field.y, 1, field.h)
-    setPal(2)                                      -- and its highlight
-    line(field.x, field.y + field.h - 1, field.w, 1)
-    line(field.x + field.w - 1, field.y, 1, field.h)
-
-    love.graphics.setColor(1, 1, 1)
-    G.bigFont.draw(G.offerName, field.x + 4,
-                   field.y + math.floor((field.h - G.bigFont.lineHeight) / 2))
+    kit.outline(field.x - 2, field.y - 2, field.w + 4, field.h + 4)
+    kit.field(field.x, field.y, field.w, field.h, G.offerName, G.bigFont)
   end
   local function label(f, at, s)
     love.graphics.setColor(1, 1, 1)
@@ -1343,7 +1151,6 @@ local function drawHeroOffer()
   box(HERO_FEMALE, G.offerFemale)
 
   screen.drawDialogControls(G.screen, G.heroView)
-  love.graphics.pop()
 end
 
 ------------------------------------------------------------------ the assault
@@ -1661,7 +1468,8 @@ function love.draw()
   screen.drawControls(G.screen)
   drawShortcutIcons()
   drawBottomBar()
-  if G.city then drawCity() end
+  -- the dialogs, bottom of the stack first
+  for _, d in ipairs(G.modals) do d.draw() end
   drawMenuBar()
   -- the turn opens with the banner over the offer, and is dismissed first
   if G.offer then drawHeroOffer() end
@@ -1710,29 +1518,10 @@ function love.mousepressed(x, y, button)
     return
   end
 
-  if G.city then
-    local c = screen.dialogControlAt(G.cityView, x, y)
-    if c and c.id >= CITY_SLOT_FIRST and c.id < CITY_SLOT_FIRST + CITY_SLOTS then
-      pickProduction(c.id - CITY_SLOT_FIRST + 1)
-    elseif c and (c.id == CITY_DONE or c.id == CITY_DONE_ALT) then
-      closeCity()
-    elseif c and c.id >= CITY_MODE_FIRST and c.id < CITY_MODE_FIRST + 4 then
-      G.cityMode = c.id - CITY_MODE_FIRST + 1
-    elseif c and c.id == CITY_STOP and G.cityMode == MODE_PRODUCTION then
-      if G.city.ownerIndex == G.player.index then
-        game.setProduction(G.g, G.city, nil)
-        say("%s builds nothing.", G.city.name)
-      end
-    elseif c and c.id == 205 and G.cityMode == MODE_CITY then
-      razeCity()
-    elseif G.cityMode == MODE_VECTOR
-       and x >= CITY_RECT.x and x < CITY_RECT.x + 224
-       and y >= CITY_RECT.y and y < CITY_RECT.y + 312 then
-      vectorTo(math.floor((x - CITY_RECT.x) / 2), math.floor((y - CITY_RECT.y) / 2))
-    elseif x < CITY_RECT.x or y < CITY_RECT.y
-        or x >= CITY_RECT.x + CITY_RECT.w or y >= CITY_RECT.y + CITY_RECT.h then
-      closeCity()          -- a click outside the dialog dismisses it
-    end
+  -- a dialog takes every click while it is up, which is what makes it modal
+  local top = kit.top()
+  if top then
+    if top.mousepressed then top.mousepressed(x, y, button) end
     return
   end
 
@@ -2047,9 +1836,14 @@ function love.keypressed(key)
     return
   end
 
+  local top = kit.top()
+  if top then
+    if top.keypressed then top.keypressed(key) end
+    return
+  end
+
   if key == "escape" then
     if G.openMenu then G.openMenu = nil return end
-    if G.city then closeCity() return end
     love.event.quit() return
   end
   if G.over then return end
@@ -2075,6 +1869,11 @@ end
 -- Typing into the hero's name field. The original's is a real edit box, and
 -- the rolled name is only its suggestion.
 function love.textinput(text)
+  local top = kit.top()
+  if top and not G.offer then
+    if top.textinput then top.textinput(text) end
+    return
+  end
   if not G.offer then return end
   if #G.offerName < HERO_NAME_MAX and text:match("^[%w%s'%-%.]+$") then
     G.offerName = G.offerName .. text
