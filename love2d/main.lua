@@ -1815,6 +1815,7 @@ local function afterSlotChange()
   say("%d of %d, %d movement", #G.selection.stack, G.selection.slots.n,
       slotsMod.moves(G.selection.slots))
 end
+G.afterSlotChange = afterSlotChange
 
 for i = 0, SLOT_COUNT - 1 do
   ACTION[SLOT_FIRST + i] = function()
@@ -2122,6 +2123,8 @@ MENU_DOES = {
   ["i"] = function() require("ui.fightorder").open() end,
   -- Order > Resign (7721:150d)
   ["r"] = function() require("ui.resign").open() end,
+  -- View > Stack (89e0:0c9c)
+  ["s"] = function() require("ui.stack").open() end,
   -- View > Army Bonus (89e0:1e3b)
   ["o"] = function() require("ui.armybonus").open() end,
   -- View > Items (66d4:0c21)

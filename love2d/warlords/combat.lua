@@ -133,6 +133,16 @@ function combat.battleItems(army)
   return itemTotal(army, rules.ITEM_BATTLE)
 end
 
+--- Command items (+n to command) carried by one army, a standard counting 1
+--- (6a89:0d71).
+function combat.commandItems(army)
+  local n = itemTotal(army, rules.ITEM_COMMAND)
+  for _, it in ipairs(army.items or {}) do
+    if it.type == rules.ITEM_STANDARD then n = n + 1 end
+  end
+  return n
+end
+
 --- The side's hero bonus: the table lookup on its strongest hero, plus every
 --- command item it carries. Standards (type 8) count 1 each.
 function combat.heroBonus(g, line)
@@ -141,12 +151,7 @@ function combat.heroBonus(g, line)
     if a.type == armytype.HERO then
       local str = (a.strength or 0) + combat.battleItems(a)
       best = math.max(best, math.min(9, str))
-      command = command + itemTotal(a, rules.ITEM_COMMAND)
-      if a.items then
-        for _, it in ipairs(a.items) do
-          if it.type == rules.ITEM_STANDARD then command = command + 1 end
-        end
-      end
+      command = command + combat.commandItems(a)
     end
   end
   return combat.HERO_TABLE[best] + command
@@ -221,6 +226,40 @@ function combat.strength(g, army, mod, class, terrain)
   local s = (army.strength or 0) + mod + combat.battleItems(army)
           + (g.types.byId[army.type].bonus[BONUS_SELF + 2 * class] or 0)
   return math.min(combat.MAX_STRENGTH, s)
+end
+
+--- What View > Stack shows beside each army of the group that moves: its
+--- strength in a fight on (x, y) (89e0:1b9c). The group's bonus is summed
+--- first -- every hero's table value and command items, and for each other
+--- army what its stack bonus for the terrain adds over the best so far --
+--- and capped at the scenario's limit; then each army is its own strength,
+--- battle items for a hero or its terrain bonus for anything else, capped at
+--- 9 (a boat at sea is 4), with the group's bonus on top. An army at sea adds
+--- nothing to the group. Returns the strengths by army.
+function combat.stackStrengths(g, armies, x, y)
+  local class = combat.terrainClass(g, x, y)
+  local total, best = 0, 0
+  for _, a in ipairs(armies) do
+    if not a.atSea then
+      if a.type == armytype.HERO then
+        local s = math.min(9, (a.strength or 0) + combat.battleItems(a))
+        total = total + combat.HERO_TABLE[s] + combat.commandItems(a)
+      else
+        local v = g.types.byId[a.type].bonus[BONUS_STACK + 2 * class] or 0
+        if v > best then total, best = total + v - best, v end
+      end
+    end
+  end
+  total = math.min(total, g.map.combatCap or 5)
+  local out = {}
+  for _, a in ipairs(armies) do
+    local s
+    if a.atSea then s = 4
+    elseif a.type == armytype.HERO then s = (a.strength or 0) + combat.battleItems(a)
+    else s = (a.strength or 0) + (g.types.byId[a.type].bonus[BONUS_SELF + 2 * class] or 0) end
+    out[a] = math.min(9, s) + total
+  end
+  return out
 end
 
 --------------------------------------------------------------------- the fight

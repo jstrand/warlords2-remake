@@ -29,10 +29,17 @@ local ROWS, PLACES = 6, 27
 local S = 0xa3
 
 -- 89e0:1a07: the first of the type's bonuses, in this order, as group 163
--- words it. A bonus field is ARMYTYPE.DAT's offset.
-local function bonusText(t)
+-- words it. A bonus field is ARMYTYPE.DAT's offset. Given the army itself, a
+-- boat at sea says so, and a hero gives its command, at most 6.
+local function bonusText(t, army)
   local b = t.bonus
   local function say(i, v) return kit.text(S, i):format(v or 0) end
+  if army and army.atSea then return say(1) end
+  if army and army.type == armytype.HERO then
+    local combat = require("warlords.combat")
+    local s = math.min(9, (army.strength or 0) + combat.battleItems(army))
+    return say(2, math.min(6, combat.HERO_TABLE[s] + combat.commandItems(army)))
+  end
   if b[52] == 2 then return say(3) end
   if b[52] == 3 then return say(4) end
   if (b[48] or 0) ~= 0 then return say(5, b[42]) end

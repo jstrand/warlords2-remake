@@ -453,6 +453,10 @@ local function testDisband(scenario)
   local side = game.begin(g)
   local h = hero.recruit(g, side, side.heroOffer)
   local stack = game.armiesAt(g, h.x, h.y)
+  local combat = require("warlords.combat")
+  h.strength = 5
+  local fight = combat.stackStrengths(g, { h }, h.x, h.y)
+  eq(fight[h], 5 + combat.HERO_TABLE[5] + 1, "View > Stack: a hero's strength, its table value and its standard")
   local n = #g.armies
   side.quest = { type = quest.OCCUPY, hero = h }
   local std = h.items[1]

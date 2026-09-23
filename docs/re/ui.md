@@ -1375,6 +1375,35 @@ Dialog 34: Done (490, default and cancel), 491/492 one row up and down,
 493/494 six (stopping at 0 and 21); the up pair greys at the top, the down
 pair when the last row is place 27.
 
+## View › Stack
+
+`89e0:0c9c` lays the selected stack out at length on a copy of the bar's slot
+arrays (group, in the moving group, mark; `89e0:0d30`), and its buttons are
+the bar's own: an army (336–343, `89e0:157d`) joins the moving group or drops
+out into one of its own, a mark (344–351, `89e0:166f`) makes its group the
+one, Group (334) and Ungroup (335) are the Grp button's two ways. OK (332,
+default) writes it back through `89e0:000a`; Cancel (333) restores the copy.
+
+Popup 0 (`89e0:0e85`): `STACK.PCK` (0, 0) 400 × 23 at (80, 62) for the column
+heads, *(max +%d)* — the scenario's combat cap, `2c04:0112` — at (480, 66),
+and eight rows 30 apart from (112, 90): the mark (ABITS (448, 0) cross,
+(448, 16) tick) at (80, y + 5); the army on a ring of colour
+(side + group) mod 8 + 2, as its shadow when not moving; a non-hero's medals
+(army +0x0a of them, ABITS 8 × 8s at `4125:2fa6`) from (x + 32, y + 8), two
+to a column, unless ARMYTYPE +48 is set; name (x + 48), strength (x + 168,
+a hero's with its battle items), for the moving group *(%d)* (x + 184),
+moves (x + 232), all at y + 5; the movement icon at (x + 256, y + 8) — a hero
+with a flying item flies, an army at sea shows ABITS (424, 30) — and the
+bonus text (x + 304, y + 5; a hero *+%d hero bonus*, its command up to 6; at
+sea *Boat strength of 4*). Rows past the stack get an empty grey ring.
+
+*(%d)* is `89e0:1b9c`: the group's bonus — every hero's table value plus its
+command items, and for everything else what its stack bonus for the tile's
+terrain adds over the best so far, armies at sea left out — capped at the
+combat cap, on top of each army's own strength with its battle items or
+terrain bonus, capped at 9 (4 at sea). Note that it sums **every** hero,
+where the battle itself takes only the strongest.
+
 ## View › Items, and the help pages
 
 `66d4:0c21` is popup 4, (120, 50) 400 × 360: *Items* (group 166) in font 1
