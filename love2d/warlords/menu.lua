@@ -5,15 +5,12 @@
 -- written out here. Recovered in docs/re/ui.md > The menu, which also lists
 -- the command each accelerator reaches.
 --
--- Layout follows 7ae8:0052: an item's width is its text width rounded up to a
--- multiple of 8 plus 8 pixels of padding each side, and the bar packs left to
--- right from x = 8. Nothing is hard-coded, so the bar re-measures itself for
--- whatever font it is given.
+-- Layout follows 7ae8:0052 and 2372:049b (below). Nothing is hard-coded, so
+-- the bar re-measures itself for whatever font it is given.
 
 local menu = {}
 
-menu.BAR_X, menu.BAR_Y = 8, 2
-menu.PAD = 8
+menu.BAR_X, menu.BAR_Y = 8, 1
 
 -- "-" is a separator line. The key is the accelerator, and is what the front
 -- end dispatches on, so it matches the command table in docs/re/ui.md.
@@ -55,39 +52,57 @@ menu.MENUS = {
   } },
 }
 
---- Measure the bar and every dropdown for a font. Returns a table of menus
---- with `x`, `w` on each, and `drop` = the dropdown rect and its item rects.
+-- The bar is 17 pixels deep -- the font's line height plus two -- and white
+-- (7ae8:02d8 fills (0, 0, 640, 17) with colour 15).
+menu.BAR_H = 17
+
+--- Measure the bar and every dropdown for a font, the way 7ae8:0052 and
+--- 2372:049b do. Returns a table of menus, each with the title's rect
+--- (`x`, `w`, text at `x + 2`) and `drop`: the dropdown's rect, the column
+--- its accelerators start in, and a rect per row.
+---
+--- A title's rect is its text width rounded up to 8, plus 8; the next title
+--- starts 8 further on still. A dropdown sits at the title's x, one pixel
+--- below the bar. Its labels are measured as if 12 pixels in (they are drawn
+--- 3 in), the accelerators start in a column 5 past the widest labelled
+--- item, and the whole is 5 wider than its widest line. Rows are the line
+--- height plus 2, a separator 2, with 2 above the first and 1 below the last.
 function menu.layout(font, barHeight, screenWidth)
   local out, x = {}, menu.BAR_X
+  local lh = font.lineHeight
   for i, m in ipairs(menu.MENUS) do
     local tw = math.ceil(font.width(m.title) / 8) * 8
-    local w = tw + menu.PAD * 2
 
-    -- the dropdown is as wide as its widest line, label and key together
-    local itemW, lines = 0, {}
-    for j, it in ipairs(m.items) do
+    local w, keyCol, keyW = 0, 0, 0
+    for _, it in ipairs(m.items) do
       local label, key = it[1], it[2]
-      local lw = (label == "-") and 0
-                 or font.width(label) + (key and (font.width(key) + 16) or 0)
-      itemW = math.max(itemW, lw)
-      lines[j] = { label = label, key = key }
-    end
-    itemW = itemW + menu.PAD * 2
-
-    local dropX = math.min(x, screenWidth - itemW - 1)
-    local y = barHeight
-    local rows = {}
-    for j, ln in ipairs(lines) do
-      local h = (ln.label == "-") and 4 or (font.lineHeight + 2)
-      rows[j] = { label = ln.label, key = ln.key, x = dropX, y = y, w = itemW, h = h }
-      y = y + h
+      if label ~= "-" then
+        local lw = 12 + font.width(label)
+        if key then
+          keyCol = math.max(keyCol, lw + 5)
+          keyW = math.max(keyW, font.width(key))
+          lw = keyCol + keyW
+        end
+        w = math.max(w, lw + 5)
+      end
     end
 
+    local y = menu.BAR_H + 1
+    local rows, at = {}, 2
+    for j, it in ipairs(m.items) do
+      local h = (it[1] == "-") and 2 or (lh + 2)
+      rows[j] = { label = it[1], key = it[2], x = x, y = y + at, w = w, h = h }
+      at = at + h
+    end
+    local h = at + 1
+
+    local dropX = math.min(x, screenWidth - w)
+    for _, r in ipairs(rows) do r.x = dropX end
     out[i] = {
-      title = m.title, items = m.items, x = x, w = w,
-      drop = { x = dropX, y = barHeight, w = itemW, h = y - barHeight, rows = rows },
+      title = m.title, items = m.items, x = x, w = tw + 8,
+      drop = { x = dropX, y = y, w = w, h = h, keyCol = keyCol, rows = rows },
     }
-    x = x + w
+    x = x + tw + 16
   end
   return out
 end

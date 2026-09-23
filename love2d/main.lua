@@ -138,11 +138,12 @@ function love.load(arg)
     m = pck.toImage(dataDir .. "/PICS/MHERO.PCK", palette),
     f = pck.toImage(dataDir .. "/PICS/FHERO.PCK", palette),
   }
-  -- ATRANS2.PCK is 144x246 of map markers on a two-colour mask; the hero is
-  -- the white figure at (96, 0). Only colour 15 is his -- 1 is the sheet's
-  -- ground and 2 the shading, and the original draws neither.
-  G.atrans = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, { 1, 2 })
-  G.heroMark = love.graphics.newQuad(96, 0, 16, 20, 144, 246)
+  -- ATRANS2.PCK is 144x246 of map markers on a mask colour, 1: the side
+  -- shields for the turn strip and the strategic map, and the hero's figure.
+  -- Drawn through a mask on colour 1 alone: colour 2 is part of the art
+  -- (1997:027e, from 8cc6:0952).
+  G.atransShields = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, 1)
+  G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   -- Drawn opaque, as 1997:0129 blits every bitmap it is given: a cell's own
@@ -160,7 +161,7 @@ function love.load(arg)
   G.bigFont = font.load(dataDir, "CHANCE17", palette, 3)
   G.titleFont = font.load(dataDir, "CHANCE36", palette, 3)
 
-  G.menuLayout = menuMod.layout(G.font, 18, screen.WIDTH)
+  G.menuLayout = menuMod.layout(G.font, menuMod.BAR_H, screen.WIDTH)
   G.openMenu = nil
   -- SHIELDS.PCK: every side's shield, 40x40 in a frame, for the dialogs that
   -- show whose something is; CITYBACK.PCK the ground a city's picture sits on
@@ -777,28 +778,54 @@ local function drawMap()
   love.graphics.setScissor()
 end
 
---- The strategic map: MAPCOLOR.DAT through the palette, one pixel per tile,
---- drawn at double size so a 112x156 map fills the 224x312 region exactly.
-local function drawStrategic()
-  local r = G.stratRect
+--- The strategic map as the original paints it anywhere it appears -- the
+--- main screen, the city dialog, the hero offer: STRAT.PCK's rendering of the
+--- terrain (screen.strategicImage), then every city it can see as an 8x8
+--- shield from ATRANS2.PCK, the owner's at (side * 16, 30), at the city's
+--- (2x - 1, 2y - 1) (834b:0ed7). The sheet also carries each shield shifted a
+--- pixel at a time, for a planar blit that can only start on a byte; drawing
+--- the unshifted one where it belongs comes to the same thing. A razed city
+--- has no shield. `mark` gets a white box round its shield, one pixel clear.
+function G.drawStrategicMap(x, y, mark)
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
-  love.graphics.setScissor(r.x, r.y, r.w, r.h)
+  love.graphics.setScissor(x, y, 224, 312)
   love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(G.stratImage, r.x, r.y, 0, 2, 2)
-
-  for _, city in ipairs(G.g.map.cities) do
-    if not city.razed and game.seen(G.g, G.player, city.x, city.y) then
-      love.graphics.setColor(1, 1, 1)
-      love.graphics.rectangle("fill", r.x + city.x * 2, r.y + city.y * 2, 4, 4)
+  love.graphics.draw(G.stratImage, x, y)
+  local w, h = G.atransShields:getDimensions()
+  for _, c in ipairs(G.g.map.cities) do
+    if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
+      local side = c.ownerIndex or 8
+      love.graphics.draw(G.atransShields, love.graphics.newQuad(side * 16, 30, 8, 8, w, h),
+                         x + c.x * 2 - 1, y + c.y * 2 - 1)
     end
   end
-  -- the viewport box: 9x9 tiles at 2 pixels each, as the original draws it
-  love.graphics.setColor(1, 1, 1)
-  love.graphics.rectangle("line",
-    r.x + G.cx * 2 + 0.5, r.y + G.cy * 2 + 0.5,
-    screen.VIEW_COLS * 2, screen.VIEW_ROWS * 2)
+  if mark then
+    local mx, my = x + mark.x * 2 - 1, y + mark.y * 2 - 1
+    local c = G.palette[16]
+    love.graphics.setColor(c[1], c[2], c[3])
+    love.graphics.rectangle("fill", mx - 1, my - 1, 10, 1)
+    love.graphics.rectangle("fill", mx - 1, my + 9, 10, 1)
+    love.graphics.rectangle("fill", mx - 1, my - 1, 1, 10)
+    love.graphics.rectangle("fill", mx + 9, my - 1, 1, 10)
+  end
+  love.graphics.setScissor()
+end
+
+local function drawStrategic()
+  local r = G.stratRect
+  G.drawStrategicMap(r.x, r.y)
+  love.graphics.setScissor(r.x, r.y, r.w, r.h)
+  -- The view box (8961:0698): the 9x9 viewport at 2 pixels a tile, as a
+  -- white square 18 across with sides two pixels thick.
+  local c = G.palette[16]
+  love.graphics.setColor(c[1], c[2], c[3])
+  local bx, by, n = r.x + G.cx * 2, r.y + G.cy * 2, screen.VIEW_COLS * 2
+  love.graphics.rectangle("fill", bx, by, n, 2)
+  love.graphics.rectangle("fill", bx, by + n - 2, n, 2)
+  love.graphics.rectangle("fill", bx, by, 2, n)
+  love.graphics.rectangle("fill", bx + n - 2, by, 2, n)
   love.graphics.setScissor()
 end
 
@@ -834,34 +861,94 @@ local function drawShortcutIcons()
   end
 end
 
-local function drawMenuBar()
-  love.graphics.setColor(1, 1, 1)
-  for i, m in ipairs(G.menuLayout) do
-    if i == G.openMenu then
-      love.graphics.setColor(0.35, 0.35, 0.35)
-      love.graphics.rectangle("fill", m.x, 0, m.w, 18)
-      love.graphics.setColor(1, 1, 1)
-    end
-    G.font.draw(m.title, m.x + menuMod.PAD, menuMod.BAR_Y)
+-- The menu bar (7ae8:02d8, 2372:132f): white, the titles in TEXT with a black
+-- glyph (7ae8:029c: font 0 in colours 0 on 15), each at its rect's x + 2.
+-- A title whose menu is open, and the row under the pointer in a dropdown,
+-- are XORed with colour 7 (2372:102d through 2012:044f) -- white goes to 8,
+-- orange, and black to 7, yellow. A greyed item's glyph is colour 3.
+--
+-- The dropdown (2372:0803) is white with a black outline down its left and
+-- along its bottom and right, and a second line a pixel further out below and
+-- to the right for its shadow; there is no line along its top, which sits a
+-- pixel under the bar. Its labels are 3 in, a separator is a black line.
+local function palColour(i)
+  local c = G.palette[i + 1]
+  love.graphics.setColor(c[1], c[2], c[3])
+end
+
+-- Turn and the sides still in it, at the right of the bar (8cc6:0952): the
+-- strip (437, 0) 202x17 is filled white, "Turn %d" is right-aligned in font 2,
+-- black, and a 16x14 shield from ATRANS2.PCK stands for each side in play,
+-- 16 apart and ending at x = 624; the side whose turn it is sits on a black
+-- box.
+local function drawTurnStrip()
+  palColour(15)
+  love.graphics.rectangle("fill", 437, 0, 202, 17)
+  local alive = {}
+  for _, side in ipairs(G.g.sides) do
+    if side.alive then alive[#alive + 1] = side end
   end
+  local n = #alive
+  local turn = ("Turn %d"):format(G.g.turn)
+  local f = G.bigFont.colours(0, 15)
+  f.draw(turn, (8 - n) * 16 + 508 - f.width(turn), 0)
+  for k, side in ipairs(alive) do
+    local x = (8 - n + k - 1) * 16 + 512
+    if side == G.player then
+      palColour(0)
+      love.graphics.rectangle("fill", x - 3, 1, 17, 15)
+    end
+    local s = side.index
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.atransShields,
+      love.graphics.newQuad(112 + math.floor(s / 4) * 16, 94 + (s % 4) * 14, 16, 14,
+                            G.atransShields:getDimensions()), x, 2)
+  end
+end
+
+local function drawMenuBar()
+  palColour(15)
+  love.graphics.rectangle("fill", 0, 0, 640, menuMod.BAR_H)
+  for i, m in ipairs(G.menuLayout) do
+    local lit = (i == G.openMenu)
+    if lit then
+      palColour(8)
+      love.graphics.rectangle("fill", m.x, 0, m.w, menuMod.BAR_H)
+    end
+    G.font.colours(lit and 7 or 0, lit and 8 or 15).draw(m.title, m.x + 2, menuMod.BAR_Y)
+  end
+  drawTurnStrip()
 
   local open = G.menuLayout[G.openMenu]
   if not open then return end
   local d = open.drop
-  love.graphics.setColor(0.27, 0.27, 0.27)
-  love.graphics.rectangle("fill", d.x, d.y, d.w, d.h)
-  love.graphics.setColor(0.6, 0.6, 0.6)
-  love.graphics.rectangle("line", d.x + 0.5, d.y + 0.5, d.w - 1, d.h - 1)
+  palColour(15)
+  love.graphics.rectangle("fill", d.x, d.y, d.w - 1, d.h - 1)
+  palColour(0)
+  love.graphics.rectangle("fill", d.x, d.y + d.h - 2, d.w - 2, 1)
+  love.graphics.rectangle("fill", d.x + 2, d.y + d.h - 1, d.w - 2, 1)
+  love.graphics.rectangle("fill", d.x, d.y, 1, d.h - 2)
+  love.graphics.rectangle("fill", d.x + d.w - 2, d.y, 1, d.h - 1)
+  love.graphics.rectangle("fill", d.x + d.w - 1, d.y + 1, 1, d.h - 1)
+
+  local mx, my = -1, -1
+  if love.mouse and love.mouse.getPosition then mx, my = love.mouse.getPosition() end
+  local hover = menuMod.rowAt(G.menuLayout, G.openMenu, mx, my)
   for _, r in ipairs(d.rows) do
     if r.label == "-" then
-      love.graphics.setColor(0.5, 0.5, 0.5)
-      love.graphics.line(r.x + 4, r.y + 2, r.x + r.w - 4, r.y + 2)
+      palColour(0)
+      love.graphics.rectangle("fill", r.x + 1, r.y - 1, d.w - 2, 1)
     else
-      love.graphics.setColor(1, 1, 1)
-      G.font.draw(r.label, r.x + menuMod.PAD, r.y + 1)
-      if r.key then
-        G.font.draw(r.key, r.x + r.w - menuMod.PAD - G.font.width(r.key), r.y + 1)
+      local grey = not (G.menuEnabled and G.menuEnabled(r.key))
+      local lit = (r == hover) and not grey
+      if lit then
+        palColour(8)
+        love.graphics.rectangle("fill", r.x + 1, r.y, d.w - 3, r.h)
       end
+      local glyph = grey and 3 or (lit and 7 or 0)
+      local f = G.font.colours(glyph, lit and 8 or 15)
+      f.draw(r.label, r.x + 3, r.y)
+      if r.key then f.draw(r.key, r.x + d.keyCol, r.y) end
     end
   end
 end
@@ -1001,24 +1088,10 @@ end
 -- and window coordinates are the same. That matters beyond tidiness --
 -- love.graphics.setScissor takes window pixels and ignores any transform, so
 -- scaling here would clip the map and the strategic map to the wrong place.
---- The strategic map in a dialog's left-hand panel, 224x312 at two pixels a
---- tile -- the city dialog's and the hero offer's -- with a box round `city`.
+--- The strategic map in a dialog's left-hand panel -- the city dialog's --
+--- with the city marked.
 function G.drawStrategicPanel(x, y, city)
-  if not G.stratImage then
-    G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
-  end
-  love.graphics.setColor(1, 1, 1)
-  love.graphics.setScissor(x, y, 224, 312)
-  love.graphics.draw(G.stratImage, x, y, 0, 2, 2)
-  for _, c in ipairs(G.g.map.cities) do
-    if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
-      love.graphics.rectangle("fill", x + c.x * 2, y + c.y * 2, 4, 4)
-    end
-  end
-  if city then
-    love.graphics.rectangle("line", x + city.x * 2 - 1.5, y + city.y * 2 - 1.5, 5, 5)
-  end
-  love.graphics.setScissor()
+  G.drawStrategicMap(x, y, city)
 end
 
 --- The start-of-turn banner: CITY.PCK framed in the side's colour, with the
@@ -1034,14 +1107,10 @@ local function drawBanner()
     love.graphics.setColor(c[1], c[2], c[3])
   end
 
-  -- The shadow is two black runs a side, down and to the right: 1133:02fe
-  -- draws a horizontal run, 1133:0344 a vertical, off the popup rect grown
-  -- by one. Taken literally that puts them at x+w and y+h of the grown rect,
-  -- one clear of the picture, and the blank pixel between shows through --
-  -- the original has none, so they sit against the picture here.
-  setPal(0)
-  fill(R.x + 1, R.y + R.h, R.w + 2, 2)
-  fill(R.x + R.w, R.y + 1, 2, R.h + 2)
+  -- The popup's own frame goes round the outside -- a black outline a pixel
+  -- out and a two-pixel shadow beyond it, as every popup has -- on top of the
+  -- frame painted into the picture. Checked against the original running.
+  kit.popupFrame(R)
 
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.cityPic, R.x, R.y)
@@ -1069,10 +1138,11 @@ local function drawBanner()
   outline(10, 10, R.w - 20, R.h - 20)
 
   love.graphics.setColor(1, 1, 1)   -- or the frame's colour tints the glyphs
+  -- 7ecb:00d6 centres on x = 320 as 320 - width / 2, truncating: for an odd
+  -- width that is a pixel right of centring the text in the rect
   local f = G.titleFont
-  f.draw(b.name, R.x + math.floor((R.w - f.width(b.name)) / 2), BANNER_NAME_Y)
-  local turn = ("Turn %d"):format(b.turn)
-  f.draw(turn, R.x + math.floor((R.w - f.width(turn)) / 2), BANNER_TURN_Y)
+  kit.centred(f, b.name, 320, BANNER_NAME_Y)
+  kit.centred(f, ("Turn %d"):format(b.turn), 320, BANNER_TURN_Y)
 end
 
 --- The hero offer. Popup 2 has no bitmap of its own, so unlike the banner it
@@ -1090,22 +1160,17 @@ local function drawHeroOffer()
   love.graphics.draw(G.marble, R.x, R.y)
 
   -- the whole map at the strategic map's own 2 pixels a tile
-  if not G.stratImage then
-    G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
-  end
-  love.graphics.draw(G.stratImage, HERO_MAP.x, HERO_MAP.y, 0, 2, 2)
-  for _, c in ipairs(G.g.map.cities) do
-    if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
-      love.graphics.rectangle("fill", HERO_MAP.x + c.x * 2, HERO_MAP.y + c.y * 2, 4, 4)
-    end
-  end
-  -- Where the hero would appear. The marker is the white figure near the top
-  -- right of ATRANS2.PCK -- a mask sheet, so only its white pixels are drawn
-  -- and the two darker ones are keyed out. It lands centred on the city's
-  -- four map pixels: with Ussyrus at tile (14, 137) the original puts the
-  -- cell's corner at (104, 329), which is that centre less (4, 6).
-  love.graphics.draw(G.atrans, G.heroMark,
-    HERO_MAP.x + b.city.x * 2 - 4, HERO_MAP.y + b.city.y * 2 - 6)
+  love.graphics.setScissor()
+  G.drawStrategicMap(HERO_MAP.x, HERO_MAP.y)
+  love.graphics.setScissor(R.x, R.y, R.w, R.h)
+  love.graphics.setColor(1, 1, 1)
+  -- Where the hero would appear (834b:1f5f): ATRANS2.PCK's figure at
+  -- (96, 0) 16x15, masked on colour 1 like the shields, at the city's
+  -- (2y - 6) and at 2x - 2 rounded down to a multiple of 8 -- the routine
+  -- blits on a byte, and this one does not carry shifted copies.
+  local fx = math.max(0, math.floor((b.city.x * 2 - 2) / 8) * 8)
+  local fy = math.max(0, b.city.y * 2 - 6)
+  love.graphics.draw(G.atransShields, G.heroMark, HERO_MAP.x + fx, HERO_MAP.y + fy)
 
   -- the portrait, in a one-pixel frame of its own
   love.graphics.draw(G.heroPic[G.offerFemale and "f" or "m"], HERO_PIC.x, HERO_PIC.y)
@@ -1121,7 +1186,8 @@ local function drawHeroOffer()
   end
   centred(G.titleFont, uidata.text(ui, HERO_TITLE_GROUP, 0), HERO_TITLE_Y)
   for i, line in ipairs(heroLines(b, G.offerFemale)) do
-    if line ~= "" then centred(G.bigFont, line, HERO_LINE_Y[i]) end
+    -- font 2 in 15 with a colour-14 outline, dark brown (78a8:06ae(2, 15, 14, 3))
+    if line ~= "" then centred(G.bigFont.colours(15, 14), line, HERO_LINE_Y[i]) end
   end
 
   -- The name field: a black outline two pixels clear of it (the rect at
@@ -1388,7 +1454,7 @@ local function drawBattle()
     local f, y = G.bigFont, AS.textY
     love.graphics.setColor(1, 1, 1)
     for _, line in ipairs(a.message) do
-      f.draw(line, R.x + math.floor((R.w - f.width(line)) / 2), y)
+      kit.centred(f, line, 320, y)                  -- 6a35:04c5, on x = 320
       y = y + AS.textStep
     end
   end
@@ -1426,9 +1492,7 @@ local function drawVictory()
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.victoryPic, R.x, R.y)
 
-  local function centred(f, text, y)
-    f.draw(text, R.x + math.floor((R.w - f.width(text)) / 2), y)
-  end
+  local function centred(f, text, y) kit.centred(f, text, 320, y) end
   centred(G.titleFont, uidata.text(ui, AS.vText, 0), AS.vTitleY)
   centred(G.bigFont, v.who, AS.vLineY[1])
   centred(G.bigFont, v.where, AS.vLineY[2])
@@ -1465,6 +1529,12 @@ function love.draw()
   screen.drawBackground(G.screen)
   drawMap()
   drawStrategic()
+  -- 8065:0a9d refills the control panel with marble before the controls go
+  -- on, the rect at 4125:2a94 -- (400, 355) 224x114 -- from the marble's own
+  -- origin, as 8065:0aeb does for the bottom bar
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.marble, love.graphics.newQuad(0, 0, 224, 114, G.marble:getDimensions()),
+                     400, 355)
   screen.drawControls(G.screen)
   drawShortcutIcons()
   drawBottomBar()
@@ -1526,7 +1596,7 @@ function love.mousepressed(x, y, button)
   end
 
   -- the menu bar takes precedence over everything beneath it
-  local hit = menuMod.titleAt(G.menuLayout, x, y, 18)
+  local hit = menuMod.titleAt(G.menuLayout, x, y, menuMod.BAR_H)
   if hit then
     G.openMenu = (G.openMenu == hit) and nil or hit
     return
@@ -1727,6 +1797,13 @@ end
 function refreshControls()
   local st = G.screen.state
   local sel = G.selection
+  -- Under the start-of-turn banner, and the hero offer that follows it, every
+  -- control is still greyed from the turn before: the original's refresh
+  -- does not run until the turn's opening is over.
+  if G.banner or G.offer then
+    for id in pairs(st) do st[id] = uidata.DISABLED end
+    return
+  end
   local function set(id, live)
     if st[id] == nil then return end
     st[id] = (live and ACTION[id]) and uidata.NORMAL or uidata.DISABLED
@@ -1812,6 +1889,12 @@ MENU_DOES = {
     say("Stack: %s.", table.concat(names, ", "))
   end,
 }
+
+-- A menu item this engine cannot do yet is greyed, the way the original greys
+-- one that is not available: saying so beats a pick that does nothing.
+function G.menuEnabled(key)
+  return key ~= nil and MENU_DOES[key] ~= nil
+end
 
 function love.keypressed(key)
   -- any key, escape included, only dismisses the banner

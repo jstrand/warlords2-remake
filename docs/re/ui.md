@@ -92,24 +92,9 @@ background** (two thirds of every sheet), 15 is the glyph and 0 its outline.
 Both `CHANCE` fonts draw every copy in 15, so their copies differ in
 something other than colour, or are simply duplicates — unresolved.
 
-The companion `.FIN` holds the metrics:
-
-```
-+0   u8   number of characters (0x60 = 96)
-+1   u8   first character (0x20 = space)
-+2   u16  sheet width, BIG-endian (0x140 = 320, matching the .FNT header)
-+4   u8   line height          (15 / 17 / 37)
-+5   u8   baseline or ascent   (12 / 12 / 25)
-+6   3 × u16   small spacing values, exact meaning unconfirmed
-+12  96 × u8   per-character width
-+108 96 × u8   a second, byte-identical width table
-+204 17 bytes  trailer, not decoded
-```
-
-The two width tables are identical in all three fonts, so the difference
-between them (advance vs. ink width, most likely) cannot be told apart from
-the shipped data. They are not one table per stacked copy — the copy counts
-are 3, 2 and 1, and there are always exactly two tables.
+The companion `.FIN` holds the metrics — two width tables, the glyphs' ink
+widths and their advances, and each copy's colours; the full layout is in
+[`../formats/font.md`](../formats/font.md).
 
 The text engine is segment `21e2`: `0401` draws a string, `0ab8` measures one,
 `0a8e` sums character widths, `0a53` looks up one character's width, `01f7`
@@ -680,15 +665,73 @@ indistinguishable on the screens checked.
 ### Menus
 
 `7ae8:0052` builds the menu bar from a table at `4125:1adc`, 12 bytes per
-entry, into 8 menus of 46-byte records. Item width is the measured text width
-**rounded up to a multiple of 8** plus 8 pixels of padding each side, and
-items are packed left to right from x = 8 — so the bar's metrics fall out of
-the font rather than being hard-coded.
+entry, into 8 menus of 46-byte records. A title's rect is its text width
+rounded up to a multiple of 8, plus 8; titles start at x = 8 and each next
+one 8 past the end of the last. Segment `2372` runs the pulldowns: `00f0` is
+the tracking loop, `0047` maps a key to a menu command, `049b` lays out and
+paints a dropdown, `102d` highlights, `132f` paints the bar's titles.
 
-Segment `2372` runs the pulldowns: `00f0` is the tracking loop (it pumps
-events and brackets its drawing with cursor hide/show), `0047` maps a key to
-a menu command, `102d` and `0ad8` paint items, `132f` handles a scrolling
-menu.
+How it looks, all checked pixel for pixel against the original:
+
+- **The bar** (`7ae8:02d8`) is filled white, (0, 0) 640 × 17 — the font's line
+  height plus 2. Titles are `TEXT` in black (`7ae8:029c` asks for font 0 in
+  colours 0, 15, 15), at the rect's x + 2, y = 1.
+- **An open menu's title**, and the row under the pointer in a dropdown, are
+  XORed with 7 (`2372:102d` → `2012:044f`): white becomes 8, orange, and black
+  7, yellow. A greyed item's glyph is colour 3.
+- **A dropdown** (`2372:049b`, `2372:0803`) sits at its title's x, one pixel
+  under the bar. Labels are measured as if 12 pixels in and drawn 3 in; the
+  accelerators start in a column 5 past the widest labelled item, and the
+  dropdown is 5 wider than its widest line. Rows are the line height plus 2, a
+  separator 2 (a black line), with 2 above the first row and 1 below the last.
+  It is white, outlined in black down its left and along its bottom and
+  right, with a second line a pixel further out below and to the right for a
+  shadow; there is no line along its top.
+
+### The turn strip
+
+`8cc6:0952` draws the right-hand end of the bar: the strip (437, 0) 202 × 17
+filled white, `Turn %d` in font 2, black, right-aligned at x = 508 + 16·(8 − n)
+for n sides still in the game, and a 16 × 14 shield for each of them — from
+`ATRANS2.PCK` at (112 + 16·(side / 4), 94 + 14·(side % 4)), masked on colour 1
+— at x = 512 + 16·(8 − n + i), y = 2. The side whose turn it is sits on a
+black box, (x − 3, 1) 17 × 15.
+
+### The strategic map
+
+It is painted into `STRAT.PCK` — bitmap 7, a 224 × 312 buffer — and blitted
+to (400, 30) (`834b:0000`). `834b:2785` paints each tile as **four** pixels,
+each with its own colour from `MAPCOLOR.DAT`, which is eleven tables:
+
+| bytes | table |
+|---|---|
+| 4 × 256 | a colour per tile id for the top-left, top-right, bottom-left and bottom-right pixel |
+| 3 × 32 | sixteen u16 colours each; the first (the identity) is the one used |
+| 4 × 20 | the same four pixels for a tile with a road, by the overlay's road number |
+
+So forest, hills and marsh come out speckled and roads are drawn in. Tile ids
+0x50–0x5f take a random grey, `dice(1, 3, 1)`, per pixel.
+
+Every city the side can see is then marked (`834b:0ed7`) with an 8 × 8 shield
+from `ATRANS2.PCK` — the owner's at (side × 16, 30), neutral the ninth — at
+the city's (2x − 1, 2y − 1). The sheet carries each shield eight times, shifted
+a pixel a row, because the blit can only start on a byte; drawing the
+unshifted one where it belongs is the same. A razed city gets none. A city
+the caller names gets a white box one pixel clear of its shield.
+
+**The view box** (`8961:0698`) is white, 18 × 18 with two-pixel sides, at
+(400 + 2·scroll x, 30 + 2·scroll y). **The hero offer's figure** (`834b:1f5f`)
+is `ATRANS2.PCK`'s (96, 0) 16 × 15, at the city's 2y − 6 and at 2x − 2
+rounded down to a multiple of 8.
+
+### Panels repainted with marble
+
+The main screen's redraw (`8065:0000`) refills two panels with `MARBLE.PCK`
+before drawing into them: the bottom bar (`8065:0aeb`, (16, 403) 360 × 66 from
+the marble's (0, 60)) and the control panel (`8065:0a9d`, (400, 355) 224 × 114
+from its origin). While the turn's opening — the banner and any hero offer —
+is up, every control is still greyed: the refresh that sets them (`8065:0174`)
+has not run yet.
 
 ## The dialogs
 
@@ -909,10 +952,8 @@ capture of the original confirms it pixel for pixel: inside the castle icon's
 sheets, the shadow sheet and the few other bitmaps `8611:08be` and friends
 blit through `451b:2a68` with a mask are see-through.
 
-The bottom bar is not the screen's own art either. `8065:0aeb` blits
-`MARBLE.PCK` over the rect at `4125:2a9c` — **(16, 403) 360 × 66**, from the
-marble's (0, 60) — before `89e0:05a3` draws the side's standing or
-`89e0:0356` the army slots.
+The bottom bar and the control panel are not the screen's own art either —
+see *Panels repainted with marble* below.
 
 ### Default and cancel buttons
 

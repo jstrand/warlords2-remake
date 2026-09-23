@@ -74,17 +74,33 @@ function screen.load(dataDir, palette, dialogId, terrain)
     end
   end
 
-  -- TERRAIN<n>/MAPCOLOR.DAT is the strategic map's own colour table: one
-  -- palette index per terrain tile id. Rendering the map through it gives the
-  -- green-islands-on-blue of the original's overview exactly.
-  self.mapColour = {}
+  -- TERRAIN<n>/MAPCOLOR.DAT is the strategic map's own colour table, read by
+  -- 834b:2a11 as eleven tables, 1200 bytes in all:
+  --
+  --   4 x 256  a colour per tile id, one table for each of the four pixels a
+  --            tile covers: top left, top right, bottom left, bottom right
+  --   3 x 32   sixteen u16 colours each, the first of which is used (it is
+  --            the identity; the others remap a few colours)
+  --   4 x 20   the same four pixels for a tile with a road on it, by road
+  --
+  -- So a tile is not one flat colour: forest, hills and marsh come out
+  -- speckled, and roads are drawn in.
+  self.mapColour = { tile = {}, road = {}, remap = {} }
   do
     local p = ("%s/TERRAIN%d/MAPCOLOR.DAT"):format(dataDir, terrain or 0)
     local f = io.open(p, "rb")
     if f then
-      local s = f:read("*a")
+      local d = f:read("*a")
       f:close()
-      for i = 1, #s do self.mapColour[i - 1] = s:byte(i) end
+      for q = 0, 3 do
+        local t = {}
+        for i = 0, 255 do t[i] = d:byte(q * 256 + i + 1) end
+        self.mapColour.tile[q] = t
+        local r = {}
+        for i = 0, 19 do r[i] = d:byte(1120 + q * 20 + i + 1) end
+        self.mapColour.road[q] = r
+      end
+      for i = 0, 15 do self.mapColour.remap[i] = d:byte(1024 + i * 2 + 1) end
     end
   end
 
@@ -190,28 +206,54 @@ end
 
 --------------------------------------------------------------- strategic map
 
---- Build the strategic map as one image, a pixel per tile. It is drawn at
---- twice the size, which is how the original's 112x156 map fills the
---- 224x312 region exactly. Rebuild it only when the fog changes -- per-tile
---- rectangles every frame would be 17472 draw calls.
+--- Build the strategic map as one 224x312 image, two pixels a tile each way,
+--- the way 834b:2785 paints STRAT.PCK: each of a tile's four pixels takes its
+--- own colour from MAPCOLOR.DAT, from the road tables when the tile has a
+--- road. Tile ids 0x50-0x5f get a random grey, 2-4, per pixel (dice(1, 3, 1));
+--- those are drawn from a generator of their own here so that painting the
+--- map never moves the game's dice. Tiles `side` has not seen are black.
+--- Rebuilt only when the fog changes -- per-pixel rectangles every frame
+--- would be 70000 draw calls.
 function screen.strategicImage(self, g, side, seen)
   local scnMod = require("warlords.scn")
   local w, h = g.map.width, g.map.height
-  local bytes = {}
-  for y = 0, h - 1 do
-    for x = 0, w - 1 do
-      local c
-      if seen and not seen(g, side, x, y) then
-        c = { 0, 0, 0 }
-      else
-        local idx = self.mapColour[scnMod.tileAt(g.map, x, y)] or 0
-        c = self.palette[idx + 1] or { 0, 0, 0 }
-      end
-      bytes[#bytes + 1] = string.char(
-        math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255), 255)
-    end
+  local mc = self.mapColour
+  local rows = {}
+  local seed = 12345
+  local function grey()
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    return 2 + math.floor(seed / 65536) % 3
   end
-  local data = love.image.newImageData(w, h, "rgba8", table.concat(bytes))
+  local function rgba(i)
+    local c = self.palette[(mc.remap[i] or i) + 1] or { 0, 0, 0 }
+    return string.char(math.floor(c[1] * 255), math.floor(c[2] * 255),
+                       math.floor(c[3] * 255), 255)
+  end
+  local black = string.char(0, 0, 0, 255)
+  for y = 0, h - 1 do
+    local top, bottom = {}, {}
+    for x = 0, w - 1 do
+      local px
+      if seen and not seen(g, side, x, y) then
+        px = { black, black, black, black }
+      else
+        local road = scnMod.roadAt(g.map, x, y) % 32
+        local id = road ~= 0 and road - 1 or (scnMod.tileAt(g.map, x, y) % 256)
+        px = {}
+        if road == 0 and id >= 0x50 and id <= 0x5f then
+          for q = 1, 4 do px[q] = rgba(grey()) end
+        else
+          local t = road ~= 0 and mc.road or mc.tile
+          for q = 0, 3 do px[q + 1] = rgba(t[q] and t[q][id] or 0) end
+        end
+      end
+      top[#top + 1] = px[1]; top[#top + 1] = px[2]
+      bottom[#bottom + 1] = px[3]; bottom[#bottom + 1] = px[4]
+    end
+    rows[#rows + 1] = table.concat(top)
+    rows[#rows + 1] = table.concat(bottom)
+  end
+  local data = love.image.newImageData(w * 2, h * 2, "rgba8", table.concat(rows))
   local img = love.graphics.newImage(data)
   img:setFilter("nearest", "nearest")
   return img

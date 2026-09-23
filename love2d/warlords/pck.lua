@@ -93,6 +93,32 @@ function pck.decode(path)
   return w, h, px
 end
 
+--- An image from decoded indices, with each index passed through `map`
+--- (index -> index) if one is given. `keys` is a set of the sheet's own
+--- indices, before mapping, to leave transparent. This is how a font is drawn
+--- in colours other than its own: 78a8:0839 remaps the sheet's glyph and
+--- outline colours.
+function pck.imageFromPixels(w, h, px, palette, map, keys)
+  keys = keys or {}
+  local bytes = {}
+  for i = 1, w * h do
+    local idx = px[i]
+    local transparent = keys[idx]
+    if map and map[idx] then idx = map[idx] end
+    if transparent then
+      bytes[i] = string.char(0, 0, 0, 0)
+    else
+      local c = palette[idx + 1]
+      bytes[i] = string.char(
+        math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255), 255)
+    end
+  end
+  local data = love.image.newImageData(w, h, "rgba8", table.concat(bytes))
+  local img = love.graphics.newImage(data)
+  img:setFilter("nearest", "nearest")
+  return img
+end
+
 -- Decode straight to a LOVE image. keyIndex (optional) becomes transparent.
 --- Decode a .PCK into an image. `keyIndex` is the palette index to make
 --- transparent, or a table of them -- ATRANS2.PCK's map markers are white on

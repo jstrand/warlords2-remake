@@ -19,25 +19,35 @@ colour — one is drawn in 15 and one in 4, 3385 pixels each.
 
 ## `.FIN` — the metrics
 
+Read by `78a8:03ea`, a byte or a big-endian word at a time:
+
 | off | type | meaning |
 |---|---|---|
-| 0 | u8 | glyph count (`0x60` = 96) |
+| 0 | u8 | glyph count, *n* (`0x60` = 96) |
 | 1 | u8 | first character (`0x20` = space) |
 | 2 | u16 **big-endian** | sheet width, matching the `.FNT` header |
 | 4 | u8 | line height |
 | 5 | u8 | baseline / ascent |
-| 6 | 3 × u16 | small spacing values, **not decoded** |
-| 12 | 96 × u8 | **glyph widths** |
-| 108 | 96 × u8 | a second, byte-identical width table |
-| 204 | 17 bytes | trailer, not decoded |
+| 6 | u8 | 0, 1 or 2 — not read by anything found yet |
+| 7 | u16 big-endian | **rows per copy** of the glyph set: 3, 3, 4 — times the line height, the height of one copy |
+| 9 | u16 big-endian | **number of copies**, *k*: 3, 2, 2 |
+| 11 | *n* × u8 | **ink widths**, from the first character |
+| 11 + *n* | *n* × u8 | **advances**, from the first character |
+| 11 + 2*n* | *k* × 3 × u16 BE | each copy's colours: glyph, outline, ground |
 
-**The width table starts at character `first + 1`, not `first`.** The space has
-no glyph in the sheet at all, and `width[0]` is the width of `!`. Getting this
-wrong shifts every character by one — text renders as clean, correct-looking
-glyphs spelling the wrong word, which is a quiet enough failure to be worth
-naming.
+**The ink widths** are how wide each glyph's art is: the sheet is packed by
+them, and the space, which has no glyph, is 0. **The advances** are how far the
+pen moves on, and are what text is measured by. They are usually the same; a
+letter that overhangs its neighbour has a smaller advance — CHANCE17's `T`
+is 18 wide and moves on 13, which puts its bar over the "u" of "Turn" at the
+top of the screen — and the space has its width here and only here: 8, 7 and
+15. (An earlier reading took both tables one byte late, which made the two
+look identical and left the space unknown.)
 
-So: `width(c) = table[c - 33]` for `c >= 33`.
+The colour triples say what each stacked copy is drawn in: `TEXT` has (15, 0,
+3), (0, 3, 3) and (4, 3, 3); both `CHANCE` fonts (15, 0, 3) and (0, 3, 3).
+`78a8:06ae` keeps these as a cache: asking for a font in colours no copy
+already has recolours one through `78a8:0839`.
 
 ## Glyph layout
 
@@ -57,8 +67,4 @@ sheet one row past its actual height, which is the check that it is not there.
 
 ## Still open
 
-- The three u16 values at `+6`.
-- **The space's advance width**, which is in none of the above.
-  `love2d/warlords/font.lua` uses a quarter of the line height, which matches
-  the shipped screens closely but is a guess.
-- What distinguishes the two identical width tables, and the 17-byte trailer.
+- The byte at `+6`.
