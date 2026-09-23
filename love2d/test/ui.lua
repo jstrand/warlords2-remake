@@ -202,6 +202,21 @@ try("frame after clicking", love.draw)
 if G and G.screen then
   local uidata = require("warlords.uidata")
   local screenMod = require("warlords.screen")
+
+  -- 8065:0174's rules: with nothing selected only the cycle's "next" is
+  -- live, and picking a stack up brings the rest of the row with it
+  local function stateOf(id) return G.screen.state[id] end
+  G.selection = nil
+  try("refresh with nothing selected", love.draw)
+  if stateOf(176) ~= uidata.DISABLED then
+    fail("button state", "fortify was live with nothing selected")
+  end
+  if stateOf(174) == uidata.DISABLED then
+    fail("button state", "next army was greyed while armies remain")
+  end
+  if stateOf(173) ~= uidata.DISABLED then
+    fail("button state", "walk on was live without a route")
+  end
   for _, c in ipairs(G.screen.dialog.controls) do
     if c.w > 0 and c.h > 0 then
       local cx, cy = c.x + math.floor(c.w / 2), c.y + math.floor(c.h / 2)
@@ -212,22 +227,33 @@ if G and G.screen then
       -- would otherwise eat the next control's press
       dismissBanner()
       dismissOffer()
+      -- a greyed-out button must not light up and must not act; a live one
+      -- must do both
+      local off = hit and G.screen.state[hit.id] == uidata.DISABLED
       try(("press control %d"):format(c.id), love.mousepressed, cx, cy, 1)
-      if hit and G.screen.state[hit.id] ~= uidata.ACTIVE then
+      if hit and not off and G.screen.state[hit.id] ~= uidata.ACTIVE then
         fail("control press", ("control %d did not light up"):format(hit.id))
       end
+      if off and G.screen.state[hit.id] ~= uidata.DISABLED then
+        fail("control press", ("disabled control %d lit up"):format(hit.id))
+      end
       try(("release control %d"):format(c.id), love.mousereleased, cx, cy, 1)
-      if hit and G.screen.state[hit.id] ~= uidata.NORMAL then
+      if hit and not off and G.screen.state[hit.id] == uidata.ACTIVE then
         fail("control release", ("control %d stayed lit"):format(hit.id))
       end
     end
   end
   -- released away from the button: must still reset, and must not act
-  local c = G.screen.dialog.controls[2]
-  try("press then leave", love.mousepressed, c.x + 1, c.y + 1, 1)
-  try("release elsewhere", love.mousereleased, 5, 470, 1)
-  if G.screen.state[c.id] ~= uidata.NORMAL then
-    fail("control release", "a button left pressed after releasing off it")
+  local c
+  for _, k in ipairs(G.screen.dialog.controls) do
+    if k.w > 0 and G.screen.state[k.id] ~= uidata.DISABLED then c = k break end
+  end
+  if c then
+    try("press then leave", love.mousepressed, c.x + 1, c.y + 1, 1)
+    try("release elsewhere", love.mousereleased, 5, 470, 1)
+    if G.screen.state[c.id] == uidata.ACTIVE then
+      fail("control release", "a button left pressed after releasing off it")
+    end
   end
   print("  exercised every control on the main screen")
 end

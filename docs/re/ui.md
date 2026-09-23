@@ -372,6 +372,35 @@ derived from the code above. The handlers this function reaches are known:
 `military_advisor`, the army-info panels and the tutorial hooks),
 `7204:033b` for cities, and `8065:0b3b` / `8065:0e04` for two drag modes.
 
+### Which buttons are live
+
+`8065:0174` is the refresh the original runs after **every** action. It walks
+the main screen's controls and sets each one to 1 or 2 — normal or greyed —
+through `18a9:066e`, and these are its rules:
+
+| control | live when |
+|---|---|
+| 173 walk on | a selection **and** route left to walk (`4125:2ea6 > 4125:2ea8`) |
+| 174 next army | `8c07:09e7()` — some army is still in the cycle |
+| 175 quit army | that **and** a selection |
+| 176 fortify | a selection |
+| 177 pad centre | a selection |
+| 178 deselect | a selection |
+| 186 | a selection |
+| 187 | a selection with a move target |
+| 188 | always |
+| 240 group all | a selection, and **not** all of it grouped (`89e0:0567`) |
+| 241 ungroup | a selection, and all of it grouped |
+| 224–231, 232–239 | slot below the stack's size; the rest are cleared outright |
+| 320–327 | always |
+| 183/184/185 | the diplomacy option, then the side's own flags pick which of the three |
+
+`8c07:09e7` is `8c07:040e` with its side effects taken out: the same filter —
+the side's armies, on the map, in the cycle, not done — asking only whether
+any is left. The four configurable buttons are refreshed separately, at the
+end, by `545c:00aa`: each is greyed when `2372:0f9f` says its assigned menu
+item is not available.
+
 ### The army cycle
 
 The five buttons above the pad are the turn's rhythm. The first walks the

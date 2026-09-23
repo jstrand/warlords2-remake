@@ -43,6 +43,7 @@ local G = {}
 local presentOffer, stratDirty, openCity, closeCity  -- defined below
 local reslot                                        -- and this one
 local startAssault, pressAssault, presentVictory, takeCity   -- the assault
+local refreshControls                               -- and the button states
 local showBanner, dismissBanner                      -- and these two
 
 local function quadsFor(img, cols, cellW, cellH, stride, count, rowStride)
@@ -1653,6 +1654,7 @@ end
 
 function love.draw()
   advanceWalk()
+  refreshControls()
   screen.drawBackground(G.screen)
   drawMap()
   drawStrategic()
@@ -1749,6 +1751,8 @@ function love.mousepressed(x, y, button)
 
   local c = screen.controlAt(G.screen, x, y)
   if c then
+    -- a disabled button does not light up and does not arm
+    if G.screen.state[c.id] == uidata.DISABLED then return end
     G.pressed = c.id
     G.screen.state[c.id] = uidata.ACTIVE
     return
@@ -1926,6 +1930,50 @@ ACTION[177] = function()
   else centreOn(G.player.capital.x, G.player.capital.y) end
 end
 
+--- Which buttons are live. 8065:0174 is the original's own refresh -- it runs
+--- after every action and sets each control to 1 or 2, normal or greyed --
+--- and these are its rules. A control this engine has no handler for is
+--- greyed as well: it is not clickable, and saying so plainly beats letting
+--- it press and do nothing.
+function refreshControls()
+  local st = G.screen.state
+  local sel = G.selection
+  local function set(id, live)
+    if st[id] == nil then return end
+    st[id] = (live and ACTION[id]) and uidata.NORMAL or uidata.DISABLED
+  end
+
+  -- 173: there is a route left to walk on along (2ea6 > 2ea8)
+  local walkOn = sel ~= nil and G.route ~= nil
+                 and #G.route.path > (G.walk and G.walk.i or 0)
+  set(173, walkOn)
+  -- 174/175: is any army still in the cycle at all (8c07:09e7)
+  local more = false
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and not a.transit
+       and not a.fortified and not a.done then more = true break end
+  end
+  set(174, more)
+  set(175, more and sel ~= nil)
+  set(176, sel ~= nil)                         -- fortify
+  set(177, sel ~= nil)                         -- centre on the selection
+  set(178, sel ~= nil)                         -- deselect
+  set(186, sel ~= nil)
+  set(187, sel ~= nil and sel.stack[1] ~= nil and sel.stack[1].target ~= nil)
+  set(188, true)
+
+  -- 240/241 share the Grp rect and are the two ways of the same switch
+  local grouped = sel and slotsMod.grouped(sel.slots)
+  set(240, sel ~= nil and not grouped)
+  set(241, sel ~= nil and grouped)
+
+  for i = 0, uidata.SHORTCUT_COUNT - 1 do
+    local name = shortcutName(i)
+    set(uidata.SHORTCUT_FIRST + i, name ~= nil and SHORTCUT_DOES[name] ~= nil)
+  end
+  for i = 0, 7 do set(320 + i, true) end       -- the pad is always live
+end
+
 function love.mousereleased(x, y, button)
   local id = G.pressed
   if not id then return end
@@ -1935,7 +1983,8 @@ function love.mousereleased(x, y, button)
   local c = screen.controlAt(G.screen, x, y)
   if not c or c.id ~= id then return end          -- released off the button
   local act = ACTION[id]
-  if act then act() else say("Button %d is not wired up yet.", id) end
+  if act then act() end
+  refreshControls()
 end
 
 -- Each menu accelerator, as far as this engine can honour it. The names are
