@@ -1635,6 +1635,20 @@ pick a slot (`545c:00e9`), 295–315 put an item on it (`545c:0053`), OK (294)
 writes `UDB.CUR` (`545c:0032`). BUTTON.DAT puts the third column's hit areas
 at x = 300, not 400. The remake keeps the choice for the session.
 
+## The tutorial's pages
+
+With the Tutorial option on (`.SCN` 0x12e), eleven help pages (FILE.DAT group
+0x19, `TUTORIA\T*.GFX`) are each shown once, through the help box
+(`8065:168d`) — each file's `#D` picks popup 14 or 15. The ones with a bit in
+`2c04:0134` set it: THERO the hero offer (`7563:11f5`, 0x01); TPROD the city
+dialog (`7204:027f`, 0x02); TSELECT closing it (`7204:0321`, 0x04); TMOVE a
+stack picked up (`1b62:051d`, 0x08); TFIGHT the same, next to an enemy city
+(`1b62:05af`, 0x10); TPROD2 the city dialog with two cities (`7204:02c5`,
+0x20); TTURN2 the second turn (`8cc6:05df`, 0x40); TSEARCH a hero picked up
+on a site (`1b62:062a`, 0x80). TENDTURN (`1c8c:02db`, on turn 1) and TFRESULT
+(`63fa:0283`, the first battle's result) go by other tests. TWARLORD
+(`7bab:00d1`) waits on a count of 10 not yet traced.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

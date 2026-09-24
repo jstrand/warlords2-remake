@@ -168,6 +168,7 @@ function save.encode(g)
     sides = sides, cities = cities, sites = sites, items = items, armies = armies,
     signs = signs, fightOrder = g.map.fightOrder,
     history = g.history, deeds = g.deeds, triumphs = g.triumphs,
+    tutorialSeen = g.tutorialSeen,
     log = g.log,
   }
 
@@ -230,6 +231,7 @@ function save.decode(text, dataDir)
   end
   if state.fightOrder then g.map.fightOrder = state.fightOrder end
   g.history, g.deeds, g.triumphs = state.history, state.deeds, state.triumphs
+  g.tutorialSeen = state.tutorialSeen
   for i, saved in ipairs(state.signs or {}) do    -- older saves lack them
     local sg = g.map.signs[i]
     if sg then sg[1], sg[2] = saved[1], saved[2] end

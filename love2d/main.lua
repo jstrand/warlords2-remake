@@ -413,6 +413,21 @@ local function select(x, y, pick)
   refreshRoute()
   say("%d of %d, %d movement",
       #G.selection.stack, s.n, slotsMod.moves(s))
+  -- the tutorial on picking a stack up (1b62:051d-062a): moving; fighting,
+  -- next to an enemy city; searching, a hero on a site
+  local moments = { "move" }
+  for dx = -1, 1 do
+    for dy = -1, 1 do
+      local c = game.cityAt(G.g, x + dx, y + dy)
+      if c and c.ownerIndex ~= G.player.index and not c.razed then moments[2] = "fight" end
+    end
+  end
+  local lead = G.selection.stack[1]
+  if lead and lead.type == armytype.HERO and G.g.map.siteAt
+     and G.g.map.siteAt[y * G.g.map.width + x] then
+    moments[#moments + 1] = "search"
+  end
+  require("ui.tutorial").chain(moments)
 end
 
 ------------------------------------------------------------- the army cycle
@@ -519,6 +534,7 @@ end
 --------------------------------------------------------------------- the turn
 
 local function afterBattle(result)
+  require("ui.tutorial").show("fresult")
   if result.captured then
     say("%s is ours!%s", result.captured.name,
         result.loot and result.loot > 0 and (" Looted %d gold."):format(result.loot) or "")
@@ -590,7 +606,12 @@ end
 --- away and reaches the hero offer afterwards, so the two are never both up.
 function dismissBanner()
   G.banner = nil
-  presentOffer(G.player)
+  -- the tutorial's pages for the second turn and the hero offer come first
+  local tutorial = require("ui.tutorial")
+  local moments = {}
+  if G.g.turn == 2 then moments[#moments + 1] = "turn2" end
+  if G.player.heroOffer then moments[#moments + 1] = "hero" end
+  tutorial.chain(moments, function() presentOffer(G.player) end)
 end
 
 -- The hero offer is popup 2 -- (80, 60) 480x312, no bitmap of its own, so it

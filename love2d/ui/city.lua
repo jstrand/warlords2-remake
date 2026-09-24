@@ -364,6 +364,7 @@ function M.open(city, mode)
   function d.close()
     kit.pop(d)
     G.city = nil
+    require("ui.tutorial").show("select")         -- 7204:0321
   end
 
   --- Choose what the city builds: slot n of the list (7087:00c8). The
@@ -511,6 +512,11 @@ function M.open(city, mode)
   end
   d.mode = nil
   d.setMode(mode)
+  -- the tutorial on production (7204:025d): the first time, and again
+  -- once the side holds two cities
+  local moments = { "prod" }
+  if #game.sideCities(G.g, G.player) >= 2 then moments[2] = "prod2" end
+  require("ui.tutorial").chain(moments)
   return d
 end
 
