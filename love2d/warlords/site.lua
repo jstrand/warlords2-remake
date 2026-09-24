@@ -252,6 +252,8 @@ function site.search(g, stack, x, y, human)
 
   if s.content == site.SAGE then
     heroMod.addExperience(g, h, 3)
+    local history = require("warlords.history")
+    history.deed(g, g.map.sides[h.owner + 1], history.FINDS, history.SAGE, 0, h.name)  -- 6536:013c
     return { site = s, kind = "sage", hero = h }
   end
 
@@ -265,6 +267,8 @@ function site.search(g, stack, x, y, human)
     beaten = g.map.monsters[s.guardian]
     if not site.survivesGuardian(g, h, stack, strength) then
       heroMod.dropItems(g, h, x, y)
+      local history = require("warlords.history")
+      history.deed(g, g.map.sides[h.owner + 1], history.KILLED, history.SEARCHING, 0, h.name)  -- 6536:02ef
       for i, a in ipairs(g.armies) do
         if a == h then table.remove(g.armies, i) break end
       end
@@ -285,6 +289,10 @@ function site.search(g, stack, x, y, human)
       h.items[#h.items + 1] = found
     end
     local side = g.map.sides[h.owner + 1]
+    if found then
+      local history = require("warlords.history")
+      history.deed(g, side, history.FINDS, found.index, 0, h.name)   -- 6536:0571
+    end
     local q = require("warlords.quest").event(g, side, "item", { hero = h })
     return { site = s, kind = "item", item = found, hero = h, quest = q, guardian = beaten }
 
@@ -320,6 +328,8 @@ function site.search(g, stack, x, y, human)
         joined[#joined + 1] = a
       end
     end
+    local history = require("warlords.history")
+    history.deed(g, g.map.sides[h.owner + 1], history.FINDS, history.ALLIES, 0, h.name)  -- 6536:07a1
     return { site = s, kind = "allies", armies = joined, type = type, hero = h,
              guardian = beaten }
   end

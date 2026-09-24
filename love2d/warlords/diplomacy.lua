@@ -103,6 +103,8 @@ function diplomacy.apply(g, side)
           g.diplomacy.proposal[key(b, a)] = want
         end
         if want == diplomacy.WAR then
+          local history = require("warlords.history")
+          history.deed(g, side, history.WAR, a, b, "")          -- 484e:0f15
           messages[#messages + 1] = ("War declared with %s!"):format(other.name)
         end
       elseif want < now then                          -- de-escalation: mutual
@@ -110,6 +112,8 @@ function diplomacy.apply(g, side)
           diplomacy.addScore(g, side, now, want)
           g.diplomacy.state[key(a, b)] = want
           g.diplomacy.state[key(b, a)] = want
+          local history = require("warlords.history")
+          history.deed(g, side, history.PEACE, a, b, "")         -- 484e:1027
           messages[#messages + 1] = ("Peace negotiated with %s!"):format(other.name)
         end
       end

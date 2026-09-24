@@ -207,6 +207,8 @@ end
 
 local function eliminate(g, side)
   side.alive = false
+  local history = require("warlords.history")
+  history.deed(g, side, history.VANQUISHED, side.index, 0, "")     -- 8065:19f1
   g.log[#g.log + 1] = ("%s has been eliminated."):format(side.name)
 end
 
@@ -382,6 +384,7 @@ function game.endTurn(g)
     if g.current > #g.sides then
       g.current = 1
       g.turn = g.turn + 1
+      require("warlords.history").record(g)     -- 8065:17f6 -> 6d51:0d60
     end
     local side = g.sides[g.current]
     if side.alive then
@@ -452,12 +455,18 @@ function game.resolveAttack(g, stack, x, y)
   -- `result.log` then kills them off in the order the fight went
   result.lines = { attackers = attackers, defenders = defenders, city = city }
 
-  -- a dead hero drops what it carried where it fell
+  -- a dead hero drops what it carried where it fell, and is remembered as
+  -- killed in the city the fight was for, or in battle (67cc:0ba1, 0c5a)
+  local history = require("warlords.history")
+  local function fallen(h)
+    history.deed(g, g.map.sides[(h.owner or 8) + 1], history.KILLED,
+                 city and city.index or history.IN_BATTLE, 0, h.name)
+  end
   for _, a in ipairs(result.deadAttackers) do
-    if a.type == armytype.HERO then heroMod.dropItems(g, a, a.x, a.y) end
+    if a.type == armytype.HERO then heroMod.dropItems(g, a, a.x, a.y) fallen(a) end
   end
   for _, d in ipairs(result.deadDefenders) do
-    if d.type == armytype.HERO then heroMod.dropItems(g, d, x, y) end
+    if d.type == armytype.HERO then heroMod.dropItems(g, d, x, y) fallen(d) end
   end
   heroMod.battleExperience(g, attackers, defenders, result, city ~= nil)
   local questMod = require("warlords.quest")
@@ -483,6 +492,8 @@ function game.resolveAttack(g, stack, x, y)
     scn.setCityTiles(g.map, city)
     move.invalidate(g)
     result.captured = city
+    local history = require("warlords.history")
+    history.deed(g, winner, history.WON, winner.index, city.index, winner.name)   -- 67cc:0af5
     result.quest = questMod.event(g, winner, "occupy",
                                   { city = city, stack = result.attackers })
                    or result.quest
@@ -684,6 +695,8 @@ function game.checkEnd(g)
   if #humans == 0 and #computers == 1 then
     g.won, g.over = true, true
     computers[1].computer = false          -- so the finished game can be looked at
+    local history = require("warlords.history")
+    history.deed(g, computers[1], history.VICTORIOUS, computers[1].index, 0, "")
     return { over = true, winner = computers[1],
              message = ("%s has triumphed!"):format(computers[1].name) }
   end
@@ -692,6 +705,8 @@ function game.checkEnd(g)
     local mine = #game.sideCities(g, humans[1])
     if mine * 2 > standing then
       g.won, g.over = true, true
+      local history = require("warlords.history")
+      history.deed(g, humans[1], history.VICTORIOUS, humans[1].index, 0, "")
       return { over = true, winner = humans[1],
                message = ("%s rules the world!"):format(humans[1].name) }
     end

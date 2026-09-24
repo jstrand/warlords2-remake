@@ -22,8 +22,10 @@ local R = { x = 160, y = 90, w = 320, h = 200 }     -- popup 1
 local DIALOG, GRACIOUS, RESIGN, CANCEL = 33, 487, 488, 489
 local S = 0xa5
 
+--- Only for a side that still holds a city (4125:5dea).
 function M.open()
   local G = kit.G
+  if #game.sideCities(G.g, G.player) == 0 then return nil end
   local d = { view = kit.view(DIALOG) }
   for _, id in ipairs({ GRACIOUS, RESIGN, CANCEL }) do d.view.state[id] = uidata.NORMAL end
   local t = function(i) return kit.text(S, i) end

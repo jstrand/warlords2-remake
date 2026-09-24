@@ -489,6 +489,34 @@ local function testDisband(scenario)
   eq(side.diploScore, diplo, "burning its own on resigning costs nothing")
 end
 
+local function testHistory(scenario)
+  print("history: " .. scenario)
+  local history = require("warlords.history")
+  local g = game.new(DATA, scenario, { seed = 41 })
+  local side = game.begin(g)
+  history.deed(g, side, history.FINDS, history.SAGE, 0, "Hero")
+  history.deed(g, side, history.WON, side.index, 3, side.name)
+  history.deed(g, side, history.EMERGES, 1, 0, "Hero")
+  eq(#g.deeds[side.index], 2, "two deeds a side")
+  local types = { g.deeds[side.index][1].type, g.deeds[side.index][2].type }
+  table.sort(types)
+  eq(types[1], history.EMERGES, "a lower type pushes out the higher")
+  eq(types[2], history.WON, "and the lower of the two stays")
+  history.deed(g, side, history.PEACE, 0, 1, "")
+  eq(#g.deeds[side.index], 2, "a higher type does not get in")
+
+  local guard = 0
+  while g.turn < 3 and guard < 50 do game.endTurn(g) guard = guard + 1 end
+  ok(g.history and #g.history >= 1, "a record for the round")
+  local r = g.history[1]
+  eq(#r.owners, #g.map.cities, "every city's owner")
+  ok(#r.events >= 2, "with the deeds")
+  eq(g.deeds[side.index], nil, "and the slots cleared")
+  local saveMod = require("warlords.save")
+  local back = saveMod.decode(saveMod.encode(g), DATA)
+  eq(#back.history, #g.history, "history survives a save")
+end
+
 local function testSage(scenario)
   print("sage: " .. scenario)
   local site = require("warlords.site")
@@ -2314,6 +2342,7 @@ testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")
 testSage("ERYTHEA")
+testHistory("ERYTHEA")
 testDisband("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")

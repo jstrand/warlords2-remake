@@ -1317,7 +1317,7 @@ into it, as the text-entry dialog does, up to 29 characters and 216 pixels
 
 ## Order › Resign
 
-`7721:150d` (only for a human side) is popup 1: *Resign!* (group 165) in font
+`7721:150d` (only for a side that holds a city — its count at `4125:5dea`) is popup 1: *Resign!* (group 165) in font
 1 centred on (320, 92) and three lines of font 2 on 320 at y = 140, 160, 180;
 dialog 33 has three buttons down the middle — *Resign Graciously* (487),
 *Resign Ungraciously* (488) and *Keep Playing* (489, default and cancel).

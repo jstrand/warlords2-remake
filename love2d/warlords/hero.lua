@@ -179,6 +179,8 @@ function hero.recruit(g, side, offer)
     end
   end
   g.armies[#g.armies + 1] = h
+  local history = require("warlords.history")
+  history.deed(g, side, history.EMERGES, city.index, 0, h.name)     -- 7563:04e7
 
   local allies = {}
   if not offer.first then

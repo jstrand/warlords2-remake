@@ -127,6 +127,8 @@ function quest.assign(g, side, h)
         if type == quest.SLAUGHTER then q.required = g.rng:dice(1, 12, 10)
         elseif type == quest.PILLAGE_GOLD then q.required = g.rng:dice(3, 300, 500) end
         side.quest = q
+        local history = require("warlords.history")
+        history.deed(g, side, history.QUEST_GIVEN, 0, 0, h and h.name)   -- 4976:0dae
         return q
       end
     end
@@ -159,6 +161,8 @@ local function finish(g, side, reason)
   side.quest = nil
   if not q then return nil end
   if reason == "done" then
+    local history = require("warlords.history")
+    history.deed(g, side, history.QUEST_DONE, 0, 0, q.hero and q.hero.name)   -- 4976:1da8
     require("warlords.hero").addExperience(g, q.hero, quest.EXPERIENCE)
     return { quest = q, reward = quest.reward(g, side, q) }
   end
