@@ -147,12 +147,21 @@ afresh, sides through Settings), Quit; **About**; **help pages** (`.GFX`)
 and the **tutorial's pages**; **the right button's tile info**; **the end of
 the game** — surrender, Congratulations, the farewells.
 
+Also done: **the start screens** — the start menu, choosing a scenario, the
+sides and options set up, New game back to them.
+
 Left:
 
-1. **The start screens** (`7f77:0000`): choosing a scenario (`NEWSCEN.PCK`),
-   its options and the sides, as the game starts and from New game.
-2. **Game › Save map / Load map** (`7721:1214`, `128a`).
-3. TWARLORD, the one tutorial page whose trigger (`7bab:00d1`) is not traced.
+1. **Game › Save map / Load map** (`7721:1214`, `128a`): a game kept as a
+   scenario of its own — ten map slots through the list chooser (groups 48,
+   49) — and reloaded through the setup screens (`7f77:0000`, `7bab:0000`)
+   as a new game. Needs the setup to start from a loaded state rather than a
+   scenario file.
+2. Random Map (`7f77:05f5`): the start menu's random world needs a map
+   generator.
+3. The computer players' characters (setup dialog 27, `7bab:16ea`, Random
+   Characters `2051`, Recall Options `2229`), and TWARLORD's trigger
+   (`7bab:00d1`).
 4. Checks against captures of the original for the screens added since the
    banner and hero offer, which were compared pixel for pixel.
 
