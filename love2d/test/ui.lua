@@ -104,6 +104,12 @@ local function dismissBanner(what)
   end
   if G.banner then try(what or "dismiss the banner", love.keypressed, "return") end
   if G.banner then fail("banner", "a key did not dismiss it") end
+  -- in the tutorial its pages come next, once each: put them away
+  local kit = require("ui.kit")
+  for _ = 1, 5 do
+    if not kit.top() then break end
+    try("put a tutorial page away", love.keypressed, "space")
+  end
 end
 
 if not G.banner then
