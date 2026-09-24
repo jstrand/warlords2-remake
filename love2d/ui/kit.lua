@@ -171,20 +171,25 @@ end
 --- colour 8 from the hero's tile to the target's, both at (2x - 2, 2y - 2)
 --- (828e:0a3f), a little shield in colour 8 edged in black at the target
 --- (828e:08cd), and a colour-8 box round it, 8 x 8 (828e:099e).
-function kit.mapTarget(mx, my, hx, hy, tx, ty)
-  love.graphics.setScissor(mx, my, 224, 312)
-  kit.setPal(8)
-  local x0, y0, x1, y1 = hx * 2 - 2, hy * 2 - 2, tx * 2 - 2, ty * 2 - 2
+--- A one-pixel line in palette colour c, end to end (Bresenham).
+function kit.line(c, x0, y0, x1, y1)
+  kit.setPal(c)
   local dx, dy = math.abs(x1 - x0), -math.abs(y1 - y0)
   local sx, sy = x0 < x1 and 1 or -1, y0 < y1 and 1 or -1
   local err = dx + dy
   while true do
-    love.graphics.rectangle("fill", mx + x0, my + y0, 1, 1)
+    love.graphics.rectangle("fill", x0, y0, 1, 1)
     if x0 == x1 and y0 == y1 then break end
     local e2 = 2 * err
     if e2 >= dy then err = err + dy x0 = x0 + sx end
     if e2 <= dx then err = err + dx y0 = y0 + sy end
   end
+end
+
+function kit.mapTarget(mx, my, hx, hy, tx, ty)
+  love.graphics.setScissor(mx, my, 224, 312)
+  kit.line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2)
+  kit.setPal(8)
   local bx, by = mx + tx * 2, my + ty * 2 - 1
   love.graphics.rectangle("fill", bx, by, 4, 5)
   kit.setPal(0)

@@ -50,13 +50,7 @@ end
 local function hline(x, y, n) love.graphics.rectangle("fill", x, y, n, 1) end
 local function vline(x, y, n) love.graphics.rectangle("fill", x, y, 1, n) end
 
---- A line in palette colour c, point to point.
-local function line(c, x0, y0, x1, y1)
-  kit.setPal(c)
-  love.graphics.setLineStyle("rough")
-  love.graphics.setLineWidth(1)
-  love.graphics.line(x0 + 0.5, y0 + 0.5, x1 + 0.5, y1 + 0.5)
-end
+local line = kit.line
 
 function M.open(mode)
   local G = kit.G
