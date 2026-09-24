@@ -1817,9 +1817,10 @@ function love.mousepressed(x, y, button)
     local tx, ty = tileAtPoint(x, y)
     if not tx then return end
     -- A left click on a tile of our own picks that stack up (8c07:06eb);
-    -- anywhere else it is an order to go there. Right click inspects.
+    -- anywhere else it is an order to go there. The right button shows what
+    -- is on the tile while it is held (740d:0037).
     if button == 2 then
-      select(tx, ty)
+      require("ui.tileinfo").open(tx, ty)
     elseif G.selection and #selectableAt(tx, ty) == 0 then
       moveSelection(tx, ty)
     else
@@ -2076,6 +2077,8 @@ function refreshControls()
 end
 
 function love.mousereleased(x, y, button)
+  local top = kit.top()
+  if top and top.mousereleased then top.mousereleased(x, y, button) return end
   local id = G.pressed
   if not id then return end
   G.pressed = nil

@@ -1524,6 +1524,33 @@ in that side's colours on a grey ring at x = 104, and when the count is not
 (`67cc:1b43`): a hero, a creature with ARMYTYPE +48 set, or an army; a navy
 too when it was at sea; and each standard a fallen hero carried.
 
+## The right button: what is on a tile
+
+A right-button press on a seen tile of the map (`740d:0037`, button 2)
+shows a 256 × 75 box until the button comes up (`740d:11cf` puts the screen
+back). `740d:131a` centres it on the tile's centre — ((col − scroll x)·40 +
+36, (row − scroll y)·40 + 50), x rounded to the byte grid — kept within
+x ∈ [128, 512], y ∈ [37, 441]; `740d:1201` puts `POPUP.PCK`'s (0, 0) 256 × 75
+behind it. Its lines are centred on the box's middle less 8, at y + 11 and
+y + 35. The first that applies:
+
+- **a stack** you may see — your own, or any with View Enemies (`.SCN`
+  0x12a) — as its armies side by side at y + 16, 24 apart, starting at the
+  middle less 12 per army less 16, on the byte grid (`740d:0bad`). An enemy
+  in a tower shows only *Tower* / *Very hard to conquer!* (group 130).
+- **a city** (`740d:0c73`): the name in the owner's colours (a neutral city
+  in yours); *Razed!* for ruins; else the owner's 16 × 16 shields at x + 24
+  and x + 208, y + 10, `ABITS` (424, 0) at (x + 48, y + 36) with the income
+  (+42) at (x + 80, y + 33) and (424, 11) at (x + 144, y + 36) with the
+  defence (+20) at (x + 176, y + 33); a capital adds that side's 32 × 23 from
+  `BSHIELD.PCK` (side × 32, 36) at x + 16 and x + 200.
+- **a site** (`740d:0fd7`): the name in your colours, then *Blessings &
+  Quests!* for a temple, *Explored!* (at y + 33) or *Unexplored!*.
+- **a signpost** (terrain 9, `740d:0a1c`): its two lines over `POPUP2.PCK`.
+- **the terrain** (`740d:10e1`): its name (group 128) in colour 7 and what
+  it is (group 129) in white; a tile with a road is terrain 0, and a crossing
+  (bit 15 of the map word) reads *Port* / *A way for armies to put to sea*.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the
