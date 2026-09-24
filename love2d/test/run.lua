@@ -515,6 +515,13 @@ local function testHistory(scenario)
   local saveMod = require("warlords.save")
   local back = saveMod.decode(saveMod.encode(g), DATA)
   eq(#back.history, #g.history, "history survives a save")
+
+  -- triumphs: a side's own row is what it lost, its row for another what it killed
+  local foe = g.sides[2]
+  history.tally(g, { owner = foe.index, type = 28, items = { { index = foe.index } } }, side.index)
+  eq(history.triumph(g, side.index, foe.index, history.HEROES), 1, "a hero killed")
+  eq(history.triumph(g, side.index, foe.index, history.STANDARDS), 1, "and the standard it carried")
+  eq(history.triumph(g, foe.index, foe.index, history.HEROES), 1, "the loser counts its own loss")
 end
 
 local function testSage(scenario)

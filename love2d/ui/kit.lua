@@ -73,13 +73,20 @@ function kit.popupFrame(R)
 end
 
 --- A popup with no picture of its own: MARBLE.PCK, from its top-left corner,
---- cropped to the rect, inside the frame. MARBLE is 480x360, which is why no
---- such popup is wider than 480.
+--- cropped to the rect, inside the frame. MARBLE is 480x360; popup 10
+--- (History) is 576 wide, and the blit (0, 0, w, h) runs past the end of
+--- each row -- read as linear memory, the columns past 480 are the start of
+--- the next row, (x - 480, y + 1). An inference, not yet checked on screen.
 function kit.popup(R)
   kit.popupFrame(R)
   love.graphics.setColor(1, 1, 1)
   love.graphics.setScissor(R.x, R.y, R.w, R.h)
   love.graphics.draw(G.marble, R.x, R.y)
+  local mw, mh = G.marble:getDimensions()
+  if R.w > mw then
+    love.graphics.draw(G.marble, love.graphics.newQuad(0, 1, R.w - mw, math.min(R.h, mh - 1), mw, mh),
+                       R.x + mw, R.y)
+  end
   love.graphics.setScissor()
 end
 

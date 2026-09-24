@@ -1480,6 +1480,50 @@ and your proposal to it as three buttons at y = 245, 285, 325: (0, 45) peace,
 372–378, 380–386 and 388–394 set it (`484e:0a69`, the column mapped past
 your own side). OK (370, default and cancel) closes; Report (371) goes back.
 
+## History
+
+`6d51:0000(n)` plays back the game's record (docs/formats/history.md); with
+the turn at 1 it only says *'Tis only turn one, my liege!* / *There is no
+history yet!* (group 93) in a message box. City, Events, Gold and Winners
+(n = 0–3) share popup 10, (32, 60) 576 × 312, and dialog 19 (`6d51:0096`):
+the strategic map at the popup's corner with the city shields as they stood
+(`834b:12d3`), the title (group 91) in font 1 centred on (432, 64), four
+tabs (352–355, the showing one lit), *Turn %d* centred on (312, 350), the
+arrows 357/358 (a turn back and on, greyed at the ends) and Done (356).
+
+The graphs (`6d51:034a`, the table at `4125:0dc6`: 300, 150, 292, 140): the
+largest figure on record — at least 10 cities, 500 gold, 100 score — tops the
+scale; axes in white with black shadows a pixel up and left, ticks at the
+ends and the middle, 4 long; the top figure and *0* right-aligned at x = 292,
+*0*, *Turns* and the last turn under the axis. Every side is a line in its
+colour from (301, 288), a step per turn to x = 300 + t·292/n,
+y = 289 − ⌊140·v/top⌋. The turn shown is a colour-13 line from y = 148 to 296
+(region 10 picks a turn by x), and under the graph, centred on (432, 318),
+group 92's line — your own figure, or on Winners the leader.
+
+Events (`6d51:16ba`): that turn's deeds, 17 apart from y = 149, each its
+side's turn-strip shield (ATRANS2 16 × 14) at x = 264 and the words at
+x = 280, a treachery, war or peace adding the other side's shield after the
+text, on the byte grid. Under them the timeline (`6d51:18da`, `4125:0dce`):
+a box (272, 319) 320 × 17 bevelled twice and outlined in black, filled from
+(275, 322) 11 high in your colour up to the turn shown and your edge colour
+past it; region 11 picks a turn.
+
+`kit.popup` fills popup 10's last 96 columns from MARBLE.PCK's next row: the
+blit copies (0, 0, 576, 312) out of a 480-wide bitmap. That is read off the
+code, not yet seen on screen.
+
+**Triumphs** (`6d51:09eb`, popup 0, dialog 20): *Triumphs* (group 80); eight
+tabs from (128, 109), 48 apart, `BUTTON.PCK` (400, 0) 48 × 40 — (400, 40)
+for the one showing — with `BSHIELD.PCK`'s 32 × 36 at (side × 32, 0) on it,
+8 in and 2 down; five rows 35 apart from y = 168: army types 4, 25, 28, 5, 29
+in that side's colours on a grey ring at x = 104, and when the count is not
+0 its line at (144, y + 9) — groups 81–85 on your own tab (your losses),
+86–90 on another's (what you killed), singular or plural. The counts are
+`2c04:1163`, 80 bytes a side and 10 an opponent, raised after every battle
+(`67cc:1b43`): a hero, a creature with ARMYTYPE +48 set, or an army; a navy
+too when it was at sea; and each standard a fallen hero carried.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

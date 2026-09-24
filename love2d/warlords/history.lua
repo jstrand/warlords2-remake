@@ -34,6 +34,49 @@ function history.deed(g, side, type, v1, v2, name)
   if d[worse].type > type then d[worse] = e end
 end
 
+-------------------------------------------------------------------- triumphs
+
+-- What History > Triumphs counts (2c04:1163: 80 bytes a side, 10 an
+-- opponent, five words). A side's own row counts what it lost; its row for
+-- another side, what it killed of them. Counted after each battle
+-- (67cc:1b43-1e92).
+history.ARMIES, history.CREATURES, history.HEROES, history.NAVIES, history.STANDARDS = 0, 1, 2, 3, 4
+
+local function bump(g, side, opp, k, n)
+  if side == nil or opp == nil or side > 7 or opp > 7 then return end
+  g.triumphs = g.triumphs or {}
+  local t = g.triumphs[side] or {}
+  g.triumphs[side] = t
+  local row = t[opp] or { [0] = 0, 0, 0, 0, 0 }
+  t[opp] = row
+  row[k] = row[k] + (n or 1)
+end
+
+--- An army of `loser`'s killed by `killer`'s: a hero, an unnatural creature
+--- (ARMYTYPE +48 set), or an army; a navy as well when it was at sea; and
+--- the standards a hero carried.
+function history.tally(g, army, killer)
+  local armytype = require("warlords.armytype")
+  local loser = army.owner
+  local k
+  if army.type == armytype.HERO then k = history.HEROES
+  elseif (g.types.byId[army.type].bonus[48] or 0) ~= 0 then k = history.CREATURES
+  else k = history.ARMIES end
+  local std = 0
+  for _, it in ipairs(army.items or {}) do if it.index < 8 then std = std + 1 end end
+  for _, row in ipairs({ { loser, loser }, { killer, loser } }) do
+    bump(g, row[1], row[2], k)
+    if army.atSea then bump(g, row[1], row[2], history.NAVIES) end
+    if std > 0 then bump(g, row[1], row[2], history.STANDARDS, std) end
+  end
+end
+
+--- The count for side `me` against `opp`, kind k.
+function history.triumph(g, me, opp, k)
+  local t = g.triumphs and g.triumphs[me] and g.triumphs[me][opp]
+  return t and t[k] or 0
+end
+
 --- The round's record (6d51:0d60), taken as the turn counter goes up.
 function history.record(g)
   if g.turn > history.LAST_TURN then return end

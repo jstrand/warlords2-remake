@@ -807,7 +807,9 @@ end
 --- pixel at a time, for a planar blit that can only start on a byte; drawing
 --- the unshifted one where it belongs comes to the same thing. A razed city
 --- has no shield. `mark` gets a white box round its shield, one pixel clear.
-function G.drawStrategicMap(x, y, mark, noCities)
+--- `owners`, if given, is who held each city (by position in the list, 0xff
+--- for ruins) -- History draws the shields as they were (834b:12d3).
+function G.drawStrategicMap(x, y, mark, noCities, owners)
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
@@ -815,9 +817,11 @@ function G.drawStrategicMap(x, y, mark, noCities)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.stratImage, x, y)
   local w, h = G.atransShields:getDimensions()
-  for _, c in ipairs(noCities and {} or G.g.map.cities) do
-    if not c.razed and game.seen(G.g, G.player, c.x, c.y) then
-      local side = c.ownerIndex or 8
+  for i, c in ipairs(noCities and {} or G.g.map.cities) do
+    local owner = owners and owners[i]
+    local gone = owners and owner == 0xff or (not owners and c.razed)
+    if not gone and game.seen(G.g, G.player, c.x, c.y) then
+      local side = owners and owner or c.ownerIndex or 8
       love.graphics.draw(G.atransShields, love.graphics.newQuad(side * 16, 30, 8, 8, w, h),
                          x + c.x * 2 - 1, y + c.y * 2 - 1)
     end
@@ -2170,6 +2174,13 @@ MENU_DOES = {
   ["x"] = function()
     if G.selection then require("ui.signpost").open(G.selection.stack) end
   end,
+  -- History > City, Events, Gold, Winners (6d51:0000(0-3))
+  ["h"] = function() require("ui.history").open(0) end,
+  ["e"] = function() require("ui.history").open(1) end,
+  ["j"] = function() require("ui.history").open(2) end,
+  ["y"] = function() require("ui.history").open(3) end,
+  -- History > Triumphs (6d51:09eb)
+  ["l"] = function() require("ui.history").triumphs() end,
   -- Report > Diplomacy (484e:0000)
   ["d"] = function() require("ui.diplomacy").open() end,
   -- Report > Quest (4976:0167)

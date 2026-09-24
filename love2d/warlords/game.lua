@@ -462,10 +462,13 @@ function game.resolveAttack(g, stack, x, y)
     history.deed(g, g.map.sides[(h.owner or 8) + 1], history.KILLED,
                  city and city.index or history.IN_BATTLE, 0, h.name)
   end
+  local mine = stack[1] and stack[1].owner
   for _, a in ipairs(result.deadAttackers) do
+    history.tally(g, a, defOwner)
     if a.type == armytype.HERO then heroMod.dropItems(g, a, a.x, a.y) fallen(a) end
   end
   for _, d in ipairs(result.deadDefenders) do
+    history.tally(g, d, mine)
     if d.type == armytype.HERO then heroMod.dropItems(g, d, x, y) fallen(d) end
   end
   heroMod.battleExperience(g, attackers, defenders, result, city ~= nil)
