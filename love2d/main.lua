@@ -190,11 +190,27 @@ function love.load(arg)
   -- A third argument fixes the seed, so a run can be reproduced exactly.
   -- test/ui.lua passes one; without it every game is different.
   local seed = tonumber(arg[3]) or os.time()
+  G.scenario = scenario
+  newGame(seed)
+  beginGame()
+
+  love.graphics.setBackgroundColor(0, 0, 0)
+  say("Click a stack, then click where to go.")
+end
+
+--- A fresh game of the scenario. Until the new-game screens set the sides
+--- up, the first side is the player's and the rest are the computer's;
+--- Settings can change that.
+function newGame(seed)
   G.seed = seed
-  G.g = game.new(dataDir, scenario, { seed = seed })
-  -- Until the new-game screens set the sides up, the first side is the
-  -- player's and the rest are the computer's; Settings can change that.
+  G.g = game.new(G.dataDir, G.scenario, { seed = seed })
   for i, s in ipairs(G.g.sides) do s.computer = i > 1 end
+  G.selection, G.over = nil, nil
+  G.stratImage = nil
+end
+
+--- Start its first turn, and centre the view on the capital.
+function beginGame()
   G.player = game.begin(G.g)
   G.cursor = G.player.capital and
              { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
@@ -202,10 +218,6 @@ function love.load(arg)
   -- centre the 9x9 viewport on the capital
   G.cx = math.max(0, math.min(G.player.capital.x - 4, G.g.map.width - screen.VIEW_COLS))
   G.cy = math.max(0, math.min(G.player.capital.y - 4, G.g.map.height - screen.VIEW_ROWS))
-
-  love.graphics.setBackgroundColor(0, 0, 0)
-
-  say("Click a stack, then click where to go.")
   showBanner(G.player)
 end
 
@@ -2129,7 +2141,25 @@ end
 MENU_DOES = {
   ["alt E"] = function() endTurn() end,
   ["m"] = function() moveAll() end,
-  ["^Q"]    = function() love.event.quit() end,
+  -- Game > Quit (7721:0000) and New game (7721:019d) ask first (groups 44
+  -- and 45). A new game here is the same scenario afresh, the sides set up
+  -- through Settings (64d2:0000(0)); the original's start screens
+  -- (7f77:0000) are still to come.
+  ["^Q"] = function()
+    local lines = {}
+    for i = 1, 4 do lines[i] = uidata.text(G.screen.ui, 0x2c, i) end
+    require("ui.input").open({ title = uidata.text(G.screen.ui, 0x2c, 0), lines = lines,
+                               confirm = true, ok = function() love.event.quit() end })
+  end,
+  ["alt N"] = function()
+    local lines = {}
+    for i = 1, 4 do lines[i] = uidata.text(G.screen.ui, 0x2d, i) end
+    require("ui.input").open({ title = uidata.text(G.screen.ui, 0x2d, 0), lines = lines,
+      confirm = true, ok = function()
+        newGame(os.time())
+        require("ui.settings").open(function() beginGame() end)
+      end })
+  end,
   -- Game > Save game and Load game (7721:093b, 026b): ten slots
   ["alt S"] = function() require("ui.savegame").save() end,
   ["alt L"] = function() require("ui.savegame").load(takeLoaded) end,
