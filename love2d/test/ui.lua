@@ -219,6 +219,48 @@ for _, button in ipairs({ 1, 2 }) do
 end
 try("frame after clicking", love.draw)
 
+-- The Grp button: 240 and 241 share its rect, and whichever is live is the
+-- one a click reaches -- group the stack, then break it up again.
+do
+  local slotsMod = require("warlords.slots")
+  G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  local tile
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.x then
+      local n = 0
+      for _, b in ipairs(G.g.armies) do
+        if b.owner == a.owner and b.x == a.x and b.y == a.y then n = n + 1 end
+      end
+      if n >= 2 then tile = a break end
+    end
+  end
+  local grp
+  for _, c in ipairs(G.screen.dialog.controls) do if c.id == 240 then grp = c end end
+  if tile and grp then
+    try("select a stack for Grp", function() G.selectAt(tile.x, tile.y) end)
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+    local function click()
+      try("draw", love.draw)                   -- refreshes the buttons' states
+      try("press Grp", love.mousepressed, grp.x + 2, grp.y + 2, 1)
+      try("release Grp", love.mousereleased, grp.x + 2, grp.y + 2, 1)
+    end
+    if slotsMod.grouped(G.selection.slots) then click() end
+    if slotsMod.grouped(G.selection.slots) then fail("Grp", "could not ungroup to start") end
+    click()
+    if not slotsMod.grouped(G.selection.slots) then fail("Grp", "the click did not group the stack") end
+    click()
+    if slotsMod.grouped(G.selection.slots) then
+      fail("Grp", "the click did not ungroup the stack")
+    else
+      print("  the Grp button groups and ungroups")
+    end
+    G.selection = nil
+  else
+    print("  (no stack of two to try Grp on)")
+  end
+end
+
 -- 18a9:0896: a city is only attacked from beside it. Far off, the pointer
 -- over it is the tower and a click opens it; next to it, the sword.
 do

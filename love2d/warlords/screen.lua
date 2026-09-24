@@ -136,13 +136,21 @@ function screen.drawBackground(self)
 end
 
 -- Some controls share a rect exactly -- 183/184/185 are three variants of one
--- button, 240/241 two of another. The original enables whichever it wants and
--- shows only that; until we know which, draw the first, so what is drawn is
--- also what hit testing finds.
+-- button, 240/241 two of another (Grp: group, ungroup). The original enables
+-- whichever applies and greys the rest, and that live one is what shows and
+-- what a click reaches; with none live, the first stands for them all.
+local function sameRect(a, b)
+  return a.x == b.x and a.y == b.y and a.w == b.w and a.h == b.h
+end
+
 local function isCovered(self, c, index)
-  for i = 1, index - 1 do
-    local o = self.dialog.controls[i]
-    if o.x == c.x and o.y == c.y and o.w == c.w and o.h == c.h then return true end
+  local live = (self.state[c.id] or uidata.NORMAL) ~= uidata.DISABLED
+  for i, o in ipairs(self.dialog.controls) do
+    if i ~= index and sameRect(o, c) then
+      local oLive = (self.state[o.id] or uidata.NORMAL) ~= uidata.DISABLED
+      if oLive and (not live or i < index) then return true end
+      if not oLive and not live and i < index then return true end
+    end
   end
   return false
 end
@@ -291,8 +299,8 @@ end
 
 --- The control under a point, or nil.
 function screen.controlAt(self, x, y)
-  for _, c in ipairs(self.dialog.controls) do
-    if c.w > 0 and c.h > 0
+  for i, c in ipairs(self.dialog.controls) do
+    if c.w > 0 and c.h > 0 and not isCovered(self, c, i)
        and x >= c.x and x < c.x + c.w and y >= c.y and y < c.y + c.h then
       return c
     end
