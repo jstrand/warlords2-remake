@@ -524,6 +524,19 @@ local function testHistory(scenario)
   eq(history.triumph(g, foe.index, foe.index, history.HEROES), 1, "the loser counts its own loss")
 end
 
+local function testSetup()
+  print("new-game setup")
+  local g = game.new(DATA, "ERYTHEA", { seed = 5, options = { quests = 0 },
+    sides = { [0] = { computer = false }, [1] = { computer = true, level = 2 }, [2] = { off = true } } })
+  eq(g.map.options.quests, 0, "the options chosen")
+  ok(not g.map.sides[1].computer, "side 0 human")
+  ok(g.map.sides[2].computer and g.map.sides[2].level == 2, "side 1 a Warlord")
+  ok(not g.map.sides[3].inUse, "side 2 left out")
+  local cap = g.map.sides[3].capital
+  eq(cap and cap.ownerIndex, nil, "and its capital neutral")
+  for _, s in ipairs(g.sides) do ok(s.index ~= 2, "not among the sides in play") end
+end
+
 local function testSage(scenario)
   print("sage: " .. scenario)
   local site = require("warlords.site")
@@ -2356,6 +2369,7 @@ testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")
 testSage("ERYTHEA")
+testSetup()
 testHistory("ERYTHEA")
 testDisband("ERYTHEA")
 testMovement("ERYTHEA")

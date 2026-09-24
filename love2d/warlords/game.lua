@@ -167,6 +167,22 @@ function game.new(dataDir, scenario, opts)
   if opts.options then
     for k, v in pairs(opts.options) do g.map.options[k] = v end
   end
+  -- the sides as the setup screen left them (7bab:0cfe): who plays each, the
+  -- computer's level, and sides turned Off, whose capitals go neutral
+  if opts.sides then
+    for _, s in ipairs(g.map.sides) do
+      local o = opts.sides[s.index]
+      if o and s.inUse then
+        if o.off then
+          if s.capital then s.capital.owner = nil end
+          s.inUse = false
+        else
+          s.computer = o.computer and true or false
+          s.level = o.level or s.level
+        end
+      end
+    end
+  end
 
   -- sides: the live gold, and who is still in the game
   g.sides = {}

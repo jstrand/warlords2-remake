@@ -16,8 +16,8 @@ Needs [LÖVE 11+](https://love2d.org). Run from the repository root so that
 `original/` resolves:
 
 ```sh
-love love2d                        # Erythea
-love love2d ISLADIA                # another scenario
+love love2d                        # the start screens: choose, set up, begin
+love love2d ISLADIA                # straight into a scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
 ```
 
@@ -34,7 +34,7 @@ regions and fonts are the game's own, read from its data files at runtime
 | left click a city | open it: Info, City (rename, raze, buy production), Production, Vector |
 | left click the map | pick up a stack of yours, or send the selection there |
 | | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
-| right click the map | inspect a tile |
+| right click the map | what is on a tile, while the button is held |
 | click the strategic map | recentre the view |
 | `Enter` / `Esc` | next army / quit army (done for this turn) — the first live button of the original's default and cancel lists |
 | `1`–`9` | step the stack one tile, laid out like the numeric pad; `5` centres on it |

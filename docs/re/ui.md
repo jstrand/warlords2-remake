@@ -1649,6 +1649,59 @@ on a site (`1b62:062a`, 0x80). TENDTURN (`1c8c:02db`, on turn 1) and TFRESULT
 (`63fa:0283`, the first battle's result) go by other tests. TWARLORD
 (`7bab:00d1`) waits on a count of 10 not yet traced.
 
+## The start screens
+
+With no scenario named the remake opens as the game does, on `7f77:0000`
+(dialog 1): the four quarters `STARTUP0`–`3.PCK`, with New Scenario (100),
+Load Game (101), Random Map (102) and Begin (103). On the right the chosen
+scenario's own `PICS\SCENARIO.PCK` — (0, 0) 264 × 225 at (328, 200) — under
+a colour-3 bar (336, 166) 248 × 28 with its name centred on (460, 172)
+(`7f77:02bf`, `0332`); Erythea to begin with (`4125:2a6e`). Random Map needs
+the map generator, which the remake does not have, and is greyed.
+
+**New Scenario** (`7f77:058d`, `0725`) lists `SCENARIO.DAT` — 84-byte
+records: name +0, directory +20, description +28, and at +76 its cities,
+ruins and players — on popup 19 (`NEWSCEN.PCK`), dialog 29: the names in a
+black box at (112, 153) 136 × 140, seven rows 20 apart, the chosen one in
+colour 15 and the rest in 5 (`7f77:0d45`); on the crystal ball in font 2
+colour 5 the name centred on (416, 101), the description on (416, 174), the
+cities ending at x = 368 and the ruins from x = 472 at y = 234, the players
+centred on (416, 254). 476–482 choose, 470–473 scroll, OK (474), Cancel
+(475).
+
+**Begin** (`7bab:0000`) sets the game up on the main screen's own frame
+(`8065:0a10`), dialog 3. A box a side, 160 × 70, at (24, 40) and (208, 40)
+down two columns 90 apart (`4125:23c8`), framed in the side's colour and
+edge colour, its name on a colour-3 tab at (x + 24, y − 8) in its colours,
+its face (`SETUPBU.PCK`, `4125:2408`) at (x + 16, y + 16) — a computer's by
+level, the two human faces in turn, an empty one for a side not in the
+scenario — and its button (`4125:24b8`) at (x + 72, y + 12). A click on the
+button (125–132, `7bab:0a4e`) goes Human → Knight → Lord → Warlord → Off →
+Human; Off (level 3) leaves the side out, its capital neutral
+(`7bab:0cfe`). The right-hand panel: *Options* and *Game* (group 7) centred
+on x = 512 at y = 48 and 206; Beginner, Intermediate, Advanced (145–147,
+`7bab:1273`, lit when the options are theirs, the table at `4125:2378`),
+Edit Options (148), *I am the Greatest* (143, which makes every side a
+computer Warlord) or *No! I really am Normal* (144), Begin (141, needing a
+side not Off) and Main Menu (142). Under the map *Difficulty Rating %d%*
+(group 6) centred on (196, 426): the options' weight — Neutral Cities × 4,
+Diplomacy × 4, Quests × 3, Hidden Map × 4, less View Enemies, plus View
+Production, at most 20 — plus the computers' strength, 80 × Σ(level + 1) /
+(3 × computers), 80 from 78 up or with no computer (`7bab:0bab`).
+
+**Edit Options** (`7bab:12a2`): popup 4, dialog 4. *Game Options* (group 8)
+in font 1 centred on (320, 55); *Affecting Difficulty* and *Not Affecting
+Difficulty* (groups 9 and 10) on rules at y = 111 and 250 (white, and black
+a pixel down and right); the ten options of group 4 in the order of
+`4125:23b4` two to a row, names from x = 128 and 320, 30 apart from y = 131
+and y = 270, their values in colour 7 128 to the right — Neutral Cities
+*Average*/*Strong*/*Active* (group 5), the rest *On*/*Off*. 159–168 change
+one, 169–171 the presets, Done (172).
+
+Left out: the Character boxes and Random Characters, which choose the
+computer players' personalities (dialog 27, `7bab:16ea`, `2051`), and Recall
+Options (`7bab:2229`).
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

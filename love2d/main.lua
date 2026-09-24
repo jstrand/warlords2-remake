@@ -88,6 +88,8 @@ end
 
 function love.load(arg)
   arg = arg or {}
+  -- with no scenario named the game opens on its start screens
+  G.starting = arg[1] == nil
   local scenario = arg[1] or "ERYTHEA"
   local dataDir  = arg[2] or "original"
 
@@ -191,10 +193,24 @@ function love.load(arg)
   -- test/ui.lua passes one; without it every game is different.
   local seed = tonumber(arg[3]) or os.time()
   G.scenario = scenario
+  love.graphics.setBackgroundColor(0, 0, 0)
+  if G.starting then
+    require("ui.start").open(function(dir, options, sides)
+      G.starting = false
+      G.scenario = dir
+      G.seed = os.time()
+      G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides })
+      G.selection, G.over, G.stratImage = nil, nil, nil
+      beginGame()
+      if G.player.computer and G.playComputer then G.playComputer() end
+    end, function(g)
+      G.starting = false
+      G.takeLoaded(g)
+    end)
+    return
+  end
   newGame(seed)
   beginGame()
-
-  love.graphics.setBackgroundColor(0, 0, 0)
   say("Click a stack, then click where to go.")
 end
 
@@ -717,6 +733,11 @@ local function endTurn()
   -- what the round's end found comes first, then the turn's banner
   ending.show(G.g.ending, function() showBanner(side) end)
 end
+-- a computer side that opens the game plays its turn before anyone's
+G.playComputer = function()
+  ai.playTurn(G.g, G.player)
+  endTurn()
+end
 
 -- The city dialog lives in ui/city.lua; these are the front end's ways in.
 function openCity(city)
@@ -736,6 +757,8 @@ local function takeLoaded(loaded)
   G.player = loaded.sides[loaded.current]
   centreOn(G.player.capital.x, G.player.capital.y)
 end
+
+G.takeLoaded = function(g) takeLoaded(g) end
 
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
@@ -1765,6 +1788,10 @@ function takeCity(what)
 end
 
 function love.draw()
+  if G.starting then
+    for _, d in ipairs(G.modals) do d.draw() end
+    return
+  end
   advanceWalk()
   refreshControls()
   screen.drawBackground(G.screen)
