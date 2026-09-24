@@ -2348,6 +2348,13 @@ function refreshControls()
   set(187, sel ~= nil and sel.stack[1] ~= nil and sel.stack[1].target ~= nil)
   set(188, true)
 
+  -- 224-231 and the marks 232-239: a slot below the stack's size is live,
+  -- the rest are not (8065:0174)
+  for i = 0, SLOT_COUNT - 1 do
+    local live = sel ~= nil and i < sel.slots.n
+    set(SLOT_FIRST + i, live)
+    set(BAR_FIRST + i, live)
+  end
   -- 240/241 share the Grp rect and are the two ways of the same switch
   local grouped = sel and slotsMod.grouped(sel.slots)
   set(240, sel ~= nil and not grouped)

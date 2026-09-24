@@ -255,6 +255,25 @@ do
     else
       print("  the Grp button groups and ungroups")
     end
+    -- a single army's slot (89e0:0963) drops it out of the group and back
+    local slot2
+    for _, c in ipairs(G.screen.dialog.controls) do if c.id == 225 then slot2 = c end end
+    local function clickSlot()
+      try("draw", love.draw)
+      try("press slot 2", love.mousepressed, slot2.x + 2, slot2.y + 2, 1)
+      try("release slot 2", love.mousereleased, slot2.x + 2, slot2.y + 2, 1)
+    end
+    click()
+    clickSlot()
+    if slotsMod.grouped(G.selection.slots) then
+      fail("slots", "clicking an army did not take it out of the group")
+    end
+    clickSlot()
+    if not slotsMod.grouped(G.selection.slots) then
+      fail("slots", "clicking it again did not put it back")
+    else
+      print("  an army's slot takes it out of the group and back")
+    end
     G.selection = nil
   else
     print("  (no stack of two to try Grp on)")
