@@ -1007,7 +1007,7 @@ local function drawMenuBar()
       palColour(0)
       love.graphics.rectangle("fill", r.x + 1, r.y - 1, d.w - 2, 1)
     else
-      local grey = not (G.menuEnabled and G.menuEnabled(r.key))
+      local grey = not (G.menuEnabled and G.menuEnabled(r.key or r.act))
       local lit = (r == hover) and not grey
       if lit then
         palColour(8)
@@ -1807,7 +1807,7 @@ function love.mousepressed(x, y, button)
   if G.openMenu then
     local row = menuMod.rowAt(G.menuLayout, G.openMenu, x, y)
     G.openMenu = nil
-    if row and row.key then menuPick(row.key) end
+    if row and (row.key or row.act) then menuPick(row.key or row.act) end
     return
   end
 
@@ -2190,6 +2190,8 @@ MENU_DOES = {
   ["e"] = function() require("ui.history").open(1) end,
   ["j"] = function() require("ui.history").open(2) end,
   ["y"] = function() require("ui.history").open(3) end,
+  -- SSG > About Warlords II, and "?" (7721:0084)
+  ["?"] = function() require("ui.about").open() end,
   -- History > Triumphs (6d51:09eb)
   ["l"] = function() require("ui.history").triumphs() end,
   -- Report > Diplomacy (484e:0000)

@@ -1591,6 +1591,18 @@ slots in use, titled *Load Game* (group 47); once loaded, *%s, thy turn
 continues!*. The remake keeps its slots beside its own save file
 (`warlords-save<n>.lua`, `warlords-saveinfo.txt` in the same form).
 
+## SSG › About, and "?"
+
+`7721:0084` pushes popup 23, (160, 55) 336 × 347: `BSCROLL.PCK` (bitmap 70)
+through its mask — `54f6:0000` masks popups 13 and 23 (`1997:027e`) and
+leaves them unframed. `8065:1471` then writes the lines after the first
+(for popup 23 the title is painted on the scroll), centred on x = 328 at
+y = 161, 181, 201, 221, 241, 261, in font 2 black edged in colour 7, an empty
+one leaving its place: "", *Version 1.02* (`4125:1292`), "", and *Free
+memory*, *Largest block* and *Locked memory* in Kb (group 139). Any key or
+click closes it. The remake has no DOS memory figures to show and leaves the
+last three out.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

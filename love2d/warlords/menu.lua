@@ -16,7 +16,7 @@ menu.BAR_X, menu.BAR_Y = 8, 1
 -- end dispatches on, so it matches the command table in docs/re/ui.md.
 menu.MENUS = {
   { title = "SSG", items = {
-      { "About Warlords II" },
+      { "About Warlords II", nil, "?" },
   } },
   { title = "Game", items = {
       { "Settings", "alt X" }, { "Shortcuts", "alt U" }, { "-" },
@@ -91,7 +91,8 @@ function menu.layout(font, barHeight, screenWidth)
     local rows, at = {}, 2
     for j, it in ipairs(m.items) do
       local h = (it[1] == "-") and 2 or (lh + 2)
-      rows[j] = { label = it[1], key = it[2], x = x, y = y + at, w = w, h = h }
+      -- a third field is what an item with no accelerator does
+      rows[j] = { label = it[1], key = it[2], act = it[3], x = x, y = y + at, w = w, h = h }
       at = at + h
     end
     local h = at + 1
