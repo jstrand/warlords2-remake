@@ -1551,6 +1551,33 @@ y + 35. The first that applies:
   it is (group 129) in white; a tile with a road is terrain 0, and a crossing
   (bit 15 of the map word) reads *Port* / *A way for armies to put to sea*.
 
+## The end of the game
+
+`8065:1aed` runs as the round ends. What it finds, and what the player sees:
+
+- **nobody in play**: *Alas!* / *No more players are left!*, then *So I bid
+  thee a fond 'FAREWELL'* / *Hit any key to return to DOS.* (group 12), and
+  the game exits (`1a4c:02b5`).
+- **the last human gone**, computers still in play: group 13's two message
+  boxes, and the computers fight on.
+- **one computer side left**: *%s, thou hast triumphed!* (group 15); the side
+  is turned human so the world can be looked over.
+- **a lone human with more than half the standing cities**: the game is won
+  (`2c04:015b`), with a *victorious* deed. The remake shows group 15's two
+  lines, then the Congratulations picture, and lets play go on.
+- **surrender** (`2c04:015d`, offered once): a human with more than half the
+  cities, and more than the biggest computer side by an eighth of all the
+  cities. `8065:1f68` shows popup 20, `RESIGN.PCK`, with dialog 30 — Reject
+  (486) and Accept (485). Accept (`8065:1e4e`) puts every computer side out,
+  sets the won flag with a deed, and shows popup 22, `RESIGNYE.PCK`
+  (*Congratulations!*, dialog 32, Done 483). Done there (`8065:2004`) turns
+  the hidden map off and redraws. Reject (`8065:1ecd`) shows popup 21,
+  `RESIGNNO.PCK` (*Peace is not an option!*, dialog 31, Done 484).
+
+Popups 20–22 are (136, 40) 368 × 390, each its own picture with the words
+painted in. Group 16 (*At thy leisure / thou mayst inspect thy kingdom*)
+fits after Congratulations, but where the original shows it is not traced.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

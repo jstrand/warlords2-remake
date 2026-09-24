@@ -375,6 +375,7 @@ end
 function game.endTurn(g)
   local ending = game.checkEnd(g)
   if ending.message then g.log[#g.log + 1] = ending.message end
+  g.ending = ending
   if ending.over then
     g.side = nil
     return nil
@@ -672,6 +673,17 @@ end
 
 ------------------------------------------------------------- end of the game
 
+--- The surrender offer taken (8065:1e4e): every computer side is out, the
+--- game is won, and the side is victorious.
+function game.acceptSurrender(g, side)
+  for _, s in ipairs(g.sides) do
+    if s.computer then s.alive = false end
+  end
+  g.won = true
+  local history = require("warlords.history")
+  history.deed(g, side, history.VICTORIOUS, side.index, 0, "")
+end
+
 --- Is the game over, or nearly? Returns a table describing the position:
 --   { over = bool, winner = side or nil, message = "..." }
 -- end_game_check, Ghidra 8065:1aed. Sets g.won and g.surrenderOffered, the
@@ -704,13 +716,15 @@ function game.checkEnd(g)
              message = ("%s has triumphed!"):format(computers[1].name) }
   end
 
-  if #humans == 1 and #computers == 0 then
+  -- A lone human with more than half the cities has won -- once. The game
+  -- goes on, for the kingdom to be looked over (group 16), so it is not over.
+  if #humans == 1 and #computers == 0 and not g.won then
     local mine = #game.sideCities(g, humans[1])
     if mine * 2 > standing then
-      g.won, g.over = true, true
+      g.won = true
       local history = require("warlords.history")
       history.deed(g, humans[1], history.VICTORIOUS, humans[1].index, 0, "")
-      return { over = true, winner = humans[1],
+      return { over = false, won = true, winner = humans[1],
                message = ("%s rules the world!"):format(humans[1].name) }
     end
   end

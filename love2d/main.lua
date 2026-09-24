@@ -665,16 +665,19 @@ local function endTurn()
     ai.playTurn(G.g, side)
     side = game.endTurn(G.g)
   end
+  local ending = require("ui.ending")
   if not side then
     G.over = true
     say("%s", G.g.log[#G.g.log] or "The game is over.")
+    ending.over(G.g.ending)
     return
   end
   G.player = side
   stratDirty()
   cycleReset()
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
-  showBanner(side)
+  -- what the round's end found comes first, then the turn's banner
+  ending.show(G.g.ending, function() showBanner(side) end)
 end
 
 -- The city dialog lives in ui/city.lua; these are the front end's ways in.
@@ -1757,7 +1760,6 @@ function love.mousepressed(x, y, button)
   -- 7ecb:0142 blocks the turn routine until any input arrives: the banner
   -- eats the click that dismisses it rather than passing it on
   if G.banner then dismissBanner() return end
-  if G.over then return end
 
   -- The assault is modal while it plays: a click runs it through, and the
   -- click that ends it opens the question of what to do with the city.
@@ -1787,6 +1789,7 @@ function love.mousepressed(x, y, button)
     if top.mousepressed then top.mousepressed(x, y, button) end
     return
   end
+  if G.over then return end
 
   -- the menu bar takes precedence over everything beneath it
   local hit = menuMod.titleAt(G.menuLayout, x, y, menuMod.BAR_H)

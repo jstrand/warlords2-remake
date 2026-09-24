@@ -2102,8 +2102,10 @@ local function testEndGame()
     if c.ownerIndex == nil then c.ownerIndex = me.index break end
   end
   local r3 = game.checkEnd(g3)
-  ok(r3.over, "more than half wins")
+  ok(r3.won, "more than half wins")
+  ok(not r3.over, "and the game goes on, to be looked over")
   eq(r3.winner, me, "and names the winner")
+  ok(not game.checkEnd(g3).won, "which is said once")
 
   -- surrender is offered while computers still play
   local g4 = game.new(DATA, "ERYTHEA", { seed = 84 })
@@ -2130,7 +2132,12 @@ local function testEndGame()
   for _, c in ipairs(g5.map.cities) do c.ownerIndex = nil end
   g5.map.cities[1].ownerIndex = side5.index
   for i = 2, #g5.map.cities do g5.map.cities[i].razed = true end
-  ok(game.checkEnd(g5).over, "one city among ruins is still more than half")
+  ok(game.checkEnd(g5).won, "one city among ruins is still more than half")
+
+  -- surrender taken: the computers are out and the game is won
+  game.acceptSurrender(g4, human)
+  ok(g4.won, "surrender accepted wins the game")
+  ok(not rival.alive, "and the computer sides are out")
 end
 
 -------------------------------------------------------------- saving a game
