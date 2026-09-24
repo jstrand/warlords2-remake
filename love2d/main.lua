@@ -155,6 +155,7 @@ function love.load(arg)
   G.atransShields = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, 1)
   G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6
   G.bagQuad = love.graphics.newQuad(64, 0, 32, 29, 144, 246)
+  G.blastQuad = love.graphics.newQuad(32, 0, 32, 29, 144, 246)   -- 6a35:0000
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   -- Drawn opaque, as 1997:0129 blits every bitmap it is given: a cell's own
@@ -896,6 +897,7 @@ local function takeLoaded(loaded)
 end
 
 G.takeLoaded = function(g) takeLoaded(g) end
+G.startAssault = function(x, y, result) startAssault(x, y, result) end
 
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
@@ -1658,9 +1660,11 @@ local AS = {
   xEven    = { 216, 248, 280, 312, 344, 376, 408, 440 },
   xOdd     = { 232, 264, 296, 328, 360, 392, 424 },
   sea      = { 0, 162, 32, 18 }, seaDrop = 10,        -- WAR.PCK's water
-  textY    = 290, textStep = 20,                      -- 6a35:04c5 steps 20
+  textY    = 298, textStep = 20,                      -- 4125:4366, stepped 20
   cloudTime = 0.7,                                    -- before the window
-  fellTime = 0.22, fellFast = 0.04,                   -- one army struck off
+  -- One casualty (6a35:0094): the blast goes on, then 7ecb:0000 waits 5, 3
+  -- and 5 BIOS ticks; once space is pressed, 2 and 3. 18.2 ticks a second.
+  fellTime = 13 / 18.2, fellFast = 5 / 18.2,
   -- STRING.DAT groups: how a fight ends, and what the spoils dialog says
   fled = 141, wonCityHero = 142, wonCity = 143,
   wonHero = 144, won = 145, lost = 146, loot = 147,
@@ -1778,15 +1782,17 @@ local function advanceAssault()
     return
   end
   if a.phase ~= "battle" then return end
+  -- each casualty's blast goes on at once and is then waited on, so the
+  -- first shows the moment the window opens and the last is held too
   local each = a.fast and AS.fellFast or AS.fellTime
   local log = a.result.log or {}
-  while a.step < #log and t - a.at >= each do
+  while a.step < #log and t >= a.at do
     a.step = a.step + 1
     if log[a.step] == 1 then a.atkDown = a.atkDown + 1
     else a.defDown = a.defDown + 1 end
     a.at = a.at + each
   end
-  if a.step >= #log then a.phase = "over" end
+  if a.step >= #log and t >= a.at then a.phase = "over" end
 end
 
 --- A key or a click: run the playback through, and when it is through, close
@@ -1795,7 +1801,7 @@ function pressAssault()
   local a = G.assault
   if not a then return end
   if a.phase ~= "over" then
-    a.fast, a.at = true, 0                     -- run it out to the end
+    a.fast, a.at = true, math.min(a.at, now() + AS.fellFast)   -- hurry the rest
     advanceAssault()
     return
   end
@@ -1828,8 +1834,10 @@ local function drawBattleLine(armies, slots, side, down)
           love.graphics.newQuad(AS.sea[1], AS.sea[2], AS.sea[3], AS.sea[4], AS.warW, AS.warH),
           at.x, at.y + AS.seaDrop)
       end
-      if i > down then
-        love.graphics.draw(sheet, quads[army.type % 32], at.x, at.y)
+      love.graphics.draw(sheet, quads[army.type % 32], at.x, at.y)
+      -- a fallen army keeps its place, under the blast that took it
+      if i <= down then
+        love.graphics.draw(G.atransShields, G.blastQuad, at.x, at.y)
       end
     end
   end
@@ -1839,7 +1847,9 @@ local function drawBattle()
   local a, R = G.assault, AS.window
   popupFrame(R)
   love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(G.marble, R.x, R.y, 0, 1, 1)
+  -- popup 8 is 320 x 312 of marble from its origin, not the whole sheet
+  love.graphics.draw(G.marble, love.graphics.newQuad(0, 0, R.w, R.h, G.marble:getDimensions()),
+                     R.x, R.y)
 
   local function shield(side, at)
     love.graphics.setColor(1, 1, 1)

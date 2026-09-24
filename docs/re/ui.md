@@ -555,10 +555,10 @@ on screen can change the outcome.
 | step | what |
 |---|---|
 | `67cc:1836` | the fire cloud from `WAR.PCK` over the tile — the rect at `4125:0cfa` is `(0, 0) 128 × 120`, three tiles across — with `WAR.8SN`. Skipped when no human can see the tile |
-| `6a35:041c` | opens **popup 8**, `(160, 60) 320 × 312`, and draws the two sides' shields from `BSHIELD.PCK` (32 × 36 cells, one per side across the sheet): the defender's at `(176, 86)`, the attacker's at `(176, 246)` |
+| `6a35:041c` | opens **popup 8**, `(160, 60) 320 × 312` of marble from the sheet's origin, and draws the two sides' shields from `BSHIELD.PCK` (32 × 36 cells, one per side across the sheet): the defender's at `(176, 86)`, the attacker's at `(176, 246)` |
 | `6a35:0160` | draws both lines |
-| `6a35:0094` | plays the log back, one army struck off at a time, with a sound and a wait each; **space** runs it through (it polls `kbhit`) |
-| `6a35:04c5` | writes how it ended, centred on x = 320, each line 20 below the last |
+| `6a35:0094` | plays the log back, one casualty at a time: a sound (`7dda:0181`), then `6a35:0000` masks `ATRANS2.PCK`'s blast, `(32, 0) 32 × 29`, over the fallen army — which stays drawn beneath it — and `7ecb:0000` waits 5, 3 and 5 BIOS ticks (18.2 a second), so about 0.7 s each. **Space** (it polls `kbhit`) cuts the rest to 2 and 3 ticks; any input also ends the wait in hand |
+| `6a35:04c5` | writes how it ended, centred on x = 320 from y = 298 (`4125:4366`), each line 20 below the last |
 | `6a35:04f6` | closes the popup |
 | `67cc:04f7` | and, if a city fell, opens the spoils dialog |
 
