@@ -120,7 +120,7 @@ Left in the engine itself: a computer player that explores as well as the
 original's (with *Hidden Map* on it expands far too slowly), and flags for the
 two decoded AI faults whose phases have no counterpart here yet.
 
-### Phase 3.5 — Interface — **in progress**
+### Phase 3.5 — Interface — **nearly done**
 
 The front end (`love2d/main.lua`, with the dialogs in `love2d/ui/`) is rebuilt
 on the original's own 640×480 screen, read from `AREA.DAT`/`BUTTON.DAT`/
@@ -135,33 +135,35 @@ Done: the main screen — menu bar and dropdowns, turn strip, strategic map
 (four-pixel tiles, roads, city shields, view box), bottom bar, control panel;
 the army slots and Grp switch; the cycle's buttons and the 3×3 pad; the
 configurable buttons; the start-of-turn banner; the hero offer; the assault
-and the spoils dialog; **the city dialog in all five modes** — Info, City
-(Rename, Raze, Build Production), Production, Vector (send, redirect, See
-All) and a site's (View › Ruins); **the five reports**; **the original's
-keyboard**; the fonts' true metrics (ink widths, advances, the space);
-**the hero screens** — Inspect with its items, Plant Flag and vectoring to
-the standard, Levels, Search with the ruin's story, the temple and the
-sage (Items through the list chooser, Money, Maps); **Report › Quest**;
-**Orders** — Fight Order, Disband, Signpost (signs load from `.SGN` and
-save), Resign; **View** — Army Bonus, Items, Ruins, Stack; **help pages**
-(`.GFX`, the control panel's help button and Items' Bonus).
+and the spoils dialog; **the city dialog in all five modes**; **the five
+reports** and **Diplomacy** (report and actions); **the original's
+keyboard**; the fonts' true metrics; **the hero screens** — Inspect, Plant
+Flag and the standard, Levels, Search with ruins, temples and the sage;
+**Quest**; **Orders** — Fight Order, Disband, Signpost, Resign; **View** —
+Army Bonus, Items, Ruins, Stack; **History** — City, Events, Gold, Winners
+(recorded each round as CURRENT.HST does) and Triumphs; **Game** —
+Settings, Shortcuts, Save and Load (ten slots), New game (the scenario
+afresh, sides through Settings), Quit; **About**; **help pages** (`.GFX`)
+and the **tutorial's pages**; **the right button's tile info**; **the end of
+the game** — surrender, Congratulations, the farewells.
 
-Left, roughly in order of what blocks playing a full game from the interface:
+Left:
 
-1. **Stack splitting proper** — the slots toggle armies in and out of the
-   moving group; check this covers every way the original splits and merges.
-2. **Diplomacy screen** (`d`, `484e`).
-3. **History**: City, Events, Gold, Winners, Triumphs (`h e j y l`, `6d51`).
-4. **Game menu**: Settings, Shortcuts (`UDB.DAT`), New game and side setup,
-   Save/Load game and map with the original's dialogs, About.
-5. **End of game**: a proper win/lose screen (today the loop just stops).
-6. Right-click tile info (`740d:131a`, the 256 × 75 popup).
-7. The tutorial and first-time help pages the game shows once
-   (`2c04:0134` flags, FILE.DAT group 0x19).
+1. **The start screens** (`7f77:0000`): choosing a scenario (`NEWSCEN.PCK`),
+   its options and the sides, as the game starts and from New game.
+2. **Game › Save map / Load map** (`7721:1214`, `128a`).
+3. TWARLORD, the one tutorial page whose trigger (`7bab:00d1`) is not traced.
+4. Checks against captures of the original for the screens added since the
+   banner and hero offer, which were compared pixel for pixel.
 
 Every unimplemented menu item is greyed. Each new dialog gets a step in a
 `test/shot` script, and is compared with the original wherever a capture
 exists.
+
+The stack splitting is covered: the bar and View › Stack share the
+original's four operations on the slots (`89e0:157d`/`0963` toggle,
+`166f`/`0910` pick a group, `16c5`/`0a55` group, `1704`/`0a99` ungroup),
+and a group that moves leaves the rest standing.
 
 Engine notes found on the way: the long ERYTHEA run of `test/ui.lua`
 (150 rounds) takes hours in the computer players' pathfinding; medals
