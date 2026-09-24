@@ -503,6 +503,29 @@ it clamps the tile to 4..107 and 4..151, puts the scroll origin four tiles up
 and left of it, and remembers it as the cursor tile at `3c04:017d`/`017f` —
 which is what the white box is drawn around.
 
+### A stack on the map, and the selection box
+
+`8611:0335(dst, side, type, count, col, row)` draws a stack on its tile: the
+top army's figure, 32 × 29 from `((type % 16) · 32, (type / 16) · 30)` of the
+side's army sheet, at **(8, 7)** in the tile; then the flag pole, three
+40-pixel lines down x + 2, 3 and 4 in colours 14, 13 and 14; then the flag,
+48 × 8 from the same sheet at `(464, y)`, bigger the more armies stand there:
+y = 29, 38, 47, 56 for one to four (`4125:2d4e`). A stack of more than four
+flies the smallest flag 8 lower down as well, and the flag for the rest at
+the top.
+
+The selected stack is boxed by **`177b`**, off the clock rather than the map
+redraw. `177b:0020(x, y, mode, …)` sets the box up — `828e:0afd` with mode 1
+when one army moves, `828e:0b27` with mode 2 for a group (`4125:2bda`) — and
+`177b:003d` takes it down, repainting the tile (`8611:0238`). The idle loop
+(`18a9:00a2` → `177b:011f`) counts BIOS ticks, and every fourth one
+`177b:0161` draws the next frame through `177b:01a1`: frame k = the mode's
+base from `4125:125c` (0 for mode 1, 4 for mode 2) plus a counter that runs
+0–3, taken from `CURS.PCK` at `((k % 4) · 64, (k / 4) · 40)`, 40 × 40, and
+drawn at the tile's corner. The top row's box is 30 × 30 at (10, 10) — round
+a lone army's figure — and the bottom row's the whole tile. On the screen the
+sheet's colour 1 is white and its 4 black.
+
 ### The pointer
 
 The game draws its own mouse pointer (`22bf`, with save-behind), and

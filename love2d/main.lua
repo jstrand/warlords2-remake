@@ -46,10 +46,12 @@ local SCROLL_KEY = 10                  -- SCROLL.PCK stands on green, as the arm
 -- WAR.PCK sits on colour 1 and BSHIELD.PCK on the green it is drawn over
 local WAR_KEY, SHIELD_KEY = 1, 12
 local RING_W, RING_H = 32, 30      -- one ABITS ring
+local CURS_RATE = 18.2 / 4          -- CURS.PCK frames a second (177b:011f)
 
 local G = {}
 
 local presentOffer, stratDirty, openCity, closeCity  -- defined below
+local drawStack
 local viewCity                                      -- and this one
 local reslot                                        -- and this one
 local startAssault, pressAssault, presentVictory, takeCity   -- the assault
@@ -156,6 +158,20 @@ function love.load(arg)
   G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6
   G.bagQuad = love.graphics.newQuad(64, 0, 32, 29, 144, 246)
   G.blastQuad = love.graphics.newQuad(32, 0, 32, 29, 144, 246)   -- 6a35:0000
+  -- CURS.PCK: the marching box round the selected stack (177b:01a1). Frame
+  -- k is the 40 x 40 cell at ((k % 4) * 64, (k / 4) * 40), drawn at the
+  -- tile's corner: 0-3 box a lone army in 30 x 30 at (10, 10), 4-7 a group
+  -- in the whole tile. Keyed on 0; on the original's screen the sheet's 1
+  -- shows white and its 4 black (checked frame by frame).
+  do
+    local w, h, px = pck.decode(dataDir .. "/PICS/CURS.PCK")
+    G.cursImg = pck.imageFromPixels(w, h, px, palette, { [1] = 15, [4] = 0 }, { [0] = true })
+  end
+  G.cursQuads = {}
+  for k = 0, 7 do
+    G.cursQuads[k] = love.graphics.newQuad((k % 4) * 64, math.floor(k / 4) * 40, 40, 40,
+                                           G.cursImg:getDimensions())
+  end
   -- The rings are 32 x 30 on a 32-pixel stride, nine of them from x = 0; the
   -- rest of the 480 x 40 sheet is other bits, and a 40 x 40 cell drags them in.
   -- Drawn opaque, as 1997:0129 blits every bitmap it is given: a cell's own
@@ -970,9 +986,7 @@ local function drawMap()
           end
           if #stack > 0 then
             local a = topArmy(stack)
-            local owner = a.owner or 8
-            love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][a.type % 32],
-                               sx + 4, sy + 4)
+            drawStack(a.owner or 8, a.type, #stack, sx, sy)
           end
         else
           love.graphics.setColor(0, 0, 0)
@@ -989,10 +1003,9 @@ local function drawMap()
     local col, row = at.x - G.cx, at.y - G.cy
     local a = G.walk.top
     if a and col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
-      local owner = a.owner or 8
-      love.graphics.setColor(1, 1, 1)
-      love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][a.type % 32],
-                         r.x + col * TILE + 4, r.y + row * TILE + 4)
+      local n = 0
+      for _ in pairs(G.walk.armies) do n = n + 1 end
+      drawStack(a.owner or 8, a.type, n, r.x + col * TILE, r.y + row * TILE)
     end
   end
 
@@ -1002,8 +1015,11 @@ local function drawMap()
                      (at and at.y or G.selection.y) - G.cy
     if col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
       love.graphics.setColor(1, 1, 1)
-      love.graphics.rectangle("line", r.x + col * TILE + 0.5, r.y + row * TILE + 0.5,
-                              TILE - 1, TILE - 1)
+      -- 828e:0afd / 0b27: the small box for one army, the large for a group
+      -- (4125:2bda); 177b:0161 steps it every fourth BIOS tick
+      local base = #G.selection.stack > 1 and 4 or 0
+      local frame = base + math.floor(now() * CURS_RATE) % 4
+      love.graphics.draw(G.cursImg, G.cursQuads[frame], r.x + col * TILE, r.y + row * TILE)
     end
   end
   love.graphics.setScissor()
@@ -1142,6 +1158,33 @@ end
 local function palColour(i)
   local c = G.palette[i + 1]
   love.graphics.setColor(c[1], c[2], c[3])
+end
+
+-- A stack on the map (8611:0335): the top army's figure, 32 x 29, at (8, 7)
+-- in the tile; the flag pole, three 40-pixel lines down x + 2, 3 and 4 in
+-- colours 14, 13 and 14; and the flag, from the side's own army sheet at
+-- (464, y) 48 x 8, bigger the more armies stand there -- y = 29, 38, 47, 56
+-- for one to four (4125:2d4e). More than four fly the smallest 8 lower down
+-- as well, and the flag for the rest at the top.
+local FLAG_Y = { 29, 38, 47, 56 }
+local flagQuads = {}
+function drawStack(owner, armyType, count, sx, sy)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.armyImg[owner], G.armyQuads[owner][armyType % 32], sx + 8, sy + 7)
+  palColour(14)
+  love.graphics.rectangle("fill", sx + 2, sy, 1, TILE)
+  love.graphics.rectangle("fill", sx + 4, sy, 1, TILE)
+  palColour(13)
+  love.graphics.rectangle("fill", sx + 3, sy, 1, TILE)
+  love.graphics.setColor(1, 1, 1)
+  local function flag(k, y)
+    if not flagQuads[k] then
+      flagQuads[k] = love.graphics.newQuad(464, FLAG_Y[k], 48, 8, G.armyImg[owner]:getDimensions())
+    end
+    love.graphics.draw(G.armyImg[owner], flagQuads[k], sx, y)
+  end
+  if count > 4 then flag(1, sy + 8) count = count - 4 end
+  flag(math.max(1, math.min(count, 4)), sy)
 end
 
 -- Turn and the sides still in it, at the right of the bar (8cc6:0952): the
