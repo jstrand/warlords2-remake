@@ -692,6 +692,13 @@ function closeCity()
 end
 G.openCity = function(city) openCity(city) end
 
+local function takeLoaded(loaded)
+  G.g, G.selection = loaded, nil
+  stratDirty()
+  G.player = loaded.sides[loaded.current]
+  centreOn(G.player.capital.x, G.player.capital.y)
+end
+
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
   if not ok then say("Nothing to load.") return end
@@ -2118,11 +2125,9 @@ MENU_DOES = {
   ["alt E"] = function() endTurn() end,
   ["m"] = function() moveAll() end,
   ["^Q"]    = function() love.event.quit() end,
-  ["alt S"] = function()
-    saveMod.write(G.g, G.savePath)
-    say("Saved to %s.", G.savePath)
-  end,
-  ["alt L"] = function() loadGame() end,
+  -- Game > Save game and Load game (7721:093b, 026b): ten slots
+  ["alt S"] = function() require("ui.savegame").save() end,
+  ["alt L"] = function() require("ui.savegame").load(takeLoaded) end,
   ["z"] = function() search() end,
   -- View > Cities, Build, Production and Vectoring open the city dialog in
   -- one of its modes on the city nearest the cursor -- any city for Cities,

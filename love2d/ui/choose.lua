@@ -53,6 +53,7 @@ function M.open(title, list, start, after)
     kit.setPal(3)
     love.graphics.rectangle("fill", BOX.x, BOX.y, BOX.w, BOX.h)
     kit.bevel(BOX.x, BOX.y, BOX.w, BOX.h, 4, 2)
+    love.graphics.setColor(1, 1, 1)
     for i = 0, ROWS - 1 do
       local e = list[d.top + i + 1]
       if e then

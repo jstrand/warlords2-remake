@@ -1578,6 +1578,19 @@ Popups 20–22 are (136, 40) 368 × 390, each its own picture with the words
 painted in. Group 16 (*At thy leisure / thou mayst inspect thy kingdom*)
 fits after Congratulations, but where the original shows it is not traced.
 
+## Game › Save game and Load game
+
+Ten slots, named in `SAVEINFO.DAT`: a line a slot, a three-digit length
+counting the name's NUL, then the name — `009Not_Used` for an empty slot.
+**Save** (`7721:093b`) lists all ten in the list chooser titled *Save Game*
+(group 46), on the slot last used (`4125:128e`). The slot chosen
+(`7721:0995`) asks for a name through the text-entry dialog — *Type the name
+of the game* / *you wish to save*, at most 15 characters and 160 pixels —
+and is written to `SAVE\SAVEn.DAT`. **Load** (`7721:026b`) lists only the
+slots in use, titled *Load Game* (group 47); once loaded, *%s, thy turn
+continues!*. The remake keeps its slots beside its own save file
+(`warlords-save<n>.lua`, `warlords-saveinfo.txt` in the same form).
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

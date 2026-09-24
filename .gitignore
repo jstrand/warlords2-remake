@@ -9,3 +9,7 @@ __pycache__/
 Warlords 2 Deluxe MANUAL.pdf
 *.pdf
 build/
+
+# the remake's saved games
+warlords-save*.lua
+warlords-saveinfo.txt
