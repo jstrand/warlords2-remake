@@ -669,6 +669,7 @@ local function pointerKind(x, y)
      or G.openMenu or kit.top() or not G.player or G.player.computer then
     return PTR.ARROW
   end
+  if G.drag then return PTR.HAND end             -- 4125:1176, while it drags
   local alt, ctrl = held("lalt", "ralt"), held("lctrl", "rctrl")
   if inRect(PTR_STRAT, x, y) then return alt and PTR.ALT or PTR.VIEW end
   local tx, ty = tileAtPoint(x, y)
@@ -2085,6 +2086,15 @@ function love.mousepressed(x, y, button)
     return
   end
 
+  -- The hand drags the map (740d:00e4 -> 8065:0e04): it remembers the tile
+  -- the view is centred on, and as the mouse moves the view follows it a
+  -- whole tile per 40 pixels until the button comes up.
+  if button == 1 and pointerKind(x, y) == PTR.HAND then
+    G.drag = { cx = G.cx + math.floor(screen.VIEW_COLS / 2),
+               cy = G.cy + math.floor(screen.VIEW_ROWS / 2), dx = 0, dy = 0 }
+    return
+  end
+
   local r = screen.regionAt(G.screen, x, y)
   if not r then return end
 
@@ -2367,7 +2377,21 @@ function refreshControls()
   for i = 0, 7 do set(320 + i, true) end       -- the pad is always live
 end
 
+--- The drag's own sums, as 8065:0e04 keeps them: the map goes the way the
+--- mouse does, so the view's centre goes the other.
+function love.mousemoved(x, y, dx, dy)
+  local d = G.drag
+  if not d then return end
+  d.dx, d.dy = d.dx - dx, d.dy - dy
+  local function tiles(v) return v < 0 and -math.floor(-v / TILE) or math.floor(v / TILE) end
+  centreOn(d.cx + tiles(d.dx), d.cy + tiles(d.dy))
+end
+
 function love.mousereleased(x, y, button)
+  if G.drag then
+    G.drag = nil
+    if not G.pressed then return end
+  end
   local top = kit.top()
   if top and top.mousereleased then top.mousereleased(x, y, button) return end
   local id = G.pressed

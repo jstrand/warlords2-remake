@@ -552,6 +552,13 @@ and the hotspot is the same distance across and down, from the table at
 | 10 | heart | 8 | the same enemy, but at peace | `attack_tile`, which then asks |
 | 11 | arrow, slanted | 0 | Alt over the strategic map or our own | `1c8c:0007(1, 1)` |
 
+**Dragging.** The hand's click, `8065:0e04`, is a drag for as long as the
+button is held (`4125:1176` keeps the hand up meanwhile): it remembers the
+tile the view is centred on, sums the mouse's own motion (`22bf:0b0c`, the
+vertical halved — mickeys run 2:1), and recentres on that tile less the sums
+over 40, rounded toward zero, through `8611:0629`. The map follows the mouse
+a tile at a time.
+
 Two more rules keep boats honest: a land stack at sea (army flag `0x1000`)
 standing on a shore gets no sword onto anything but road, bridge, water, shore
 or city, and one ashore gets none onto a shore unless it stands on one of

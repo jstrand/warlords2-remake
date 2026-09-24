@@ -280,6 +280,33 @@ do
   end
 end
 
+-- The hand drags the map (8065:0e04): 80 pixels down and right moves the
+-- view's centre two tiles up and left.
+do
+  G.selection, G.drag = nil, nil
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.cx, G.cy = 20, 20
+  local x, y
+  for tx = 0, 8 do
+    for ty = 0, 8 do
+      local px, py = G.mapRect.x + tx * 40 + 20, G.mapRect.y + ty * 40 + 20
+      if not x and G.pointerKind(px, py) == 4 then x, y = px, py end
+    end
+  end
+  if x then
+    try("press the hand", love.mousepressed, x, y, 1)
+    try("drag", love.mousemoved, x + 80, y + 80, 80, 80)
+    try("let go", love.mousereleased, x + 80, y + 80, 1)
+    if G.cx ~= 18 or G.cy ~= 18 then
+      fail("drag", ("the view went to %d,%d, not 18,18"):format(G.cx, G.cy))
+    elseif G.drag then
+      fail("drag", "the drag outlived the button")
+    else
+      print("  the hand drags the map")
+    end
+  end
+end
+
 -- 18a9:0896: a city is only attacked from beside it. Far off, the pointer
 -- over it is the tower and a click opens it; next to it, the sword.
 do

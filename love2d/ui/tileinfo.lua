@@ -19,7 +19,9 @@
 --     BSHIELD at x + 16 and x + 200, y + 10
 --   a site (740d:0fd7): its name in your colours, then "Blessings & Quests!"
 --     for a temple, "Explored!" or "Unexplored!"
---   a signpost (740d:0a1c): its two lines over POPUP2.PCK instead
+--   a signpost (740d:0a1c): its two lines over POPUP2.PCK instead -- a
+--     wooden board, blitted through its mask (the [0x69c8] blit with
+--     4125:546d), so the map shows round it: its ground, colour 1, is keyed
 --   else the terrain (740d:10e1): its name (group 128) in colour 7 and what
 --     it is (group 129) -- a road counts as terrain 0, and a port has lines
 --     of its own
@@ -145,6 +147,14 @@ function M.open(tx, ty)
 
   function d.draw()
     local b = art(back)
+    if back == 36 then
+      if not G.signBoard then
+        local pck = require("warlords.pck")
+        local img, w, h = pck.toImage(G.dataDir .. "/PICS/POPUP2.PCK", G.palette, 1)
+        G.signBoard = { image = img, w = w, h = h }
+      end
+      b = G.signBoard
+    end
     love.graphics.setColor(1, 1, 1)
     if b then love.graphics.draw(b.image, love.graphics.newQuad(0, 0, W, H, b.w, b.h), bx, by) end
     love.graphics.setColor(1, 1, 1)
