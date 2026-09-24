@@ -174,6 +174,22 @@ else
   else
     print("  the free turn-1 hero arrived")
   end
+  -- on turn 1 the capital opens in Production next (8cc6:04bd)
+  local kit = require("ui.kit")
+  local found
+  for _, d in ipairs(G.modals) do
+    if d.city == G.player.capital and d.mode == 2 then found = true end
+  end
+  if not found then
+    fail("turn-1 hero", "the capital's dialog did not open in Production after the hero")
+  else
+    print("  the capital opened in Production")
+  end
+  -- put the tutorial's pages and the dialog away
+  for _ = 1, 6 do
+    if not kit.top() then break end
+    try("close a dialog", love.keypressed, "escape")
+  end
 end
 
 --- Later offers can be refused; clear whichever dialog is up.

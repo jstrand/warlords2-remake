@@ -633,7 +633,9 @@ function dismissBanner()
   local moments = {}
   if G.g.turn == 2 then moments[#moments + 1] = "turn2" end
   if G.player.heroOffer then moments[#moments + 1] = "hero" end
-  tutorial.chain(moments, function() presentOffer(G.player) end)
+  tutorial.chain(moments, function()
+    if not presentOffer(G.player) then afterOffer() end
+  end)
 end
 
 -- The hero offer is popup 2 -- (80, 60) 480x312, no bitmap of its own, so it
@@ -709,10 +711,21 @@ local function acceptOffer()
   else
     say("%s joins at %s.", h.name, G.g.map.cities[h.homeCity + 1].name)
   end
+  afterOffer()
+end
+
+--- The turn's opening, once any hero offer is settled (8cc6:04bd, the
+--- stage after 7563:0d5c): on turn 1 the capital's dialog opens in
+--- Production, for the first thing to build to be chosen.
+function afterOffer()
+  if G.g.turn == 1 and G.player.capital and not G.player.computer then
+    cityUi.open(G.player.capital, cityUi.PRODUCTION)
+  end
 end
 
 local function refuseOffer()
   G.offer, G.player.heroOffer = nil, nil
+  afterOffer()
   say("The hero rides away.")
 end
 
