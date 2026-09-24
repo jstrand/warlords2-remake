@@ -1603,6 +1603,23 @@ memory*, *Largest block* and *Locked memory* in Kb (group 139). Any key or
 click closes it. The remake has no DOS memory figures to show and leaves the
 last three out.
 
+## Game › Settings
+
+`64d2:0000(n)` — n = 1 from the menu, 0 when setting a new game up — is
+popup 4, (120, 50) 400 × 360, dialog 9 (`64d2:0137`, tables from `4125:0ac4`).
+Heads in the side's colours: *Name* ending at x = 248, *Human*, *Enhanced*,
+*Observe* centred on 280, 396, 468, at y = 60. A row a side from y = 90, 30
+apart: its name in its colours ending at x = 248; a side out of play shows
+*Deceased!* at x = 280 (nothing if its name is *Not used*); else `ABITS`'
+box — (320, 0) ticked, (320, 20) clear — at (256, y) for Human (`.SCN`
+0xd0), then *Human* or the level (0xc0: *Knight*, *Lord*, *Warlord*) at
+(280, y), the Enhanced box (0xf0) at (400, y), and for a computer side the
+Observe box (0x147) at (448, y). Under them Music (152, 340), Effects
+(152, 370) and Speech (256, 340), their words 24 to the right. 252–259
+toggle Human (`64d2:04cc`), 260–267 Enhanced (`0508`), 268–275 Observe
+(`053f`), 276–278 the sounds — Music and Effects greyed without a sound card
+(`4125:37a3`, `37a2`) — and OK (251) closes (`64d2:0034`).
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the

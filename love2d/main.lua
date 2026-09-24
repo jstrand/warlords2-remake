@@ -192,6 +192,9 @@ function love.load(arg)
   local seed = tonumber(arg[3]) or os.time()
   G.seed = seed
   G.g = game.new(dataDir, scenario, { seed = seed })
+  -- Until the new-game screens set the sides up, the first side is the
+  -- player's and the rest are the computer's; Settings can change that.
+  for i, s in ipairs(G.g.sides) do s.computer = i > 1 end
   G.player = game.begin(G.g)
   G.cursor = G.player.capital and
              { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
@@ -661,7 +664,9 @@ end
 local function endTurn()
   G.selection = nil
   local side = game.endTurn(G.g)
-  while side and side.index ~= G.player.index do
+  -- the computer plays its sides; a human side, one or several, is handed
+  -- to whoever sits at the keyboard
+  while side and side.computer do
     ai.playTurn(G.g, side)
     side = game.endTurn(G.g)
   end
@@ -2190,6 +2195,8 @@ MENU_DOES = {
   ["e"] = function() require("ui.history").open(1) end,
   ["j"] = function() require("ui.history").open(2) end,
   ["y"] = function() require("ui.history").open(3) end,
+  -- Game > Settings (64d2:0000(1))
+  ["alt X"] = function() require("ui.settings").open() end,
   -- SSG > About Warlords II, and "?" (7721:0084)
   ["?"] = function() require("ui.about").open() end,
   -- History > Triumphs (6d51:09eb)

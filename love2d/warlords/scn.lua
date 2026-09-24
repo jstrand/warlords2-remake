@@ -20,6 +20,7 @@ local SIDE_NAMES, SIDE_STRIDE = 0, 20
 local SIDE_COLOURS, SIDE_EDGES = 0xa0, 0xb0
 local SIDE_RECS, SIDE_REC_STRIDE = 387, 20
 local LEVELS, CONTROLLERS, ENHANCED = 0xc0, 0xd0, 0xf0
+local OBSERVE = 0x147
 local MONSTER_STRENGTH = 0x1007
 local FIGHT_ORDER, FIGHT_ROWS, FIGHT_TYPES = 0x60b, 9, 29
 local COMBAT_CAP, DIPLO_SCORE = 0x112, 0x10e3
@@ -135,6 +136,8 @@ function scn.load(dir, name)
       computer = u16(s, CONTROLLERS + 2 * i) ~= 0,
       level = u16(s, LEVELS + 2 * i),
       enhanced = u16(s, ENHANCED + 2 * i) ~= 0,
+      -- Observe: the player watches this computer side's moves (Settings)
+      observe = u16(s, OBSERVE + 2 * i) ~= 0,
       diploScore = u16(s, DIPLO_SCORE + 2 * i),
 
     }

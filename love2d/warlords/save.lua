@@ -111,7 +111,8 @@ function save.encode(g)
   for _, s in ipairs(g.sides) do
     sides[#sides + 1] = {
       index = s.index, gold = s.gold, alive = s.alive, computer = s.computer,
-      level = s.level, enhanced = s.enhanced, diploScore = s.diploScore,
+      level = s.level, enhanced = s.enhanced, observe = s.observe or nil,
+      diploScore = s.diploScore,
       income = s.income, upkeepTotal = s.upkeepTotal, produced = s.produced,
       ai = s.ai and { roles = s.ai.roles } or nil,
       quest = s.quest and {
@@ -257,6 +258,7 @@ function save.decode(text, dataDir)
     local s = g.map.sides[saved.index + 1]
     s.gold, s.alive, s.computer = saved.gold, saved.alive, saved.computer
     s.level, s.enhanced, s.diploScore = saved.level, saved.enhanced, saved.diploScore
+    s.observe = saved.observe or false
     s.income, s.upkeepTotal = saved.income, saved.upkeepTotal
     s.produced = saved.produced
     s.ai = saved.ai
