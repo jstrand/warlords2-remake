@@ -2195,6 +2195,8 @@ MENU_DOES = {
   ["e"] = function() require("ui.history").open(1) end,
   ["j"] = function() require("ui.history").open(2) end,
   ["y"] = function() require("ui.history").open(3) end,
+  -- Game > Shortcuts (545c:0000)
+  ["alt U"] = function() require("ui.shortcuts").open() end,
   -- Game > Settings (64d2:0000(1))
   ["alt X"] = function() require("ui.settings").open() end,
   -- SSG > About Warlords II, and "?" (7721:0084)

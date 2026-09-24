@@ -1620,6 +1620,21 @@ toggle Human (`64d2:04cc`), 260–267 Enhanced (`0508`), 268–275 Observe
 (`053f`), 276–278 the sounds — Music and Effects greyed without a sound card
 (`4125:37a3`, `37a2`) — and OK (251) closes (`64d2:0034`).
 
+## Game › Shortcuts
+
+`545c:0000` is popup 0, dialog 14 (`545c:014a`): *Menu Shortcuts* in font 1
+centred on (320, 63); the 21 items of `UDB.DAT` — a u16 count, then 68-byte
+records (`545c:04ac`): the item's command at +0, its name at +2, and at +52
+its button's rect in `MENUBUTT.PCK`, 64 wide with the lit half on the right
+— three to a row from (96, 100), 152 and 30 apart (`4125:04ce`), each its
+32 × 29 button (lit when it is on the slot being set) and its name 40 right
+and 5 down; *Choose 4 buttons for shortcuts* centred on (320, 320); and the
+four slots from (96, 342), 40 apart (`4125:0522`), each its item's button or
+the blank at (256, 84), the slot being set outlined in colour 9. 316–319
+pick a slot (`545c:00e9`), 295–315 put an item on it (`545c:0053`), OK (294)
+writes `UDB.CUR` (`545c:0032`). BUTTON.DAT puts the third column's hit areas
+at x = 300, not 400. The remake keeps the choice for the session.
+
 ## Report › Quest
 
 `auto_ui_no_quest` (`4976:0167`) is popup 2 with dialog 16's Done (330) and the
