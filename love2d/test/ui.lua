@@ -219,6 +219,48 @@ for _, button in ipairs({ 1, 2 }) do
 end
 try("frame after clicking", love.draw)
 
+-- 18a9:0896: a city is only attacked from beside it. Far off, the pointer
+-- over it is the tower and a click opens it; next to it, the sword.
+do
+  local game = require("warlords.game")
+  local mine
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.x then mine = a break end
+  end
+  local target
+  for _, c in ipairs(G.g.map.cities) do
+    if c.ownerIndex ~= G.player.index and not c.razed then target = c break end
+  end
+  G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  if mine and target then
+    local ox, oy = mine.x, mine.y
+    local function pointAt(tx, ty)
+      G.cx, G.cy = tx - 4, ty - 4
+      return G.mapRect.x + 4 * 40 + 20, G.mapRect.y + 4 * 40 + 20
+    end
+    try("select a stack", function() G.selectAt(mine.x, mine.y) end)
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end   -- the tutorial's page
+    -- put the stack far from the city, then right beside it
+    local lead = G.selection and G.selection.stack[1] or mine
+    ox, oy = lead.x, lead.y
+    local function place(x, y) for _, a in ipairs(G.selection.stack) do a.x, a.y = x, y end end
+    place(target.x + 6, target.y)
+    local px, py = pointAt(target.x, target.y)
+    local far = G.pointerKind(px, py)
+    if far == 8 or far == 10 then fail("pointer", "the sword showed over a far city") end
+    place(target.x - 1, target.y)
+    local near = G.pointerKind(px, py)
+    if near ~= 8 and near ~= 10 then
+      fail("pointer", ("beside a city the pointer was %s, not the sword"):format(tostring(near)))
+    end
+    place(ox, oy)
+    G.selection = nil
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+    print("  the sword shows only beside a city")
+  end
+end
+
 -- press and release every control of the main screen, on and off the button,
 -- so the state handling runs for all of them
 if G and G.screen then

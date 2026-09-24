@@ -18,6 +18,7 @@ local game     = require("warlords.game")
 local move     = require("warlords.move")
 local ai       = require("warlords.ai")
 local rules    = require("warlords.rules")
+local diplomacy = require("warlords.diplomacy")
 local hero     = require("warlords.hero")
 local armytype = require("warlords.armytype")
 local saveMod  = require("warlords.save")
@@ -164,6 +165,14 @@ function love.load(arg)
   for i = 0, 8 do
     G.ringQuads[i] = love.graphics.newQuad(i * RING_W, 0, RING_W, RING_H, 480, 40)
   end
+
+  -- STAND.PCK: the twelve mouse pointers, drawn by the game itself (22bf)
+  G.pointerImg = pck.toImage(dataDir .. "/STAND.PCK", palette, 10)
+  G.pointerQuads = {}
+  for i = 0, 11 do
+    G.pointerQuads[i] = love.graphics.newQuad(i * 16, 0, 16, 16, G.pointerImg:getDimensions())
+  end
+  if love.mouse and love.mouse.setVisible then love.mouse.setVisible(false) end
 
   -- the original's own chrome and fonts
   G.screen = screen.load(dataDir, palette, uidata.MAIN_SCREEN, 0)
@@ -575,7 +584,10 @@ local function afterBattle(result)
   end
 end
 
-local function moveSelection(x, y)
+--- Walk the selection towards (x, y). Only `attack` -- a click with the
+--- sword up (740d:0179), or a step by hand (1c8c:041f) -- turns running into
+--- an enemy into an assault: a walk (1c8c:01fd) just stops beside it.
+local function moveSelection(x, y, attack)
   local sel = G.selection
   if not sel then return end
   local from = { x = sel.stack[1].x, y = sel.stack[1].y }
@@ -584,6 +596,7 @@ local function moveSelection(x, y)
   orderTo(sel.stack, x, y)
   G.route = move.preview(G.g, sel.stack, x, y)
   local r = move.moveTo(G.g, sel.stack, x, y)
+  if r.stopped == "attack" and not (attack and r.steps == 0) then r.stopped = "blocked" end
   if r.stopped == "attack" then
     -- The stack has walked as far as the tile beside the target; the assault
     -- is fought from there. The fight is resolved first and then shown.
@@ -607,6 +620,111 @@ local function moveSelection(x, y)
     if not G.walk then centreOn(G.selection.x, G.selection.y) end
   end
   if not G.walk then refreshRoute() end
+end
+
+------------------------------------------------------------------ the pointer
+
+-- 18a9:0896 decides the mouse pointer from what is under it and what is
+-- selected, and a click on the map does whatever that pointer promises
+-- (740d:0037's jump table on the same number) -- so the pointer is the whole
+-- rule for what a click does. STAND.PCK (FILE.DAT group 0x18) holds the
+-- twelve, 16x16 along one row on colour key 10 (79de:0117 -> 22bf:000a);
+-- 22bf:036f takes cell k from (k * 16, 0), and its hotspot is the same
+-- distance across and down, from the table at 4125:045c.
+local PTR = { ARROW = 0, VIEW = 1, BOAT = 2, CITY = 3, HAND = 4, SELECT = 5,
+              WALK = 6, SITE = 7, ATTACK = 8, ADVISE = 9, PEACE = 10, ALT = 11 }
+local PTR_HOT = { [0] = 0, 6, 8, 6, 8, 8, 8, 8, 0, 8, 8, 0 }
+local PTR_STRAT = { 400, 30, 224, 312 }   -- 4125:2aa8, the strategic map
+local PTR_PANEL = { 0, 17, 392, 386 }     -- 4125:2ab8, the map's frame
+local PTR_OK = { [move.ROAD] = true, [move.BRIDGE] = true,
+                 [move.WATER] = true, [move.SHORE] = true, [move.CITY] = true }
+
+local function inRect(r, x, y)
+  return x >= r[1] and y >= r[2] and x < r[1] + r[3] and y < r[2] + r[4]
+end
+
+local function held(a, b)
+  return love.keyboard and love.keyboard.isDown and love.keyboard.isDown(a, b)
+end
+
+local function pointerKind(x, y)
+  if G.starting or G.over or G.banner or G.offer or G.assault or G.victory
+     or G.openMenu or kit.top() or not G.player or G.player.computer then
+    return PTR.ARROW
+  end
+  local alt, ctrl = held("lalt", "ralt"), held("lctrl", "rctrl")
+  if inRect(PTR_STRAT, x, y) then return alt and PTR.ALT or PTR.VIEW end
+  local tx, ty = tileAtPoint(x, y)
+  if not tx then return inRect(PTR_PANEL, x, y) and PTR.HAND or PTR.ARROW end
+
+  local g, me = G.g, G.player.index
+  if tx < 0 or ty < 0 or tx >= g.map.width or ty >= g.map.height then return PTR.HAND end
+  local here = game.armiesAt(g, tx, ty)
+  local city = game.cityAt(g, tx, ty)
+  local armies = here[1] ~= nil
+  -- the tile's owner nibble: whoever stands there, else the city's, else none
+  local owner = armies and here[1].owner or (city and city.ownerIndex) or rules.NEUTRAL
+  -- a razed city is ruins (7204:0000 still opens on it)
+  local t = city and (city.razed and move.SITE or move.CITY) or scn.terrainAt(g.map, tx, ty)
+
+  local sel = G.selection and #G.selection.stack > 0 and G.selection.stack
+  local dist, mode, under, atSea = 0, nil, move.PLAIN, false
+  if sel then
+    dist = math.max(math.abs(tx - sel[1].x), math.abs(ty - sel[1].y))
+    mode = move.stackMode(g, sel)
+    under = scn.terrainAt(g.map, sel[1].x, sel[1].y)
+    atSea = sel[1].atSea and true or false
+  end
+  -- a tile out of sight, or one the stack cannot enter at all, is the hand
+  local cost = (sel and mode ~= move.FLYING) and (move.COST[t] or 0) or 1
+  if not game.seen(g, G.player, tx, ty) or cost <= 0 then return PTR.HAND end
+
+  local function walk()
+    if mode ~= move.FLYING and (t == move.WATER or t == move.SHORE) then return PTR.BOAT end
+    return PTR.WALK
+  end
+  local function look()
+    if t == move.CITY then return PTR.CITY end
+    if t == move.SITE then return PTR.SITE end
+    return PTR.HAND
+  end
+  local enemyNear = sel and dist <= 1 and owner ~= me and (t == move.CITY or armies)
+
+  if held("lshift", "rshift") then
+    if enemyNear and g.map.options.militaryAdvisor ~= 0 then return PTR.ADVISE end
+    return look()
+  end
+  if armies and owner == me and not ctrl then
+    if alt then return PTR.ALT end
+    if not sel or dist < 1 then return PTR.SELECT end
+    return walk()
+  end
+  -- Next to an enemy the sword -- or the heart, for a side at peace. A land
+  -- stack at sea fights only onto water, a shore, a bridge or a city, and
+  -- one ashore reaches an enemy on the shore only from the same.
+  if enemyNear
+     and not (atSea and mode == move.LAND and under == move.SHORE and not PTR_OK[t])
+     and not (not atSea and mode == move.LAND and t == move.SHORE and not PTR_OK[under]) then
+    if g.map.options.diplomacy == 0 or owner == rules.NEUTRAL then return PTR.ATTACK end
+    local st = diplomacy.state(g, me, owner)
+    if t == move.CITY then return st == diplomacy.WAR and PTR.ATTACK or PTR.PEACE end
+    return st ~= diplomacy.PEACE and PTR.ATTACK or PTR.PEACE
+  end
+  if sel and (owner == me or (owner == rules.NEUTRAL and t ~= move.CITY)) then
+    if alt then return PTR.ALT end
+    if dist >= 1 and ctrl and armies then return PTR.SELECT end
+    return walk()
+  end
+  return look()
+end
+G.pointerKind = pointerKind
+
+local function drawPointer()
+  if not (G.pointerImg and love.mouse and love.mouse.getPosition) then return end
+  local mx, my = love.mouse.getPosition()
+  local k = pointerKind(mx, my)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(G.pointerImg, G.pointerQuads[k], mx - PTR_HOT[k], my - PTR_HOT[k])
 end
 
 -- The start-of-turn banner (8cc6:0259). Popup 6 of the table at 4125:06a8 is
@@ -1809,6 +1927,7 @@ end
 function love.draw()
   if G.starting then
     for _, d in ipairs(G.modals) do d.draw() end
+    drawPointer()
     return
   end
   advanceWalk()
@@ -1833,6 +1952,7 @@ function love.draw()
   if G.assault then drawAssault() end
   if G.victory then drawVictory() end
   if G.banner then drawBanner() end
+  drawPointer()
 end
 
 --------------------------------------------------------------------- input
@@ -1915,10 +2035,19 @@ function love.mousepressed(x, y, button)
     -- is on the tile while it is held (740d:0037).
     if button == 2 then
       require("ui.tileinfo").open(tx, ty)
-    elseif G.selection and #selectableAt(tx, ty) == 0 then
-      moveSelection(tx, ty)
-    else
-      select(tx, ty)
+      return
+    end
+    -- the left button does what the pointer shows (740d:00ce)
+    local k = pointerKind(x, y)
+    if k == PTR.WALK or k == PTR.BOAT then
+      moveSelection(tx, ty)                    -- 1c8c:01fd
+    elseif k == PTR.ATTACK or k == PTR.PEACE then
+      moveSelection(tx, ty, true)              -- attack_tile, 67cc:0000
+    elseif k == PTR.CITY or k == PTR.SITE then
+      local city = game.cityAt(G.g, tx, ty)    -- 7204:0000
+      if city then openCity(city) end
+    elseif k == PTR.SELECT or k == PTR.ALT then
+      select(tx, ty)                           -- 1b62:0405
     end
 
   elseif r.id == screen.REGION.STRATEGIC then

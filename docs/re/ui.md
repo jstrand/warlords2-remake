@@ -503,12 +503,47 @@ it clamps the tile to 4..107 and 4..151, puts the scroll origin four tiles up
 and left of it, and remembers it as the cursor tile at `3c04:017d`/`017f` —
 which is what the white box is drawn around.
 
+### The pointer
+
+The game draws its own mouse pointer (`22bf`, with save-behind), and
+**`18a9:0896`** picks which of twelve it is from what is under it; `18a9:0885`
+hands the number to `22bf:036f`. A click on the map then does whatever the
+pointer promised: `740d:00ce` jumps on the same number. The pictures are
+`STAND.PCK` (`FILE.DAT` group `0x18`), 16 × 16 along one row from
+`(k * 16, 0)`, keyed on colour 10 (`79de:0117` → `1709:0000` → `22bf:000a`),
+and the hotspot is the same distance across and down, from the table at
+`4125:045c`:
+
+| k | picture | hotspot | shown | a click |
+|---|---|---|---|---|
+| 0 | arrow | 0 | anywhere else, and over every dialog | — |
+| 1 | magnifier | 6 | over the strategic map (`4125:2aa8`) | |
+| 2 | boat | 8 | a walk onto water or shore, not flying | walk (`1c8c:01fd`) |
+| 3 | tower | 6 | a city not to be walked to or fought | the city dialog (`7204:0000`), Production for our own |
+| 4 | hand | 8 | out of sight, a tile the stack cannot enter (`4125:1274` cost 0), the map's frame (`4125:2ab8`), an enemy out of reach | drag (`8065:0e04`) |
+| 5 | target | 8 | our own stack, when nothing is selected or it is the one selected; with Ctrl, any of ours | select (`1b62:0405`) |
+| 6 | legs | 8 | a walk | walk (`1c8c:01fd`) |
+| 7 | ruins | 8 | a site, a razed city | `7204:0000` on the city there, else mode 4 |
+| 8 | sword | 0 | an enemy **within one tile** (`1a8b:0acc` ≤ 1): a city at war, a stack not at peace, anything neutral or with Diplomacy off | `attack_tile` |
+| 9 | ? | 8 | Shift over such an enemy, with the Military Advisor on | the advisor (`67cc:1f19`) |
+| 10 | heart | 8 | the same enemy, but at peace | `attack_tile`, which then asks |
+| 11 | arrow, slanted | 0 | Alt over the strategic map or our own | `1c8c:0007(1, 1)` |
+
+Two more rules keep boats honest: a land stack at sea (army flag `0x1000`)
+standing on a shore gets no sword onto anything but road, bridge, water, shore
+or city, and one ashore gets none onto a shore unless it stands on one of
+those itself.
+
 ### The assault
 
-A city is **not walked into**. `walk_path` stops the moment the next step is a
-city the mover does not own and hands that tile to **`attack_tile`**
-(`67cc:0000`), so the stack always fights from one of the eight tiles around
-it, diagonals included. `attack_tile` refuses outright unless the target is a
+A city is **not walked into**, and it is **not attacked from afar** either. A
+walk (`1c8c:01fd` → `1a8b:0c4f`) that runs into an enemy just stops beside it;
+only two callers ever reach **`attack_tile`** (`67cc:0000`): a click with the
+sword or heart pointer up (`740d:0179`), which the pointer only shows within
+one tile of the stack (› The pointer), and a step by hand (`1c8c:041f`, the
+numeric pad), whose one step comes back as 3 or 5 when it meets an enemy. So
+the stack always fights from one of the eight tiles around the target,
+diagonals included. `attack_tile` refuses outright unless the target is a
 city or a tile with armies on it, and unless the mover has a movement point
 left to spend.
 
