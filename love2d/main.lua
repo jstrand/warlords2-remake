@@ -195,23 +195,29 @@ function love.load(arg)
   G.scenario = scenario
   love.graphics.setBackgroundColor(0, 0, 0)
   if G.starting then
-    require("ui.start").open(function(dir, options, sides)
-      G.starting = false
-      G.scenario = dir
-      G.seed = os.time()
-      G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides })
-      G.selection, G.over, G.stratImage = nil, nil, nil
-      beginGame()
-      if G.player.computer and G.playComputer then G.playComputer() end
-    end, function(g)
-      G.starting = false
-      G.takeLoaded(g)
-    end)
+    openStart()
     return
   end
   newGame(seed)
   beginGame()
   say("Click a stack, then click where to go.")
+end
+
+--- The start screens (7f77:0000): a new game set up there, or a saved one.
+function openStart()
+  G.starting = true
+  require("ui.start").open(function(dir, options, sides)
+    G.starting = false
+    G.scenario = dir
+    G.seed = os.time()
+    G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides })
+    G.selection, G.over, G.stratImage = nil, nil, nil
+    beginGame()
+    if G.player.computer and G.playComputer then G.playComputer() end
+  end, function(g)
+    G.starting = false
+    G.takeLoaded(g)
+  end)
 end
 
 --- A fresh game of the scenario. Until the new-game screens set the sides
@@ -2190,9 +2196,7 @@ MENU_DOES = {
   ["alt E"] = function() endTurn() end,
   ["m"] = function() moveAll() end,
   -- Game > Quit (7721:0000) and New game (7721:019d) ask first (groups 44
-  -- and 45). A new game here is the same scenario afresh, the sides set up
-  -- through Settings (64d2:0000(0)); the original's start screens
-  -- (7f77:0000) are still to come.
+  -- and 45); a new game goes back to the start screens (7f77:0000).
   ["^Q"] = function()
     local lines = {}
     for i = 1, 4 do lines[i] = uidata.text(G.screen.ui, 0x2c, i) end
@@ -2204,8 +2208,8 @@ MENU_DOES = {
     for i = 1, 4 do lines[i] = uidata.text(G.screen.ui, 0x2d, i) end
     require("ui.input").open({ title = uidata.text(G.screen.ui, 0x2d, 0), lines = lines,
       confirm = true, ok = function()
-        newGame(os.time())
-        require("ui.settings").open(function() beginGame() end)
+        G.selection, G.banner, G.offer = nil, nil, nil
+        openStart()
       end })
   end,
   -- Game > Save game and Load game (7721:093b, 026b): ten slots
