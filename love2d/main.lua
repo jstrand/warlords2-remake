@@ -1181,9 +1181,10 @@ local function drawMenuBar()
       palColour(8)
       love.graphics.rectangle("fill", m.x, 0, m.w, menuMod.BAR_H)
     end
+    love.graphics.setColor(1, 1, 1)
     G.font.colours(lit and 7 or 0, lit and 8 or 15).draw(m.title, m.x + 2, menuMod.BAR_Y)
   end
-  drawTurnStrip()
+  if not G.starting then drawTurnStrip() end
 
   local open = G.menuLayout[G.openMenu]
   if not open then return end
@@ -1213,6 +1214,7 @@ local function drawMenuBar()
       end
       local glyph = grey and 3 or (lit and 7 or 0)
       local f = G.font.colours(glyph, lit and 8 or 15)
+      love.graphics.setColor(1, 1, 1)   -- the separators' black would tint it
       f.draw(r.label, r.x + 3, r.y)
       if r.key then f.draw(r.key, r.x + d.keyCol, r.y) end
     end
@@ -1927,6 +1929,7 @@ end
 function love.draw()
   if G.starting then
     for _, d in ipairs(G.modals) do d.draw() end
+    drawMenuBar()
     drawPointer()
     return
   end
@@ -1994,8 +1997,12 @@ function love.mousepressed(x, y, button)
     return
   end
 
-  -- a dialog takes every click while it is up, which is what makes it modal
+  -- On the start screens the menu bar stays live over them (7f77:0200 sets
+  -- what it offers there); anywhere else a dialog takes every click.
   local top = kit.top()
+  if top and top.menuBar and (G.openMenu or menuMod.titleAt(G.menuLayout, x, y, menuMod.BAR_H)) then
+    top = nil
+  end
   if top then
     if top.mousepressed then top.mousepressed(x, y, button) end
     return
@@ -2011,7 +2018,8 @@ function love.mousepressed(x, y, button)
   if G.openMenu then
     local row = menuMod.rowAt(G.menuLayout, G.openMenu, x, y)
     G.openMenu = nil
-    if row and (row.key or row.act) then menuPick(row.key or row.act) end
+    local key = row and (row.key or row.act)
+    if key and G.menuEnabled(key) then menuPick(key) end
     return
   end
 
@@ -2356,7 +2364,16 @@ MENU_DOES = {
   end,
   -- Game > Save game and Load game (7721:093b, 026b): ten slots
   ["alt S"] = function() require("ui.savegame").save() end,
-  ["alt L"] = function() require("ui.savegame").load(takeLoaded) end,
+  ["alt L"] = function()
+    require("ui.savegame").load(function(g)
+      -- from the start screens, a game read back puts them away
+      if G.starting then
+        for i = #G.modals, 1, -1 do G.modals[i] = nil end
+        G.starting = false
+      end
+      takeLoaded(g)
+    end)
+  end,
   ["z"] = function() search() end,
   -- View > Cities, Build, Production and Vectoring open the city dialog in
   -- one of its modes on the city nearest the cursor -- any city for Cities,
@@ -2446,7 +2463,14 @@ MENU_DOES = {
 -- A menu item this engine cannot do yet is greyed, the way the original greys
 -- one that is not available: saying so beats a pick that does nothing.
 function G.menuEnabled(key)
-  return key ~= nil and MENU_DOES[key] ~= nil
+  if key == nil or MENU_DOES[key] == nil then return false end
+  -- 7f77:0200: on the start screens every menu is greyed but Game's Quit,
+  -- and Load game while a slot holds one (7721:0e25; Load map likewise, by
+  -- 7721:0e42, which the remake does not have)
+  if G.starting then
+    return key == "^Q" or (key == "alt L" and require("ui.savegame").used() > 0)
+  end
+  return true
 end
 
 function love.keypressed(key)
@@ -2475,6 +2499,18 @@ function love.keypressed(key)
 
   local top = kit.top()
   if top then
+    -- the start screens' menu takes its accelerators too
+    if top.menuBar and love.keyboard and love.keyboard.isDown then
+      local accel
+      if love.keyboard.isDown("lctrl", "rctrl") and key == "q" then accel = "^Q"
+      elseif love.keyboard.isDown("lalt", "ralt") and #key == 1 then accel = "alt " .. key:upper() end
+      if accel then
+        G.openMenu = nil
+        if G.menuEnabled(accel) then MENU_DOES[accel]() end
+        return
+      end
+    end
+    if G.openMenu then G.openMenu = nil return end
     if top.keypressed then top.keypressed(key) end
     return
   end

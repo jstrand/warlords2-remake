@@ -49,6 +49,13 @@ end
 
 M.last = 1
 
+--- How many slots hold a game (7721:0e25), which is what lets Load game on.
+function M.used()
+  local n = 0
+  for _, name in ipairs(readInfo()) do if name ~= UNUSED then n = n + 1 end end
+  return n
+end
+
 function M.save()
   local G = kit.G
   local names = readInfo()

@@ -509,6 +509,26 @@ for _ = 1, 150 do
 end
 try("final frame", love.draw)
 
+-- the start screens keep the menu bar, with only Quit and Load game live
+-- (7f77:0200)
+do
+  local kit = require("ui.kit")
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.over = nil
+  if try("open the start screens", openStart) then
+    try("draw the start screen", love.draw)
+    try("open the Game menu", love.mousepressed, 60, 4, 1)
+    if G.openMenu ~= 2 then fail("start menu bar", "the Game menu did not open") end
+    try("draw it open", love.draw)
+    if G.menuEnabled("alt S") then fail("start menu bar", "Save game was live") end
+    if not G.menuEnabled("^Q") then fail("start menu bar", "Quit was greyed") end
+    try("close it", love.keypressed, "escape")
+    if G.openMenu then fail("start menu bar", "escape left the menu open") end
+    if not kit.top() then fail("start menu bar", "escape closed the start screen") end
+    print("  the start screens keep the menu bar")
+  end
+end
+
 os.remove("warlords-save.lua")
 
 if failures == 0 then

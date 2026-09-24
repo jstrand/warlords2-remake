@@ -188,7 +188,8 @@ local FACES = { [0] = { 0, 0 }, { 0, 40 }, { 0, 80 }, { 0, 120 }, { 0, 160 }, { 
 local LEVEL_BUTTON = { [0] = 120, 200, 280, 360, 40 }  -- 4125:24b8: Knight .. Off, Human
 
 local function openSetup(G, st, begin, back)
-  local d = { view = kit.view(3) }
+  -- the menu bar stays live over it, as over the start menu (7bab:0034)
+  local d = { view = kit.view(3), menuBar = true }
   local art = G.screen.art_for(31)                   -- SETUPBU.PCK
 
   local function refresh()
@@ -371,7 +372,7 @@ end
 function M.open(start, loaded)
   local G = kit.G
   local list = M.scenarios(G.dataDir)
-  local d = { view = kit.view(1), cur = 1 }
+  local d = { view = kit.view(1), cur = 1, menuBar = true }
   for i, e in ipairs(list) do if e.dir == "Erythea" then d.cur = i end end   -- 4125:2a6e
 
   local function refresh()

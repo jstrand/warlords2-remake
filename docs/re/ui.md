@@ -1694,6 +1694,15 @@ a colour-3 bar (336, 166) 248 × 28 with its name centred on (460, 172)
 (`7f77:02bf`, `0332`); Erythea to begin with (`4125:2a6e`). Random Map needs
 the map generator, which the remake does not have, and is greyed.
 
+The menu bar stays up over the start screens, and live: `7f77:0200` greys
+every menu (`2372:0eab(0, 0)` — a menu's enabled items are a bit mask at
+`+0x1a` of its 46-byte record) and then lets on, through `2372:0ef8`, only
+Game's **Quit** (item 505), **Load game** (502) while `7721:0e25` counts a
+used save slot, and **Load map** (504) while `7721:0e42` counts a saved map.
+The items are numbered in menu order from About (497) to End Turn (535) —
+the same numbers `UDB.DAT` gives the shortcut items. The setup screen paints
+the same bar (`7bab:0034` → `2372:132f`).
+
 **New Scenario** (`7f77:058d`, `0725`) lists `SCENARIO.DAT` — 84-byte
 records: name +0, directory +20, description +28, and at +76 its cities,
 ruins and players — on popup 19 (`NEWSCEN.PCK`), dialog 29: the names in a
