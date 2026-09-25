@@ -825,10 +825,15 @@ declared war"); state 1 is refused in some cases too (`attack_tile`).
   more hostile** than this one; then both move to it and "Peace negotiated
   with %s!" is shown.
 
+Proposals are not used up: each stands until the side changes it
+(`diplomacy_init` sets them equal to the state).
+
 **Diplomatic score** (the same `u16` per side at `.SCN` `0x10e3` that
-pillage/sack/raze raise; see Capturing a city). `484e:1063` also adds to it
-for each side whose proposal is more peaceful than both the current state and
-the other side's proposal:
+pillage/sack/raze raise; see Capturing a city). At the end of each side's
+turn `484e:1063` also adds to it for each side its proposal is more peaceful
+than both the current state and the other side's proposal. At game start
+every side's score is 1d8, and 400 more for a human with *I am the
+Greatest* on (`79fa:0000`):
 
 | proposal → from current | added |
 |---|---|

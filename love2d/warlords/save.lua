@@ -74,6 +74,23 @@ end
 
 --- Turn a game into a string. Armies are written with an id so that the
 --- references between them (a quest's hero, a city's vector) survive.
+-- A side's AI data is plain numbers and tables, but for the armies its
+-- assault groups have staged: those go by id.
+local function saveAI(d, ids)
+  if not d then return nil end
+  local out = {}
+  for k, v in pairs(d) do out[k] = v end
+  out.groups = {}
+  for i, grp in ipairs(d.groups or {}) do
+    local copy = {}
+    for k, v in pairs(grp) do copy[k] = v end
+    copy.staged = {}
+    for s = 1, 4 do copy.staged[s] = grp.staged[s] and ids[grp.staged[s]] or nil end
+    out.groups[i] = copy
+  end
+  return out
+end
+
 function save.encode(g)
   local ids = {}
   for i, a in ipairs(g.armies) do ids[a] = i end
@@ -103,7 +120,11 @@ function save.encode(g)
       items = items, blessings = a.blessings,
       transit = a.transit and { turns = a.transit.turns, dest = a.transit.dest } or nil,
       returning = a.returning or nil,
-      order = a.order and { target = a.order.target } or nil,
+      -- the computer players' standing order (record +14/+15) and marks
+      aiOrder = (a.aiOrder or 0) ~= 0 and a.aiOrder or nil, aiDest = a.aiDest,
+      aiGroup = (a.aiGroup or 0) ~= 0 and a.aiGroup or nil,
+      aiExplore = a.aiExplore or nil, aiNeutral = a.aiNeutral or nil,
+      aiParty = a.aiParty or nil,
     }
   end
 
@@ -114,7 +135,7 @@ function save.encode(g)
       level = s.level, enhanced = s.enhanced, observe = s.observe or nil,
       diploScore = s.diploScore,
       income = s.income, upkeepTotal = s.upkeepTotal, produced = s.produced,
-      ai = s.ai and { roles = s.ai.roles } or nil,
+      ai = saveAI(s.ai, ids), aiSolidarity = s.aiSolidarity, card = s.card,
       quest = s.quest and {
         type = s.quest.type, hero = ids[s.quest.hero], done = s.quest.done,
         required = s.quest.required, targetKind = s.quest.targetKind,
@@ -132,7 +153,7 @@ function save.encode(g)
     cities[#cities + 1] = {
       index = c.index, name = c.name, ownerIndex = c.ownerIndex, producing = c.producing,
       countdown = c.countdown, vectorTo = c.vectorTo, razed = c.razed or nil,
-      defence = c.defence, income = c.income, previousOwner = c.previousOwner,
+      defence = c.defence, income = c.income, claim = c.claim,
       razedBy = c.razedBy, slots = c.slots,
     }
   end
@@ -162,6 +183,7 @@ function save.encode(g)
     scenario = g.map.name,
     turn = g.turn, current = g.current, seed = g.rng.state,
     won = g.won or nil, over = g.over or nil, noHumansSaid = g.noHumansSaid or nil,
+    greatest = g.greatest or nil,
     surrenderOffered = g.surrenderOffered or nil,
     options = g.map.options,
     diplomacy = g.diplomacy,
@@ -197,6 +219,7 @@ function save.decode(text, dataDir)
   g.rng.state = state.seed
   g.won, g.over, g.surrenderOffered = state.won, state.over, state.surrenderOffered
   g.noHumansSaid = state.noHumansSaid
+  g.greatest = state.greatest
   g.diplomacy, g.log = state.diplomacy, state.log or {}
 
   local itemByIndex = {}
@@ -215,7 +238,8 @@ function save.decode(text, dataDir)
     local c = g.map.cities[saved.index + 1]
     c.ownerIndex, c.producing, c.countdown = saved.ownerIndex, saved.producing, saved.countdown
     c.vectorTo, c.razed, c.defence = saved.vectorTo, bool(saved.razed), saved.defence
-    c.income, c.previousOwner, c.slots = saved.income, saved.previousOwner, saved.slots
+    c.income, c.slots = saved.income, saved.slots
+    c.claim = saved.claim or saved.previousOwner or c.claim
     c.razedBy = saved.razedBy
     c.name = saved.name or c.name            -- renamed; older saves lack it
   end
@@ -264,7 +288,14 @@ function save.decode(text, dataDir)
     s.observe = saved.observe or false
     s.income, s.upkeepTotal = saved.income, saved.upkeepTotal
     s.produced = saved.produced
-    s.ai = saved.ai
+    -- an older save kept the roles alone; it keeps the data set up anew
+    if saved.ai and saved.ai.groups then
+      s.ai = saved.ai
+      for _, grp in ipairs(s.ai.groups) do
+        for k = 1, 4 do grp.staged[k] = grp.staged[k] and armies[grp.staged[k]] or nil end
+      end
+    end
+    s.aiSolidarity, s.card = saved.aiSolidarity, saved.card
     s.quest = nil
     if saved.quest then
       local q = {

@@ -240,11 +240,12 @@ end
 --- The start screens (7f77:0000): a new game set up there, or a saved one.
 function openStart()
   G.starting = true
-  require("ui.start").open(function(dir, options, sides)
+  require("ui.start").open(function(dir, options, sides, extra)
     G.starting = false
     G.scenario = dir
     G.seed = os.time()
-    G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides })
+    G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides,
+                                      greatest = extra and extra.greatest })
     G.selection, G.over, G.stratImage = nil, nil, nil
     beginGame()
     if G.player.computer and G.playComputer then G.playComputer() end

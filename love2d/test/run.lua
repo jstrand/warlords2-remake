@@ -1923,8 +1923,21 @@ local function testDiplomacy()
   eq(d.state(g2, 0, 1), d.PEACE, "matched proposals make peace")
   ok(m2[1] and m2[1]:find("Peace negotiated"), "and it is announced")
 
-  -- making peace raises the diplomatic score, exactly as an atrocity does
-  ok((g2.sides[1].diploScore or 0) >= 11, "peace from war is worth 1d10+10")
+  -- suing for peace raises the diplomatic score, exactly as an atrocity
+  -- does: as the turn ends, a proposal below both the state and the other
+  -- side's proposal is scored (diplomacy_score_update, 484e:1063)
+  local g3 = game.new(DATA, "ERYTHEA", { seed = 63, options = { diplomacy = 1 } })
+  d.propose(g3, 0, 1, d.WAR)
+  d.apply(g3, g3.sides[1])
+  d.propose(g3, 0, 1, d.PEACE)
+  local before = g3.sides[1].diploScore or 0
+  d.scoreUpdate(g3, g3.sides[1])
+  local gain = (g3.sides[1].diploScore or 0) - before
+  ok(gain >= 11 and gain <= 20, "peace offered from war is worth 1d10+10: " .. gain)
+  d.propose(g3, 1, 0, d.PEACE)
+  before = g3.sides[1].diploScore
+  d.scoreUpdate(g3, g3.sides[1])
+  eq(g3.sides[1].diploScore, before, "not once the other side offers it too")
 
   -- ratings are relative and lowest-first
   local g3 = game.new(DATA, "ERYTHEA", { seed = 63 })
@@ -2348,6 +2361,141 @@ local function testBugFlags()
   end
 end
 
+------------------------------------------------------------ the computer AI
+
+-- The computer players: their character cards, what the level and the card
+-- set up, and the pieces of the original's AI that can be pinned down
+-- without playing a whole game. docs/re/ai.md, docs/formats/crd.md.
+local function testComputerPlayers()
+  print("computer players")
+  local aicard = require("warlords.aicard")
+  local aiMod = require("warlords.ai")
+  local core = require("warlords.ai.core")
+  local groups = require("warlords.ai.groups")
+  local move = require("warlords.move")
+
+  -- the decks: nine cards a level
+  for level = 0, 2 do eq(aicard.count(DATA, level), 9, "nine cards for level " .. level) end
+  local w = aicard.load(DATA, 2, 0)
+  eq(w.groups, 4, "the Standard Warlord runs four assault groups")
+  eq(w.raze, 5, "and razes 5 in 1000")
+  eq(w.humanShare, 3, "and turns on a human with 3x10+1d10 percent")
+  eq(w.solidarity, 1, "and stands with the other computers")
+  local k = aicard.load(DATA, 0, 0)
+  eq(k.cautious, 1, "the Standard Knight is cautious")
+  eq(k.groups, 1, "and runs one group")
+  local name = aicard.describe(DATA, 2, 1)
+  eq(name, "Attila the Hun", "a card's name is the first line of its .DSC")
+
+  -- a die of no sides gives its bonus, as the original's dice does
+  local r = require("warlords.rng").new(5)
+  eq(r:dice(1, 0, 3), 3, "dice(1, 0, 3) is 3")
+
+  -- straight-line distance, truncated (map_distance, 2012:1199)
+  eq(core.dist(0, 0, 3, 4), 5, "distance is Euclidean")
+  eq(core.dist(0, 0, 1, 1), 1, "and truncated")
+
+  -- levels and cards fill the AI data
+  local sides = {}
+  for i = 0, 7 do sides[i] = { computer = true, level = i % 3 } end
+  sides[0] = { computer = false, level = 0 }
+  local g = game.new(DATA, "ERYTHEA", { seed = 71, sides = sides })
+  local knight, lord, warlord = g.map.sides[4], g.map.sides[2], g.map.sides[3]
+  eq(knight.level, 0, "side 3 plays as a Knight")
+  eq(knight.ai.maxGroups, 1, "a Knight runs one group")
+  eq(knight.ai.cautious, 1, "and is cautious")
+  ok(not knight.ai.bold, "and never attacks a side it is not at war with")
+  eq(lord.ai.maxGroups, 3, "a Lord three")
+  ok(lord.ai.bold, "a Lord is bold -- the level sets it and a card cannot clear it")
+  eq(warlord.ai.maxGroups, 4, "a Warlord four")
+  ok(warlord.ai.humanShare >= 31 and warlord.ai.humanShare <= 40,
+     "a Warlord turns on a human holding 31-40% of the world: " .. warlord.ai.humanShare)
+  ok(knight.ai.humanShare >= 81 and knight.ai.humanShare <= 90, "a Knight at 81-90%")
+  eq(g.map.fightOrder[3][8], w.fightOrder[8], "the card sets the side's fight order")
+
+  -- every city is somebody's ground once the computers have shared them out
+  local unclaimed = 0
+  for _, c in ipairs(g.map.cities) do
+    if c.claim == nil or c.claim == core.NEUTRAL then unclaimed = unclaimed + 1 end
+  end
+  eq(unclaimed, 0, "the computers claim every city between them (623c:010b)")
+  for _, s in ipairs(g.sides) do
+    eq(s.capital.claim, s.index, s.name .. " claims its capital")
+  end
+  for _, s in ipairs(g.sides) do
+    ok(s.diploScore >= 1 and s.diploScore <= 8, "a diplomatic score starts at 1d8")
+  end
+
+  -- I am the Greatest: a human starts 400 worse off, and the computers spare
+  -- each other while any of them fights a human
+  local gg = game.new(DATA, "ERYTHEA", { seed = 72, sides = sides, greatest = true,
+                                         options = { diplomacy = 1 } })
+  ok(gg.map.sides[1].diploScore > 400, "I am the Greatest: a human's score starts above 400")
+  ok(gg.map.sides[2].diploScore <= 8, "a computer's does not")
+  local dip = require("warlords.diplomacy")
+  gg.diplomacy.state[1 * 8 + 0], gg.diplomacy.state[0 * 8 + 1] = dip.WAR, dip.WAR
+  local fights = groups.fightingHumans(gg)
+  ok(fights[1], "a computer at war with the human is marked")
+  require("warlords.ai.diplomacy").phase(gg, gg.map.sides[2])
+  eq(dip.proposal(gg, 1, 2), dip.PEACE, "and no computer proposes war on it")
+
+  -- a computer's path ignores the fog; a human's does not (1555:08bf)
+  local h = game.new(DATA, "ERYTHEA", { seed = 73, sides = sides, options = { hiddenMap = 1 } })
+  local human, comp = h.map.sides[1], h.map.sides[2]
+  local hg, cg = move.grid(h, human.index), move.grid(h, comp.index)
+  local fogged, open = 0, 0
+  for k2 = 0, h.map.width * h.map.height - 1 do
+    if hg[k2] % 8 == 0 and cg[k2] % 8 ~= 0 then fogged = fogged + 1 end
+    if cg[k2] % 8 ~= 0 then open = open + 1 end
+  end
+  ok(fogged > 1000, "unseen ground blocks the human's paths only: " .. fogged)
+
+  -- the odds of taking an empty tile are certain
+  local army
+  for _, a in ipairs(g.armies) do if a.owner == warlord.index then army = a end end
+  local sel = core.select(g, { army })
+  eq(core.odds(g, sel, 0, 0), 100, "nothing to fight is a sure thing")
+
+  -- the neighbour table: six a city, nearest first unless one side is full
+  local nb, nd = core.neighbours(g, g.map.cities[1])
+  eq(#nb, 6, "a city has six neighbours")
+  for j = 1, #nd do ok(nd[j] < 100, "each within reach") end
+
+  -- nobody picks an enemy before turn 8 without having fought it
+  eq(groups.pickEnemy(g, warlord), nil, "no enemy is picked in the first turns")
+  warlord.ai.battles[4] = 3
+  warlord.ai.citiesLost[4] = 2
+  local picked = groups.pickEnemy(g, warlord)
+  ok(picked ~= nil, "a side that has fought us can be picked")
+
+  -- early vengeance: a Warlord razes or sacks a human's city taken early
+  local c = g.map.cities[1]
+  for _, cc in ipairs(g.map.cities) do if cc ~= knight.capital and cc ~= warlord.capital then c = cc break end end
+  c.ownerIndex = warlord.index
+  local before = warlord.diploScore
+  ok(groups.earlyVengeance(g, warlord.index, c, 0), "a Warlord takes vengeance on a human's city")
+  ok(warlord.diploScore > before, "and it is an atrocity")
+  ok(not groups.earlyVengeance(g, knight.index, c, 0), "a Knight does not")
+
+  -- a whole computer turn in each level keeps the game sound, and a save
+  -- keeps the AI's data, groups and all
+  local saveMod = require("warlords.save")
+  local side = game.begin(g)
+  while side and g.turn <= 12 do
+    if side.computer then aiMod.playTurn(g, side) end
+    side = game.endTurn(g)
+  end
+  local grp = warlord.ai.groups[1]
+  grp.active, grp.target, grp.rally = 2, 1, warlord.capital.index
+  grp.staged[2] = g.armies[#g.armies]
+  local g2 = saveMod.decode(saveMod.encode(g), DATA)
+  local w2 = g2.map.sides[warlord.index + 1].ai
+  eq(w2.maxGroups, warlord.ai.maxGroups, "the AI data survives a save")
+  eq(w2.groups[1].rally, warlord.capital.index, "and its groups")
+  eq(w2.groups[1].staged[2], g2.armies[#g2.armies], "with their staged armies")
+  eq(g2.map.cities[5].claim, g.map.cities[5].claim, "and the cities' claims")
+end
+
 --------------------------------------------------------------------- main
 
 if not exists(DATA .. "/TERRAIN0/ARMYTYPE.DAT") then
@@ -2390,6 +2538,7 @@ testSites("DRAGON")
 testSlots()
 testScreenLayout()
 testCityCastles()
+testComputerPlayers()
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end

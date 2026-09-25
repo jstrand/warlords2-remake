@@ -25,8 +25,9 @@ names:
 | `0x10e3` | `u16` per side: atrocity score (raze/sack/pillage) |
 
 **City record, runtime fields** (after `+42` income, all zero in the files):
-`+0x2c` type in production, `+0x2d` turns left, `+0x2f` previous owner
-(15 after razing), `+0x31` vectoring on, `+0x33`/`+0x35` vector target x, y.
+`+0x2c` type in production, `+0x2d` turns left, `+0x2f` the side whose
+ground the computer players count it as -- set at game start and by their
+diplomacy, 15 after razing, never on a capture (`docs/re/ai.md`), `+0x31` vectoring on, `+0x33`/`+0x35` vector target x, y.
 
 **Site record (31 bytes), fields the code uses:** `+0` x, `+2` y, `+0x18`
 content (file: 1 temple / 2 ruin; at game start: 2 item, 3 sage, 4 gold,

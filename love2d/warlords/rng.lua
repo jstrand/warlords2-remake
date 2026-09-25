@@ -29,6 +29,9 @@ end
 -- the sage's gem.
 function rng:dice(n, sides, bonus)
   local total = bonus or 0
+  -- a die of no sides rolls nothing and gives the bonus (dice, as the
+  -- character cards' zero dice use it)
+  if (sides or 0) <= 0 then return total end
   for _ = 1, n do total = total + self:below(sides) + 1 end
   return total
 end

@@ -97,7 +97,7 @@ end
 --- Is a city a port -- does any tile of its 2x2 footprint touch bridge, water
 --- or shore? Only a port city lets a stack change between land and sea.
 -- FUN_1555_109d.
-local function isPort(g, city)
+function move.isPort(g, city)
   for dx = -1, 2 do
     for dy = -1, 2 do
       local x, y = city.x + dx, city.y + dy
@@ -143,7 +143,7 @@ function move.grid(g, sideIndex)
   -- city of the moving side is also a crossing
   for _, c in ipairs(g.map.cities) do
     local mine = c.ownerIndex == sideIndex
-    local port = mine and isPort(g, c)
+    local port = mine and move.isPort(g, c)
     for dx = 0, 1 do
       for dy = 0, 1 do
         local x, y = c.x + dx, c.y + dy
@@ -161,8 +161,11 @@ function move.grid(g, sideIndex)
     end
   end
 
-  -- with Hidden Map on, a side cannot path through what it has not seen
-  if g.map.options.hiddenMap ~= 0 and sideIndex ~= nil then
+  -- with Hidden Map on, a human cannot path through what it has not seen; a
+  -- computer player's paths ignore the fog (path_prepare_grid, 1555:08bf,
+  -- applies it only when is_computer_turn is false)
+  local side = sideIndex ~= nil and g.map.sides[sideIndex + 1]
+  if g.map.options.hiddenMap ~= 0 and side and not side.computer then
     local gameMod = require("warlords.game")
     for i = 0, W * H - 1 do
       if not gameMod.seen(g, sideIndex, i % W, math.floor(i / W)) then

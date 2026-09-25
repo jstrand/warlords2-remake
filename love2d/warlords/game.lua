@@ -163,6 +163,8 @@ function game.new(dataDir, scenario, opts)
     armies = {},
     turn = 1,
     log = {},
+    -- I am the Greatest (7bab:0ee8, DS:3c04_0116): the computers gang up
+    greatest = opts.greatest or nil,
   }
   if opts.options then
     for k, v in pairs(opts.options) do g.map.options[k] = v end
@@ -179,6 +181,7 @@ function game.new(dataDir, scenario, opts)
         else
           s.computer = o.computer and true or false
           s.level = o.level or s.level
+          s.card = o.card or 0
         end
       end
     end
@@ -219,6 +222,9 @@ function game.new(dataDir, scenario, opts)
   setupGarrisons(g)
   require("warlords.site").setup(g)
   for _, s in ipairs(g.sides) do game.revealStart(g, s) end
+  -- the computer players' data, their claims on the map, and every side's
+  -- diplomatic score (59bf:084d, 623c:010b, 79fa:0000)
+  require("warlords.ai").startGame(g)
 
   g.current = 1             -- index into g.sides
   g.side = g.sides[1]
@@ -396,6 +402,13 @@ end
 --- Hand the turn to the next living side, starting a new game turn when the
 --- list wraps. Returns the side now to play, or nil if the game is over.
 function game.endTurn(g)
+  -- the side's peace overtures are scored as its turn ends: at the end of
+  -- ai_turn for a computer, and of the turn (8065:2074) for a human while
+  -- the game is not won
+  local leaving = g.side
+  if leaving and leaving.alive and (leaving.computer or not g.won) then
+    require("warlords.diplomacy").scoreUpdate(g, leaving)
+  end
   local ending = game.checkEnd(g)
   if ending.message then g.log[#g.log + 1] = ending.message end
   g.ending = ending
@@ -487,6 +500,15 @@ function game.resolveAttack(g, stack, x, y)
                  city and city.index or history.IN_BATTLE, 0, h.name)
   end
   local mine = stack[1] and stack[1].owner
+  -- the defending side remembers who attacked it (ai_record_battle, 5db9:09d7)
+  do
+    local heroesLost = 0
+    for _, dd in ipairs(result.deadDefenders) do
+      if dd.type == armytype.HERO then heroesLost = heroesLost + 1 end
+    end
+    require("warlords.ai").recordBattle(g, defOwner, mine, x, y, heroesLost,
+      #result.deadDefenders, result.won and #defenders > 0, city ~= nil)
+  end
   for _, a in ipairs(result.deadAttackers) do
     history.tally(g, a, defOwner)
     if a.type == armytype.HERO then heroMod.dropItems(g, a, a.x, a.y) fallen(a) end
@@ -513,7 +535,6 @@ function game.resolveAttack(g, stack, x, y)
       loser.gold = math.max(0, loser.gold - 2 * loot)
       result.loot = loot
     end
-    city.previousOwner = (city.ownerIndex == winner.index) and rules.NEUTRAL or city.ownerIndex
     city.producing, city.countdown, city.vectorTo = nil, 0, nil
     city.ownerIndex = winner.index
     scn.setCityTiles(g.map, city)
@@ -521,9 +542,15 @@ function game.resolveAttack(g, stack, x, y)
     result.captured = city
     local history = require("warlords.history")
     history.deed(g, winner, history.WON, winner.index, city.index, winner.name)   -- 67cc:0af5
-    result.quest = questMod.event(g, winner, "occupy",
-                                  { city = city, stack = result.attackers })
-                   or result.quest
+    -- a computer's quest hero taking its quest city (5e97:038d) razes it
+    -- when that is the quest
+    local handled = winner.computer
+      and require("warlords.ai").questCapture(g, winner, city, result.attackers)
+    if not handled then
+      result.quest = questMod.event(g, winner, "occupy",
+                                    { city = city, stack = result.attackers })
+                     or result.quest
+    end
   end
 
   -- The survivors walk into the tile they just cleared -- but only as many as
@@ -597,7 +624,7 @@ local function makeRuins(g, city)
   -- colours of whoever held the city, so remember who that was.
   city.razedBy = city.ownerIndex or 0
   city.ownerIndex = nil
-  city.previousOwner = rules.NEUTRAL
+  city.claim = rules.NEUTRAL
   city.slots = {}
   city.producing, city.countdown, city.vectorTo = nil, 0, nil
   city.defence = 0

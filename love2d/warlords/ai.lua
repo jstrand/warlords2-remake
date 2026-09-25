@@ -1,486 +1,304 @@
--- A computer player.
+-- The computer players.
 --
--- The phase order, the city roles, the production purposes and the garrison
--- sizes are the original's (docs/re/ai.md). The *movement* decisions are not:
--- the original's assault groups and target scoring are documented but depend
--- on per-side statistics a remake has no reason to keep, so `ai.phaseAttack`
--- and `ai.phaseOrders` below are ours, and are marked as such. Everything that
--- claims a Ghidra address is decoded.
+-- A port of WARLORD2.EXE's AI (docs/re/ai.md). Every side has a block of AI
+-- data (warlords/ai/core.lua) filled at game start from its level and its
+-- character card (docs/formats/crd.md); each computer turn runs the
+-- original's nineteen phases in the original's order (ai_turn, 5db9:0000).
+--
+--   warlords/ai/core.lua      data, neighbours, the selection, flood, battles, walk
+--   warlords/ai/cities.lua    evaluate, garrisons, neutrals, production, vectoring
+--   warlords/ai/groups.lua    the assault groups and picking an enemy
+--   warlords/ai/moves.lua     standing orders, rescue, explorers, hero parties
+--   warlords/ai/heroes.lua    the hero phase
+--   warlords/ai/diplomacy.lua proposals
 
-local armytype = require("warlords.armytype")
-local combat   = require("warlords.combat")
-local move     = require("warlords.move")
-local rules    = require("warlords.rules")
+local aicard = require("warlords.aicard")
+local core   = require("warlords.ai.core")
 
 local ai = {}
 
--- city roles (docs/re/ai.md). 9, 10 and 12 are never assigned by the original
--- either -- its production switch has dead rows for them.
-ai.JUST_TAKEN, ai.TAKING_NEUTRAL, ai.NEAR_NEUTRAL = 1, 2, 3
-ai.WEAK_GARRISON, ai.BUILDING_UP, ai.GROUP_MEMBER = 4, 5, 6
-ai.GROUP_TARGET, ai.STOP, ai.EXPLORER = 7, 8, 13
+ai.core = core
 
--- role -> production purpose. ai_production, Ghidra 5db9:06d4.
-ai.PURPOSE_FOR_ROLE = {
-  [2] = 4, [3] = nil,     -- role 3 is decided by the Neutral Cities option
-  [4] = 2, [5] = 3, [6] = 3, [7] = 3, [8] = false,
-  [11] = 4, [13] = 4,
-}
+------------------------------------------------------------------ game start
 
-ai.MIN_GOLD_TO_BUILD = 40      -- below this, and with income under upkeep, stop
-ai.REBUILD_GOLD = 500          -- what "rebuilding" wants in hand
-
---------------------------------------------------------------------- helpers
-
-local function cityTiles(city)
-  local out = {}
-  for dx = 0, 1 do for dy = 0, 1 do out[#out + 1] = { city.x + dx, city.y + dy } end end
-  return out
+--- The level's built-in settings (59bf:0d7b). Only a side with no card on
+--- disk -- or a human, whose AI data nothing reads -- keeps them.
+local function levelDefaults(g, d, level)
+  local r = g.rng
+  if level == 0 then
+    d.rebuildLimit, d.cautious = 30, 1
+    d.dieHuman, d.dieWarlord, d.dieLord = r:dice(1, 4, 0), r:dice(1, 4, 0), r:dice(1, 4, 0)
+    d.maxGroups, d.solidarity = 1, 0
+    d.rebuildType, d.rebuildTypeRich = 3, 3
+    d.raze, d.sack, d.pillage, d.perCity, d.bonusHuman = 0, 0, 0, 0, 0
+    d.bonusWarlord, d.bonusLord, d.bonusKnight, d.poor, d.early = 0, 0, 0, 0, 0
+    d.humanShare = 80
+  elseif level == 1 then
+    d.rebuildLimit, d.cautious = 20, 0
+    d.dieHuman, d.dieWarlord, d.dieKnight = r:dice(1, 4, 0), r:dice(1, 4, 0), r:dice(1, 8, 0)
+    d.bold = true
+    d.solidarity, d.maxGroups = 0, 2
+    d.rebuildType, d.rebuildTypeRich = 6, 18
+    d.raze, d.sack, d.pillage, d.perCity, d.bonusHuman = 5, 10, 20, 1, 5
+    d.bonusKnight, d.bonusLord, d.bonusWarlord, d.poor, d.early = 0, 0, 0, 0, 0
+    d.humanShare = 35
+  else
+    d.rebuildLimit, d.cautious = 10, 0
+    d.dieHuman, d.dieLord, d.dieKnight = r:dice(1, 10, 0), r:dice(1, 8, 0), r:dice(1, 6, 0)
+    d.maxGroups, d.solidarity = 4, 1
+    d.bold = true
+    d.rebuildType, d.rebuildTypeRich = 7, 0
+    d.raze, d.sack, d.pillage, d.perCity, d.bonusHuman = 5, 10, 20, 5, 50
+    d.bonusKnight, d.bonusLord, d.bonusWarlord, d.poor, d.early = 0, 0, 0, 50, 1
+    d.humanShare = 35
+  end
 end
 
-local function distance(ax, ay, bx, by)
-  return math.max(math.abs(ax - bx), math.abs(ay - by))
+--- Fill a computer side's AI data from its card (59bf:0d7b), dice and all.
+local function fromCard(g, side, d, card)
+  local r = g.rng
+  d.dieHuman = r:dice(1, card.dieHuman, 0)
+  d.dieLord = r:dice(1, card.dieLord, 0)
+  d.dieKnight = r:dice(1, card.dieKnight, 0)
+  d.dieWarlord = r:dice(1, card.dieWarlord, 0)
+  d.maxGroups = math.max(0, math.min(core.MAX_GROUPS, card.groups))
+  d.solidarity = card.solidarity
+  if card.bold ~= 0 then d.bold = true end
+  d.cautious = card.cautious
+  d.rebuildType, d.rebuildTypeRich = card.rebuildType, card.rebuildTypeRich
+  d.rebuildLimit = card.rebuildLimit
+  d.raze, d.sack, d.pillage, d.perCity = card.raze, card.sack, card.pillage, card.perCity
+  d.bonusHuman, d.bonusWarlord = card.bonusHuman, card.bonusWarlord
+  d.bonusLord, d.bonusKnight = card.bonusLord, card.bonusKnight
+  d.poor, d.early = card.poor, card.early
+  d.humanShare = card.humanShare * 10 + r:dice(1, 10, 0)
+  -- the card's fight order replaces the side's
+  g.map.fightOrder[side.index] = card.fightOrder
 end
 
---- The cities next to a city, as the original's neighbour table would give
---- them: the six nearest, by map distance (5db9:0656 keeps a precomputed list).
-local function neighbours(g, city, n)
-  local out = {}
+--- A side's AI data at game start (ai_init_side, 59bf:084d).
+function ai.initSide(g, side)
+  local d = core.newData(g)
+  side.ai = d
+  local quick = g.map.options.quickStart ~= 0
   for _, c in ipairs(g.map.cities) do
-    if c ~= city then
-      out[#out + 1] = { city = c, d = distance(city.x, city.y, c.x, c.y) }
+    d.roles[c.index] = quick and core.WEAK or 0
+    d.held[c.index] = 0
+    d.flags[c.index] = g.map.options.hiddenMap ~= 0 and core.CF_UNSEEN or 0
+  end
+  local level = 2
+  if side.computer and (side.level == 0 or side.level == 1) then level = side.level end
+  levelDefaults(g, d, level)
+  if side.inUse and side.computer then
+    local card = g.dataDir and aicard.load(g.dataDir, level, side.card or 0)
+    if card then fromCard(g, side, d, card) end
+  end
+  return d
+end
+
+--- Split the cities no side starts with among the computer players, for the
+--- AI to think of as its own ground (623c:010b). Each side's capital is its
+--- own; then, round the computer sides in turn, each takes the city nearest
+--- its last one (or, half the time, nearest its capital) that is nobody's.
+--- With no computer player, every side but one picked at random shares out.
+local function shareOutCities(g)
+  for _, c in ipairs(g.map.cities) do c.claim = c.ownerIndex or core.NEUTRAL end
+  local shares, humans, computers = {}, 0, 0
+  local from = {}
+  for i = 0, 7 do
+    local s = g.map.sides[i + 1]
+    shares[i] = false
+    if s and s.inUse then
+      if s.computer then shares[i], computers = true, computers + 1
+      else humans = humans + 1 end
+      from[i] = { s.capX, s.capY }
+      local c = core.cityAt(g, s.capX, s.capY)
+      if c then c.claim = i end
     end
   end
-  table.sort(out, function(p, q) return p.d < q.d end)
-  local picked = {}
-  for i = 1, math.min(n or 6, #out) do picked[#picked + 1] = out[i].city end
-  return picked
+  if computers == 0 and humans ~= 0 then
+    local best, bestRoll
+    for i = 7, 0, -1 do
+      local s = g.map.sides[i + 1]
+      if s and s.inUse then
+        shares[i] = true
+        local roll = g.rng:dice(1, 100, 0)
+        if best == nil or bestRoll < roll then best, bestRoll = i, roll end
+      end
+    end
+    if best then shares[best] = false end
+  end
+  local turn
+  for i = 7, 0, -1 do if shares[i] then turn = i break end end
+  if not turn then return end
+  while true do
+    local x, y = from[turn][1], from[turn][2]
+    local pick, bestD
+    for i = #g.map.cities, 1, -1 do
+      local c = g.map.cities[i]
+      if core.standing(c) and c.claim == core.NEUTRAL then
+        local d = core.dist(x, y, c.x, c.y)
+        if not bestD or d < bestD then pick, bestD = c, d end
+      end
+    end
+    if not pick then break end
+    pick.claim = turn
+    local s = g.map.sides[turn + 1]
+    if g.rng:dice(1, 10, -1) < 5 then
+      from[turn] = { s.capX, s.capY }
+    else
+      from[turn] = { pick.x, pick.y }
+    end
+    repeat turn = (turn + 1) % 8 until shares[turn]
+  end
 end
 
---------------------------------------------------------------------- phases
+--- Set the computer players up for a new game: every side's AI data (all
+--- eight have it in the original), the cities' claims, and the diplomatic
+--- scores -- 1d8 each, and 400 more for a human when *I am the Greatest* is
+--- on (79fa:0000).
+function ai.startGame(g)
+  for _, s in ipairs(g.map.sides) do ai.initSide(g, s) end
+  shareOutCities(g)
+  for _, s in ipairs(g.map.sides) do
+    s.diploScore = g.rng:dice(1, 8, 0)
+    if g.greatest and not s.computer then s.diploScore = s.diploScore + 400 end
+  end
+end
 
---- evaluate: recount, resolve role 1, and keep the role bytes tidy.
--- ai_phase_evaluate, Ghidra 59bf:0000.
-function ai.phaseEvaluate(g, side)
-  local gameMod = require("warlords.game")
-  side.ai = side.ai or { roles = {} }
-  local roles = side.ai.roles
+------------------------------------------------------------------ the turn
 
-  local own, enemy, neutral = 0, 0, 0
-  for _, c in ipairs(g.map.cities) do
+--- ai_turn_setup (5db9:0386): the side's solidarity is put where the others
+--- can see it, the explorer roles lapse, and each city's "cleaned" mark goes.
+local function turnSetup(g, side)
+  local d = core.data(g, side)
+  side.aiSolidarity = d.solidarity
+  local quick = g.map.options.quickStart ~= 0 and g.map.options.hiddenMap ~= 0
+  for i = #g.map.cities, 1, -1 do
+    local c = g.map.cities[i]
     if c.ownerIndex == side.index then
-      own = own + 1
-      if roles[c.index] == nil then roles[c.index] = ai.JUST_TAKEN end
-    else
-      roles[c.index] = nil
-      if c.ownerIndex == nil then neutral = neutral + 1 else enemy = enemy + 1 end
-    end
-  end
-  side.ai.own, side.ai.enemy, side.ai.neutral = own, enemy, neutral
-
-  -- role 1 resolves by whether a neutral city is among the six neighbours
-  for _, c in ipairs(gameMod.sideCities(g, side)) do
-    if roles[c.index] == ai.JUST_TAKEN then
-      local near = false
-      for _, n in ipairs(neighbours(g, c)) do
-        if n.ownerIndex == nil then near = true end
+      local r = core.role(d, c)
+      if r == core.EXPLORER or r == core.EXPLORER2 then
+        core.setRole(d, c, g.turn < 5 and core.WEAK or core.STOP)
       end
-      roles[c.index] = near and ai.NEAR_NEUTRAL or ai.BUILDING_UP
-    end
-  end
-end
-
---- The garrison a city wants: 8 at war with a neighbour's owner, else 4 for
---- two or more foreign neighbours, 3 for one, 2 for none.
--- ai_wanted_garrison, Ghidra 5ca7:0a3d.
-function ai.wantedGarrison(g, side, city)
-  local foreign, atWar = 0, false
-  for _, n in ipairs(neighbours(g, city)) do
-    if n.ownerIndex ~= nil and n.ownerIndex ~= side.index then
-      foreign = foreign + 1
-      atWar = true              -- without diplomacy every other side is an enemy
-    end
-  end
-  if atWar then return 8 end
-  if foreign >= 2 then return 4 end
-  if foreign == 1 then return 3 end
-  return 2
-end
-
---- neutral: a city with a neutral neighbour hunts it, one without settles
---- down. ai_neutral_targets, Ghidra 57ea:00b5.
-function ai.phaseNeutral(g, side)
-  local gameMod = require("warlords.game")
-  local roles = side.ai.roles
-  for _, c in ipairs(gameMod.sideCities(g, side)) do
-    local near = false
-    for _, n in ipairs(neighbours(g, c)) do
-      if n.ownerIndex == nil then near = true end
-    end
-    local role = roles[c.index]
-    if near then
-      if role ~= ai.TAKING_NEUTRAL then roles[c.index] = ai.NEAR_NEUTRAL end
-    elseif role == ai.NEAR_NEUTRAL or role == ai.TAKING_NEUTRAL then
-      roles[c.index] = ai.WEAK_GARRISON
-    end
-  end
-end
-
---- Set each city's role from its garrison. ai_city_garrison_check, 5ca7:023f
---- decides the 4 / 5 / 8 split; **which** cities are allowed to stop is ours:
---- the original relies on its assault groups to keep roles moving, so a
---- straight port of the check leaves every city on role 8 and the side never
---- builds anything again.
-function ai.phaseGarrisons(g, side)
-  local gameMod = require("warlords.game")
-  local roles = side.ai.roles
-  for _, c in ipairs(gameMod.sideCities(g, side)) do
-    local here = #gameMod.armiesAt(g, c.x, c.y)
-    local want = ai.wantedGarrison(g, side, c)
-    if here >= rules.MAX_STACK then
-      roles[c.index] = ai.STOP             -- nothing more fits on the tile
-    elseif here < 2 then
-      roles[c.index] = ai.WEAK_GARRISON
-    elseif here < want then
-      roles[c.index] = ai.BUILDING_UP
-    elseif ai.hasTargetNear(g, side, c) then
-      roles[c.index] = ai.BUILDING_UP      -- there is still somewhere to go
-    else
-      roles[c.index] = ai.STOP
-    end
-  end
-end
-
---- Is there a city this side does not own within striking distance?
-function ai.hasTargetNear(g, side, city)
-  for _, c in ipairs(g.map.cities) do
-    if c.ownerIndex ~= side.index and not c.razed
-       and distance(city.x, city.y, c.x, c.y) <= 25 then
-      return true
-    end
-  end
-  return false
-end
-
---- Choose what every city builds. ai_production, Ghidra 5db9:06d4.
-function ai.phaseProduction(g, side)
-  local gameMod = require("warlords.game")
-  local cities = gameMod.sideCities(g, side)
-  for i = #cities, 1, -1 do
-    local c = cities[i]
-    -- stop the whole phase when the side is broke and running at a loss
-    if side.gold < ai.MIN_GOLD_TO_BUILD
-       and (side.income or 0) < (side.upkeepTotal or 0) then
-      return
-    end
-    if not c.producing then
-      local role = side.ai.roles[c.index] or ai.BUILDING_UP
-      local purpose = ai.PURPOSE_FOR_ROLE[role]
-      if role == ai.NEAR_NEUTRAL then
-        purpose = g.map.options.neutralCities ~= 0 and 2 or 1
-      elseif purpose == nil then
-        purpose = 3
+      if quick then
+        if g.turn == 1 then core.setRole(d, c, core.EXPLORER)
+        elseif g.turn < 3 then core.setRole(d, c, core.EXPLORER2) end
       end
-      if purpose then
-        local slot = rules.bestSlot(c.slots, purpose, g.types, side.enhanced)
-        -- purpose 4 wants a flier and may find none
-        if not slot and purpose == 4 then
-          slot = rules.bestSlot(c.slots, 3, g.types, side.enhanced)
-        end
-        if slot then
-          for n, s in ipairs(c.slots) do
-            if s == slot then gameMod.setProduction(g, c, n) end
-          end
-        end
-      end
+      core.clearCflag(d, c, core.CF_CLEANED)
     end
   end
 end
 
---------------------------------------------------------- movement (ours, not
---------------------------------------------------------- the original's)
+--- Play one computer turn: ai_turn (5db9:0000), phase by phase. `yield`, if
+--- given, is called between phases so a front end can breathe.
+function ai.playTurn(g, side, yield)
+  local cities = require("warlords.ai.cities")
+  local groups = require("warlords.ai.groups")
+  local moves  = require("warlords.ai.moves")
+  local heroes = require("warlords.ai.heroes")
+  local diplo  = require("warlords.ai.diplomacy")
+  local pause = yield or function() end
+  local hidden = g.map.options.hiddenMap ~= 0
 
---- What a city is worth attacking from here, or nil if it is too far.
-local function targetScore(g, side, from, city)
-  local d = distance(from.x, from.y, city.x, city.y)
-  if d > 25 then return nil end
-  local defenders = 0
-  for _, t in ipairs(cityTiles(city)) do
-    defenders = defenders + #require("warlords.game").armiesAt(g, t[1], t[2])
+  -- the computer always hires an offered hero it can afford (hero_offer_check
+  -- priced it; the side pays on recruiting)
+  if side.heroOffer and side.gold >= (side.heroOffer.price or 0) then
+    require("warlords.hero").recruit(g, side, side.heroOffer)
+    side.heroOffer = nil
   end
-  local score = 100 - d * 3 - defenders * 8
-  if city.ownerIndex == nil then score = score + 12 end   -- neutrals are cheaper
-  return score
+
+  -- every army starts the phases unmoved
+  for _, a in ipairs(g.armies) do
+    if a.owner == side.index then a.aiMoved = nil end
+  end
+
+  turnSetup(g, side)
+  diplo.phase(g, side);               pause("diplomacy")
+  heroes.phase(g, side);              pause("move hero")
+  if hidden then moves.search(g, side) end
+  pause("move search")
+  moves.heroParties(g, side);         pause("move explore")
+  groups.assault(g, side);            pause("assault")
+  moves.move(g, side);                pause("move #1")
+  moves.rescue(g, side);              pause("rescue")
+  cities.evaluate(g, side, side.index); pause("evaluate")
+  cities.clean(g, side);              pause("clean city")
+  cities.neutral(g, side);            pause("neutral")
+  moves.move(g, side);                pause("move #2")
+  cities.quickAttack(g, side)
+  if hidden then cities.updateHide(g, side) end
+  groups.assaultXX(g, side);          pause("assault XX")
+  moves.specials(g, side);            pause("specials")
+  cities.rebuild(g, side);            pause("rebuilding")
+  moves.lastRescue(g, side);          pause("last rescue")
+  cities.production(g, side);         pause("production")
+  cities.vectoring(g, side);          pause("vectoring")
 end
 
---- Give idle armies a standing order to march on a city. The original keeps
---- the order in the army record (+14/+15) and its assault groups decide the
---- target; the scoring here is ours.
-function ai.phaseOrders(g, side)
-  local gameMod = require("warlords.game")
-  for _, c in ipairs(gameMod.sideCities(g, side)) do
-    local here = gameMod.armiesAt(g, c.x, c.y)
-    local spare = {}
-    for i = 3, #here do                              -- always leave two behind
-      if not here[i].order then spare[#spare + 1] = here[i] end
-    end
-    if #spare > 0 then
-      local best, bestScore
-      for _, target in ipairs(g.map.cities) do
-        if target.ownerIndex ~= side.index and not target.razed then
-          local s = targetScore(g, side, c, target)
-          if s and (not bestScore or s > bestScore) then best, bestScore = target, s end
-        end
-      end
-      if best then
-        -- send them as one stack, up to the stack limit
-        for i = 1, math.min(#spare, rules.MAX_STACK) do
-          spare[i].order = { target = best.index }
-        end
-      end
-    end
-  end
-end
+------------------------------------------------------------------ hooks
 
---- Every walk the computer makes is reported here once it is made, so a
+--- Every walk a computer stack makes is reported here once it is made, so a
 --- front end can show it: `ai.onWalk(g, stack, result)`, if one is set.
 function ai.walked(g, stack, r)
   if ai.onWalk and r and (r.steps or 0) > 0 then ai.onWalk(g, stack, r) end
 end
 
---- March every army that has an order, and attack when it arrives.
-function ai.phaseMove(g, side)
-  local gameMod = require("warlords.game")
-
-  -- group the ordered armies by tile and target, so a stack moves together
-  local groups = {}
-  for _, a in ipairs(gameMod.sideArmies(g, side)) do
-    if a.order and not a.transit and (a.moves or 0) > 0 then
-      local k = ("%d,%d,%d"):format(a.x, a.y, a.order.target)
-      groups[k] = groups[k] or {}
-      local group = groups[k]
-      if #group < rules.MAX_STACK then group[#group + 1] = a end
+--- Where a hired hero appears for a computer (ai_hero_city, 5db9:0919): the
+--- city whose role scores best -- a rally city 1d100+100, one taking a
+--- neutral 1d100+50, one next to a neutral 1d100 -- or `default`.
+function ai.heroCity(g, side, default)
+  local d = core.data(g, side)
+  local best, bestScore = default, 0
+  for i = #g.map.cities, 1, -1 do
+    local c = g.map.cities[i]
+    if c.ownerIndex == side.index then
+      local r, score = core.role(d, c), 0
+      if r == core.RALLY then score = g.rng:dice(1, 100, 100)
+      elseif r == core.TAKING_NEUTRAL then score = g.rng:dice(1, 100, 50)
+      elseif r == core.NEAR_NEUTRAL then score = g.rng:dice(1, 100, 0) end
+      if bestScore < score then best, bestScore = c, score end
     end
   end
-
-  for _, stack in pairs(groups) do
-    local city = g.map.cities[stack[1].order.target + 1]
-    if not city or city.ownerIndex == side.index or city.razed then
-      for _, a in ipairs(stack) do a.order = nil end     -- the order is stale
-    else
-      ai.sendAt(g, side, stack, city)
-    end
-  end
+  return best
 end
 
---- Walk a stack at a city, attacking if it reaches it. One path per turn: the
---- walk stops when the stack runs out of movement anyway.
-function ai.sendAt(g, side, stack, city)
-  local gameMod = require("warlords.game")
-  if #stack == 0 or (stack[1].moves or 0) <= 0 then return end
-
-  local path = move.findPath(g, stack, stack[1].x, stack[1].y, city.x, city.y)
-  if not path then
-    for _, a in ipairs(stack) do a.order = nil end     -- nowhere to go
-    return
+--- A computer's quest hero has taken a city (5e97:038d, from the capture,
+--- 67cc:124a). When it is the quest's city the quest is done: a city to be
+--- razed is razed -- sacked if it is worth 400 -- and the side stops
+--- steering clear of it. Returns true when it razed or sacked, so the
+--- capture is not also taken for an occupation.
+function ai.questCapture(g, side, c, stack)
+  local quest = require("warlords.quest")
+  local q = side.quest
+  if g.map.options.quests == 0 or not q or q.target ~= c then return false end
+  if q.type ~= quest.OCCUPY and q.type ~= quest.RAZE then return false end
+  local withHero = false
+  for _, a in ipairs(stack or {}) do if a == q.hero then withHero = true end end
+  if not withHero then return false end
+  local d = core.data(g, side)
+  d.questsDone = d.questsDone + 1
+  d.questCity = nil
+  if q.type == quest.RAZE then
+    require("warlords.ai.groups").raze(g, side, c, true, core.select(g, stack))
+    return true
   end
-  if #path == 0 then return end
-
-  local r = move.walk(g, stack, path)
-  ai.walked(g, stack, r)
-  if r.stopped == "attack" then
-    local result = gameMod.resolveAttack(g, stack, r.attack.x, r.attack.y)
-    if result.won then
-      for _, a in ipairs(stack) do
-        if not result.deadByArmy[a] then a.order = nil end
-      end
-    end
-  end
+  return false
 end
 
---------------------------------------------------------------- diplomacy
-
-ai.LEADER_SHARE = 50           -- % of all cities that makes a side the target
-
---- Set this side's proposals. The original clears them all first and then
---- works through its grudge, threat, leader and assault tests
---- (docs/re/ai.md > Diplomacy); the two escalate-to-war branches in its own
---- grudge and threat tests are unreachable, so war only ever comes from the
---- last three. This keeps those three.
-function ai.phaseDiplomacy(g, side)
-  local gameMod = require("warlords.game")
-  local diplomacy = require("warlords.diplomacy")
-  if g.map.options.diplomacy == 0 then return end     -- everyone is already at war
-
-  local total = #g.map.cities
-  local leader, leaderCities = nil, 0
-  for _, s in ipairs(g.sides) do
-    if s.alive then
-      local n = #gameMod.sideCities(g, s)
-      if n > leaderCities then leader, leaderCities = s, n end
-    end
+--- A battle has been fought on a side's tile (ai_record_battle, 5db9:09d7):
+--- the defending side's data remembers who attacked it and what it cost.
+function ai.recordBattle(g, defender, attacker, x, y, heroesLost, armiesLost, allLost, cityTile)
+  if defender == nil or attacker == nil or defender == core.NEUTRAL then return end
+  local d = core.data(g, defender)
+  d.heroesKilled[attacker] = d.heroesKilled[attacker] + heroesLost
+  d.armiesKilled[attacker] = d.armiesKilled[attacker] + armiesLost
+  d.battles[attacker] = d.battles[attacker] + 1
+  if allLost then d.lost[attacker] = d.lost[attacker] + 1 end
+  if cityTile then
+    d.cityBattles[attacker] = d.cityBattles[attacker] + 1
+    if allLost then d.citiesLost[attacker] = d.citiesLost[attacker] + 1 end
   end
-
-  -- whoever we have armies marching on
-  local marchingOn = {}
-  for _, a in ipairs(gameMod.sideArmies(g, side)) do
-    if a.order then
-      local city = g.map.cities[a.order.target + 1]
-      if city and city.ownerIndex then marchingOn[city.ownerIndex] = true end
-    end
-  end
-
-  for _, other in ipairs(g.sides) do
-    if other.alive and other.index ~= side.index then
-      local wantWar = marchingOn[other.index]
-      if leader == other and math.floor(leaderCities * 100 / math.max(1, total)) > ai.LEADER_SHARE then
-        wantWar = true
-      end
-      diplomacy.propose(g, side.index, other.index,
-                        wantWar and diplomacy.WAR or diplomacy.PEACE)
-    end
-  end
-end
-
----------------------------------------------------------------- hero errands
-
---- Send each hero, with the stack it stands in, at the nearest unsearched
---- ruin. The scoring is the original's (ai_send_hero_party, Ghidra 5ad0:11a6):
---- 215 - d inside 15 tiles, 90 - d inside 40, nothing further.
-function ai.phaseHeroes(g, side)
-  local gameMod = require("warlords.game")
-  local siteMod = require("warlords.site")
-  local taken = {}
-
-  for _, a in ipairs(gameMod.sideArmies(g, side)) do
-    if a.type == armytype.HERO and not a.transit and (a.moves or 0) > 0 then
-      -- a temple is worth a visit when the side has no quest in hand
-      local wantTemple = g.map.options.quests ~= 0 and side.quest == nil
-      local best, bestScore
-      for _, s in ipairs(g.map.sites) do
-        local worth = s.content ~= siteMod.TEMPLE or wantTemple
-        if not s.searched and not taken[s] and worth then
-          local d = distance(a.x, a.y, s.x, s.y)
-          local score = d < 15 and (215 - d) or (d < 40 and (90 - d) or nil)
-          if score and (not bestScore or score > bestScore) then best, bestScore = s, score end
-        end
-      end
-      if best then
-        taken[best] = true
-        -- the hero takes one companion, as the original does
-        local stack = { a }
-        for _, mate in ipairs(gameMod.armiesAt(g, a.x, a.y)) do
-          if mate ~= a and mate.owner == side.index and #stack < 2 then
-            stack[#stack + 1] = mate
-          end
-        end
-        local path = move.findPath(g, stack, a.x, a.y, best.x, best.y)
-        if path and #path > 0 then
-          ai.walked(g, stack, move.walk(g, stack, path))
-          local found = gameMod.searchHere(g, stack)
-          if found and found.kind == "killed" then break end   -- the hero is gone
-        end
-        taken[best] = true
-      end
-    end
-  end
-end
-
----------------------------------------------------------------- exploring
-
---- Walk spare stacks towards the edge of what the side has seen.
---
--- Ours, not the original's: it has dedicated explore and search phases and
--- marks whole cities as explorers (roles 11 and 13), which this does not
--- reproduce. It shows: with *Hidden Map* on the computer players expand much
--- more slowly than they do with it off, because they spend too long feeling
--- their way around. Worth replacing with the real phases before anyone plays
--- a fog game seriously.
-function ai.phaseExplore(g, side)
-  if g.map.options.hiddenMap == 0 then return end
-  local gameMod = require("warlords.game")
-
-  -- the frontier: seen tiles that touch something unseen
-  local frontier = {}
-  local mask = (g.explored or {})[side.index] or {}
-  for k in pairs(mask) do
-    local x, y = k % g.map.width, math.floor(k / g.map.width)
-    local edge = false
-    for dx = -1, 1 do
-      for dy = -1, 1 do
-        local nx, ny = x + dx, y + dy
-        if nx >= 0 and ny >= 0 and nx < g.map.width and ny < g.map.height
-           and not gameMod.seen(g, side.index, nx, ny) then
-          edge = true
-        end
-      end
-    end
-    if edge then frontier[#frontier + 1] = { x = x, y = y } end
-  end
-  if #frontier == 0 then return end
-
-  -- who can go: anything already in the field without an order, plus the
-  -- surplus in each city beyond the two that hold it
-  local scouts = {}
-  local inCity = {}
-  for _, c in ipairs(gameMod.sideCities(g, side)) do
-    local here = gameMod.armiesAt(g, c.x, c.y)
-    for i, a in ipairs(here) do
-      inCity[a] = true
-      -- the attack phase has first call on the third army; only the fourth
-      -- and beyond are spare enough to go wandering
-      if i >= 4 and not a.order and (a.moves or 0) > 0 then scouts[#scouts + 1] = a end
-    end
-  end
-  for _, a in ipairs(gameMod.sideArmies(g, side)) do
-    if not inCity[a] and not a.transit and not a.order and (a.moves or 0) > 0 then
-      scouts[#scouts + 1] = a
-    end
-  end
-
-  for _, scout in ipairs(scouts) do
-    -- head for the *far* edge of what we know, so a scout covers ground
-    -- instead of shuffling one tile at a time; keep trying, because a
-    -- frontier tile may be across water
-    local candidates = {}
-    for _, f in ipairs(frontier) do
-      local d = distance(scout.x, scout.y, f.x, f.y)
-      if d > 0 then candidates[#candidates + 1] = { f = f, d = d } end
-    end
-    table.sort(candidates, function(p, q) return p.d > q.d end)
-    for i = 1, math.min(#candidates, 8) do
-      local f = candidates[i].f
-      local path = move.findPath(g, { scout }, scout.x, scout.y, f.x, f.y)
-      if path and #path > 0 then
-        ai.walked(g, { scout }, move.walk(g, { scout }, path))
-        break
-      end
-    end
-  end
-end
-
---------------------------------------------------------------------- the turn
-
---- Play one computer turn. The phase order is the original's, minus the
---- phases a remake has no use for (docs/re/ai.md > Turn pipeline).
-function ai.playTurn(g, side)
-  local heroMod = require("warlords.hero")
-
-  -- the computer always hires an offered hero it can afford (5db9:0919)
-  if side.heroOffer and side.gold >= (side.heroOffer.price or 0) then
-    heroMod.recruit(g, side, side.heroOffer)
-    side.heroOffer = nil
-  end
-
-  ai.phaseDiplomacy(g, side)
-  ai.phaseEvaluate(g, side)
-  ai.phaseHeroes(g, side)
-  ai.phaseOrders(g, side)
-  ai.phaseMove(g, side)
-  ai.phaseExplore(g, side)
-  ai.phaseNeutral(g, side)
-  ai.phaseGarrisons(g, side)
-  ai.phaseProduction(g, side)
 end
 
 return ai

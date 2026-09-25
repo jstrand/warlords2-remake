@@ -31,7 +31,7 @@ type above 2000 gold (9, built in 0) and the three level bonuses.
 | offset | → AI data | meaning (reader) |
 |---|---|---|
 | `0x08` | `+0x24a` | assault groups at once (`563e`, `5f19`, `5db9:085f`) |
-| `0x0a` | `+0x0c` bit 0 | **accepts peace** when not at war with the proposer's enemies (`558d:0851`) |
+| `0x0a` | `+0x0c` bit 0 | **bold**: may attack a side it is at peace or uneasy with, when at war with nobody else (`558d:0851`). A card can only set it; the Lord and Warlord defaults already have it |
 | `0x0e`–`0x2a` | `.SCN 0x60b + 29·side` | the side's **fight order**, 29 army types |
 | `0x2b` | `+0x48` | **cautious**: no *quick attack* phase (`5e97:04ba`), one army more before attacking a neutral (`57ea:03aa`, `0b19`), no follow-up from a newly taken neutral (`57ea:06c7`) |
 | `0x2d` | `+0x10` | army type *rebuilding* buys below 2000 gold (`5db9:0af2`) |
@@ -67,7 +67,7 @@ at least two cities left in the plan and never hits a capital
 
 Rebuild types are army-type indices. `dv` columns are dice sizes.
 
-| card | groups | peace | cautious | raze/sack/pillage ‰ | per city | own-level bonus | poor | early | human % | solidarity | name |
+| card | groups | bold | cautious | raze/sack/pillage ‰ | per city | own-level bonus | poor | early | human % | solidarity | name |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | K000 | 1 | – | yes | 20/0/0 | 0 | 0 | 0 | – | 8 | – | Standard Knight |
 | K001–K008 | 1 | – | yes | 20/0/0 | 0 | 0 | 0 | – | 8 | – | *differ from K000 only in rebuild types and fight order* |
@@ -76,6 +76,9 @@ Rebuild types are army-type indices. `dv` columns are dice sizes.
 | L004 | 2 | – | – | 0/50/100 | 1 | 0 | 100 | – | 5 | – | Rebecca the Rapacious |
 | W000 | 4 | yes | – | 5/10/20 | 5 | 0 | 50 | yes | 3 | yes | Standard Warlord |
 | W001–W008 | 4 | yes | – | 4–5/8–12/16–20 | 1–5 | 0 | 20–50 | yes | 3 | yes | Attila the Hun … William the Wily |
+
+The *bold* column is the card's own bit; Lords and Warlords are bold
+whatever it says, since their level's defaults set the bit first.
 
 ## What a level changes, in sum
 

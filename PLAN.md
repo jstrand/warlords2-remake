@@ -117,19 +117,18 @@ A scenario plays to victory on its own.
 `rules.bugs` reproduces the original's faults, one flag per fault the engine
 actually reads.
 
-Left in the engine itself: the computer player. Its phase order, city roles,
-production and garrisons are the original's, but its targeting, diplomacy
-and movement are the remake's own, and it **ignores the level entirely**.
-In the original a level is its character card (`CARDS/*.CRD`,
-`docs/formats/crd.md`): assault groups at once, peace, caution with
-neutrals, raze/sack/pillage, when to turn on a leading human, computer
-solidarity, and the fight order. *I am the Greatest* also changes the
-game, not just the setup (`docs/re/ai.md` › I am the Greatest); here it
-stops at the setup screen. Still missing as well: the assault groups,
-`ai_pick_enemy`, *rebuilding*, *quick attack*, exploring as well as the
-original (with *Hidden Map* on it expands far too slowly), the starting
-diplomatic score (1d8, not read from the `.SCN`), and flags for the two
-decoded AI faults whose phases have no counterpart here yet.
+The computer players are a port of the original's AI (`love2d/warlords/ai.lua`
+and `ai/`): all nineteen phases of `ai_turn` in order, the per-side AI data,
+the character cards (`docs/formats/crd.md`) and the level defaults, the
+assault groups and `ai_pick_enemy`, diplomacy with the claims and computer
+solidarity, *I am the Greatest*, clean city's garrisons, neutrals, explorers,
+hero parties and the hero phase, rebuilding, quick attack, the sage, and
+the battle statistics. Their paths ignore the fog, as the original's do, so
+*Hidden Map* games expand at the original's pace. The original's quirks are
+kept as they are, not flagged (`docs/re/ai.md` › Found while porting it).
+
+Left in the engine itself: nothing known. Checking the AI's play against
+DOSBox is Phase 3.5 item 4's work.
 
 ### Phase 3.5 — Interface — **nearly done**
 
@@ -183,8 +182,9 @@ Left:
    generator.
 3. The computer players' characters (setup dialog 27, `7bab:16ea`, Random
    Characters `2051`, Recall Options `2229`), and TWARLORD's trigger
-   (`7bab:00d1`). The cards themselves are decoded (`docs/formats/crd.md`);
-   the dialog only picks the number at `.SCN` `0x00e0`.
+   (`7bab:00d1`). The cards are decoded and played (`docs/formats/crd.md`);
+   the dialog only picks the number, which the setup already carries into
+   the game (each side's `card`, reset to 0 as the original resets it).
 4. Checks against captures of the original for the screens added since the
    banner and hero offer, which were compared pixel for pixel. Only four
    native captures exist (`erythea_t1_banner`, `erythea_t1_hero`,
@@ -201,7 +201,7 @@ original's four operations on the slots (`89e0:157d`/`0963` toggle,
 and a group that moves leaves the rest standing.
 
 Engine notes found on the way: the long ERYTHEA run of `test/ui.lua`
-(150 rounds) takes hours in the computer players' pathfinding; medals
+(150 rounds) now takes seconds; medals
 (`67cc:2274`, army +0x0a) are not modelled, so View › Stack shows none; the
 Stack view sums every hero's bonus where the battle takes the strongest —
 check which the battle really does; `quest.lua` sets a revealed site's mask

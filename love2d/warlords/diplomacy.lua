@@ -34,15 +34,16 @@ diplomacy.RATING_RANKS = {
 
 local function key(a, b) return a * 8 + b end
 
---- Set every pair: war if the Diplomacy option is off, peace if it is on.
--- diplomacy_init, Ghidra 484e:11bd.
+--- Set every pair: war if the Diplomacy option is off, peace if it is on,
+--- and every proposal to match. diplomacy_init, Ghidra 484e:11bd.
 function diplomacy.init(g)
   local start = g.map.options.diplomacy ~= 0 and diplomacy.PEACE or diplomacy.WAR
   g.diplomacy = { state = {}, proposal = {} }
   for a = 0, 7 do
     for b = 0, 7 do
-      g.diplomacy.state[key(a, b)] = a == b and diplomacy.PEACE or start
-      g.diplomacy.proposal[key(a, b)] = nil
+      local v = a == b and diplomacy.PEACE or start
+      g.diplomacy.state[key(a, b)] = v
+      g.diplomacy.proposal[key(a, b)] = v
     end
   end
 end
@@ -66,61 +67,83 @@ function diplomacy.mayAttack(g, a, b)
   return diplomacy.state(g, a, b) ~= diplomacy.PEACE
 end
 
---- Propose a state to another side. It takes effect at the start of this
---- side's next turn.
+--- Propose a state to another side. The proposal stands until changed; it
+--- is acted on at the start of each of this side's turns.
 function diplomacy.propose(g, a, b, state)
   if not g.diplomacy or a == b then return end
   g.diplomacy.proposal[key(a, b)] = state
 end
 
+--- The state a side proposes to another -- the current state when nothing
+--- was ever proposed.
 function diplomacy.proposal(g, a, b)
-  return g.diplomacy and g.diplomacy.proposal[key(a, b)]
+  if not g.diplomacy then return nil end
+  local p = g.diplomacy.proposal[key(a, b)]
+  if p == nil then p = diplomacy.state(g, a, b) end
+  return p
 end
 
 --------------------------------------------------------------- applying them
 
 --- Apply one side's proposals. Returns a list of messages.
 --
--- Escalating takes effect at once for both sides, and the other side's
--- proposal is raised to match. De-escalating only lands when the other side's
--- proposal is no more hostile than this one. diplomacy_apply, Ghidra 484e:0db3.
+-- A proposal more hostile than the state takes effect at once, for both
+-- sides, and the other side's proposal is raised to the new state if it was
+-- below it. One less hostile only lands when the other side's proposal is no
+-- more hostile. Proposals are not used up. diplomacy_apply, Ghidra
+-- 484e:0db3.
 function diplomacy.apply(g, side)
   if not g.diplomacy then return {} end
   local messages = {}
   local a = side.index
 
   for b = 0, 7 do
-    local want = g.diplomacy.proposal[key(a, b)]
-    if want and b ~= a and g.map.sides[b + 1] and g.map.sides[b + 1].inUse then
+    local other = g.map.sides[b + 1]
+    if b ~= a and other then
       local now = diplomacy.state(g, a, b)
-      local theirs = g.diplomacy.proposal[key(b, a)]
-      local other = g.map.sides[b + 1]
-
-      if want > now then                              -- escalation: at once
-        g.diplomacy.state[key(a, b)] = want
-        g.diplomacy.state[key(b, a)] = want
-        if theirs == nil or theirs < want then
-          g.diplomacy.proposal[key(b, a)] = want
-        end
-        if want == diplomacy.WAR then
-          local history = require("warlords.history")
-          history.deed(g, side, history.WAR, a, b, "")          -- 484e:0f15
-          messages[#messages + 1] = ("War declared with %s!"):format(other.name)
-        end
-      elseif want < now then                          -- de-escalation: mutual
-        if theirs ~= nil and theirs <= want then
-          diplomacy.addScore(g, side, now, want)
+      local want = diplomacy.proposal(g, a, b)
+      if want ~= now then
+        if want > now then                            -- escalation: at once
           g.diplomacy.state[key(a, b)] = want
           g.diplomacy.state[key(b, a)] = want
-          local history = require("warlords.history")
-          history.deed(g, side, history.PEACE, a, b, "")         -- 484e:1027
-          messages[#messages + 1] = ("Peace negotiated with %s!"):format(other.name)
+          if diplomacy.proposal(g, b, a) < want then
+            g.diplomacy.proposal[key(b, a)] = want
+          end
+          if want == diplomacy.WAR then
+            local history = require("warlords.history")
+            history.deed(g, side, history.WAR, a, b, "")          -- 484e:0f15
+            messages[#messages + 1] = ("War declared with %s!"):format(other.name)
+          end
+        elseif diplomacy.proposal(g, b, a) <= want then -- de-escalation: mutual
+          g.diplomacy.state[key(a, b)] = want
+          g.diplomacy.state[key(b, a)] = want
+          if want == diplomacy.PEACE then
+            local history = require("warlords.history")
+            history.deed(g, side, history.PEACE, a, b, "")         -- 484e:1027
+            messages[#messages + 1] = ("Peace negotiated with %s!"):format(other.name)
+          end
         end
       end
-      g.diplomacy.proposal[key(a, b)] = nil
     end
   end
   return messages
+end
+
+--- At the end of a side's turn, its peace overtures count against it
+--- (diplomacy_score_update, 484e:1063, from the end of ai_turn and of a
+--- human's turn): every proposal less hostile than both the state and the
+--- other side's proposal adds to its diplomatic score.
+function diplomacy.scoreUpdate(g, side)
+  if not g.diplomacy then return end
+  local a = side.index
+  for b = 0, 7 do
+    if b ~= a and g.map.sides[b + 1] then
+      local p, st = diplomacy.proposal(g, a, b), diplomacy.state(g, a, b)
+      if p < st and p < diplomacy.proposal(g, b, a) then
+        diplomacy.addScore(g, side, st, p)
+      end
+    end
+  end
 end
 
 --- What a peaceful move adds to the **diplomatic score** (484e:1063):

@@ -22,8 +22,8 @@ A level does nothing by itself. At game start (`ai_init_side`, `59bf:084d` →
 side's **character card** (`CARDS/K|L|W nnn.CRD`, number at `.SCN`
 `0x00e0 + 2·side`) overwrites every one of them, and the side's fight order
 too. So a Knight, Lord or Warlord is whatever its card says: how many
-assault groups run at once, whether it accepts peace, how carefully it takes
-neutrals, whether it razes, sacks or pillages what it takes, how soon it
+assault groups run at once, whether it attacks sides it is not at war with,
+how carefully it takes neutrals, whether it razes, sacks or pillages what it takes, how soon it
 turns on a human who is winning, and whether it stands with the other
 computers. The card layout and all 27 cards are in
 [`../formats/crd.md`](../formats/crd.md).
@@ -38,7 +38,7 @@ In outline, the Standard cards:
 | | Knight | Lord | Warlord |
 |---|---|---|---|
 | assault groups at once | 1 | 3 | 4 |
-| accepts peace | no | no | yes |
+| attacks a side it is not at war with (`558d:0851`) | no | yes | yes |
 | careful with neutrals, no *quick attack* | yes | no | no |
 | raze / sack / pillage what it takes (‰) | 20 / 0 / 0 | 1 / 2 / 3 +1 per city | 5 / 10 / 20 +5 per city, +50 sack/pillage when poor |
 | razes or sacks a human's city before turn 10 | no | no | yes |
@@ -98,7 +98,7 @@ Each side has a `0x42c`-byte block, held in a memory handle at
 (`docs/formats/save.md`). Fields seen so far:
 
 - `+0x02`, `+0x04`, `+0x06`, `+0x08`: cities owned by this side, by an enemy,
-  neutral, and enemy-or-neutral but **known** — recounted by *evaluate*
+  neutral, and not yet seen — recounted by *evaluate*
 - `+0x56 + city`: a per-city **role** byte, 1–13; drives production purpose
   and vectoring (below)
 - `+0xba + city`: turns this side has held the city
@@ -308,8 +308,9 @@ standing on one tile — filtered by the two halves of the army record's order
 byte `+14` and by a minimum movement allowance, then sorted by `623c:14d3`.
 `ai_send_hero_party` (`5ad0:11a6`) then picks where that stack should go:
 
-1. Find the **hero** in the stack and the first army with the special flag
-   `DS:0668 + 6·type`; with a hero but no companion it gives up (returns 1).
+1. Find the **hero** in the stack and the first army that **flies**
+   (`army_move_flags`, `DS:0664 + 6·type`); with a hero but no flier it gives
+   up (returns 1).
    The stack is cut down to exactly those two, and both armies' orders are
    cleared.
 2. Score every **site**: it must be reachable (`623c:16ae`), stand on a site
@@ -348,6 +349,62 @@ nearest unexplored ruin, and home to a city when there is none.
   data's per-city byte that aren't an assault target: if the stack on the
   tile east of the city can be sent and arrives, and the city isn't building
   anything, the city becomes an **explorer** (role 13).
+
+## Found while porting it
+
+The engine's port is `love2d/warlords/ai.lua` and `love2d/warlords/ai/`.
+Writing it turned up the following, most of it read from the disassembly
+where the decompile had lost arguments.
+
+- **Distances** are `map_distance` (`2012:1199`): `floor(sqrt(dx² + dy²))`,
+  not the larger of the two steps.
+- **Neighbours.** The shared block (`0x4b0` bytes) is each city's six
+  neighbours and their path lengths, built once at game start
+  (`623c:0398`): a land flood from the city (radius 45, then 60 if that
+  finds nothing) with every other city blocking, nearest first, except
+  that once three lie west, east, north or south of it, more on that side
+  count 50 farther (`623c:0749`).
+- **Claims.** City `+0x2f` is not a previous owner: nothing writes it on a
+  capture. At game start every city gets its owner's index and then the
+  computers share out the rest, round the table, each taking the city
+  nearest its last pick (or, half the time, its capital) (`623c:010b`); each
+  diplomacy phase claims one more within 40 of the capital (`558d:0917`);
+  razing clears it. Diplomacy's `swapped` count and `ai_pick_enemy`'s
+  "cities we hold that it used to own" read it.
+- **Odds.** Every "chance of winning" is the battle fought `+0x20` = 10 times
+  without effect (`623c:15c5`).
+- **Flood distances.** `1555:1ab9` runs the pathfinder's wavefront from a
+  point within a square radius; a city's distance is the least over the
+  twelve tiles round its footprint (`59bf:0a85`), cost + 1, unreached 30001.
+- **Fog.** `path_prepare_grid` (`1555:08bf`) blocks unseen tiles only on a
+  human's turn: computer players path straight through them.
+- **The walk.** A computer stack's `move_stack_to` (`1a8b:0001`) re-plans at
+  an enemy city (`623c:1771`): it attacks only a neutral city, a side it is at
+  war with, or -- one time in four -- a human's, and only with better than 51%;
+  otherwise it turns to the best city in 15 (`623c:1885`: `400 − d + 10 ×
+  odds` within this turn's move, `100 − d + 5 × odds` with a fair chance).
+  A group's stack with no path to its target is **disbanded** (`563e:0f1b`),
+  as is an idle army out of town with nowhere to go (`5ad0:0c5b`).
+- **Clean city** (`5ca7:023f`) moves the armies between the city's four
+  tiles: the "keepers" (by `DS:0824`, chosen by `5ca7:0b5c`) on (x+1, y),
+  then eight to a tile on (x, y), (x, y+1), (x+1, y+1). For a rally city
+  the keepers are the strike force -- a hero, fliers and the special types
+  first -- and `563e:06e9` launches exactly that tile. It also disbands
+  beyond 24 armies, and beyond heroes + magic + 4 when the side is broke.
+- **`+0x0c` bit 0** is read only by `558d:0851`: it lets the side attack a
+  side it is at peace or uneasy with, provided it is at war with nobody else.
+  The Lord and Warlord defaults set it and a card can only add it, so only
+  Knights hold back.
+- **Dead code.** `558d:0a6e` reads the solidarity mark of *human* sides,
+  which only a computer turn ever sets. `563e:16fd` collects the follow-up
+  stack by passing the group's wanted size as the order number, so no
+  stack ever matches. `ai_pick_enemy`'s capital override compares the
+  holder with the per-side group counts rather than the groups' targets.
+- **Diplomatic score.** `diplomacy_score_update` (`484e:1063`) runs at the end
+  of every turn -- `ai_turn` for a computer, `8065:2074` for a human -- and
+  proposals are never used up: they stand until changed.
+- **The sage** gives a computer the map round the unseen neutral cluster
+  next to its cities (`5e97:0080`), or else the gem.
 
 **Debug output.** `5db9:0dc9` receives every phase string. It's a 5-byte stub
 in the shipped game, so the debug log is compiled out. The `auto_str_*` AI

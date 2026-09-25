@@ -100,7 +100,8 @@ local function newSetup(G, sc)
   for i = 0, 9 do st.options[i] = map.options[OPTION_KEYS[i]] or 0 end
   for _, s in ipairs(map.sides) do
     st.sides[s.index] = { inUse = s.inUse, name = s.name, colour = s.colour, edge = s.edge,
-                          computer = s.computer, level = s.computer and (s.level or 0) or 0 }
+                          computer = s.computer, level = s.computer and (s.level or 0) or 0,
+                          card = s.card or 0 }
   end
   return st
 end
@@ -268,6 +269,7 @@ local function openSetup(G, st, begin, back)
         if not s.computer then s.computer, s.level = true, 0
         elseif s.level == 3 then s.computer, s.level = false, 0
         else s.level = s.level + 1 end
+        s.card = 0                    -- the level's Standard character
       end
     elseif id == 141 then
       local playing = 0
@@ -283,7 +285,11 @@ local function openSetup(G, st, begin, back)
       st.greatest = true
       for i = 0, 7 do
         local s = st.sides[i]
-        if s and s.inUse then s.computer, s.level = true, 2 end
+        if s and s.inUse then
+          -- a side that was not a Warlord gets the Standard Warlord card
+          if not (s.computer and s.level == 2) then s.card = 0 end
+          s.computer, s.level = true, 2
+        end
       end
     elseif id == 144 then st.greatest = false
     elseif id >= 145 and id <= 147 then
@@ -367,7 +373,8 @@ end
 
 ------------------------------------------------------------ the start menu
 
---- Open the start menu. `start(scenarioDir, options, sides)` begins a game;
+--- Open the start menu. `start(scenarioDir, options, sides, extra)` begins a
+--- game (`extra.greatest`: I am the Greatest);
 --- `loaded(g)` takes a saved one.
 function M.open(start, loaded)
   local G = kit.G
@@ -428,10 +435,10 @@ function M.open(start, loaded)
         for i = 0, 9 do options[OPTION_KEYS[i]] = s.options[i] end
         for i = 0, 7 do
           local e = s.sides[i]
-          if e then sides[i] = { computer = e.computer, level = e.level,
+          if e then sides[i] = { computer = e.computer, level = e.level, card = e.card,
                                  off = e.computer and e.level == 3 } end
         end
-        start(s.sc.dir:upper(), options, sides)
+        start(s.sc.dir:upper(), options, sides, { greatest = s.greatest })
       end, reopen)
     end
   end

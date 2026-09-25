@@ -113,6 +113,8 @@ function hero.offer(g, side)
 
   local city = g.rng:pick(cities)
   if not city then return nil end
+  -- a computer's hero appears where its AI wants one (ai_hero_city, 5db9:0919)
+  if side.computer then city = require("warlords.ai").heroCity(g, side, city) end
   return named { price = price, city = city }
 end
 
