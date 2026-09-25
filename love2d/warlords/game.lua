@@ -370,6 +370,7 @@ function game.startTurn(g, side)
     eliminate(g, side)
     return false
   end
+  game.tidyExplored(g, side)
   local heroMod = require("warlords.hero")
   for _, m in ipairs(require("warlords.diplomacy").apply(g, side)) do
     g.log[#g.log + 1] = m
@@ -676,6 +677,78 @@ function game.reveal(g, side, x, y, flying)
   return found
 end
 
+-- The hidden map's edges. An unseen tile is drawn with a cell of
+-- HIDDEN.PCK over it, picked by which of its eight neighbours are unseen too
+-- (8611:0f6f): bit 0 north, then clockwise (4125:2eda / 2eea), a tile off the
+-- map counting as unseen. 4125:2d56 turns the pattern into the cell -- 0-13
+-- the sheet's, 14 all black, 255 a shape the sheet has no cell for.
+game.FOG_DX = { 0, 1, 1, 1, 0, -1, -1, -1 }
+game.FOG_DY = { -1, -1, 0, 1, 1, 1, 0, -1 }
+game.FOG_CELL = {
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 10,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 3, 3, 3, 12,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 10,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 3, 3, 3, 12,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 10,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 3, 3, 3, 12,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 10,
+  4, 4, 4, 4, 4, 4, 4, 13, 4, 4, 4, 4, 8, 8, 8, 9,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 10,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 3, 3, 3, 12,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 255, 255, 255, 10,
+  255, 255, 255, 255, 255, 255, 255, 10, 255, 255, 255, 255, 3, 3, 3, 12,
+  255, 11, 255, 11, 255, 11, 255, 1, 255, 11, 255, 11, 255, 11, 255, 1,
+  255, 11, 255, 11, 255, 11, 255, 1, 255, 11, 255, 11, 3, 6, 3, 2,
+  255, 11, 255, 11, 255, 11, 255, 1, 255, 11, 255, 11, 255, 11, 255, 1,
+  4, 5, 4, 5, 4, 5, 4, 0, 4, 5, 4, 5, 8, 7, 8, 14,
+}
+game.FOG_NONE, game.FOG_BLACK = 255, 14
+
+--- The HIDDEN.PCK cell over (x, y) for this side, or nil for a tile it has
+--- seen (or one whose edge has no cell).
+function game.fogCell(g, side, x, y)
+  if game.seen(g, side, x, y) then return nil end
+  local bits = 0
+  for i = 1, 8 do
+    local nx, ny = x + game.FOG_DX[i], y + game.FOG_DY[i]
+    if nx < 0 or ny < 0 or nx >= g.map.width or ny >= g.map.height
+       or not game.seen(g, side, nx, ny) then
+      bits = bits + 2 ^ (i - 1)
+    end
+  end
+  local cell = game.FOG_CELL[bits + 1]
+  if cell == game.FOG_NONE then return nil end
+  return cell
+end
+
+--- The start of a turn tidies the hidden map (8611:1558, from 8cc6:00cd):
+--- twice over, column by column, an unseen tile whose edge the sheet cannot
+--- draw is simply uncovered.
+function game.tidyExplored(g, side)
+  if g.map.options.hiddenMap == 0 then return end
+  if type(side) == "table" then side = side.index end
+  g.explored = g.explored or {}
+  g.explored[side] = g.explored[side] or {}
+  local mask, W, H = g.explored[side], g.map.width, g.map.height
+  for _ = 1, 2 do
+    for x = 0, W - 1 do
+      for y = 0, H - 1 do
+        local k = y * W + x
+        if not mask[k] then
+          local bits = 0
+          for i = 1, 8 do
+            local nx, ny = x + game.FOG_DX[i], y + game.FOG_DY[i]
+            if nx < 0 or ny < 0 or nx >= W or ny >= H or not mask[ny * W + nx] then
+              bits = bits + 2 ^ (i - 1)
+            end
+          end
+          if game.FOG_CELL[bits + 1] == game.FOG_NONE then mask[k] = true end
+        end
+      end
+    end
+  end
+end
+
 --- Uncover everything a side can already see: its cities and its armies.
 function game.revealStart(g, side)
   if g.map.options.hiddenMap == 0 then return end
@@ -685,6 +758,7 @@ function game.revealStart(g, side)
   for _, a in ipairs(game.sideArmies(g, side)) do
     if not a.transit then game.reveal(g, side.index, a.x, a.y, false) end
   end
+  game.tidyExplored(g, side)
 end
 
 ------------------------------------------------------------- end of the game

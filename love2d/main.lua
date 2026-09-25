@@ -158,6 +158,14 @@ function love.load(arg)
   G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6
   G.bagQuad = love.graphics.newQuad(64, 0, 32, 29, 144, 246)
   G.blastQuad = love.graphics.newQuad(32, 0, 32, 29, 144, 246)   -- 6a35:0000
+  -- HIDDEN.PCK: the hidden map's edges, fourteen 40 x 40 cells 48 apart in
+  -- two rows 41 apart; colour 1 is where the map shows through
+  G.fogImg = pck.toImage(dataDir .. "/PICS/HIDDEN.PCK", palette, 1)
+  G.fogQuads = {}
+  for c = 0, 13 do
+    G.fogQuads[c] = love.graphics.newQuad((c % 7) * 48, math.floor(c / 7) * 41, 40, 40,
+                                          G.fogImg:getDimensions())
+  end
   -- CURS.PCK: the marching box round the selected stack (177b:01a1). Frame
   -- k is the 40 x 40 cell at ((k % 4) * 64, (k / 4) * 40), drawn at the
   -- tile's corner: 0-3 box a lone army in 30 x 30 at (10, 10), 4-7 a group
@@ -937,6 +945,33 @@ local function topArmy(stack)
   return best
 end
 
+-- The hidden map (8611:24c2): over each unseen tile, black through its
+-- HIDDEN.PCK cell -- cell c at ((c % 7) * 48, (c / 7) * 41), 40 x 40, black
+-- where the fog is and colour 1 where the map shows through (152a:017f with
+-- the mask 4125:551e). Cell 14, a tile with nothing seen round it, is black.
+local function drawFog()
+  if G.g.map.options.hiddenMap == 0 then return end
+  local r = G.mapRect
+  for row = 0, screen.VIEW_ROWS - 1 do
+    for col = 0, screen.VIEW_COLS - 1 do
+      local mx, my = G.cx + col, G.cy + row
+      local cell = mx < G.g.map.width and my < G.g.map.height
+                   and game.fogCell(G.g, G.player, mx, my)
+      if cell then
+        local sx, sy = r.x + col * TILE, r.y + row * TILE
+        if cell == game.FOG_BLACK then
+          love.graphics.setColor(0, 0, 0)
+          love.graphics.rectangle("fill", sx, sy, TILE, TILE)
+        else
+          love.graphics.setColor(1, 1, 1)
+          love.graphics.draw(G.fogImg, G.fogQuads[cell], sx, sy)
+        end
+      end
+    end
+  end
+  love.graphics.setColor(1, 1, 1)
+end
+
 local function drawMap()
   local r = G.mapRect
   -- one item a tile is enough to draw: the last in item order, as 8611:2d7c
@@ -954,7 +989,8 @@ local function drawMap()
       local mx, my = G.cx + col, G.cy + row
       local sx, sy = r.x + col * TILE, r.y + row * TILE
       if mx < G.g.map.width and my < G.g.map.height then
-        if game.seen(G.g, G.player, mx, my) then
+        -- every tile is drawn; the hidden map is laid over it afterwards
+        do
           local t = scn.tileAt(G.g.map, mx, my)
           local sheet = math.floor(t / 96) + 1
           love.graphics.setColor(1, 1, 1)
@@ -989,13 +1025,11 @@ local function drawMap()
             local a = topArmy(stack)
             drawStack(a.owner or 8, a.type, #stack, sx, sy)
           end
-        else
-          love.graphics.setColor(0, 0, 0)
-          love.graphics.rectangle("fill", sx, sy, TILE, TILE)
         end
       end
     end
   end
+  drawFog()
   drawRoute()
 
   -- the stack itself, wherever the walk has got to

@@ -526,6 +526,20 @@ drawn at the tile's corner. The top row's box is 30 × 30 at (10, 10) — round
 a lone army's figure — and the bottom row's the whole tile. On the screen the
 sheet's colour 1 is white and its 4 black.
 
+### The hidden map's edges
+
+The map is drawn whole and the hidden map laid over it (`8611:24c2`, after
+the stacks). Each unseen tile in view gets a cell of `HIDDEN.PCK` —
+fourteen 40 × 40 cells, 48 apart in two rows 41 apart — blitted as black
+through the cell as a mask (`152a:017f`, mask `4125:551e`), so the fog's
+dithered fringe lets the tile show through at its edge. The cell comes from
+`8611:0f6f`: a bit for each of the eight neighbours that is unseen or off
+the map, north first and then clockwise (`4125:2eda` / `2eea`), looked up
+in the 256-byte table at `4125:2d56` — 0–13 the sheet's cells, 14 (nothing
+seen round it) black, 255 a shape the sheet cannot draw. At the start of a
+turn `8611:1558` (from `8cc6:00cd`) passes over the whole map twice, column
+by column, and uncovers every unseen tile whose shape is 255.
+
 ### The pointer
 
 The game draws its own mouse pointer (`22bf`, with save-behind), and
