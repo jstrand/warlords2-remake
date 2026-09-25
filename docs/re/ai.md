@@ -15,6 +15,53 @@ Addresses are Ghidra addresses.
 human side is briefly flagged as computer during one phase so shared code
 takes the automatic path). Levels live at `.SCN` `0x00c0 + 2·side` (0–2).
 
+## Levels and characters
+
+A level does nothing by itself. At game start (`ai_init_side`, `59bf:084d` →
+`59bf:0d7b`) it picks built-in defaults for the side's AI data, and then the
+side's **character card** (`CARDS/K|L|W nnn.CRD`, number at `.SCN`
+`0x00e0 + 2·side`) overwrites every one of them, and the side's fight order
+too. So a Knight, Lord or Warlord is whatever its card says: how many
+assault groups run at once, whether it accepts peace, how carefully it takes
+neutrals, whether it razes, sacks or pillages what it takes, how soon it
+turns on a human who is winning, and whether it stands with the other
+computers. The card layout and all 27 cards are in
+[`../formats/crd.md`](../formats/crd.md).
+
+After that, the level is read in only two places, each picking which of
+the card's per-level values to use: a constant added to every candidate in
+`ai_pick_enemy` (so it changes nothing), and a bonus to the three
+raze/sack/pillage chances (`5f19:06a0`).
+
+In outline, the Standard cards:
+
+| | Knight | Lord | Warlord |
+|---|---|---|---|
+| assault groups at once | 1 | 3 | 4 |
+| accepts peace | no | no | yes |
+| careful with neutrals, no *quick attack* | yes | no | no |
+| raze / sack / pillage what it takes (‰) | 20 / 0 / 0 | 1 / 2 / 3 +1 per city | 5 / 10 / 20 +5 per city, +50 sack/pillage when poor |
+| razes or sacks a human's city before turn 10 | no | no | yes |
+| declares war on a human holding | 81–90% | 51–60% | 31–40% of all cities |
+| won't fight a computer that fights a human | no | no | yes |
+
+## I am the Greatest
+
+The setup button (`7bab:0ee8`) makes every side in play a computer Warlord,
+resets the card of any side that wasn't one, and sets `DS:3c04_0116`. The
+flag stays set when sides are changed afterwards, so the player turns their
+own side back to Human; only *No! I really am Normal* clears it. It's a
+global, not in the `.SCN`. With it set:
+
+- at game start every **human** side's diplomatic score is 1d8 **+ 400**
+  (`79fa:0000`; computers get 1d8), so `ai_pick_enemy`'s
+  `|score difference| / 8` term adds about 50 against every human;
+- in *diplomacy* (`558d:0000`) and in `ai_pick_enemy` (`5f19:0e04`), when
+  either this side or the other computer is at war with a human, the
+  computer is **dropped**: no war proposed on it, no score as an enemy.
+
+So the computers gang up on the human.
+
 ## Turn pipeline (`ai_turn`, `5db9:0000`)
 
 Each phase is announced with a debug string (at `DS:0838`…) before it runs.

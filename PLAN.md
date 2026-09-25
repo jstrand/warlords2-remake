@@ -18,6 +18,7 @@ Findings from inspecting `original/` (424 files, 5.4 MB):
 | `*.SCN` | Fixed 12-byte name records (side names, army-set names) + scenario params | Easy. |
 | `ARMYTYPE.DAT` | Fixed-stride record table: name + `u16` stat fields (strength, move, upkeep, cost) | **The rules goldmine.** |
 | `DATA/*.DAT` | UI strings, terrain table, quotes, error text | Mostly text. |
+| `CARDS/*.CRD` | **SOLVED.** 27 computer character cards, K/L/W × 9; see `docs/formats/crd.md` | What a computer level actually means. |
 | `WARLORD2.HLP` | **SOLVED.** 388 x 104-byte context-help records; see `docs/formats/hlp.md` | A full UI action list. |
 | `*.XMI` | Miles AIL **XMIDI** (`FORM/XDIR/CAT /XMID`), + `MIDPAK`/`DIGPAK`/`*.ADV` drivers | Solved problem — ScummVM has an XMI parser. |
 | `*.8SN` | Raw **unsigned 8-bit PCM**, ~centered on 0x7E | One-line conversion to WAV. |
@@ -116,9 +117,19 @@ A scenario plays to victory on its own.
 `rules.bugs` reproduces the original's faults, one flag per fault the engine
 actually reads.
 
-Left in the engine itself: a computer player that explores as well as the
-original's (with *Hidden Map* on it expands far too slowly), and flags for the
-two decoded AI faults whose phases have no counterpart here yet.
+Left in the engine itself: the computer player. Its phase order, city roles,
+production and garrisons are the original's, but its targeting, diplomacy
+and movement are the remake's own, and it **ignores the level entirely**.
+In the original a level is its character card (`CARDS/*.CRD`,
+`docs/formats/crd.md`): assault groups at once, peace, caution with
+neutrals, raze/sack/pillage, when to turn on a leading human, computer
+solidarity, and the fight order. *I am the Greatest* also changes the
+game, not just the setup (`docs/re/ai.md` › I am the Greatest); here it
+stops at the setup screen. Still missing as well: the assault groups,
+`ai_pick_enemy`, *rebuilding*, *quick attack*, exploring as well as the
+original (with *Hidden Map* on it expands far too slowly), the starting
+diplomatic score (1d8, not read from the `.SCN`), and flags for the two
+decoded AI faults whose phases have no counterpart here yet.
 
 ### Phase 3.5 — Interface — **nearly done**
 
@@ -148,7 +159,18 @@ and the **tutorial's pages**; **the right button's tile info**; **the end of
 the game** — surrender, Congratulations, the farewells.
 
 Also done: **the start screens** — the start menu, choosing a scenario, the
-sides and options set up, New game back to them.
+sides and options set up, New game back to them, with the menu bar greyed
+as `7f77:0200` leaves it.
+
+And the feel of the main map, found by playing: **the game's own pointers**
+(`STAND.PCK`, `18a9:0896`) with a click doing what the pointer shows and
+attacks only from beside the target; **the selection box** (`CURS.PCK`'s
+marching frame) and stacks drawn as `8611:0335` does; **dragging the view**
+with the hand; **the hidden map's fuzzy edges** (`HIDDEN.PCK`); the battle
+window sized as popup 8, with each casualty's blast held; the capital opening
+in Production after turn 1's hero; and **the computer's turns shown on the
+map** when its side is observed, played in a coroutine so the program stays
+responsive (Shift/Alt opens Settings mid-round).
 
 Left:
 
@@ -161,9 +183,13 @@ Left:
    generator.
 3. The computer players' characters (setup dialog 27, `7bab:16ea`, Random
    Characters `2051`, Recall Options `2229`), and TWARLORD's trigger
-   (`7bab:00d1`).
+   (`7bab:00d1`). The cards themselves are decoded (`docs/formats/crd.md`);
+   the dialog only picks the number at `.SCN` `0x00e0`.
 4. Checks against captures of the original for the screens added since the
-   banner and hero offer, which were compared pixel for pixel.
+   banner and hero offer, which were compared pixel for pixel. Only four
+   native captures exist (`erythea_t1_banner`, `erythea_t1_hero`,
+   `setting_up`, `setup_sides`); the city dialog, reports, hero screens,
+   battle and start menu have none yet.
 
 Every unimplemented menu item is greyed. Each new dialog gets a step in a
 `test/shot` script, and is compared with the original wherever a capture
