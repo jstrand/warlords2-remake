@@ -74,6 +74,11 @@ love = {
     newImageData = function(w, h) return stubImage(w, h) end,
   },
   event = { quit = function() end },
+  -- keys the harness holds down, for the accelerators (alt E ends the turn)
+  keyboard = { isDown = function(...)
+    for _, k in ipairs({ ... }) do if HELD and HELD[k] then return true end end
+    return false
+  end },
   -- the assault plays itself out on the clock, so it needs one
   timer = { getTime = os.clock },
 }
@@ -98,7 +103,30 @@ print(("  drew %d sprites"):format(drawCalls))
 -- the harness clears it the way a player would.
 -- Dismissing it is also what lets the turn's first dialog through, so nothing
 -- may be waiting underneath while the banner is still up.
+--- Let the computer's round, if one is being played, run through: a key
+--- skips its moves, and any message on the way is put away.
+function humanLeft()
+  local game = require("warlords.game")
+  for _, s in ipairs(G.g.sides) do
+    if s.alive and not s.computer and #game.sideCities(G.g, s) > 0 then return true end
+  end
+  return false
+end
+
+function finishComputer()
+  local kit = require("ui.kit")
+  for _ = 1, 20000 do
+    -- with no human left the computers fight on, as long as they like
+    if not G.aiRun or (not humanLeft() and G.g.noHumansSaid and not kit.top()) then return end
+    if kit.top() then love.keypressed("return")
+    elseif not G.aiSkip then love.keypressed("x") end
+    love.draw()
+  end
+  if G.aiRun then error("the computer's round never came back") end
+end
+
 local function dismissBanner(what)
+  finishComputer()
   if G.banner and G.offer then
     fail("banner", "a hero was offered before the banner was dismissed")
   end
@@ -201,9 +229,22 @@ local function dismissOffer()
   if G.offer then fail("hero offer", "the dialog would not close") end
 end
 
+--- Game > End Turn, as a player types it: alt E. The computer then plays
+--- across frames; unless `watch` is asked for, a key runs its moves through
+--- at once, and the frames are drawn until the round comes back. Any message
+--- on the way (the last human gone) is put away.
+function endTurn(watch)
+  HELD = { lalt = true }
+  love.keypressed("e")
+  HELD = nil
+  if not watch then finishComputer() end
+end
+
 -- the turn sequence, several times over: this runs every computer player too
 for i = 1, 3 do
-  try("end turn " .. i, love.keypressed, "space")
+  local turn = G.g.turn
+  try("end turn " .. i, endTurn)
+  if G.g.turn == turn and not G.over then fail("end turn", "alt E did not end the turn") end
   dismissBanner("dismiss the banner on turn " .. i)
   dismissOffer()
 end
@@ -582,20 +623,64 @@ try("click the status bar", love.mousepressed, 100, 750, 1)
 
 -- make sure no dialog is left open: while one is, clicks are swallowed, the
 -- player never moves and the game below never reaches an end
+finishComputer()
 G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
 for i = #G.modals, 1, -1 do G.modals[i] = nil end
+
+-- Observe (8cc6:0000): a watched computer's walks are shown one by one, the
+-- camera on each, and a key runs the rest of the round through
+do
+  for _, side in ipairs(G.g.sides) do side.observe = true end
+  local turn = G.g.turn
+  try("end a watched turn", endTurn, true)
+  local frames = 0
+  while G.aiRun and not (G.walk and G.walk.computer) and frames < 2000 do
+    try("watch a frame", love.draw)
+    frames = frames + 1
+  end
+  local watched = G.walk ~= nil and G.walk.computer
+  -- holding Shift between the computer's turns opens Settings (5db9:045e)
+  if G.aiRun then
+    local kit = require("ui.kit")
+    HELD = { lshift = true }
+    for _ = 1, 200 do
+      if kit.top() or not G.aiRun then break end
+      if G.walk and G.walk.computer then
+        G.walk = nil
+        try("cut a walk short", G.resumeComputer)
+      end
+      try("draw with Shift held", love.draw)
+    end
+    HELD = nil
+    if G.aiRun and not kit.top() then fail("observe", "Shift did not open Settings")
+    elseif kit.top() then
+      print("  Shift during the computer's turns opens Settings")
+      try("close Settings", love.keypressed, "return")
+    end
+  end
+  try("skip the rest", finishComputer)
+  if G.aiRun then fail("observe", "a key did not run the round through") end
+  if G.g.turn == turn and not G.over then fail("observe", "the round never came back") end
+  if watched then print("  a computer's walk was shown")
+  else print("  (no computer walk in sight to show)") end
+  dismissBanner()
+  dismissOffer()
+end
 
 -- play on until the game ends, so the end-of-game path runs too
 -- 150 rounds is enough to reach the end in the small scenarios, and to run
 -- the turn machinery hard in the large ones. Stop as soon as it is over:
 -- every further turn is a full round of computer players for nothing.
 for _ = 1, 150 do
-  try("long game", love.keypressed, "space")
+  try("long game", endTurn)
   dismissBanner()
   dismissOffer()
-  if G.over then break end
+  if G.over or not humanLeft() then break end
 end
 try("final frame", love.draw)
+print(("  the game reached turn %d%s"):format(G.g.turn,
+  G.over and ", and ended" or (not humanLeft() and ", the war going on without a human" or "")))
+G.aiRun = nil
 
 -- the start screens keep the menu bar, with only Quit and Load game live
 -- (7f77:0200)

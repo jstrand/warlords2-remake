@@ -540,6 +540,25 @@ seen round it) black, 255 a shape the sheet cannot draw. At the start of a
 turn `8611:1558` (from `8cc6:00cd`) passes over the whole map twice, column
 by column, and uncovers every unseen tile whose shape is 255.
 
+### Watching the computer
+
+Whether a computer's turn is shown is **Observe**, not View Enemies (whose
+only reader is the right-button tile box, `740d:01b5`). New-game setup
+(`79fa:0000`) sets Observe for every side, unless the map is hidden and a
+human plays; Settings changes it side by side (`2c04:0147` + 2 · side). At
+the start of each side's turn `8cc6:0000` copies the side's Observe into
+`2c04:0159`, forced on when no human is left, and with it off the map is not
+drawn for that turn (`8611:006c`); with it on, the walk (`1a8b:04c8`) centres
+on the stack step by step as it does for the player's own.
+
+During the computer's turns `5db9:045e` watches the keyboard: **Shift or Alt**
+held opens Settings (`64d2:0000(0)`), where a side can be handed back to a
+human or its watching turned off. When the last human falls, `8065:1c6f` says
+so in two boxes (group 13: *No further human resistance is possible! / But the
+battle will continue!*, then *Hold down 'Shift' or 'Alt' to stop the war /
+and visit the sites of thy old battles*) and the computers fight on; a game
+with no human from the start says group 14 instead (`8065:00f1`).
+
 ### The pointer
 
 The game draws its own mouse pointer (`22bf`, with save-behind), and

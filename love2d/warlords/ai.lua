@@ -242,6 +242,12 @@ function ai.phaseOrders(g, side)
   end
 end
 
+--- Every walk the computer makes is reported here once it is made, so a
+--- front end can show it: `ai.onWalk(g, stack, result)`, if one is set.
+function ai.walked(g, stack, r)
+  if ai.onWalk and r and (r.steps or 0) > 0 then ai.onWalk(g, stack, r) end
+end
+
 --- March every army that has an order, and attack when it arrives.
 function ai.phaseMove(g, side)
   local gameMod = require("warlords.game")
@@ -281,6 +287,7 @@ function ai.sendAt(g, side, stack, city)
   if #path == 0 then return end
 
   local r = move.walk(g, stack, path)
+  ai.walked(g, stack, r)
   if r.stopped == "attack" then
     local result = gameMod.resolveAttack(g, stack, r.attack.x, r.attack.y)
     if result.won then
@@ -369,7 +376,7 @@ function ai.phaseHeroes(g, side)
         end
         local path = move.findPath(g, stack, a.x, a.y, best.x, best.y)
         if path and #path > 0 then
-          move.walk(g, stack, path)
+          ai.walked(g, stack, move.walk(g, stack, path))
           local found = gameMod.searchHere(g, stack)
           if found and found.kind == "killed" then break end   -- the hero is gone
         end
@@ -445,7 +452,7 @@ function ai.phaseExplore(g, side)
       local f = candidates[i].f
       local path = move.findPath(g, { scout }, scout.x, scout.y, f.x, f.y)
       if path and #path > 0 then
-        move.walk(g, { scout }, path)
+        ai.walked(g, { scout }, move.walk(g, { scout }, path))
         break
       end
     end

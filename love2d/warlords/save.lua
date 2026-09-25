@@ -161,7 +161,7 @@ function save.encode(g)
     version = save.VERSION,
     scenario = g.map.name,
     turn = g.turn, current = g.current, seed = g.rng.state,
-    won = g.won or nil, over = g.over or nil,
+    won = g.won or nil, over = g.over or nil, noHumansSaid = g.noHumansSaid or nil,
     surrenderOffered = g.surrenderOffered or nil,
     options = g.map.options,
     diplomacy = g.diplomacy,
@@ -196,6 +196,7 @@ function save.decode(text, dataDir)
   g.turn, g.current = state.turn, state.current
   g.rng.state = state.seed
   g.won, g.over, g.surrenderOffered = state.won, state.over, state.surrenderOffered
+  g.noHumansSaid = state.noHumansSaid
   g.diplomacy, g.log = state.diplomacy, state.log or {}
 
   local itemByIndex = {}

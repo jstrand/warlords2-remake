@@ -191,6 +191,12 @@ function game.new(dataDir, scenario, opts)
     s.ownerIndex = s.index
     if s.inUse then g.sides[#g.sides + 1] = s end
   end
+  -- 79fa:0000: every side is observed -- its turns shown on the map -- unless
+  -- the map is hidden and a human plays; Settings changes it side by side
+  local humans = 0
+  for _, s in ipairs(g.sides) do if not s.computer then humans = humans + 1 end end
+  local observed = not (g.map.options.hiddenMap ~= 0 and humans >= 1)
+  for _, s in ipairs(g.sides) do s.observe = observed end
 
   -- cities: ownership, production slots, defence
   for _, c in ipairs(g.map.cities) do
@@ -795,6 +801,12 @@ function game.checkEnd(g)
   if #alive == 0 then
     g.over = true
     return { over = true, message = "Alas! No more players are left!" }
+  end
+
+  -- the last human gone and the computers fighting on (8065:1c6f): said once
+  if #humans == 0 and #computers > 1 and not g.noHumansSaid then
+    g.noHumansSaid = true
+    return { over = false, noHumans = true }
   end
 
   if #humans == 0 and #computers == 1 then

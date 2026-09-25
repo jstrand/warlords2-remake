@@ -364,6 +364,8 @@ local function advanceWalk()
   if w.i >= #w.tiles and t - w.at >= WALK.stepTime then
     G.walk = nil
     refreshRoute()
+    -- a computer's walk shown, the computer goes on
+    if w.computer and G.resumeComputer then G.resumeComputer() end
   end
 end
 
@@ -658,11 +660,11 @@ end
 -- distance across and down, from the table at 4125:045c.
 local PTR = { ARROW = 0, VIEW = 1, BOAT = 2, CITY = 3, HAND = 4, SELECT = 5,
               WALK = 6, SITE = 7, ATTACK = 8, ADVISE = 9, PEACE = 10, ALT = 11 }
-local PTR_HOT = { [0] = 0, 6, 8, 6, 8, 8, 8, 8, 0, 8, 8, 0 }
-local PTR_STRAT = { 400, 30, 224, 312 }   -- 4125:2aa8, the strategic map
-local PTR_PANEL = { 0, 17, 392, 386 }     -- 4125:2ab8, the map's frame
-local PTR_OK = { [move.ROAD] = true, [move.BRIDGE] = true,
-                 [move.WATER] = true, [move.SHORE] = true, [move.CITY] = true }
+PTR.HOT = { [0] = 0, 6, 8, 6, 8, 8, 8, 8, 0, 8, 8, 0 }
+PTR.STRAT = { 400, 30, 224, 312 }         -- 4125:2aa8, the strategic map
+PTR.PANEL = { 0, 17, 392, 386 }           -- 4125:2ab8, the map's frame
+PTR.OK = { [move.ROAD] = true, [move.BRIDGE] = true,
+           [move.WATER] = true, [move.SHORE] = true, [move.CITY] = true }
 
 local function inRect(r, x, y)
   return x >= r[1] and y >= r[2] and x < r[1] + r[3] and y < r[2] + r[4]
@@ -673,15 +675,15 @@ local function held(a, b)
 end
 
 local function pointerKind(x, y)
-  if G.starting or G.over or G.banner or G.offer or G.assault or G.victory
+  if G.starting or G.over or G.banner or G.offer or G.assault or G.victory or G.aiRun
      or G.openMenu or kit.top() or not G.player or G.player.computer then
     return PTR.ARROW
   end
   if G.drag then return PTR.HAND end             -- 4125:1176, while it drags
   local alt, ctrl = held("lalt", "ralt"), held("lctrl", "rctrl")
-  if inRect(PTR_STRAT, x, y) then return alt and PTR.ALT or PTR.VIEW end
+  if inRect(PTR.STRAT, x, y) then return alt and PTR.ALT or PTR.VIEW end
   local tx, ty = tileAtPoint(x, y)
-  if not tx then return inRect(PTR_PANEL, x, y) and PTR.HAND or PTR.ARROW end
+  if not tx then return inRect(PTR.PANEL, x, y) and PTR.HAND or PTR.ARROW end
 
   local g, me = G.g, G.player.index
   if tx < 0 or ty < 0 or tx >= g.map.width or ty >= g.map.height then return PTR.HAND end
@@ -729,8 +731,8 @@ local function pointerKind(x, y)
   -- stack at sea fights only onto water, a shore, a bridge or a city, and
   -- one ashore reaches an enemy on the shore only from the same.
   if enemyNear
-     and not (atSea and mode == move.LAND and under == move.SHORE and not PTR_OK[t])
-     and not (not atSea and mode == move.LAND and t == move.SHORE and not PTR_OK[under]) then
+     and not (atSea and mode == move.LAND and under == move.SHORE and not PTR.OK[t])
+     and not (not atSea and mode == move.LAND and t == move.SHORE and not PTR.OK[under]) then
     if g.map.options.diplomacy == 0 or owner == rules.NEUTRAL then return PTR.ATTACK end
     local st = diplomacy.state(g, me, owner)
     if t == move.CITY then return st == diplomacy.WAR and PTR.ATTACK or PTR.PEACE end
@@ -750,7 +752,7 @@ local function drawPointer()
   local mx, my = love.mouse.getPosition()
   local k = pointerKind(mx, my)
   love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(G.pointerImg, G.pointerQuads[k], mx - PTR_HOT[k], my - PTR_HOT[k])
+  love.graphics.draw(G.pointerImg, G.pointerQuads[k], mx - PTR.HOT[k], my - PTR.HOT[k])
 end
 
 -- The start-of-turn banner (8cc6:0259). Popup 6 of the table at 4125:06a8 is
@@ -873,15 +875,105 @@ local function refuseOffer()
   say("The hero rides away.")
 end
 
+-- The computer's turns. They run in a coroutine, so the screen keeps being
+-- drawn and the keyboard read while they are played: it gives a frame back
+-- after every side's turn, and stops after each walk worth showing for it to
+-- play out on the map. A turn is shown when its side is observed or no human
+-- is left (8cc6:0000 -> 2c04:0159); a walk only if the player has seen any
+-- of it. Holding Shift or Alt between turns opens Settings (5db9:045e), where
+-- a side can be handed back to a human or its watching turned off; any other
+-- key or a click runs the rest of the round through unwatched.
+local finishRound, resumeComputer, stepComputer, playComputers
+do
+local function humansLeft()
+  for _, s in ipairs(G.g.sides) do
+    if s.alive and not s.computer and #game.sideCities(G.g, s) > 0 then return true end
+  end
+  return false
+end
+
+local function shown(side)
+  return side and (side.observe or not humansLeft())
+end
+
+ai.onWalk = function(g, stack, r)
+  local co = G.aiRun
+  if not co or coroutine.running() ~= co or G.aiSkip or not shown(G.aiSide) then return end
+  local seen = not humansLeft()
+  for _, t in ipairs(r.walked or {}) do
+    if seen then break end
+    if game.seen(g, G.player, t.x, t.y) then seen = true end
+  end
+  if seen then coroutine.yield("walk", stack, r.walked) end
+end
+
+function resumeComputer()
+  local co = G.aiRun
+  if not co then return end
+  G.aiWait = nil
+  local ok, what, a, b = coroutine.resume(co)
+  if not ok then G.aiRun = nil error(what) end
+  if coroutine.status(co) == "dead" then
+    G.aiRun, G.aiSkip, G.aiSide = nil, nil, nil
+    finishRound(what)
+    return
+  end
+  stratDirty()
+  if what == "walk" then
+    local armies = {}
+    for _, army in ipairs(a) do armies[#armies + 1] = army end
+    startWalk(armies, b)
+    G.walk.computer = true
+  elseif what == "nohumans" then
+    -- 8065:1c6f: the last human is gone, and the war goes on
+    local t = function(i) return uidata.text(G.screen.ui, 0xd, i) end
+    searchUi.message(t(0), t(1), function()
+      searchUi.message(t(2), t(3), function() G.aiWait = true end)
+    end)
+  else
+    G.aiWait = true                 -- a turn done: go on at the next frame
+  end
+end
+G.resumeComputer = function() resumeComputer() end
+
+--- Called every frame: carry the computer on once nothing is in its way.
+function stepComputer()
+  if not G.aiRun or not G.aiWait or G.walk or kit.top() then return end
+  if held("lshift", "rshift") or held("lalt", "ralt") then
+    G.aiSkip = nil
+    require("ui.settings").open()
+    return
+  end
+  resumeComputer()
+end
+
+--- Play computer sides from `side` on, until a human's turn or the end.
+function playComputers(side)
+  G.aiRun = coroutine.create(function()
+    while side and side.computer do
+      G.aiSide = side
+      ai.playTurn(G.g, side)
+      side = game.endTurn(G.g)
+      if G.g.ending and G.g.ending.noHumans then coroutine.yield("nohumans") end
+      coroutine.yield("turn")
+    end
+    return side
+  end)
+  resumeComputer()
+end
+end
+
 local function endTurn()
   G.selection = nil
   local side = game.endTurn(G.g)
   -- the computer plays its sides; a human side, one or several, is handed
   -- to whoever sits at the keyboard
-  while side and side.computer do
-    ai.playTurn(G.g, side)
-    side = game.endTurn(G.g)
-  end
+  if side and side.computer then return playComputers(side) end
+  finishRound(side)
+end
+
+--- The round is over: the next human side takes the keyboard.
+function finishRound(side)
   local ending = require("ui.ending")
   if not side then
     G.over = true
@@ -898,8 +990,7 @@ local function endTurn()
 end
 -- a computer side that opens the game plays its turn before anyone's
 G.playComputer = function()
-  ai.playTurn(G.g, G.player)
-  endTurn()
+  playComputers(G.player)
 end
 
 -- The city dialog lives in ui/city.lua; these are the front end's ways in.
@@ -1201,6 +1292,7 @@ end
 -- (464, y) 48 x 8, bigger the more armies stand there -- y = 29, 38, 47, 56
 -- for one to four (4125:2d4e). More than four fly the smallest 8 lower down
 -- as well, and the flag for the rest at the top.
+do
 local FLAG_Y = { 29, 38, 47, 56 }
 local flagQuads = {}
 function drawStack(owner, armyType, count, sx, sy)
@@ -1220,6 +1312,7 @@ function drawStack(owner, armyType, count, sx, sy)
   end
   if count > 4 then flag(1, sy + 8) count = count - 4 end
   flag(math.max(1, math.min(count, 4)), sy)
+end
 end
 
 -- Turn and the sides still in it, at the right of the bar (8cc6:0952): the
@@ -2015,6 +2108,7 @@ function takeCity(what)
 end
 
 function love.draw()
+  stepComputer()
   if G.starting then
     for _, d in ipairs(G.modals) do d.draw() end
     drawMenuBar()
@@ -2059,6 +2153,14 @@ local function menuPick(key)
 end
 
 function love.mousepressed(x, y, button)
+  -- the computer's moves being shown: a key or a click runs the rest through
+  if G.aiRun and not kit.top() then
+    -- Shift and Alt are held to reach Settings, not pressed to skip
+    if key and key:match("shift$") or key and key:match("alt$") then return end
+    G.aiSkip = true
+    if G.walk and G.walk.computer then G.walk = nil resumeComputer() end
+    return
+  end
   -- 7ecb:0142 blocks the turn routine until any input arrives: the banner
   -- eats the click that dismisses it rather than passing it on
   if G.banner then dismissBanner() return end
@@ -2592,6 +2694,14 @@ function G.menuEnabled(key)
 end
 
 function love.keypressed(key)
+  -- the computer's moves being shown: a key or a click runs the rest through
+  if G.aiRun and not kit.top() then
+    -- Shift and Alt are held to reach Settings, not pressed to skip
+    if key and key:match("shift$") or key and key:match("alt$") then return end
+    G.aiSkip = true
+    if G.walk and G.walk.computer then G.walk = nil resumeComputer() end
+    return
+  end
   -- any key, escape included, only dismisses the banner
   if G.banner then dismissBanner() return end
 
