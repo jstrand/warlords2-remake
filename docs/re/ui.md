@@ -720,6 +720,14 @@ and then, in the column at x = 344: the words **Group** `(0, 30)` and **Move**
 `(352, 436)`; and the **Grp** button, 32 × 19, **red** at `(288, 0)` or
 **green** at `(288, 19)`.
 
+Above them, at **(344, 407)**, `89e0:070d` puts one 32 × 10 icon from
+ABITS saying how the moving group travels: **(184, 30)**, the wing, when it
+flies (`1c8c:07fa`, the rule of `stack_movement_mode` over the moving
+armies); **(424, 30)** when every one of them is at sea; otherwise its move
+bonuses -- **(216, 30)** woods and hills, **(248, 30)** woods, **(152, 30)**
+hills -- and with none of these a blank in colour 3 (the rects at
+`4125:3046`-`3066`, the point at `306e`).
+
 `89e0:17e7` decides the marks, and it is the part worth stating plainly:
 
 - only the **head of each group** is marked at all, the armies below it in the

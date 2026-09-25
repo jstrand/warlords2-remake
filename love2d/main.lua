@@ -1428,6 +1428,12 @@ local GROUP_SRC, MOVE_SRC = { 0, 30, 32, 8 }, { 32, 30, 32, 8 }
 local GROUP_AT, MOVE_AT   = { 344, 420 }, { 344, 428 }
 local GROUP_MOVES_AT      = { 352, 436 }
 local GRP_SRC = { red = { 288, 0 }, green = { 288, 19 } }
+-- how the moving group travels (89e0:070d): one 32 x 10 icon at (344, 407)
+local MOVE_ICON_AT, MOVE_ICON_W, MOVE_ICON_H = { 344, 407 }, 32, 10
+local MOVE_ICON = {
+  fly = { 184, 30 }, sea = { 424, 30 },
+  both = { 216, 30 }, woods = { 248, 30 }, hills = { 152, 30 },
+}
 local GRP_AT, GRP_W, GRP_H = { 344, 447 }, 32, 19
 
 local abitsQuad             -- (x, y, w, h) -> a cached quad into ABITS.PCK
@@ -1492,6 +1498,37 @@ local function drawArmySlots()
   drawDigits(s and slotsMod.moves(s) or 0, GROUP_MOVES_AT[1], GROUP_MOVES_AT[2])
   drawAbits(s and slotsMod.grouped(s) and GRP_SRC.green or GRP_SRC.red,
             GRP_W, GRP_H, GRP_AT[1], GRP_AT[2])
+
+  -- over it, the way the moving group travels (89e0:070d): a wing when it
+  -- flies (1c8c:07fa, the stack's own rule), a boat when every one of it is
+  -- at sea, else its woods and hills bonuses -- or nothing, colour 3
+  local moving = {}
+  if s then
+    for i, a in ipairs(s.army) do
+      if s.inGroup[i] then moving[#moving + 1] = a end
+    end
+  end
+  local icon
+  if #moving > 0 then
+    local sea, woods, hills = true, false, false
+    for _, a in ipairs(moving) do
+      local t = G.g.types.byId[a.type]
+      if t.woodsMove then woods = true end
+      if t.hillsMove then hills = true end
+      if not a.atSea then sea = false end
+    end
+    if move.stackMode(G.g, moving) == move.FLYING then icon = MOVE_ICON.fly
+    elseif sea then icon = MOVE_ICON.sea
+    elseif woods and hills then icon = MOVE_ICON.both
+    elseif woods then icon = MOVE_ICON.woods
+    elseif hills then icon = MOVE_ICON.hills end
+  end
+  if icon then
+    drawAbits(icon, MOVE_ICON_W, MOVE_ICON_H, MOVE_ICON_AT[1], MOVE_ICON_AT[2])
+  else
+    palColour(3)
+    love.graphics.rectangle("fill", MOVE_ICON_AT[1], MOVE_ICON_AT[2], MOVE_ICON_W, MOVE_ICON_H)
+  end
 end
 
 -- With nothing selected the bar shows the side's standing instead: cities,
