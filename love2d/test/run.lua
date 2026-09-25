@@ -2496,6 +2496,78 @@ local function testComputerPlayers()
   eq(g2.map.cities[5].claim, g.map.cities[5].claim, "and the cities' claims")
 end
 
+------------------------------------------------------------- going to sea
+
+-- Going to sea and coming ashore (1a8b:04c8): only a land move changes it,
+-- a flier never goes to sea, and a hero flying with a flier does not either.
+local function testSea()
+  print("going to sea")
+  local move = require("warlords.move")
+  local scn = require("warlords.scn")
+  local g = game.new(DATA, "ERYTHEA", { seed = 81 })
+
+  -- a land tile beside open water, and that water
+  local lx, ly, wx, wy
+  for y = 1, g.map.height - 2 do
+    for x = 1, g.map.width - 2 do
+      local t2 = scn.terrainAt(g.map, x + 1, y)
+      if not lx and scn.terrainAt(g.map, x, y) == move.PLAIN
+         and (t2 == move.WATER or t2 == move.SHORE)
+         and #game.armiesAt(g, x, y) == 0 and #game.armiesAt(g, x + 1, y) == 0 then
+        lx, ly, wx, wy = x, y, x + 1, y
+      end
+    end
+  end
+  ok(lx ~= nil, "Erythea has a plain beside the sea")
+
+  local dragon, hero
+  for _, t in ipairs(g.types.list) do
+    if t.flies and t.name:find("Dragon") then dragon = t end
+  end
+  local function army(typeId)
+    local a = { type = typeId, owner = 0, x = lx, y = ly, strength = 5,
+                maxMoves = 20, moves = 20, upkeep = 0 }
+    g.armies[#g.armies + 1] = a
+    return a
+  end
+  hero = army(armytype.HERO)
+  local d = army(dragon.id)
+  local stack = { hero, d }
+  eq(move.stackMode(g, stack), move.FLYING, "a hero with a dragon flies")
+  move.walk(g, stack, { { x = wx, y = wy, cost = 2 } })
+  eq(hero.x, wx, "and flies out over the water")
+  ok(not d.atSea and not hero.atSea, "without either going to sea")
+  eq(move.stackMode(g, stack), move.FLYING, "so it still flies")
+  move.walk(g, stack, { { x = lx, y = ly, cost = 2 } })
+  eq(hero.x, lx, "and can come back to land")
+
+  -- a land stack puts to sea on water and comes ashore on land
+  local foot = army(1)
+  move.settleSea(g, { foot }, wx, wy, move.LAND, false)
+  ok(foot.atSea, "a land army ending on water is at sea")
+  move.settleSea(g, { foot }, lx, ly, move.LAND, true)
+  ok(not foot.atSea, "and ashore again on land")
+  -- a flier walking with a land army stays a flier; the hero goes to sea
+  local walkers = { hero, d, foot }
+  move.settleSea(g, walkers, wx, wy, move.LAND, false)
+  ok(not d.atSea, "a flier never goes to sea")
+  ok(hero.atSea and foot.atSea, "the hero and the footman with it do")
+  -- a boat move changes nothing
+  hero.atSea, foot.atSea = false, false
+  move.settleSea(g, { foot }, wx, wy, move.BOAT, false)
+  ok(not foot.atSea, "a boat move leaves the flag as it was")
+
+  -- an older save's flier at sea is put right
+  local saveMod = require("warlords.save")
+  hero.x, hero.y, d.x, d.y = wx, wy, wx, wy
+  hero.atSea, d.atSea = true, true
+  for i = #g.armies, 1, -1 do if g.armies[i] == foot then table.remove(g.armies, i) end end
+  local g2 = saveMod.decode(saveMod.encode(g), DATA)
+  for _, a in ipairs(g2.armies) do
+    if a.x == wx and a.y == wy then ok(not a.atSea, "a loaded flier and its hero are not at sea") end
+  end
+end
+
 --------------------------------------------------------------------- main
 
 if not exists(DATA .. "/TERRAIN0/ARMYTYPE.DAT") then
@@ -2523,6 +2595,7 @@ testDisband("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")
+testSea()
 testCombat("ERYTHEA")
 testCapture("ERYTHEA")
 testCityChoices("ERYTHEA")

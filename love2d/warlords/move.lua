@@ -417,12 +417,12 @@ function move.walk(g, stack, path)
 
   local cost = costTo[lastOk]
   local dest = path[lastOk]
-  local water = scn.terrainAt(g.map, dest.x, dest.y) == move.WATER
+  local mode, _, _, wasAtSea = move.stackMode(g, stack)
   for _, a in ipairs(stack) do
     a.x, a.y = dest.x, dest.y
     a.moves = math.max(0, (a.moves or 0) - cost)
-    a.atSea = water
   end
+  move.settleSea(g, stack, dest.x, dest.y, mode, wasAtSea)
 
   -- walking uncovers the map as it goes
   if g.map.options.hiddenMap ~= 0 and side ~= nil then
@@ -443,6 +443,33 @@ function move.walk(g, stack, path)
   for i = 1, lastOk do result.walked[i] = { x = path[i].x, y = path[i].y } end
   if lastOk < #path and result.stopped == "arrived" then result.stopped = "blocked" end
   return result
+end
+
+--- Going to sea and coming ashore, at the end of a walk (1a8b:04c8). Only a
+--- stack moving as a land stack changes: flying and boat moves leave it as
+--- it was. A land stack ending on water or a shore puts to sea -- every army
+--- in it that cannot fly, and a hero too unless a flier goes with it and
+--- nothing else walks. One at sea ending on land (not water, shore or a
+--- bridge) comes ashore, every army.
+function move.settleSea(g, stack, x, y, mode, wasAtSea)
+  if mode ~= move.LAND then return end
+  local t = scn.terrainAt(g.map, x, y)
+  if not wasAtSea then
+    if t ~= move.WATER and t ~= move.SHORE then return end
+    local flier, walker = false, false
+    for _, a in ipairs(stack) do
+      if g.types.byId[a.type].flies then flier = true
+      elseif a.type ~= armytype.HERO then walker = true end
+    end
+    if walker then flier = false end
+    for _, a in ipairs(stack) do
+      if not g.types.byId[a.type].flies and (a.type ~= armytype.HERO or not flier) then
+        a.atSea = true
+      end
+    end
+  elseif t ~= move.WATER and t ~= move.SHORE and t ~= move.BRIDGE then
+    for _, a in ipairs(stack) do a.atSea = false end
+  end
 end
 
 --- Move a stack towards a tile: pathfind, then walk.

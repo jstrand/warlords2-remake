@@ -1037,6 +1037,17 @@ local function topArmy(stack)
   return best
 end
 
+-- The figure a stack shows (8611:2985): its top army's, or a boat -- the
+-- Navy, type 5 -- when an army in it is at sea.
+local NAVY = 5
+local function stackFigure(stack)
+  for _, a in ipairs(stack) do
+    if a.atSea then return NAVY end
+  end
+  local a = topArmy(stack)
+  return a and a.type
+end
+
 -- The hidden map (8611:24c2): over each unseen tile, black through its
 -- HIDDEN.PCK cell -- cell c at ((c % 7) * 48, (c / 7) * 41), 40 x 40, black
 -- where the fog is and colour 1 where the map shows through (152a:017f with
@@ -1115,7 +1126,7 @@ local function drawMap()
           end
           if #stack > 0 then
             local a = topArmy(stack)
-            drawStack(a.owner or 8, a.type, #stack, sx, sy)
+            drawStack(a.owner or 8, stackFigure(stack), #stack, sx, sy)
           end
         end
       end
@@ -1130,9 +1141,9 @@ local function drawMap()
     local col, row = at.x - G.cx, at.y - G.cy
     local a = G.walk.top
     if a and col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
-      local n = 0
-      for _ in pairs(G.walk.armies) do n = n + 1 end
-      drawStack(a.owner or 8, a.type, n, r.x + col * TILE, r.y + row * TILE)
+      local n, walking = 0, {}
+      for w in pairs(G.walk.armies) do n = n + 1; walking[#walking + 1] = w end
+      drawStack(a.owner or 8, stackFigure(walking), n, r.x + col * TILE, r.y + row * TILE)
     end
   end
 

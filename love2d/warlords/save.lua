@@ -314,6 +314,25 @@ function save.decode(text, dataDir)
     end
   end
 
+  -- saves made before the walk kept to 1a8b:04c8 could put a flier at sea,
+  -- and a hero flying with one: nothing the original can reach, so undone
+  local fliers, walkers = {}, {}
+  for _, a in ipairs(g.armies) do
+    if a.x then
+      local k = a.y * g.map.width + a.x
+      if g.types.byId[a.type].flies then fliers[k] = true
+      elseif a.type ~= 28 then walkers[k] = true end
+    end
+  end
+  for _, a in ipairs(g.armies) do
+    if a.atSea and a.x then
+      local k = a.y * g.map.width + a.x
+      if g.types.byId[a.type].flies or (a.type == 28 and fliers[k] and not walkers[k]) then
+        a.atSea = false
+      end
+    end
+  end
+
   g.side = g.sides[g.current]
   require("warlords.move").invalidate(g)
   return g
