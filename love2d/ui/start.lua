@@ -191,6 +191,8 @@ local LEVEL_BUTTON = { [0] = 120, 200, 280, 360, 40 }  -- 4125:24b8: Knight .. O
 local function openSetup(G, st, begin, back)
   -- the menu bar stays live over it, as over the start menu (7bab:0034)
   local d = { view = kit.view(3), menuBar = true }
+  -- a screen, not a dialog: 7bab:0000 clears 4125:166a, so Begin has no ring
+  d.view.screen = true
   local art = G.screen.art_for(31)                   -- SETUPBU.PCK
 
   local function refresh()
@@ -380,6 +382,8 @@ function M.open(start, loaded)
   local G = kit.G
   local list = M.scenarios(G.dataDir)
   local d = { view = kit.view(1), cur = 1, menuBar = true }
+  -- a screen, not a dialog: 7f77:0000 clears 4125:166a, so Begin has no ring
+  d.view.screen = true
   for i, e in ipairs(list) do if e.dir == "Erythea" then d.cur = i end end   -- 4125:2a6e
 
   local function refresh()
