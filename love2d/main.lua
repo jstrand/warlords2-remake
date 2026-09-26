@@ -23,6 +23,8 @@ local hero     = require("warlords.hero")
 local armytype = require("warlords.armytype")
 local saveMod  = require("warlords.save")
 local screen   = require("warlords.screen")
+local layoutMod = require("warlords.layout")
+local display  = require("display")
 local uidata   = require("warlords.uidata")
 local font     = require("warlords.font")
 local menuMod  = require("warlords.menu")
@@ -57,6 +59,7 @@ local reslot                                        -- and this one
 local startAssault, pressAssault, presentVictory, takeCity   -- the assault
 local refreshControls                               -- and the button states
 local showBanner, dismissBanner                      -- and these two
+local clampCamera, centreOn, syncLayout              -- the view, below
 
 local function quadsFor(img, cols, cellW, cellH, stride, count, rowStride)
   local qs = {}
@@ -205,7 +208,6 @@ function love.load(arg)
   G.bigFont = font.load(dataDir, "CHANCE17", palette, 3)
   G.titleFont = font.load(dataDir, "CHANCE36", palette, 3)
 
-  G.menuLayout = menuMod.layout(G.font, menuMod.BAR_H, screen.WIDTH)
   G.openMenu = nil
   -- SHIELDS.PCK: every side's shield, 40x40 in a frame, for the dialogs that
   -- show whose something is; CITYBACK.PCK the ground a city's picture sits on
@@ -222,10 +224,12 @@ function love.load(arg)
   G.audio = require("sound")
   G.audio.init(dataDir, G.screen.ui.files)
 
-  G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
-  G.stratRect = screen.region(G.screen, screen.REGION.STRATEGIC)
-  G.barRect  = screen.region(G.screen, screen.REGION.BOTTOMBAR)
-  G.menuRect = screen.region(G.screen, screen.REGION.MENUBAR)
+  -- the screen: its real pixels, the UI's scale, and the map's zoom, which
+  -- starts at the UI's own so the map looks as it always has (display.lua)
+  display.install()
+  display.measure()
+  G.zoom = display.scale
+  syncLayout()
 
   -- A third argument fixes the seed, so a run can be reproduced exactly.
   -- test/ui.lua passes one; without it every game is different.
@@ -285,24 +289,143 @@ function beginGame()
   G.cursor = G.player.capital and
              { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
   G.selection = nil
-  -- centre the 9x9 viewport on the capital
-  G.cx = math.max(0, math.min(G.player.capital.x - 4, G.g.map.width - screen.VIEW_COLS))
-  G.cy = math.max(0, math.min(G.player.capital.y - 4, G.g.map.height - screen.VIEW_ROWS))
+  centreOn(G.player.capital.x, G.player.capital.y)
   showBanner(G.player)
 end
 
 --------------------------------------------------------------------- camera
 
-local function clampCamera()
-  G.cx = math.max(0, math.min(G.cx, G.g.map.width - screen.VIEW_COLS))
-  G.cy = math.max(0, math.min(G.cy, G.g.map.height - screen.VIEW_ROWS))
+-- The original's view was 9x9 tiles, stepped a whole tile at a time. Here it
+-- is as many tiles as the map's rect holds at the map's zoom (display.lua),
+-- and it slides smoothly: G.cx, G.cy is the tile at its top-left corner, in
+-- fractions of a tile. On the original's own screen at zoom 1 they stay
+-- whole numbers and everything lands where it always did.
+
+--- The view's size in tiles, fractions included.
+local function viewSize()
+  local k = display.scale / (TILE * G.zoom)
+  return G.mapRect.w * k, G.mapRect.h * k
+end
+G.viewSize = viewSize
+
+--- The camera in device pixels, rounded to one, which is where the map is
+--- drawn from and what every hit test measures against.
+local function camDev()
+  local z = TILE * G.zoom
+  return math.floor(G.cx * z + 0.5), math.floor(G.cy * z + 0.5)
 end
 
-local function centreOn(x, y)
-  G.cx = x - math.floor(screen.VIEW_COLS / 2)
-  G.cy = y - math.floor(screen.VIEW_ROWS / 2)
+--- A UI point as a map position, in tiles with their fractions.
+function G.uiToMap(x, y)
+  local r, s, z = G.mapRect, display.scale, TILE * G.zoom
+  local cx, cy = camDev()
+  return (cx + (x - r.x) * s) / z, (cy + (y - r.y) * s) / z
+end
+
+--- A map position, in tiles, as a UI point.
+function G.mapToUI(tx, ty)
+  local r, s, z = G.mapRect, display.scale, TILE * G.zoom
+  local cx, cy = camDev()
+  return r.x + (tx * z - cx) / s, r.y + (ty * z - cy) / s
+end
+
+--- The tile at the view's centre -- the original's "cursor", which the
+--- keyboard's city and ruin lookups measure from.
+function G.viewCentre()
+  local vw, vh = viewSize()
+  return math.floor(G.cx + vw / 2), math.floor(G.cy + vh / 2)
+end
+
+--- The tiles the view touches, edges included, as { x0, y0, x1, y1 }.
+local function viewTiles()
+  local vw, vh = viewSize()
+  local mw, mh = G.g.map.width, G.g.map.height
+  return { math.max(0, math.floor(G.cx)), math.max(0, math.floor(G.cy)),
+           math.min(mw - 1, math.ceil(G.cx + vw) - 1), math.min(mh - 1, math.ceil(G.cy + vh) - 1) }
+end
+G.viewTiles = viewTiles
+
+--- Is (x, y) among the tiles being drawn this frame?
+function G.shown(x, y)
+  local v = G.view
+  return v and x >= v[1] and y >= v[2] and x <= v[3] and y <= v[4]
+end
+
+--- Is (x, y) on screen? Its middle has to be.
+local function inView(x, y)
+  local vw, vh = viewSize()
+  return x + 0.5 > G.cx and x + 0.5 < G.cx + vw and y + 0.5 > G.cy and y + 0.5 < G.cy + vh
+end
+
+--- Keep the view on the map; a map smaller than the view sits in its middle.
+function clampCamera()
+  local vw, vh = viewSize()
+  local mw, mh = G.g.map.width, G.g.map.height
+  G.cx = vw >= mw and (mw - vw) / 2 or math.max(0, math.min(G.cx, mw - vw))
+  G.cy = vh >= mh and (mh - vh) / 2 or math.max(0, math.min(G.cy, mh - vh))
+end
+
+function centreOn(x, y)
+  local vw, vh = viewSize()
+  G.cx, G.cy = x + 0.5 - vw / 2, y + 0.5 - vh / 2
   clampCamera()
 end
+
+--- The zoom the map may go to: from a device pixel a map pixel up to two
+--- steps past the UI's own scale.
+local function maxZoom() return display.scale + 2 end
+
+--- Zoom the map to `z`, keeping the map where the UI point (x, y) is -- the
+--- pointer, or the view's middle -- where it was.
+function G.setZoom(z, x, y)
+  z = math.max(1, math.min(maxZoom(), z))
+  if z == G.zoom then return end
+  local r = G.mapRect
+  x, y = x or r.x + r.w / 2, y or r.y + r.h / 2
+  local tx, ty = G.uiToMap(x, y)
+  G.zoom = z
+  local k = display.scale / (TILE * z)
+  G.cx, G.cy = tx - (x - r.x) * k, ty - (y - r.y) * k
+  clampCamera()
+end
+
+--- Lay the main screen out for layout `L` (warlords/layout.lua), keeping
+--- the view centred where it was.
+local function applyLayout(L)
+  local mid
+  if G.g and G.cx and G.mapRect then
+    local vw, vh = viewSize()
+    mid = { G.cx + vw / 2, G.cy + vh / 2 }
+  end
+  G.layout = L
+  screen.relayout(G.screen, L)
+  G.mapRect   = screen.region(G.screen, screen.REGION.MAP)
+  G.stratRect = screen.region(G.screen, screen.REGION.STRATEGIC)
+  G.barRect   = screen.region(G.screen, screen.REGION.BOTTOMBAR)
+  G.menuRect  = screen.region(G.screen, screen.REGION.MENUBAR)
+  G.panelRect = screen.region(G.screen, screen.REGION.MAPPANEL)
+  G.menuLayout = menuMod.layout(G.font, menuMod.BAR_H, L.w)
+  G.zoom = math.max(1, math.min(maxZoom(), G.zoom or display.scale))
+  if mid then
+    local vw, vh = viewSize()
+    G.cx, G.cy = mid[1] - vw / 2, mid[2] - vh / 2
+    clampCamera()
+  end
+end
+
+--- The start screens are the original's 640x480, centred; the game has the
+--- whole screen. Run before anything reads the layout: each frame, and each
+--- input, since a click can take the start screens away.
+function syncLayout()
+  local w, h = layoutMod.W, layoutMod.H
+  if not G.starting then w, h = display.uiSize() end
+  display.setFrame(math.max(w, layoutMod.W), math.max(h, layoutMod.H))
+  if not G.layout or G.layout.w ~= display.w or G.layout.h ~= display.h then
+    applyLayout(layoutMod.compute(display.w, display.h))
+  end
+end
+G.syncLayout = function() syncLayout() end
+G.centreOn = function(x, y) centreOn(x, y) end
 
 --------------------------------------------------------------------- walking
 
@@ -392,7 +515,7 @@ end
 --- The route, as rings on the map: 8611:2ef5's two marks and the ghost it
 --- puts on the far end.
 local function drawRoute()
-  local r, route = G.mapRect, G.route
+  local route = G.route
   if not route then return end
   local ghost = G.selection and G.selection.stack[1]
   -- while the walk plays out, the route is drawn from where it has got to,
@@ -400,9 +523,8 @@ local function drawRoute()
   local first = G.walk and G.walk.i or 1
   for i = first, #route.path do
     local step = route.path[i]
-    local col, row = step.x - G.cx, step.y - G.cy
-    if col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
-      local sx, sy = r.x + col * TILE, r.y + row * TILE
+    if G.shown(step.x, step.y) then
+      local sx, sy = step.x * TILE, step.y * TILE
       love.graphics.setColor(1, 1, 1)
       if i == #route.path then
         if ghost then
@@ -423,7 +545,8 @@ end
 local function tileAtPoint(sx, sy)
   local r = G.mapRect
   if sx < r.x or sy < r.y or sx >= r.x + r.w or sy >= r.y + r.h then return nil end
-  return G.cx + math.floor((sx - r.x) / TILE), G.cy + math.floor((sy - r.y) / TILE)
+  local tx, ty = G.uiToMap(sx, sy)
+  return math.floor(tx), math.floor(ty)
 end
 
 --------------------------------------------------------------------- selection
@@ -678,13 +801,13 @@ end
 local PTR = { ARROW = 0, VIEW = 1, BOAT = 2, CITY = 3, HAND = 4, SELECT = 5,
               WALK = 6, SITE = 7, ATTACK = 8, ADVISE = 9, PEACE = 10, ALT = 11 }
 PTR.HOT = { [0] = 0, 6, 8, 6, 8, 8, 8, 8, 0, 8, 8, 0 }
-PTR.STRAT = { 400, 30, 224, 312 }         -- 4125:2aa8, the strategic map
-PTR.PANEL = { 0, 17, 392, 386 }           -- 4125:2ab8, the map's frame
+-- 4125:2aa8 and :2ab8 are the strategic map and the map's frame -- regions
+-- 1 and 13, which is where G.stratRect and G.panelRect come from
 PTR.OK = { [move.ROAD] = true, [move.BRIDGE] = true,
            [move.WATER] = true, [move.SHORE] = true, [move.CITY] = true }
 
 local function inRect(r, x, y)
-  return x >= r[1] and y >= r[2] and x < r[1] + r[3] and y < r[2] + r[4]
+  return x >= r.x and y >= r.y and x < r.x + r.w and y < r.y + r.h
 end
 
 local function held(a, b)
@@ -698,9 +821,9 @@ local function pointerKind(x, y)
   end
   if G.drag then return PTR.HAND end             -- 4125:1176, while it drags
   local alt, ctrl = held("lalt", "ralt"), held("lctrl", "rctrl")
-  if inRect(PTR.STRAT, x, y) then return alt and PTR.ALT or PTR.VIEW end
+  if inRect(G.stratRect, x, y) then return alt and PTR.ALT or PTR.VIEW end
   local tx, ty = tileAtPoint(x, y)
-  if not tx then return inRect(PTR.PANEL, x, y) and PTR.HAND or PTR.ARROW end
+  if not tx then return inRect(G.panelRect, x, y) and PTR.HAND or PTR.ARROW end
 
   local g, me = G.g, G.player.index
   if tx < 0 or ty < 0 or tx >= g.map.width or ty >= g.map.height then return PTR.HAND end
@@ -819,34 +942,36 @@ end
 -- Ghidra drops the arguments to the drawing calls, so the coordinates come
 -- from the disassembly: they are DGROUP statics at 4125:1112 onwards, and the
 -- control rects in BUTTON.DAT group 9 agree with them exactly.
-local HERO_POPUP = { x = 80, y = 60, w = 480, h = 312 }
-local HERO_DIALOG = 12                 -- JOIN.DAT: dialog 12 -> button group 9
--- AREA.DAT screen 0 has no regions for this dialog, but screen 6's one region
--- gives the map panel's size: 224x312 is the whole 112x156 map at 2 pixels a
--- tile, the same scale as the strategic map on the main screen.
-local HERO_MAP = { x = 80, y = 60, w = 224, h = 312 }
-local HERO_PIC = { x = 320, y = 110, w = 224, h = 170 }   -- MHERO/FHERO, exactly
-local HERO_TITLE_Y = 63
-local HERO_CENTRE = 432                -- the centre line of the right-hand half
-local HERO_LINE_Y = { 190, 210, 230, 250 }
--- the labels are drawn right-aligned, ending just short of their box
-local HERO_MALE_LABEL, HERO_FEMALE_LABEL = { x = 376, y = 315 }, { x = 480, y = 315 }
-local HERO_BOX_W, HERO_BOX_H = 24, 20  -- ABITS: checked at (320,0), clear below
-local HERO_CHECKED, HERO_CLEAR = { x = 320, y = 0 }, { x = 320, y = 20 }
--- control ids in group 9
-local HERO_OK, HERO_CANCEL, HERO_FIELD = 287, 288, 289
-local HERO_MALE, HERO_FEMALE = 290, 291
--- STRING.DAT groups: the title, the four caption lines, the two labels
-local HERO_TITLE_GROUP, HERO_LINE_GROUP, HERO_SEX_GROUP = 0x5f, 0x61, 0x62
--- hero_recruit copies the name into a 20-byte slot (2c04:0223, stride 0x14)
-local HERO_NAME_MAX = 19
+local HERO = {
+  POPUP = { x = 80, y = 60, w = 480, h = 312 },
+  DIALOG = 12,                         -- JOIN.DAT: dialog 12 -> button group 9
+  -- AREA.DAT screen 0 has no regions for this dialog, but screen 6's one
+  -- region gives the map panel's size: 224x312 is the whole 112x156 map at 2
+  -- pixels a tile, the same scale as the strategic map on the main screen.
+  MAP = { x = 80, y = 60, w = 224, h = 312 },
+  PIC = { x = 320, y = 110, w = 224, h = 170 },   -- MHERO/FHERO, exactly
+  TITLE_Y = 63,
+  CENTRE = 432,                        -- the centre line of the right-hand half
+  LINE_Y = { 190, 210, 230, 250 },
+  -- the labels are drawn right-aligned, ending just short of their box
+  MALE_LABEL = { x = 376, y = 315 }, FEMALE_LABEL = { x = 480, y = 315 },
+  BOX_W = 24, BOX_H = 20,              -- ABITS: checked at (320,0), clear below
+  CHECKED = { x = 320, y = 0 }, CLEAR = { x = 320, y = 20 },
+  -- control ids in group 9
+  OK = 287, CANCEL = 288, FIELD = 289,
+  MALE = 290, FEMALE = 291,
+  -- STRING.DAT groups: the title, the four caption lines, the two labels
+  TITLE_GROUP = 0x5f, LINE_GROUP = 0x61, SEX_GROUP = 0x62,
+  -- hero_recruit copies the name into a 20-byte slot (2c04:0223, stride 0x14)
+  NAME_MAX = 19,
+}
 
 --- The four lines over the picture, as 6563:0d5c assembles them. The first
 --- two are empty on turn 1, which is why the free hero's caption sits low.
 local function heroLines(offer, female)
   local ui, side = G.screen.ui, G.player
   local first = female and 8 or 0             -- the female wording is +8
-  local function s(i) return uidata.text(ui, HERO_LINE_GROUP, first + i) end
+  local function s(i) return uidata.text(ui, HERO.LINE_GROUP, first + i) end
   if offer.first then
     return { s(0), s(1), s(2), s(3):format(offer.city.name) }
   end
@@ -856,7 +981,7 @@ end
 
 function presentOffer(side)
   if not side.heroOffer then return false end
-  if not G.heroView then G.heroView = screen.dialog(G.screen, HERO_DIALOG) end
+  if not G.heroView then G.heroView = screen.dialog(G.screen, HERO.DIALOG) end
   local offer = side.heroOffer
   G.offer = offer
   -- The name and sex were rolled with the offer; the checkboxes only change
@@ -865,8 +990,8 @@ function presentOffer(side)
   G.offerFemale = offer.female or false
   G.offerName = offer.name or "Hero"
   -- the first hero is free and cannot be turned down, so Cancel is disabled
-  G.heroView.state[HERO_CANCEL] = offer.first and uidata.DISABLED or uidata.NORMAL
-  G.heroView.state[HERO_OK] = uidata.NORMAL
+  G.heroView.state[HERO.CANCEL] = offer.first and uidata.DISABLED or uidata.NORMAL
+  G.heroView.state[HERO.OK] = uidata.NORMAL
   return true
 end
 
@@ -1082,14 +1207,12 @@ end
 -- the mask 4125:551e). Cell 14, a tile with nothing seen round it, is black.
 local function drawFog()
   if G.g.map.options.hiddenMap == 0 then return end
-  local r = G.mapRect
-  for row = 0, screen.VIEW_ROWS - 1 do
-    for col = 0, screen.VIEW_COLS - 1 do
-      local mx, my = G.cx + col, G.cy + row
-      local cell = mx < G.g.map.width and my < G.g.map.height
-                   and game.fogCell(G.g, G.player, mx, my)
+  local v = G.view
+  for my = v[2], v[4] do
+    for mx = v[1], v[3] do
+      local cell = game.fogCell(G.g, G.player, mx, my)
       if cell then
-        local sx, sy = r.x + col * TILE, r.y + row * TILE
+        local sx, sy = mx * TILE, my * TILE
         if cell == game.FOG_BLACK then
           love.graphics.setColor(0, 0, 0)
           love.graphics.rectangle("fill", sx, sy, TILE, TILE)
@@ -1103,8 +1226,21 @@ local function drawFog()
   love.graphics.setColor(1, 1, 1)
 end
 
+--- The map, in map pixels: the caller has the transform and the scissor up
+--- (love.draw), so a tile is simply drawn at (x * 40, y * 40).
 local function drawMap()
-  local r = G.mapRect
+  G.view = viewTiles()
+  local v = G.view
+  -- who stands where, found once rather than a search of every army for
+  -- every tile, in the order game.armiesAt would give them
+  local armiesOn = {}
+  for _, a in ipairs(G.g.armies) do
+    if not a.transit and a.x and a.x >= v[1] and a.x <= v[3] and a.y >= v[2] and a.y <= v[4] then
+      local k = a.x + a.y * 1000
+      armiesOn[k] = armiesOn[k] or {}
+      table.insert(armiesOn[k], a)
+    end
+  end
   -- one item a tile is enough to draw: the last in item order, as 8611:2d7c
   -- walks them from the end
   G.itemsOnTile = {}
@@ -1114,12 +1250,10 @@ local function drawMap()
       G.itemsOnTile[it.x + it.y * 1000] = it
     end
   end
-  love.graphics.setScissor(r.x, r.y, r.w, r.h)
-  for row = 0, screen.VIEW_ROWS - 1 do
-    for col = 0, screen.VIEW_COLS - 1 do
-      local mx, my = G.cx + col, G.cy + row
-      local sx, sy = r.x + col * TILE, r.y + row * TILE
-      if mx < G.g.map.width and my < G.g.map.height then
+  for my = v[2], v[4] do
+    for mx = v[1], v[3] do
+      local sx, sy = mx * TILE, my * TILE
+      do
         -- every tile is drawn; the hidden map is laid over it afterwards
         do
           local t = scn.tileAt(G.g.map, mx, my)
@@ -1142,7 +1276,7 @@ local function drawMap()
             end
           end
 
-          local stack = game.armiesAt(G.g, mx, my)
+          local stack = armiesOn[mx + my * 1000] or {}
           -- a stack still walking is drawn where the walk has got to, not
           -- where it has already arrived
           if G.walk then
@@ -1166,29 +1300,26 @@ local function drawMap()
   -- the stack itself, wherever the walk has got to
   local at = walkingAt()
   if at then
-    local col, row = at.x - G.cx, at.y - G.cy
     local a = G.walk.top
-    if a and col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
+    if a and G.shown(at.x, at.y) then
       local n, walking = 0, {}
       for w in pairs(G.walk.armies) do n = n + 1; walking[#walking + 1] = w end
-      drawStack(a.owner or 8, stackFigure(walking), n, r.x + col * TILE, r.y + row * TILE)
+      drawStack(a.owner or 8, stackFigure(walking), n, at.x * TILE, at.y * TILE)
     end
   end
 
   -- the selection box, which follows the walk
   if G.selection then
-    local col, row = (at and at.x or G.selection.x) - G.cx,
-                     (at and at.y or G.selection.y) - G.cy
-    if col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
+    local x, y = at and at.x or G.selection.x, at and at.y or G.selection.y
+    if G.shown(x, y) then
       love.graphics.setColor(1, 1, 1)
       -- 828e:0afd / 0b27: the small box for one army, the large for a group
       -- (4125:2bda); 177b:0161 steps it every fourth BIOS tick
       local base = #G.selection.stack > 1 and 4 or 0
       local frame = base + math.floor(now() * CURS_RATE) % 4
-      love.graphics.draw(G.cursImg, G.cursQuads[frame], r.x + col * TILE, r.y + row * TILE)
+      love.graphics.draw(G.cursImg, G.cursQuads[frame], x * TILE, y * TILE)
     end
   end
-  love.graphics.setScissor()
 end
 
 --- The strategic map as the original paints it anywhere it appears -- the
@@ -1267,14 +1398,19 @@ local function drawStrategic()
   G.drawStrategicMap(r.x, r.y)
   love.graphics.setScissor(r.x, r.y, r.w, r.h)
   -- The view box (8961:0698): the 9x9 viewport at 2 pixels a tile, as a
-  -- white square 18 across with sides two pixels thick.
+  -- white square 18 across with sides two pixels thick. Here it is whatever
+  -- the view covers, placed to the device pixel as the view slides.
   local c = G.palette[16]
   love.graphics.setColor(c[1], c[2], c[3])
-  local bx, by, n = r.x + G.cx * 2, r.y + G.cy * 2, screen.VIEW_COLS * 2
-  love.graphics.rectangle("fill", bx, by, n, 2)
-  love.graphics.rectangle("fill", bx, by + n - 2, n, 2)
-  love.graphics.rectangle("fill", bx, by, 2, n)
-  love.graphics.rectangle("fill", bx + n - 2, by, 2, n)
+  local s = display.scale
+  local function snap(v) return math.floor(v * s + 0.5) / s end
+  local vw, vh = viewSize()
+  local bx, by = r.x + snap(G.cx * 2), r.y + snap(G.cy * 2)
+  local w, h = snap(vw * 2), snap(vh * 2)
+  love.graphics.rectangle("fill", bx, by, w, 2)
+  love.graphics.rectangle("fill", bx, by + h - 2, w, 2)
+  love.graphics.rectangle("fill", bx, by, 2, h)
+  love.graphics.rectangle("fill", bx + w - 2, by, 2, h)
   love.graphics.setScissor()
 end
 
@@ -1387,7 +1523,7 @@ end
 
 local function drawMenuBar()
   palColour(15)
-  love.graphics.rectangle("fill", 0, 0, 640, menuMod.BAR_H)
+  love.graphics.rectangle("fill", 0, 0, G.layout.w, menuMod.BAR_H)
   for i, m in ipairs(G.menuLayout) do
     local lit = (i == G.openMenu)
     if lit then
@@ -1397,7 +1533,13 @@ local function drawMenuBar()
     love.graphics.setColor(1, 1, 1)
     G.font.colours(lit and 7 or 0, lit and 8 or 15).draw(m.title, m.x + 2, menuMod.BAR_Y)
   end
-  if not G.starting then drawTurnStrip() end
+  if not G.starting then
+    -- the strip keeps to the right-hand end of a wider bar
+    love.graphics.push()
+    love.graphics.translate(G.layout.ex, 0)
+    drawTurnStrip()
+    love.graphics.pop()
+  end
 
   local open = G.menuLayout[G.openMenu]
   if not open then return end
@@ -1602,11 +1744,6 @@ local function drawBottomBar()
   end
 end
 
--- Everything draws into a 640x480 frame with no transform (the scaling up to
--- the window happens once, at the end of main.lua). That matters beyond
--- tidiness -- love.graphics.setScissor takes target pixels and ignores any
--- transform, so scaling here would clip the map and the strategic map to the
--- wrong place.
 -- The city dialog's Vector mode paints the map its own way (834b:08df, and
 -- 834b:1817 for See All): no owner shields, but a marker on each of the
 -- side's cities from ATRANS2.PCK's row at y = 94, 16x10, and lines for the
@@ -1805,7 +1942,7 @@ end
 --- original running at its own 640x480, puts the outline one pixel outside
 --- the rect on every side and the contents exactly at the rect.
 local function drawHeroOffer()
-  local R, b = HERO_POPUP, G.offer
+  local R, b = HERO.POPUP, G.offer
   kit.popupFrame(R)
 
   -- MARBLE.PCK is 480x360, so popup 2's 480x312 is its top-left corner
@@ -1815,7 +1952,7 @@ local function drawHeroOffer()
 
   -- the whole map at the strategic map's own 2 pixels a tile
   love.graphics.setScissor()
-  G.drawStrategicMap(HERO_MAP.x, HERO_MAP.y)
+  G.drawStrategicMap(HERO.MAP.x, HERO.MAP.y)
   love.graphics.setScissor(R.x, R.y, R.w, R.h)
   love.graphics.setColor(1, 1, 1)
   -- Where the hero would appear (834b:1f5f): ATRANS2.PCK's figure at
@@ -1824,30 +1961,30 @@ local function drawHeroOffer()
   -- blits on a byte, and this one does not carry shifted copies.
   local fx = math.max(0, math.floor((b.city.x * 2 - 2) / 8) * 8)
   local fy = math.max(0, b.city.y * 2 - 6)
-  love.graphics.draw(G.atransShields, G.heroMark, HERO_MAP.x + fx, HERO_MAP.y + fy)
+  love.graphics.draw(G.atransShields, G.heroMark, HERO.MAP.x + fx, HERO.MAP.y + fy)
 
   -- the portrait, in a one-pixel frame of its own
-  love.graphics.draw(G.heroPic[G.offerFemale and "f" or "m"], HERO_PIC.x, HERO_PIC.y)
+  love.graphics.draw(G.heroPic[G.offerFemale and "f" or "m"], HERO.PIC.x, HERO.PIC.y)
   love.graphics.setColor(0, 0, 0)
-  love.graphics.rectangle("line", HERO_PIC.x - 0.5, HERO_PIC.y - 0.5,
-                          HERO_PIC.w + 1, HERO_PIC.h + 1)
+  love.graphics.rectangle("line", HERO.PIC.x - 0.5, HERO.PIC.y - 0.5,
+                          HERO.PIC.w + 1, HERO.PIC.h + 1)
   love.graphics.setScissor()
 
   local ui = G.screen.ui
   local function centred(f, s, y)
     love.graphics.setColor(1, 1, 1)
-    f.draw(s, HERO_CENTRE - math.floor(f.width(s) / 2), y)
+    f.draw(s, HERO.CENTRE - math.floor(f.width(s) / 2), y)
   end
-  centred(G.titleFont, uidata.text(ui, HERO_TITLE_GROUP, 0), HERO_TITLE_Y)
+  centred(G.titleFont, uidata.text(ui, HERO.TITLE_GROUP, 0), HERO.TITLE_Y)
   for i, line in ipairs(heroLines(b, G.offerFemale)) do
     -- font 2 in 15 with a colour-14 outline, dark brown (78a8:06ae(2, 15, 14, 3))
-    if line ~= "" then centred(G.bigFont.colours(15, 14), line, HERO_LINE_Y[i]) end
+    if line ~= "" then centred(G.bigFont.colours(15, 14), line, HERO.LINE_Y[i]) end
   end
 
   -- The name field: a black outline two pixels clear of it (the rect at
   -- 4125:1142), then the field itself as 7ecb:0058 draws every field --
   -- filled flat with colour 3 and sunk into the marble.
-  local field = screen.dialogControl(G.heroView, HERO_FIELD)
+  local field = screen.dialogControl(G.heroView, HERO.FIELD)
   if field then
     love.graphics.setColor(0, 0, 0)
     kit.outline(field.x - 2, field.y - 2, field.w + 4, field.h + 4)
@@ -1857,18 +1994,18 @@ local function drawHeroOffer()
     love.graphics.setColor(1, 1, 1)
     f.draw(s, at.x - f.width(s), at.y)
   end
-  label(G.bigFont, HERO_MALE_LABEL, uidata.text(ui, HERO_SEX_GROUP, 0))
-  label(G.bigFont, HERO_FEMALE_LABEL, uidata.text(ui, HERO_SEX_GROUP, 1))
+  label(G.bigFont, HERO.MALE_LABEL, uidata.text(ui, HERO.SEX_GROUP, 0))
+  label(G.bigFont, HERO.FEMALE_LABEL, uidata.text(ui, HERO.SEX_GROUP, 1))
   local function box(id, on)
     local c = screen.dialogControl(G.heroView, id)
     if not c then return end
-    local s = on and HERO_CHECKED or HERO_CLEAR
+    local s = on and HERO.CHECKED or HERO.CLEAR
     love.graphics.setColor(1, 1, 1)
     love.graphics.draw(G.abits,
-      love.graphics.newQuad(s.x, s.y, HERO_BOX_W, HERO_BOX_H, 480, 40), c.x, c.y)
+      love.graphics.newQuad(s.x, s.y, HERO.BOX_W, HERO.BOX_H, 480, 40), c.x, c.y)
   end
-  box(HERO_MALE, not G.offerFemale)
-  box(HERO_FEMALE, G.offerFemale)
+  box(HERO.MALE, not G.offerFemale)
+  box(HERO.FEMALE, G.offerFemale)
 
   screen.drawDialogControls(G.screen, G.heroView)
 end
@@ -2064,15 +2201,14 @@ function pressAssault()
   if a.captured then presentVictory(a.captured, a.victor) end
 end
 
+--- The cloud over the tile, drawn with the map, in map pixels.
 local function drawCloud()
-  local a, r = G.assault, G.mapRect
-  local sx = r.x + (a.x - G.cx) * TILE + math.floor((TILE - AS.cloudW) / 2)
-  local sy = r.y + (a.y - G.cy) * TILE + math.floor((TILE - AS.cloudH) / 2)
-  love.graphics.setScissor(r.x, r.y, r.w, r.h)
+  local a = G.assault
+  local sx = a.x * TILE + math.floor((TILE - AS.cloudW) / 2)
+  local sy = a.y * TILE + math.floor((TILE - AS.cloudH) / 2)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.warPic,
     love.graphics.newQuad(0, 0, AS.cloudW, AS.cloudH, AS.warW, AS.warH), sx, sy)
-  love.graphics.setScissor()
 end
 
 --- One line of armies. They are struck off from the front, which is the order
@@ -2128,9 +2264,10 @@ local function drawBattle()
   end
 end
 
+--- The cloud is drawn with the map (love.draw); this is the window after it.
 local function drawAssault()
   advanceAssault()
-  if G.assault.phase == "cloud" then drawCloud() else drawBattle() end
+  if G.assault.phase ~= "cloud" then drawBattle() end
 end
 
 ---------------------------------------------------------- the spoils of a city
@@ -2200,37 +2337,78 @@ function love.update()
   if top and top.update then top.update() end
 end
 
+--- Draw in the popups' 640x480 frame, centred on the screen (layout.lua).
+local function inDialogFrame(draw)
+  local d = G.layout.dialog
+  love.graphics.push()
+  love.graphics.translate(d.x, d.y)
+  draw()
+  love.graphics.pop()
+end
+
+--- Draw one of the fixed groups of the original screen where the layout has
+--- moved it, in the original's own coordinates.
+local function inGroup(group, draw)
+  local o = G.layout.offset[group]
+  love.graphics.push()
+  love.graphics.translate(o.x, o.y)
+  draw()
+  love.graphics.pop()
+end
+
+local function drawModals()
+  for _, d in ipairs(G.modals) do d.draw() end   -- bottom of the stack first
+end
+
+--- One frame, in three passes (display.lua): the chrome in UI pixels, the map
+--- in map pixels at its own zoom, then the dialogs and the pointer over both.
 function love.draw()
+  syncLayout()
   stepComputer()
+  display.pushUI()
   if G.starting then
-    for _, d in ipairs(G.modals) do d.draw() end
+    drawModals()
     drawMenuBar()
     drawPointer()
+    love.graphics.pop()
     return
   end
   advanceWalk()
   refreshControls()
-  screen.drawBackground(G.screen)
+  screen.drawBackground(G.screen, G.layout)
+
+  local r = G.mapRect
+  love.graphics.setScissor(r.x, r.y, r.w, r.h)
+  local cx, cy = camDev()
+  display.pushMap(r.x, r.y, cx, cy, G.zoom)
   drawMap()
+  if G.assault and G.assault.phase == "cloud" then drawCloud() end
+  love.graphics.pop()
+  love.graphics.setScissor()
+
   drawStrategic()
   -- 8065:0a9d refills the control panel with marble before the controls go
   -- on, the rect at 4125:2a94 -- (400, 355) 224x114 -- from the marble's own
   -- origin, as 8065:0aeb does for the bottom bar
-  love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(G.marble, love.graphics.newQuad(0, 0, 224, 114, G.marble:getDimensions()),
-                     400, 355)
+  inGroup("panel", function()
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.marble, love.graphics.newQuad(0, 0, 224, 114, G.marble:getDimensions()),
+                       400, 355)
+  end)
   screen.drawControls(G.screen)
   drawShortcutIcons()
-  drawBottomBar()
-  -- the dialogs, bottom of the stack first
-  for _, d in ipairs(G.modals) do d.draw() end
+  inGroup("bar", drawBottomBar)
+  inDialogFrame(drawModals)
   drawMenuBar()
   -- the turn opens with the banner over the offer, and is dismissed first
-  if G.offer then drawHeroOffer() end
-  if G.assault then drawAssault() end
-  if G.victory then drawVictory() end
-  if G.banner then drawBanner() end
+  inDialogFrame(function()
+    if G.offer then drawHeroOffer() end
+    if G.assault then drawAssault() end
+    if G.victory then drawVictory() end
+    if G.banner then drawBanner() end
+  end)
   drawPointer()
+  love.graphics.pop()
 end
 
 --------------------------------------------------------------------- input
@@ -2246,6 +2424,9 @@ local function menuPick(key)
 end
 
 function love.mousepressed(x, y, button)
+  syncLayout()
+  -- the popups sit in a 640x480 frame of their own, and take their clicks in it
+  local fx, fy = x - G.layout.dialog.x, y - G.layout.dialog.y
   -- the computer's moves being shown: a key or a click runs the rest through
   if G.aiRun and not kit.top() then
     -- Shift and Alt are held to reach Settings, not pressed to skip
@@ -2262,20 +2443,20 @@ function love.mousepressed(x, y, button)
   -- click that ends it opens the question of what to do with the city.
   if G.assault then pressAssault() return end
   if G.victory then
-    local c = screen.dialogControlAt(G.victoryView, x, y)
+    local c = screen.dialogControlAt(G.victoryView, fx, fy)
     if c and G.victoryView.state[c.id] ~= uidata.DISABLED then takeCity(c.id) end
     return
   end
 
   -- the hero offer is modal: nothing behind it takes a click
   if G.offer then
-    local c = screen.dialogControlAt(G.heroView, x, y)
+    local c = screen.dialogControlAt(G.heroView, fx, fy)
     if not c then return end
-    if c.id == HERO_MALE then G.offerFemale = false
-    elseif c.id == HERO_FEMALE then G.offerFemale = true
-    elseif c.id == HERO_OK then acceptOffer()
+    if c.id == HERO.MALE then G.offerFemale = false
+    elseif c.id == HERO.FEMALE then G.offerFemale = true
+    elseif c.id == HERO.OK then acceptOffer()
     -- the first hero is free, and its Cancel is disabled rather than absent
-    elseif c.id == HERO_CANCEL and not G.offer.first then refuseOffer()
+    elseif c.id == HERO.CANCEL and not G.offer.first then refuseOffer()
     end
     return
   end
@@ -2287,7 +2468,7 @@ function love.mousepressed(x, y, button)
     top = nil
   end
   if top then
-    if top.mousepressed then top.mousepressed(x, y, button) end
+    if top.mousepressed then top.mousepressed(fx, fy, button) end
     return
   end
   if G.over then return end
@@ -2315,12 +2496,11 @@ function love.mousepressed(x, y, button)
     return
   end
 
-  -- The hand drags the map (740d:00e4 -> 8065:0e04): it remembers the tile
-  -- the view is centred on, and as the mouse moves the view follows it a
-  -- whole tile per 40 pixels until the button comes up.
+  -- The hand drags the map (740d:00e4 -> 8065:0e04). The original's view
+  -- followed it a whole tile per 40 pixels; this one slides with the pointer,
+  -- so the ground that was grabbed stays under it.
   if button == 1 and pointerKind(x, y) == PTR.HAND then
-    G.drag = { cx = G.cx + math.floor(screen.VIEW_COLS / 2),
-               cy = G.cy + math.floor(screen.VIEW_ROWS / 2), dx = 0, dy = 0 }
+    G.drag = { cx = G.cx, cy = G.cy, dx = 0, dy = 0 }
     return
   end
 
@@ -2526,11 +2706,11 @@ ACTION[186] = function()
   local sel = G.selection
   if not sel or #sel.stack == 0 then return end
   local t = sel.stack[1].target
-  local vx, vy = G.cx + 4, G.cy + 4
-  if t and not (vx == math.max(4, math.min(107, t.x)) and vy == math.max(4, math.min(151, t.y)))
-     and sel.x >= G.cx and sel.x < G.cx + screen.VIEW_COLS
-     and sel.y >= G.cy and sel.y < G.cy + screen.VIEW_ROWS then
+  -- to the destination, unless the view is already there
+  local cx, cy = G.cx, G.cy
+  if t and inView(sel.x, sel.y) then
     centreOn(t.x, t.y)
+    if G.cx == cx and G.cy == cy then centreOn(sel.x, sel.y) end
   else
     centreOn(sel.x, sel.y)
   end
@@ -2607,22 +2787,39 @@ function refreshControls()
 end
 
 --- The drag's own sums, as 8065:0e04 keeps them: the map goes the way the
---- mouse does, so the view's centre goes the other.
+--- mouse does, so the view goes the other -- by exactly as far, at any zoom.
 function love.mousemoved(x, y, dx, dy)
   local d = G.drag
   if not d then return end
-  d.dx, d.dy = d.dx - dx, d.dy - dy
-  local function tiles(v) return v < 0 and -math.floor(-v / TILE) or math.floor(v / TILE) end
-  centreOn(d.cx + tiles(d.dx), d.cy + tiles(d.dy))
+  d.dx, d.dy = d.dx + dx, d.dy + dy
+  local k = display.scale / (TILE * G.zoom)
+  G.cx, G.cy = d.cx - d.dx * k, d.cy - d.dy * k
+  clampCamera()
+end
+
+--- The wheel zooms the map about the tile under the pointer (not the
+--- original's: it had neither a wheel nor a zoom).
+function love.wheelmoved(_, wy)
+  syncLayout()
+  if G.starting or G.over or kit.top() or G.banner or G.offer or G.victory or wy == 0 then return end
+  local mx, my
+  if love.mouse and love.mouse.getPosition then mx, my = love.mouse.getPosition() end
+  local r = G.mapRect
+  if not (mx and inRect(r, mx, my)) then mx, my = nil, nil end
+  G.setZoom(G.zoom + (wy > 0 and 1 or -1), mx, my)
 end
 
 function love.mousereleased(x, y, button)
+  syncLayout()
   if G.drag then
     G.drag = nil
     if not G.pressed then return end
   end
   local top = kit.top()
-  if top and top.mousereleased then top.mousereleased(x, y, button) return end
+  if top and top.mousereleased then
+    top.mousereleased(x - G.layout.dialog.x, y - G.layout.dialog.y, button)
+    return
+  end
   local id = G.pressed
   if not id then return end
   G.pressed = nil
@@ -2639,7 +2836,7 @@ end
 --- the side has seen, and of its own for any mode but Info; then the city
 --- dialog on it in that mode.
 viewCity = function(mode)
-  local cx, cy = G.cx + 4, G.cy + 4
+  local cx, cy = G.viewCentre()
   local best, bestD
   for _, c in ipairs(G.g.map.cities) do
     local ok = game.seen(G.g, G.player, c.x, c.y)
@@ -2735,7 +2932,7 @@ MENU_DOES = {
   -- View > Ruins (17be's inline case: 7204:0000 in mode 4 at the cursor)
   ["."] = function()
     local ruin = require("ui.ruin")
-    ruin.open(ruin.nearest(G.cx + 4, G.cy + 4))
+    ruin.open(ruin.nearest(G.viewCentre()))
   end,
   -- View > Stack (89e0:0c9c)
   ["s"] = function() require("ui.stack").open() end,
@@ -2790,6 +2987,7 @@ function G.menuEnabled(key)
 end
 
 function love.keypressed(key)
+  syncLayout()
   -- the computer's moves being shown: a key or a click runs the rest through
   if G.aiRun and not kit.top() then
     -- Shift and Alt are held to reach Settings, not pressed to skip
@@ -2855,6 +3053,9 @@ function love.keypressed(key)
   local digit = key:match("^kp(%d)$") or key:match("^(%d)$")
 
   if key == "return" or key == "kpenter" then press(174)
+  -- the map's zoom (not the original's), about the view's middle
+  elseif key == "kp+" or key == "pageup" then G.setZoom(G.zoom + 1)
+  elseif key == "kp-" or key == "pagedown" then G.setZoom(G.zoom - 1)
   elseif key == "escape" then press(175)
   elseif key == "space" then press(240)           -- group the stack (89e0:0a55)
   elseif key == "tab" then press(186)
@@ -2905,75 +3106,20 @@ function love.textinput(text)
     return
   end
   if not G.offer then return end
-  if #G.offerName < HERO_NAME_MAX and text:match("^[%w%s'%-%.]+$") then
+  if #G.offerName < HERO.NAME_MAX and text:match("^[%w%s'%-%.]+$") then
     G.offerName = G.offerName .. text
   end
 end
 
---------------------------------------------------------------------- scaling
+--------------------------------------------------------------------- the window
 
--- Everything above works in the original's 640x480. Any other window (the
--- game starts full screen) gets that frame drawn into a 640x480 canvas, blown
--- up by the largest whole number that fits with nearest filtering, so each
--- pixel becomes a crisp block, and centred with black around it. setScissor
--- works in the canvas's pixels while it is the target, so the clipping stays
--- right. The sums are in the display's real pixels (conf.lua asks for
--- highdpi), so on a Retina screen the blocks are whole device pixels, not
--- whole points the OS then resamples. The mouse comes back to 640x480 before
--- any handler sees it. (A function rather than a do block: main.lua's chunk is at Lua's limit on
--- locals.)
-;(function()
-  local W, H = 640, 480
-  local drawFrame = love.draw
-  local canvas, scale, ox, oy, dpi
-
-  -- a window position (LOVE gives it in points) in the game's pixels, held
-  -- to the frame
-  local function toGame(x, y)
-    x = math.floor((x * dpi - ox) / scale)
-    y = math.floor((y * dpi - oy) / scale)
-    return math.max(0, math.min(W - 1, x)), math.max(0, math.min(H - 1, y))
-  end
-
-  local function setUp()
-    if canvas ~= nil or not love.graphics.newCanvas then return end
-    dpi = love.graphics.getDPIScale()
-    local ww, wh = love.graphics.getPixelDimensions()
-    if ww == W and wh == H then canvas = false return end
-    scale = math.max(1, math.floor(math.min(ww / W, wh / H)))
-    ox = math.floor((ww - W * scale) / 2)
-    oy = math.floor((wh - H * scale) / 2)
-    canvas = love.graphics.newCanvas(W, H)
-    canvas:setFilter("nearest", "nearest")
-    local getPosition = love.mouse.getPosition
-    love.mouse.getPosition = function() return toGame(getPosition()) end
-    for _, name in ipairs({ "mousepressed", "mousereleased" }) do
-      local handle = love.handlers[name]
-      love.handlers[name] = function(x, y, ...)
-        x, y = toGame(x, y)
-        return handle(x, y, ...)
-      end
-    end
-    local moved = love.handlers.mousemoved
-    love.handlers.mousemoved = function(x, y, dx, dy, ...)
-      x, y = toGame(x, y)
-      return moved(x, y, dx * dpi / scale, dy * dpi / scale, ...)
-    end
-  end
-
-  function love.draw()
-    setUp()
-    if not canvas then return drawFrame() end
-    love.graphics.push("all")
-    love.graphics.setCanvas(canvas)
-    love.graphics.clear(love.graphics.getBackgroundColor())
-    drawFrame()
-    love.graphics.pop()
-    love.graphics.clear(0, 0, 0)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(canvas, ox / dpi, oy / dpi, 0, scale / dpi, scale / dpi)
-  end
-end)()
+--- A new window size (or the first real one): measure it again, and the next
+--- frame lays the screen out for it.
+function love.resize()
+  display.measure()
+  G.layout = nil
+  syncLayout()
+end
 
 -- LOVE ignores what main.lua returns; test/ui.lua uses it to inspect state.
 return G

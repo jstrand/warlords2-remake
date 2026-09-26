@@ -6,6 +6,7 @@
 
 local pck    = require("warlords.pck")
 local uidata = require("warlords.uidata")
+local layout = require("warlords.layout")
 
 local screen = {}
 
@@ -21,7 +22,6 @@ screen.REGION = {
 }
 
 screen.TILE = 40
-screen.VIEW_COLS, screen.VIEW_ROWS = 9, 9
 
 --------------------------------------------------------------------- loading
 
@@ -47,6 +47,8 @@ function screen.load(dataDir, palette, dialogId, terrain)
   local self = {
     ui = ui,
     dialog = uidata.dialog(ui, dialogId or uidata.MAIN_SCREEN),
+    -- the four quarters' colour indices, kept for a bigger screen's ground
+    backgroundPx = {},
     art = {},
     dataDir = dataDir,
     palette = palette,
@@ -69,10 +71,13 @@ function screen.load(dataDir, palette, dialogId, terrain)
   for i = 0, 3 do
     local path = findArt(dataDir, ("screen%d.pck"):format(i), terrain)
     if path then
-      local img = pck.toImage(path, palette)
+      local img, _, _, px = pck.toImage(path, palette)
       self.background[i] = { image = img, x = (i % 2) * 320, y = math.floor(i / 2) * 240 }
+      self.backgroundPx[i] = px
     end
   end
+  -- the layout as the data gives it, for relayout to start from every time
+  self.original = self.dialog
 
   -- TERRAIN<n>/MAPCOLOR.DAT is the strategic map's own colour table, read by
   -- 834b:2a11 as eleven tables, 1200 bytes in all:
@@ -126,12 +131,92 @@ function screen.load(dataDir, palette, dialogId, terrain)
   return self
 end
 
+--------------------------------------------------------------------- layout
+
+--- Place the main screen's controls and regions for layout `L`
+--- (warlords/layout.lua): each moves with its group, and the map, its frame
+--- and the menu bar stretch. The data's own rects are left alone, so this
+--- can be done again for another size.
+function screen.relayout(self, L)
+  local d = self.original
+  local out = {}
+  for k, v in pairs(d) do out[k] = v end
+  out.controls, out.regions = {}, {}
+  for i, c in ipairs(d.controls) do
+    out.controls[i] = layout.move(L, layout.group(c), c)
+  end
+  for i, r in ipairs(d.regions) do
+    out.regions[i] = layout.region(L, r)
+  end
+  self.dialog = out
+end
+
 --------------------------------------------------------------------- drawing
 
-function screen.drawBackground(self)
+-- A screen bigger than the original has no art of its own. Its ground is the
+-- original's speckled stone, taken from the gutter between the map and the
+-- right-hand panels (a 20 x 432 strip, x 378-397 from y 32), and every panel
+-- is the original's own -- marble in a black outline -- copied across whole.
+-- The stone is a checkerboard dither, so the strips are laid on even x and
+-- slid by even amounts, which keeps the checkerboard unbroken.
+local STONE = { x = 378, y = 32, w = 20, h = 432 }
+local PANELS = {                       -- outline included
+  { group = "strat", x = 399, y = 29,  w = 226, h = 314 },
+  { group = "panel", x = 399, y = 354, w = 226, h = 116 },
+  { group = "bar",   x = 15,  y = 402, w = 362, h = 68 },
+}
+
+local function composedArt(self)
+  if self.bgImage then return end
+  local px = {}
+  for i = 0, 3 do
+    local q, qx, qy = self.backgroundPx[i], (i % 2) * 320, math.floor(i / 2) * 240
+    if q then
+      for y = 0, 239 do
+        for x = 0, 319 do px[(qy + y) * 640 + qx + x + 1] = q[y * 320 + x + 1] end
+      end
+    end
+  end
+  for i = 1, 640 * 480 do px[i] = px[i] or 0 end
+  self.bgImage = pck.imageFromPixels(640, 480, px, self.palette)
+  local strip = {}
+  for y = 0, STONE.h - 1 do
+    for x = 0, STONE.w - 1 do
+      strip[y * STONE.w + x + 1] = px[(STONE.y + y) * 640 + STONE.x + x + 1]
+    end
+  end
+  self.stoneImg = pck.imageFromPixels(STONE.w, STONE.h, strip, self.palette)
+  self.stoneImg:setWrap("repeat", "repeat")
+end
+
+--- The main screen's ground for layout `L`: the original's own at 640x480,
+--- and put together from its pieces on anything bigger.
+function screen.drawBackground(self, L)
   love.graphics.setColor(1, 1, 1)
-  for _, q in pairs(self.background) do
-    love.graphics.draw(q.image, q.x, q.y)
+  if not L or L.classic then
+    for _, q in pairs(self.background) do
+      love.graphics.draw(q.image, q.x, q.y)
+    end
+    return
+  end
+  composedArt(self)
+  local sw, sh = STONE.w, STONE.h
+  for k = 0, math.ceil(L.w / sw) - 1 do
+    local slide = (k * 146) % sh
+    slide = slide - slide % 2
+    love.graphics.draw(self.stoneImg, love.graphics.newQuad(0, slide, sw, L.h, sw, sh), k * sw, 0)
+  end
+  -- the map's black outline, a pixel out all round
+  local m = L.map
+  love.graphics.setColor(0, 0, 0)
+  love.graphics.rectangle("fill", m.x - 1, m.y - 1, m.w + 2, 1)
+  love.graphics.rectangle("fill", m.x - 1, m.y + m.h, m.w + 2, 1)
+  love.graphics.rectangle("fill", m.x - 1, m.y - 1, 1, m.h + 2)
+  love.graphics.rectangle("fill", m.x + m.w, m.y - 1, 1, m.h + 2)
+  love.graphics.setColor(1, 1, 1)
+  for _, p in ipairs(PANELS) do
+    local at = layout.move(L, p.group, p)
+    love.graphics.draw(self.bgImage, love.graphics.newQuad(p.x, p.y, p.w, p.h, 640, 480), at.x, at.y)
   end
 end
 

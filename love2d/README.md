@@ -21,11 +21,25 @@ love love2d ISLADIA                # straight into a scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
 ```
 
-The window is the original's own **640 × 480** screen, at exactly that size —
-so screen and window coordinates are the same, which `love.graphics.setScissor`
-quietly depends on. The chrome is not a lookalike: the background, buttons,
-regions and fonts are the game's own, read from its data files at runtime
-(`docs/formats/screens.md`).
+The game opens full screen. The chrome is not a lookalike: the background,
+buttons, regions and fonts are the game's own, read from its data files at
+runtime (`docs/formats/screens.md`). How it fills a screen bigger than the
+original's 640 × 480 is **not** the original's:
+
+- The interface is drawn at a whole-number scale in the display's real pixels,
+  the biggest that still fits 640 × 480, so every pixel of the art stays a
+  sharp block (`display.lua`).
+- The start screens stay the original's 640 × 480, centred.
+- On the main screen the fixed pieces keep their size and move to an edge —
+  the strategic map to the top right, the control panel to the bottom right,
+  the bottom bar to the bottom left — and the map takes the rest
+  (`warlords/layout.lua`). The dialogs sit in a 640 × 480 frame centred on the
+  screen, so each keeps the coordinates the original gives it.
+- The map has a zoom of its own, also a whole number of device pixels, and
+  slides smoothly rather than a tile at a time.
+
+On a 640 × 480 screen all of this comes back to the original's layout, pixel
+for pixel.
 
 | input | does |
 |---|---|
@@ -39,6 +53,8 @@ regions and fonts are the game's own, read from its data files at runtime
 | `Enter` / `Esc` | next army / quit army (done for this turn) — the first live button of the original's default and cancel lists |
 | `1`–`9` | step the stack one tile, laid out like the numeric pad; `5` centres on it |
 | arrows, the 3×3 pad | move the view a tile |
+| drag the map | slide the view with the pointer |
+| mouse wheel / `PageUp` `PageDown` / keypad `+` `-` | zoom the map in and out (not the original's) |
 | `Space` | group the whole stack |
 | `Tab` / `Backspace` | look at where the stack is going, and back / forget its destination |
 | `Home` / `End` / `Del` | centre on the stack / put it down / walk on along its route |
@@ -82,6 +98,7 @@ only that the code runs:
 ```sh
 luajit love2d/test/ui.lua           # Tutoria
 luajit love2d/test/ui.lua original ERYTHEA
+luajit love2d/test/ui.lua original TUTORIA 20250918 980x615   # a bigger screen
 ```
 
 **That it runs is not that it looks right.** The stub's `setColor` is a no-op
@@ -100,7 +117,8 @@ W2_OUT=/tmp/shots W2_SCRIPT=love2d/test/shot/shots.lua \
 
 The arguments are the game's own, and passing the seed is what makes two runs
 comparable. `W2_SCRIPT` names a file of `{name, fn}` steps — see
-`test/shot/shots.lua`.
+`test/shot/shots.lua`. The window is 640 × 480 unless `W2_SIZE=980x615` asks for
+another size, or `W2_FULLSCREEN=1` for the whole screen in its real pixels.
 
 **Write for Lua 5.1.** LÖVE embeds LuaJIT, so the engine avoids `//` and the
 `&`/`|` operators — they parse under a modern `lua` binary and then fail to
@@ -123,7 +141,8 @@ for the cost grid's flags.
 | `save.lua` | saving and loading a game in progress |
 | `uidata.lua` | `JOIN.DAT`, `AREA.DAT`, `BUTTON.DAT`, `FILE.DAT`: the screen layout |
 | `font.lua` | the `.FNT`/`.FIN` proportional fonts |
-| `screen.lua` | the 640×480 screen: background, controls, hit regions |
+| `screen.lua` | the main screen: background, controls, hit regions |
+| `layout.lua` | where the main screen's pieces go on a screen of any size (not the original's) |
 | `menu.lua` | the menu bar and its items, laid out the original's way |
 | `ai.lua` | a computer player |
 | `cues.lua` | which song each moment gets, and what the advisor says |
