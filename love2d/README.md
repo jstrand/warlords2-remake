@@ -55,6 +55,7 @@ for pixel.
 | arrows, the 3×3 pad | move the view a tile |
 | drag the map | slide the view with the pointer |
 | mouse wheel / `PageUp` `PageDown` / keypad `+` `-` | zoom the map in and out (not the original's) |
+| View › Map 1x… / Interface 1x… | pick the map's zoom, or the interface's scale (not the original's); the one in use is ticked |
 | `Space` | group the whole stack |
 | `Tab` / `Backspace` | look at where the stack is going, and back / forget its destination |
 | `Home` / `End` / `Del` | centre on the stack / put it down / walk on along its route |

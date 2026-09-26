@@ -27,6 +27,8 @@ display.W, display.H = 640, 480    -- the original's screen, and the smallest
 display.dpi = 1
 display.pw, display.ph = 640, 480
 display.scale = 1
+display.maxScale = 1               -- the biggest the screen allows
+display.chosen = nil               -- a scale picked from the menu, if any
 
 -- the frame being drawn: its size in UI pixels and where its (0, 0) sits
 display.w, display.h = 640, 480
@@ -34,8 +36,9 @@ display.ox, display.oy = 0, 0
 
 local lg = love.graphics
 
---- Read the window's size, and pick the UI's scale: the biggest whole number
---- that still fits the original's 640x480, which the start screens need.
+--- Read the window's size, and pick the UI's scale: the one chosen from the
+--- menu, or else the biggest whole number that still fits the original's
+--- 640x480, which the start screens need.
 function display.measure()
   display.dpi = lg.getDPIScale and lg.getDPIScale() or 1
   if lg.getPixelDimensions then
@@ -44,8 +47,15 @@ function display.measure()
     local w, h = lg.getDimensions()
     display.pw, display.ph = w * display.dpi, h * display.dpi
   end
-  display.scale = math.max(1, math.floor(math.min(display.pw / display.W,
-                                                  display.ph / display.H)))
+  display.maxScale = math.max(1, math.floor(math.min(display.pw / display.W,
+                                                     display.ph / display.H)))
+  display.scale = math.min(display.chosen or display.maxScale, display.maxScale)
+end
+
+--- Draw the UI at `n` device pixels a pixel from now on, as far as it fits.
+function display.choose(n)
+  display.chosen = math.max(1, math.floor(n))
+  display.measure()
 end
 
 --- How many UI pixels the game gets: the whole screen, or `display.wanted`

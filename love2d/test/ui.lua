@@ -745,6 +745,8 @@ do
     if G.openMenu ~= 2 then fail("start menu bar", "the Game menu did not open") end
     try("draw it open", love.draw)
     if G.menuEnabled("alt S") then fail("start menu bar", "Save game was live") end
+    if not G.menuEnabled("ui scale 1") then fail("start menu bar", "the interface's scale was greyed") end
+    if G.menuEnabled("map zoom 1") then fail("start menu bar", "the map's zoom was live") end
     if not G.menuEnabled("^Q") then fail("start menu bar", "Quit was greyed") end
     try("close it", love.keypressed, "escape")
     if G.openMenu then fail("start menu bar", "escape left the menu open") end

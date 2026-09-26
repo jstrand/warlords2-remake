@@ -372,8 +372,9 @@ function centreOn(x, y)
 end
 
 --- The zoom the map may go to: from a device pixel a map pixel up to two
---- steps past the UI's own scale.
-local function maxZoom() return display.scale + 2 end
+--- steps past the biggest scale the UI can take -- the same whatever scale
+--- it has been given, so the two can be picked apart.
+local function maxZoom() return display.maxScale + 2 end
 
 --- Zoom the map to `z`, keeping the map where the UI point (x, y) is -- the
 --- pointer, or the view's middle -- where it was.
@@ -404,7 +405,8 @@ local function applyLayout(L)
   G.barRect   = screen.region(G.screen, screen.REGION.BOTTOMBAR)
   G.menuRect  = screen.region(G.screen, screen.REGION.MENUBAR)
   G.panelRect = screen.region(G.screen, screen.REGION.MAPPANEL)
-  G.menuLayout = menuMod.layout(G.font, menuMod.BAR_H, L.w)
+  G.menuLayout = menuMod.layout(G.font, menuMod.BAR_H, L.w,
+                                menuMod.withZooms(display.maxScale, maxZoom()))
   G.zoom = math.max(1, math.min(maxZoom(), G.zoom or display.scale))
   if mid then
     local vw, vh = viewSize()
@@ -425,6 +427,30 @@ function syncLayout()
   end
 end
 G.syncLayout = function() syncLayout() end
+
+--- Draw the interface at `n` device pixels a pixel (View > Interface): the
+--- screen is laid out again for its new size, the view kept centred where it
+--- was and the map at the zoom it had.
+function G.setUIScale(n)
+  local mid
+  if G.g and G.cx and not G.starting then
+    local vw, vh = viewSize()
+    mid = { G.cx + vw / 2, G.cy + vh / 2 }
+  end
+  display.choose(n)
+  G.layout = nil
+  syncLayout()
+  if mid then
+    local vw, vh = viewSize()
+    G.cx, G.cy = mid[1] - vw / 2, mid[2] - vh / 2
+    clampCamera()
+  end
+end
+
+--- Is this menu item the setting in use? The zoom items are ticked so.
+function G.menuTicked(key)
+  return key == "map zoom " .. tostring(G.zoom) or key == "ui scale " .. display.scale
+end
 G.centreOn = function(x, y) centreOn(x, y) end
 
 --------------------------------------------------------------------- walking
@@ -1572,6 +1598,15 @@ local function drawMenuBar()
       love.graphics.setColor(1, 1, 1)   -- the separators' black would tint it
       f.draw(r.label, r.x + 3, r.y)
       if r.key then f.draw(r.key, r.x + d.keyCol, r.y) end
+      -- the zoom in use (not the original's): a diamond in the key column
+      if G.menuTicked(r.key or r.act) then
+        palColour(glyph)
+        local cx, cy = r.x + d.keyCol + 2, r.y + math.floor(r.h / 2)
+        for k = -2, 2 do
+          local half = 2 - math.abs(k)
+          love.graphics.rectangle("fill", cx - half, cy + k, half * 2 + 1, 1)
+        end
+      end
     end
   end
 end
@@ -2975,13 +3010,23 @@ MENU_DOES = {
 
 -- A menu item this engine cannot do yet is greyed, the way the original greys
 -- one that is not available: saying so beats a pick that does nothing.
+-- View's zoom items (not the original's; menu.withZooms): the map's zoom and
+-- the interface's scale, one item each, as far as any screen could offer.
+for n = 1, 16 do
+  MENU_DOES["map zoom " .. n] = function() G.setZoom(n) end
+  MENU_DOES["ui scale " .. n] = function() G.setUIScale(n) end
+end
+
 function G.menuEnabled(key)
   if key == nil or MENU_DOES[key] == nil then return false end
   -- 7f77:0200: on the start screens every menu is greyed but Game's Quit,
   -- and Load game while a slot holds one (7721:0e25; Load map likewise, by
-  -- 7721:0e42, which the remake does not have)
+  -- 7721:0e42, which the remake does not have). The interface's scale is
+  -- live there too, since it is the start screens' size as well -- not the
+  -- original's, which had no such thing.
   if G.starting then
     return key == "^Q" or (key == "alt L" and require("ui.savegame").used() > 0)
+           or key:match("^ui scale ") ~= nil
   end
   return true
 end
