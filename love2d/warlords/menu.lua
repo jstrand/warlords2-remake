@@ -55,9 +55,9 @@ menu.MENUS = {
 --- The menus with the screen's zooms added to View -- not the original's,
 --- which had one size of everything. An item for each zoom the map can take
 --- and each scale the interface can, run by its act ("map zoom 2",
---- "ui scale 3") and ticked while it is the one in use; and how the game
---- has the screen: all of it, a window on the desktop, or the original's own
---- 640x480 with black round it.
+--- "ui scale 3") and ticked while it is the one in use; the video mode, full
+--- screen or a window on the desktop; and, in either, 4:3 on or off: the
+--- original's own 640x480 with black round it.
 function menu.withZooms(maxUI, maxMap)
   local out = {}
   for i, m in ipairs(menu.MENUS) do
@@ -72,6 +72,7 @@ function menu.withZooms(maxUI, maxMap)
       items[#items + 1] = { "-" }
       items[#items + 1] = { "Full screen", nil, "screen full" }
       items[#items + 1] = { "Window", nil, "screen window" }
+      items[#items + 1] = { "-" }
       items[#items + 1] = { "4:3 (original)", nil, "screen 4:3" }
     end
     out[i] = { title = m.title, items = items }

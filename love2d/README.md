@@ -59,7 +59,8 @@ for pixel.
 | drag the map | slide the view with the pointer |
 | mouse wheel / `PageUp` `PageDown` / keypad `+` `-` | zoom the map in and out (not the original's) |
 | View › Map 1x… / Interface 1x… | pick the map's zoom, or the interface's scale (not the original's); the one in use is ticked |
-| View › Full screen / Window / 4:3 | the whole screen, a resizable window on the desktop, or the original's 640 × 480 with black round it (not the original's) |
+| View › Full screen / Window | the video mode: the whole screen, or a resizable window on the desktop (not the original's) |
+| View › 4:3 | on or off, in either mode: only the original's 640 × 480, with black round it (not the original's) |
 | `Space` | group the whole stack |
 | `Tab` / `Backspace` | look at where the stack is going, and back / forget its destination |
 | `Home` / `End` / `Del` | centre on the stack / put it down / walk on along its route |

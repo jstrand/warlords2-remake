@@ -453,24 +453,28 @@ function G.setUIScale(n)
   relayout(function() display.choose(n) end)
 end
 
---- How the game has the screen: "full", all of it; "4:3", only the
---- original's 640x480 with black round it; or "window", a window on the
---- desktop that can be resized (View > Full screen, Window, 4:3).
+--- The video mode: "full", the whole screen, or "window", a window on the
+--- desktop that can be resized (View > Full screen, Window).
 function G.setScreen(how)
-  relayout(function()
-    display.setWindowed(how == "window")
-    display.wanted = how == "4:3" and { w = layoutMod.W, h = layoutMod.H } or nil
-  end)
+  relayout(function() display.setWindowed(how == "window") end)
 end
 
 function G.screenMode()
-  return display.windowed and "window" or display.wanted and "4:3" or "full"
+  return display.windowed and "window" or "full"
 end
 
---- Is this menu item the setting in use? The zoom items are ticked so.
+--- All of the screen or window, or only the original's 640x480 with black
+--- round it (View > 4:3), in either video mode.
+function G.setOriginalSize(on)
+  relayout(function() display.wanted = on and { w = layoutMod.W, h = layoutMod.H } or nil end)
+end
+
+--- Is this menu item the setting in use? The zoom items are ticked so, and
+--- 4:3 while it is on.
 function G.menuTicked(key)
   return key == "map zoom " .. tostring(G.zoom) or key == "ui scale " .. display.scale
          or key == "screen " .. G.screenMode()
+         or (key == "screen 4:3" and display.wanted ~= nil)
 end
 G.centreOn = function(x, y) centreOn(x, y) end
 
@@ -3038,9 +3042,9 @@ for n = 1, 16 do
   MENU_DOES["map zoom " .. n] = function() G.setZoom(n) end
   MENU_DOES["ui scale " .. n] = function() G.setUIScale(n) end
 end
-for _, how in ipairs({ "full", "window", "4:3" }) do
-  MENU_DOES["screen " .. how] = function() G.setScreen(how) end
-end
+MENU_DOES["screen full"] = function() G.setScreen("full") end
+MENU_DOES["screen window"] = function() G.setScreen("window") end
+MENU_DOES["screen 4:3"] = function() G.setOriginalSize(display.wanted == nil) end
 
 function G.menuEnabled(key)
   if key == nil or MENU_DOES[key] == nil then return false end
