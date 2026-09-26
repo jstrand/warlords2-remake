@@ -151,9 +151,13 @@ play: the item pool comes from the scenario's `.ITM` file
 
 At game start, `setup_capitals` (Ghidra `79fa:07ca`) gives each side its
 capital; every other city is neutral (owner 15). With **Quick Start** on
-(`.SCN` `0x128`), all neutral cities are then dealt out round-robin:
-each side in turn takes the neutral city nearest its last city (with half
-chance measured from its capital instead) until none are left. Then
+(`.SCN` `0x128`), all neutral cities are then dealt out round-robin,
+starting with the lowest-numbered side in play: each side in turn takes the
+neutral city nearest (straight-line, truncated) the one it took last, ties to
+the lowest city number (`828e:04fa`), until none are left. After each pick
+a 1d10 roll below 5 makes that side measure its next pick from its capital
+instead. These rolls come before the production nudges below, and the
+starting garrisons (`setup_garrisons`, run later) follow the new owners. Then
 `setup_city_production` (`79fa:0a75`) rebuilds every city's production. **The
 per-slot values stored in the `.SCN` file are ignored.**
 

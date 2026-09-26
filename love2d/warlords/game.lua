@@ -151,6 +151,44 @@ local function setupGarrisons(g)
   end
 end
 
+--- Quick Start: deal every neutral city out to the sides (setup_capitals,
+--- 79fa:07ca). The lowest side in play picks first, then round the others:
+--- each takes the neutral city nearest its last pick -- ties to the first
+--- in the list (828e:04fa) -- and on 1d10 below 5 measures its next pick
+--- from its capital instead.
+local function dealCities(g)
+  local from, turn = {}, nil
+  for i = 7, 0, -1 do
+    local s = g.map.sides[i + 1]
+    if s and s.inUse then
+      from[i] = { s.capX, s.capY }
+      turn = i
+    end
+  end
+  if not turn then return end
+  while true do
+    local x, y = from[turn][1], from[turn][2]
+    local pick, best = nil, 1000
+    for _, c in ipairs(g.map.cities) do
+      if c.ownerIndex == nil then
+        -- map_distance (2012:1199): straight-line, truncated
+        local dx, dy = x - c.x, y - c.y
+        local d = math.floor(math.sqrt(dx * dx + dy * dy))
+        if d < best then pick, best = c, d end
+      end
+    end
+    if not pick then return end
+    local side = g.map.sides[turn + 1]
+    pick.owner, pick.ownerIndex = side, turn
+    if g.rng:dice(1, 10, -1) < 5 then
+      from[turn] = { side.capX, side.capY }
+    else
+      from[turn] = { pick.x, pick.y }
+    end
+    repeat turn = (turn + 1) % 8 until from[turn]
+  end
+end
+
 --- Build a fresh game from the original data files.
 -- dataDir is the directory holding TERRAIN0/ and the scenario folders.
 function game.new(dataDir, scenario, opts)
@@ -201,9 +239,11 @@ function game.new(dataDir, scenario, opts)
   local observed = not (g.map.options.hiddenMap ~= 0 and humans >= 1)
   for _, s in ipairs(g.sides) do s.observe = observed end
 
-  -- cities: ownership, production slots, defence
+  for _, c in ipairs(g.map.cities) do c.ownerIndex = c.owner and c.owner.index or nil end
+  if g.map.options.quickStart ~= 0 then dealCities(g) end
+
+  -- cities: production slots, defence
   for _, c in ipairs(g.map.cities) do
-    c.ownerIndex = c.owner and c.owner.index or nil
     c.slots = rules.citySlots(c.produces, g.types, g.rng)
     c.defence = rules.cityDefence(#c.slots)
     c.producing = nil       -- slot index being built
