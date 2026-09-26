@@ -49,14 +49,17 @@ local lg = love.graphics
 --- A notched panel hides a strip along its top. macOS keeps a desktop
 --- full-screen window out of it but says nothing of it in a mode of the
 --- game's own, so the window opens desktop full screen first, and the strip
---- that leaves at the top is kept clear once the mode has changed.
+--- that leaves at the top is kept clear once the mode has changed. Only a Mac
+--- has one: anywhere else desktop full screen is the whole screen anyway, and
+--- the measuring is not trusted to say so.
 function display.openWindow(title)
   local win = love.window
   if not (win and win.setMode and win.isOpen) or win.isOpen() then return end
   local _, deskH = win.getDesktopDimensions()
   win.setMode(0, 0, { fullscreen = true, fullscreentype = "desktop", highdpi = true })
   local _, fullH = lg.getDimensions()
-  local strip = math.max(0, deskH - fullH) / deskH
+  local mac = love.system and love.system.getOS and love.system.getOS() == "OS X"
+  local strip = mac and math.max(0, deskH - fullH) / deskH or 0
   local best
   for _, m in ipairs(win.getFullscreenModes()) do
     if not best or m.width * m.height > best.width * best.height then best = m end
