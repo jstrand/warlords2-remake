@@ -1,13 +1,7 @@
-# Decoded/derived copies of the original game assets. These are SSG's
-# copyrighted content -- never commit or redistribute them. See PLAN.md §6.
-preview/
-*.png
 
 .DS_Store
 __pycache__/
 *.pyc
-Warlords 2 Deluxe MANUAL.pdf
-*.pdf
 build/
 
 # the remake's saved games
