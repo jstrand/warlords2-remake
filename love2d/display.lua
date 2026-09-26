@@ -33,6 +33,12 @@ display.top = 0                    -- device rows kept clear at the top: the not
 display.scale = 1
 display.maxScale = 1               -- the biggest the screen allows
 display.chosen = nil               -- a scale picked from the menu, if any
+display.windowed = false           -- in a window on the desktop, not full screen
+
+-- the full-screen mode openWindow chose, and its notch strip, to go back to;
+-- and the window's last size and place, to come back to
+local fullMode, fullTop
+local windowAt
 
 -- the frame being drawn: its size in UI pixels and where its (0, 0) sits
 display.w, display.h = 640, 480
@@ -68,8 +74,65 @@ function display.openWindow(title)
                           { fullscreen = true, fullscreentype = "exclusive", highdpi = true }) then
     local _, ph = lg.getPixelDimensions()
     display.top = math.ceil(strip * ph)
+    fullMode, fullTop = best, display.top
   end
   if title then win.setTitle(title) end
+end
+
+--- The system's cursor is hidden over the game, which draws its own, and in
+--- full screen the pointer is kept in the window. In a window it is free to
+--- leave, and the system's shows over the black round the frame.
+local away = false                 -- in a window, the pointer is off the frame
+local function capture()
+  if love.mouse.setVisible then love.mouse.setVisible(display.windowed and away) end
+  if love.mouse.setGrabbed then love.mouse.setGrabbed(not display.windowed) end
+end
+
+--- Play in an ordinary window on the desktop, resizable, or back in the full
+--- screen openWindow opened (View > Window, Full screen). The window opens
+--- at four-fifths of the desktop, or at the size and place it last had, and
+--- is never smaller than the original's 640x480. Without a window the game
+--- opened itself (a harness) only the setting changes.
+function display.setWindowed(on)
+  if on == display.windowed then return end
+  local win = love.window
+  if fullMode and win and win.setMode then
+    if on then
+      local w, h, x, y
+      if windowAt then
+        w, h, x, y = windowAt[1], windowAt[2], windowAt[3], windowAt[4]
+      else
+        local dw, dh = win.getDesktopDimensions()
+        w = math.max(display.W, math.floor(dw * 0.8))
+        h = math.max(display.H, math.floor(dh * 0.8))
+      end
+      if not win.setMode(w, h, { fullscreen = false, resizable = true, highdpi = true,
+                                 minwidth = display.W, minheight = display.H,
+                                 x = x, y = y }) then return end
+      display.top = 0
+    else
+      local w, h = win.getMode()
+      local x, y = win.getPosition()
+      windowAt = { w, h, x, y }
+      if not win.setMode(fullMode.width, fullMode.height,
+                         { fullscreen = true, fullscreentype = "exclusive", highdpi = true }) then
+        return
+      end
+      display.top = fullTop
+    end
+  end
+  display.windowed = on
+  away = false
+  if love.mouse then capture() end
+  display.measure()
+end
+
+--- Is the pointer off the game, so that it draws none? Only ever in a
+--- window: off the frame, or out of the window altogether.
+function display.pointerAway()
+  if not display.windowed then return false end
+  local win = love.window
+  return away or (win and win.hasMouseFocus and not win.hasMouseFocus()) or false
 end
 
 --- Read the window's size, and pick the UI's scale: the one chosen from the
@@ -171,7 +234,9 @@ function display.install()
     -- pointer would stop while the real one went on, into the black round
     -- the frame or the notch's strip, where the system shows a cursor of its
     -- own. The warp back reports a move of its own, which is not the
-    -- player's and is passed on as none.
+    -- player's and is passed on as none. In a window the pointer goes where
+    -- it likes, and off the frame the system's cursor takes over from the
+    -- game's.
     local warpedTo
     local moved = love.handlers.mousemoved
     love.handlers.mousemoved = function(x, y, dx, dy, ...)
@@ -184,7 +249,13 @@ function display.install()
         local x1 = (display.ox + display.w * display.scale - 1) / d
         local y1 = (display.oy + display.h * display.scale - 1) / d
         local cx, cy = math.max(x0, math.min(x1, x)), math.max(y0, math.min(y1, y))
-        if (cx ~= x or cy ~= y) and love.mouse.setPosition then
+        if display.windowed then
+          local off = cx ~= x or cy ~= y
+          if off ~= away then
+            away = off
+            capture()
+          end
+        elseif (cx ~= x or cy ~= y) and love.mouse.setPosition then
           love.mouse.setPosition(cx, cy)
           warpedTo = { cx, cy }
         end
@@ -193,16 +264,12 @@ function display.install()
       return moved(x, y, dx * k, dy * k, ...)
     end
 
-    -- no system cursor over the game, and the pointer kept in its window;
-    -- both again whenever the game has the focus back
-    local function hide()
-      if love.mouse.setVisible then love.mouse.setVisible(false) end
-      if love.mouse.setGrabbed then love.mouse.setGrabbed(true) end
-    end
-    hide()
+    -- no system cursor over the game, and in full screen the pointer kept in
+    -- its window; both again whenever the game has the focus back
+    capture()
     local focus = love.handlers.focus
     love.handlers.focus = function(f, ...)
-      if f then hide() end
+      if f then capture() end
       if focus then return focus(f, ...) end
     end
   end

@@ -453,16 +453,24 @@ function G.setUIScale(n)
   relayout(function() display.choose(n) end)
 end
 
---- The whole screen, or only the original's 640x480 with black round it
---- (View > Full screen, 4:3).
-function G.setOriginalSize(on)
-  relayout(function() display.wanted = on and { w = layoutMod.W, h = layoutMod.H } or nil end)
+--- How the game has the screen: "full", all of it; "4:3", only the
+--- original's 640x480 with black round it; or "window", a window on the
+--- desktop that can be resized (View > Full screen, Window, 4:3).
+function G.setScreen(how)
+  relayout(function()
+    display.setWindowed(how == "window")
+    display.wanted = how == "4:3" and { w = layoutMod.W, h = layoutMod.H } or nil
+  end)
+end
+
+function G.screenMode()
+  return display.windowed and "window" or display.wanted and "4:3" or "full"
 end
 
 --- Is this menu item the setting in use? The zoom items are ticked so.
 function G.menuTicked(key)
   return key == "map zoom " .. tostring(G.zoom) or key == "ui scale " .. display.scale
-         or key == (display.wanted and "screen 4:3" or "screen full")
+         or key == "screen " .. G.screenMode()
 end
 G.centreOn = function(x, y) centreOn(x, y) end
 
@@ -928,6 +936,7 @@ G.pointerKind = pointerKind
 
 local function drawPointer()
   if not (G.pointerImg and love.mouse and love.mouse.getPosition) then return end
+  if display.pointerAway() then return end
   local mx, my = love.mouse.getPosition()
   local k = pointerKind(mx, my)
   love.graphics.setColor(1, 1, 1)
@@ -3029,8 +3038,9 @@ for n = 1, 16 do
   MENU_DOES["map zoom " .. n] = function() G.setZoom(n) end
   MENU_DOES["ui scale " .. n] = function() G.setUIScale(n) end
 end
-MENU_DOES["screen full"] = function() G.setOriginalSize(false) end
-MENU_DOES["screen 4:3"] = function() G.setOriginalSize(true) end
+for _, how in ipairs({ "full", "window", "4:3" }) do
+  MENU_DOES["screen " .. how] = function() G.setScreen(how) end
+end
 
 function G.menuEnabled(key)
   if key == nil or MENU_DOES[key] == nil then return false end
@@ -3173,12 +3183,10 @@ end
 
 --------------------------------------------------------------------- the window
 
---- A new window size (or the first real one): measure it again, and the next
---- frame lays the screen out for it.
+--- A new window size (or the first real one), the window dragged bigger or
+--- smaller: measure it again and lay the screen out for it.
 function love.resize()
-  display.measure()
-  G.layout = nil
-  syncLayout()
+  relayout(display.measure)
 end
 
 -- LOVE ignores what main.lua returns; test/ui.lua uses it to inspect state.

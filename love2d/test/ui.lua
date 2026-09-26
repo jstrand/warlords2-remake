@@ -515,7 +515,13 @@ if G and G.menuLayout then
   if G.layout.w ~= 640 or G.layout.h ~= 480 then
     fail("4:3", ("the screen is %dx%d, not 640x480"):format(G.layout.w, G.layout.h))
   end
-  G.setOriginalSize(false)
+  -- a window, here with no real one to open, has the whole of it
+  G.setScreen("window")
+  if G.screenMode() ~= "window" or G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then
+    fail("window", ("the screen is %s %dx%d, not window %dx%d"):format(
+      G.screenMode(), G.layout.w, G.layout.h, SCREEN_W, SCREEN_H))
+  end
+  G.setScreen("full")
   if G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then
     fail("full screen", ("the screen is %dx%d, not %dx%d"):format(G.layout.w, G.layout.h, SCREEN_W, SCREEN_H))
   end
