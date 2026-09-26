@@ -722,7 +722,11 @@ local function testMovement(scenario)
       if not target and x >= 0 and y >= 0 and x < g.map.width and y < g.map.height
          and not game.cityAt(g, x, y) then
         local p = movement.findPath(g, stack, from.x, from.y, x, y)
-        if p and #p >= 2 then target = { x = x, y = y, path = p } end
+        -- stay ashore: going to sea would end the move and use it up
+        if p and #p >= 2 and p[#p].cost < movement.PAST_SHORE
+           and not movement.has(movement.grid(g, side.index)[y * g.map.width + x], movement.WATER_F) then
+          target = { x = x, y = y, path = p }
+        end
       end
     end
   end
@@ -2321,7 +2325,7 @@ local function testHiddenMap()
       if not target and x >= 0 and y >= 0 and game.seen(g, side.index, x, y)
          and (x ~= army.x or y ~= army.y) then
         local p = movement.findPath(g, { army }, army.x, army.y, x, y)
-        if p and #p > 0 then target = { x = x, y = y } end
+        if p and #p > 0 and p[#p].cost < movement.PAST_SHORE then target = { x = x, y = y } end
       end
     end
   end
@@ -2566,6 +2570,60 @@ local function testSea()
   for _, a in ipairs(g2.armies) do
     if a.x == wx and a.y == wy then ok(not a.atSea, "a loaded flier and its hero are not at sea") end
   end
+
+  -- Boarding and landing (1555:19e4, 1a8b:0d1a): the shore is water, so a
+  -- land stack only goes to sea or comes ashore at a crossing -- a bridge,
+  -- its own port city or a marked tile -- and doing so ends its move.
+  g = game.new(DATA, "ERYTHEA", { seed = 81 })
+  local mirea
+  for _, c in ipairs(g.map.cities) do if c.name == "Mirea" then mirea = c end end
+  ok(mirea and mirea.ownerIndex == 0 and move.isPort(g, mirea), "Mirea is side 0's port")
+  local grid = move.grid(g, 0)
+  local function byte(x, y) return grid[y * g.map.width + x] end
+  eq(scn.terrainAt(g.map, 86, 7), move.SHORE, "the shore runs past Mirea")
+  ok(move.has(byte(86, 7), move.WATER_F), "and a shore tile is water to a walker")
+  eq(move.stepCost(byte(83, 9), byte(82, 9), move.LAND, false, false, 10), nil,
+     "so a land stack cannot step onto it from a plain")
+
+  local sailor = { type = 1, owner = 0, x = mirea.x, y = mirea.y, strength = 5,
+                   maxMoves = 20, moves = 20, upkeep = 0 }
+  g.armies[#g.armies + 1] = sailor
+  local r = move.moveTo(g, { sailor }, 86, 4)
+  eq(sailor.y, 7, "leaving port it stops on the first sea tile")
+  eq(scn.terrainAt(g.map, sailor.x, sailor.y), move.SHORE, "the shore")
+  ok(sailor.atSea, "at sea")
+  eq(r.spent, move.COST[move.SHORE], "paying the tile's cost and no water charge")
+  eq(sailor.moves, 0, "and going to sea uses up the rest of its move")
+  eq(r.stopped, "out of moves", "which ends the walk")
+
+  sailor.moves = 20
+  r = move.moveTo(g, { sailor }, 86, 4)
+  eq(sailor.y, 4, "next turn it sails out into open water")
+  ok(sailor.atSea, "still at sea")
+  eq(sailor.moves, 20 - (7 - 4) * move.COST[move.WATER], "paying 1 a tile")
+  eq(move.findPath(g, { sailor }, 86, 4, 86, 5)[1].cost, move.COST[move.WATER],
+     "sailing on costs no water charge either")
+
+  r = move.moveTo(g, { sailor }, mirea.x, mirea.y)
+  eq(sailor.x * 1000 + sailor.y, mirea.x * 1000 + mirea.y, "it sails back into port")
+  ok(not sailor.atSea, "and comes ashore there")
+  eq(sailor.moves, 0, "which uses up its move too")
+
+  -- a stack at sea attacks a port city from the water
+  local kuuria
+  for _, c in ipairs(g.map.cities) do if c.name == "Kuuria" then kuuria = c end end
+  local sx, sy
+  for x = kuuria.x - 1, kuuria.x + 2 do
+    for y = kuuria.y - 1, kuuria.y + 2 do
+      local t = scn.terrainAt(g.map, x, y)
+      if not sx and (t == move.WATER or t == move.SHORE) and not g.map.crossing[y * g.map.width + x + 1]
+         and #game.armiesAt(g, x, y) == 0 then sx, sy = x, y end
+    end
+  end
+  ok(sx ~= nil, "Kuuria has open water beside it")
+  sailor.x, sailor.y, sailor.atSea, sailor.moves = sx, sy, true, 20
+  local p = move.findPath(g, { sailor }, sx, sy, kuuria.x, kuuria.y)
+  ok(p ~= nil, "a stack at sea can path into the port it attacks")
 end
 
 --------------------------------------------------------------------- main

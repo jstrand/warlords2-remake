@@ -46,8 +46,11 @@ end
 
 move.has = has
 
-move.WATER_PENALTY = 10       -- a land stack stepping into open water
+-- The water charge only steers the route: the wavefront adds it where a land
+-- stack comes out of open water, but the walk never spends it.
+move.WATER_PENALTY = 10       -- a land stack's route leaving open water
 move.WATER_PENALTY_TO = 20    -- ... when the whole move is aimed at water
+move.PAST_SHORE = 0x80        -- a step after going to sea or ashore (1555:19e4)
 move.MIN_MOVE_LEFT = 2        -- the walk stops below this
 move.MAX_PATH = 200           -- a path is at most 200 compass steps
 
@@ -84,7 +87,8 @@ function move.stackMode(g, stack)
     if t.hillsMove then hills = true end
   end
 
-  if atSea then return move.LAND, woods, hills, true end
+  -- at sea the bonus flags are the sea flag alone: no woods or hills bonus
+  if atSea then return move.LAND, false, false, true end
   if anyBoat then return move.BOAT, woods, hills, false end
   if heroFlight or allFly or (allNonHeroFly and anyFly) then
     return move.FLYING, woods, hills, false
@@ -127,7 +131,7 @@ function move.grid(g, sideIndex)
       local byte = scn.roadAt(g.map, x, y) % 0x20 ~= 0 and 1 or move.COST[terrain]
       if terrain == move.BRIDGE then
         byte = with(with(byte, move.CROSS_F), move.WATER_F)
-      elseif terrain == move.WATER then
+      elseif terrain == move.WATER or terrain == move.SHORE then
         byte = with(byte, move.WATER_F)
       elseif terrain == move.FOREST then
         byte = with(byte, move.FOREST_F)
@@ -185,9 +189,12 @@ end
 
 --------------------------------------------------------------------- costs
 
---- The cost of stepping onto tile `to` from tile `from`, or nil if the step
---- cannot be taken. Both are cost-grid bytes. `penalty` is the water entry
---- charge for this move (10, or 20 when the move is aimed at water).
+--- The wavefront's weight for spreading from tile `from` to tile `to`, or nil
+--- if it cannot spread there (1555:0373). Both are cost-grid bytes. The
+--- original floods out from the destination, so `from` is the tile nearer
+--- it; `penalty` is the water charge (10, or 20 when the move is aimed at
+--- water), added where a land stack's walk would come out of open water.
+--- This picks the route only: move.walkCost is what the walk spends.
 function move.stepCost(fromByte, toByte, mode, woods, hills, penalty)
   local cost = toByte % 8
   local toWater, fromWater = has(toByte, move.WATER_F), has(fromByte, move.WATER_F)
@@ -216,11 +223,36 @@ function move.stepCost(fromByte, toByte, mode, woods, hills, penalty)
     if woods and has(toByte, move.FOREST_F) then cost = 2 end
     if hills and has(toByte, move.HILLS_F) then cost = 2 end
   end
-  -- stepping out of land (or off a crossing) into open water costs extra
+  -- the flood reaching open water from land (or a crossing) costs extra
   if (not fromWater or has(fromByte, move.CROSS_F)) and toWater and not toCross then
     cost = cost + penalty
   end
   return cost
+end
+
+--- The moves a walk spends stepping onto a tile (1555:19e4): the tile's own
+--- cost, 2 for a flier where that is more, and the woods and hills bonuses on
+--- land. No water charge.
+function move.walkCost(byte, mode, woods, hills)
+  local cost = byte % 8
+  if mode == move.FLYING then
+    if has(byte, move.WATER_F) and not has(byte, move.CROSS_F) then return 2 end
+    if cost == 0 or cost > 2 then return 2 end
+    return cost
+  end
+  if mode == move.LAND and cost > 2 then
+    if woods and has(byte, move.FOREST_F) then cost = 2 end
+    if hills and has(byte, move.HILLS_F) then cost = 2 end
+  end
+  return cost
+end
+
+--- Does a land stack stepping onto this tile go to sea (or, `atSea`, come
+--- ashore)? Water from land, or land from the sea, where the tile is no
+--- crossing. The walk ends there: every step after it costs PAST_SHORE.
+function move.crossesShore(byte, atSea)
+  if has(byte, move.CROSS_F) then return false end
+  return has(byte, move.WATER_F) ~= (atSea and true or false)
 end
 
 --- The movement points a stack shares: the lowest of its armies'.
@@ -262,7 +294,7 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   if dx < 0 or dy < 0 or dx >= W or dy >= H then return nil end
 
   local side = stack[1] and stack[1].owner
-  local mode, woods, hills = move.stackMode(g, stack)
+  local mode, woods, hills, atSea = move.stackMode(g, stack)
   local grid = move.grid(g, side)
 
   -- the destination's own terrain decides the water charge for the whole move
@@ -270,12 +302,27 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   local penalty = (destTerrain == move.WATER or destTerrain == move.SHORE)
                   and move.WATER_PENALTY_TO or move.WATER_PENALTY
 
-  -- a stack may always path *to* a city, just never through one it does not own
+  -- a stack may always path *to* a city, just never through one it does not
+  -- own: its footprint opens at the city cost for this search, and a port is
+  -- a crossing, so a stack at sea can attack it (path_mark_cities, 1555:0bde)
   local goal = dy * W + dx
   local goalByte = grid[goal]
-  local restore
-  if goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
-    restore, grid[goal] = goalByte, goalByte + 1
+  local restore = {}
+  local city = g.map.cityTile[goal]
+  if city and goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
+    local port = move.isPort(g, city)
+    for ox = 0, 1 do
+      for oy = 0, 1 do
+        local x, y = city.x + ox, city.y + oy
+        if x < W and y < H then
+          local k = y * W + x
+          restore[k] = grid[k]
+          local byte = grid[k] - grid[k] % 8 + move.COST[move.CITY]
+          if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
+          grid[k] = byte
+        end
+      end
+    end
   end
 
   local dist, prev, done = {}, {}, {}
@@ -330,7 +377,14 @@ function move.findPath(g, stack, sx, sy, dx, dy)
         if nx >= 0 and ny >= 0 and nx < W and ny < H then
           local nk = ny * W + nx
           if not done[nk] then
-            local c = move.stepCost(grid[k], grid[nk], mode, woods, hills, penalty)
+            local c = move.stepCost(grid[k], grid[nk], mode, woods, hills, 0)
+            -- the flood runs from the destination, so its water charge falls
+            -- where the walk comes out of open water -- never off the start
+            if c and mode == move.LAND and k ~= start
+               and has(grid[k], move.WATER_F) and not has(grid[k], move.CROSS_F)
+               and (not has(grid[nk], move.WATER_F) or has(grid[nk], move.CROSS_F)) then
+              c = c + penalty
+            end
             if c and (dist[nk] == nil or d + c < dist[nk]) then
               dist[nk] = d + c
               prev[nk] = { k, c }
@@ -342,15 +396,31 @@ function move.findPath(g, stack, sx, sy, dx, dy)
     end
   end
 
-  if restore then grid[goal] = restore end
-  if dist[goal] == nil then return nil end
+  if dist[goal] == nil then
+    for k, byte in pairs(restore) do grid[k] = byte end
+    return nil
+  end
 
   local path, k = {}, goal
   while k ~= start do
-    local p = prev[k]
-    table.insert(path, 1, { x = k % W, y = math.floor(k / W), cost = p[2] })
-    k = p[1]
+    table.insert(path, 1, { x = k % W, y = math.floor(k / W), k = k })
+    k = prev[k][1]
   end
+
+  -- what the walk spends on each step (path_step_costs, 1555:18be): a land
+  -- stack's move ends where it goes to sea or comes ashore
+  local ashore = false
+  for _, step in ipairs(path) do
+    local byte = grid[step.k]
+    if ashore then
+      step.cost = move.PAST_SHORE
+    else
+      step.cost = move.walkCost(byte, mode, woods, hills)
+      ashore = mode == move.LAND and move.crossesShore(byte, atSea)
+    end
+    step.k = nil
+  end
+  for k2, byte in pairs(restore) do grid[k2] = byte end
   if #path > move.MAX_PATH then return nil end
   return path
 end
@@ -422,7 +492,15 @@ function move.walk(g, stack, path)
     a.x, a.y = dest.x, dest.y
     a.moves = math.max(0, (a.moves or 0) - cost)
   end
-  move.settleSea(g, stack, dest.x, dest.y, mode, wasAtSea)
+  -- going to sea or coming ashore uses up the move of every army that did
+  -- (1a8b:0d1a), and the walk ends there whatever it met (1a8b:0c4f)
+  local change = move.settleSea(g, stack, dest.x, dest.y, mode, wasAtSea)
+  if change then
+    for _, a in ipairs(stack) do
+      if (a.atSea and true or false) == (change == "to sea") then a.moves = 0 end
+    end
+    result.stopped, result.attack = "out of moves", nil
+  end
 
   -- walking uncovers the map as it goes
   if g.map.options.hiddenMap ~= 0 and side ~= nil then
@@ -450,26 +528,32 @@ end
 --- it was. A land stack ending on water or a shore puts to sea -- every army
 --- in it that cannot fly, and a hero too unless a flier goes with it and
 --- nothing else walks. One at sea ending on land (not water, shore or a
---- bridge) comes ashore, every army.
+--- bridge) comes ashore, every army. Returns "to sea" or "ashore" when that
+--- happened, nil otherwise.
 function move.settleSea(g, stack, x, y, mode, wasAtSea)
-  if mode ~= move.LAND then return end
+  if mode ~= move.LAND then return nil end
   local t = scn.terrainAt(g.map, x, y)
   if not wasAtSea then
-    if t ~= move.WATER and t ~= move.SHORE then return end
+    if t ~= move.WATER and t ~= move.SHORE then return nil end
     local flier, walker = false, false
     for _, a in ipairs(stack) do
       if g.types.byId[a.type].flies then flier = true
       elseif a.type ~= armytype.HERO then walker = true end
     end
     if walker then flier = false end
+    local change
     for _, a in ipairs(stack) do
       if not g.types.byId[a.type].flies and (a.type ~= armytype.HERO or not flier) then
         a.atSea = true
+        change = "to sea"
       end
     end
+    return change
   elseif t ~= move.WATER and t ~= move.SHORE and t ~= move.BRIDGE then
     for _, a in ipairs(stack) do a.atSea = false end
+    return "ashore"
   end
+  return nil
 end
 
 --- Move a stack towards a tile: pathfind, then walk.

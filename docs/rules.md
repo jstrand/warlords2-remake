@@ -255,11 +255,15 @@ The pathfinder lives in resident segment `0555` (Ghidra `1555`). It builds a
 then runs a wavefront search from the destination (`path_wavefront`,
 `1555:0373`). Each grid byte holds a **cost in the low 3 bits** plus flags:
 `0x08` water, `0x10` crossing, `0x20` hills, `0x40` forest, `0x80` city.
+The water flag goes on **water, shore and bridge** tiles alike (the terrain
+switch in `1555:0d9e`), so to a walker the shore is sea, not land.
 
 **Cost 0 means impassable** and is stamped over the tile during grid
 preparation. That covers mountains and every city the moving side does not
-own — so a path may never run *through* a foreign city, only end on one
-(`path_mark_cities` re-opens the destination). A **city occupies a 2×2
+own — so a path may never run *through* a foreign city, only end on one.
+When the destination is such a city, `path_mark_cities` (`1555:0bde`)
+re-opens its whole footprint at the city cost for that search, and makes it a
+crossing if it is a port, so a stack at sea can attack a port from the water. A **city occupies a 2×2
 footprint**: all four tiles get the city flag.
 
 **Crossing tiles** (`0x10`) are the only places a stack may change between
@@ -293,7 +297,7 @@ flag table built by `build_army_move_flags`, Ghidra `7715:0000`):
 | **at sea** | any army is already on water | land rules, sea flag set |
 | **boat** | any army is a boat (`+60`) | water and city tiles only; pays the table cost |
 | **flying** | every army flies (`+54`), *or* every non-hero flies and at least one army does, *or* a hero carries a flight item | **2 per tile** (water and mountains included); 1 where the tile costs 1 |
-| **land** | otherwise | table costs; mountains impassable; may only cross between land and water at a crossing tile; stepping into open water costs an extra **10**, or **20 when the move's destination tile is itself water or shore** (`1555:08bf` sets the charge once per move) |
+| **land** | otherwise | table costs; mountains impassable; may only cross between land and water where one of the two tiles is a crossing; going to sea or ashore ends the move (see below) |
 
 A land stack gets a **move bonus** if **any** army in it has one. Forest or
 hills tiles then cost **2** instead of 4 or 6:
@@ -308,6 +312,33 @@ from that. The 2-MP carry-over is confirmed (see Start of a side's turn) and so 
 8-army stack limit (see Moving a stack).
 
 A path is stored as up to 200 compass directions (0 = north, clockwise).
+
+**The water charge only picks the route.** For a land stack the wavefront
+adds **10** to its weights where the walk would come out of open water onto
+land or a crossing, or **20 when the move's destination tile is itself water
+or shore** (`1555:08bf` sets the charge once per move). The moves actually
+spent come from `path_step_costs` (`1555:18be` → `1555:19e4`): the tile's
+table cost, with the flier and woods/hills rules, and no water charge.
+
+### Going to sea and coming ashore
+
+A land stack goes to sea by stepping from a crossing (a bridge, its own port
+city or a marked tile) onto water or shore that is not a crossing, and comes
+ashore the same way round. That step is the last one: `1555:19e4` charges
+**0x80** for every step after it, so the walk stops there. At the end of the
+walk (`place_stack_at_step`, `1a8b:04c8`):
+
+- A land stack ending on **water or shore** puts to sea: every army that
+  cannot fly, and a hero too unless a flier goes with it and nothing else
+  walks. Flying and boat moves never change the flag.
+- A stack at sea ending anywhere but water, shore or a bridge comes ashore,
+  every army.
+- Either way the move is **used up**: `1a8b:0d1a` sets the moves of every
+  army that just went to sea, or of every army after coming ashore, to 0,
+  and `move_stack_step` reports the walk as stopped short. Sailing into one's
+  own port city counts as coming ashore.
+- A stack at sea carries only the sea bonus flag (`0x08`), so no woods or
+  hills bonus.
 
 ## Moving a stack
 
