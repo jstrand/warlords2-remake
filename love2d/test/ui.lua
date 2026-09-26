@@ -511,6 +511,14 @@ if G and G.menuLayout then
     end
     G.openMenu = nil
   end
+  -- the last of View's is 4:3: the original's 640x480, whatever the screen
+  if G.layout.w ~= 640 or G.layout.h ~= 480 then
+    fail("4:3", ("the screen is %dx%d, not 640x480"):format(G.layout.w, G.layout.h))
+  end
+  G.setOriginalSize(false)
+  if G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then
+    fail("full screen", ("the screen is %dx%d, not %dx%d"):format(G.layout.w, G.layout.h, SCREEN_W, SCREEN_H))
+  end
   print(("  opened %d menus and picked %d items"):format(#G.menuLayout, picked))
 end
 

@@ -430,16 +430,15 @@ function syncLayout()
 end
 G.syncLayout = function() syncLayout() end
 
---- Draw the interface at `n` device pixels a pixel (View > Interface): the
---- screen is laid out again for its new size, the view kept centred where it
---- was and the map at the zoom it had.
-function G.setUIScale(n)
+--- Change how the screen is used, by `change`, and lay it out again for its
+--- new size -- the view kept centred where it was, the map at its zoom.
+local function relayout(change)
   local mid
   if G.g and G.cx and not G.starting then
     local vw, vh = viewSize()
     mid = { G.cx + vw / 2, G.cy + vh / 2 }
   end
-  display.choose(n)
+  change()
   G.layout = nil
   syncLayout()
   if mid then
@@ -449,9 +448,21 @@ function G.setUIScale(n)
   end
 end
 
+--- Draw the interface at `n` device pixels a pixel (View > Interface).
+function G.setUIScale(n)
+  relayout(function() display.choose(n) end)
+end
+
+--- The whole screen, or only the original's 640x480 with black round it
+--- (View > Full screen, 4:3).
+function G.setOriginalSize(on)
+  relayout(function() display.wanted = on and { w = layoutMod.W, h = layoutMod.H } or nil end)
+end
+
 --- Is this menu item the setting in use? The zoom items are ticked so.
 function G.menuTicked(key)
   return key == "map zoom " .. tostring(G.zoom) or key == "ui scale " .. display.scale
+         or key == (display.wanted and "screen 4:3" or "screen full")
 end
 G.centreOn = function(x, y) centreOn(x, y) end
 
@@ -3018,17 +3029,19 @@ for n = 1, 16 do
   MENU_DOES["map zoom " .. n] = function() G.setZoom(n) end
   MENU_DOES["ui scale " .. n] = function() G.setUIScale(n) end
 end
+MENU_DOES["screen full"] = function() G.setOriginalSize(false) end
+MENU_DOES["screen 4:3"] = function() G.setOriginalSize(true) end
 
 function G.menuEnabled(key)
   if key == nil or MENU_DOES[key] == nil then return false end
   -- 7f77:0200: on the start screens every menu is greyed but Game's Quit,
   -- and Load game while a slot holds one (7721:0e25; Load map likewise, by
-  -- 7721:0e42, which the remake does not have). The interface's scale is
-  -- live there too, since it is the start screens' size as well -- not the
-  -- original's, which had no such thing.
+  -- 7721:0e42, which the remake does not have). The interface's scale and
+  -- the screen's shape are live there too, since they are the start
+  -- screens' size as well -- not the original's, which had no such thing.
   if G.starting then
     return key == "^Q" or (key == "alt L" and require("ui.savegame").used() > 0)
-           or key:match("^ui scale ") ~= nil
+           or key:match("^ui scale ") ~= nil or key:match("^screen ") ~= nil
   end
   return true
 end
