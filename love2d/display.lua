@@ -167,11 +167,43 @@ function display.install()
         return handle(x, y, ...)
       end
     end
+    -- The real pointer is kept inside the frame: past its edge the game's own
+    -- pointer would stop while the real one went on, into the black round
+    -- the frame or the notch's strip, where the system shows a cursor of its
+    -- own. The warp back reports a move of its own, which is not the
+    -- player's and is passed on as none.
+    local warpedTo
     local moved = love.handlers.mousemoved
     love.handlers.mousemoved = function(x, y, dx, dy, ...)
-      x, y = display.toUI(x, y)
       local k = display.dpi / display.scale
+      if warpedTo and x == warpedTo[1] and y == warpedTo[2] then
+        warpedTo, dx, dy = nil, 0, 0
+      else
+        local d = display.dpi
+        local x0, y0 = display.ox / d, display.oy / d
+        local x1 = (display.ox + display.w * display.scale - 1) / d
+        local y1 = (display.oy + display.h * display.scale - 1) / d
+        local cx, cy = math.max(x0, math.min(x1, x)), math.max(y0, math.min(y1, y))
+        if (cx ~= x or cy ~= y) and love.mouse.setPosition then
+          love.mouse.setPosition(cx, cy)
+          warpedTo = { cx, cy }
+        end
+      end
+      x, y = display.toUI(x, y)
       return moved(x, y, dx * k, dy * k, ...)
+    end
+
+    -- no system cursor over the game, and the pointer kept in its window;
+    -- both again whenever the game has the focus back
+    local function hide()
+      if love.mouse.setVisible then love.mouse.setVisible(false) end
+      if love.mouse.setGrabbed then love.mouse.setGrabbed(true) end
+    end
+    hide()
+    local focus = love.handlers.focus
+    love.handlers.focus = function(f, ...)
+      if f then hide() end
+      if focus then return focus(f, ...) end
     end
   end
 end
