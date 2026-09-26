@@ -3,7 +3,10 @@
 -- Not the original's: it drew 640x480 and nothing else. Here there are three
 -- kinds of coordinate:
 --
---   device  the display's own pixels (LOVE's "pixel dimensions")
+--   device  the display's own pixels (LOVE's "pixel dimensions"). The game
+--           puts the display in its own full-resolution mode where it can
+--           (display.openWindow), so these are the panel's real pixels and
+--           nothing resamples them on the way.
 --   UI      the interface's pixels: every rect in the game's data, the menu
 --           bar, the dialogs, the pointer. One UI pixel is `scale` device
 --           pixels across, a whole number, so the art stays sharp.
@@ -25,7 +28,8 @@ display.W, display.H = 640, 480    -- the original's screen, and the smallest
 
 -- the device, as last measured
 display.dpi = 1
-display.pw, display.ph = 640, 480
+display.pw, display.ph = 640, 480   -- what the frame may use, below `top`
+display.top = 0                    -- device rows kept clear at the top: the notch
 display.scale = 1
 display.maxScale = 1               -- the biggest the screen allows
 display.chosen = nil               -- a scale picked from the menu, if any
@@ -35,6 +39,35 @@ display.w, display.h = 640, 480
 display.ox, display.oy = 0, 0
 
 local lg = love.graphics
+
+--- Open the game's window, full screen in the display's own biggest mode --
+--- on a Mac in a scaled resolution, the panel's real pixels rather than a
+--- bigger picture macOS then shrinks to fit. Only when the window has been
+--- left to the game (conf.lua's t.window = nil); a harness that opened its
+--- own keeps it.
+---
+--- A notched panel hides a strip along its top. macOS keeps a desktop
+--- full-screen window out of it but says nothing of it in a mode of the
+--- game's own, so the window opens desktop full screen first, and the strip
+--- that leaves at the top is kept clear once the mode has changed.
+function display.openWindow(title)
+  local win = love.window
+  if not (win and win.setMode and win.isOpen) or win.isOpen() then return end
+  local _, deskH = win.getDesktopDimensions()
+  win.setMode(0, 0, { fullscreen = true, fullscreentype = "desktop", highdpi = true })
+  local _, fullH = lg.getDimensions()
+  local strip = math.max(0, deskH - fullH) / deskH
+  local best
+  for _, m in ipairs(win.getFullscreenModes()) do
+    if not best or m.width * m.height > best.width * best.height then best = m end
+  end
+  if best and win.setMode(best.width, best.height,
+                          { fullscreen = true, fullscreentype = "exclusive", highdpi = true }) then
+    local _, ph = lg.getPixelDimensions()
+    display.top = math.ceil(strip * ph)
+  end
+  if title then win.setTitle(title) end
+end
 
 --- Read the window's size, and pick the UI's scale: the one chosen from the
 --- menu, or else the biggest whole number that still fits the original's
@@ -47,6 +80,7 @@ function display.measure()
     local w, h = lg.getDimensions()
     display.pw, display.ph = w * display.dpi, h * display.dpi
   end
+  display.ph = display.ph - display.top
   display.maxScale = math.max(1, math.floor(math.min(display.pw / display.W,
                                                      display.ph / display.H)))
   display.scale = math.min(display.chosen or display.maxScale, display.maxScale)
@@ -72,7 +106,7 @@ end
 function display.setFrame(w, h)
   display.w, display.h = w, h
   display.ox = math.floor((display.pw - w * display.scale) / 2)
-  display.oy = math.floor((display.ph - h * display.scale) / 2)
+  display.oy = display.top + math.floor((display.ph - h * display.scale) / 2)
 end
 
 --- Draw in UI pixels until the matching pop.

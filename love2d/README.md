@@ -21,14 +21,17 @@ love love2d ISLADIA                # straight into a scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
 ```
 
-The game opens full screen. The chrome is not a lookalike: the background,
+The game opens full screen, in the display's own biggest mode — on a Mac set
+to a scaled resolution, the panel's real pixels rather than a bigger picture
+macOS shrinks to fit — with a notch's strip along the top left clear. The chrome is not a lookalike: the background,
 buttons, regions and fonts are the game's own, read from its data files at
 runtime (`docs/formats/screens.md`). How it fills a screen bigger than the
 original's 640 × 480 is **not** the original's:
 
 - The interface is drawn at a whole-number scale in the display's real pixels,
   the biggest that still fits 640 × 480, so every pixel of the art stays a
-  sharp block (`display.lua`).
+  sharp block (`display.lua`). View › Interface 1x is one game pixel to one
+  pixel of the screen.
 - The start screens stay the original's 640 × 480, centred.
 - On the main screen the fixed pieces keep their size and move to an edge —
   the strategic map to the top right, the control panel to the bottom right,
@@ -119,7 +122,8 @@ W2_OUT=/tmp/shots W2_SCRIPT=love2d/test/shot/shots.lua \
 The arguments are the game's own, and passing the seed is what makes two runs
 comparable. `W2_SCRIPT` names a file of `{name, fn}` steps — see
 `test/shot/shots.lua`. The window is 640 × 480 unless `W2_SIZE=980x615` asks for
-another size, or `W2_FULLSCREEN=1` for the whole screen in its real pixels.
+another size, `W2_FULLSCREEN=1` for desktop full screen, or `W2_NATIVE=1` for the
+window the game opens for itself.
 
 **Write for Lua 5.1.** LÖVE embeds LuaJIT, so the engine avoids `//` and the
 `&`/`|` operators — they parse under a modern `lua` binary and then fail to

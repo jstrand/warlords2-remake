@@ -2,8 +2,15 @@
 -- original did (warlords/layout.lua); see love2d/conf.lua.
 --
 --     W2_SIZE=980x615   a window that size instead, for the bigger layout
---     W2_FULLSCREEN=1   the whole screen in its real pixels, as the game runs
+--     W2_FULLSCREEN=1   the whole screen, desktop full screen
+--     W2_NATIVE=1       the window left to the game, as it opens it to play:
+--                       full screen in the display's own mode
 function love.conf(t)
+  t.console = false
+  if os.getenv("W2_NATIVE") then
+    t.window = nil
+    return
+  end
   t.window.title = "Warlords II (screenshot)"
   local w, h = (os.getenv("W2_SIZE") or ""):match("^(%d+)x(%d+)$")
   t.window.width = tonumber(w) or 640
@@ -14,5 +21,4 @@ function love.conf(t)
     t.window.fullscreentype = "desktop"
     t.window.highdpi = true
   end
-  t.console = false
 end

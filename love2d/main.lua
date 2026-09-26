@@ -94,6 +94,8 @@ end
 
 function love.load(arg)
   arg = arg or {}
+  -- the window first: nothing can be drawn, or loaded to draw, before it
+  display.openWindow("Warlords II")
   -- with no scenario named the game opens on its start screens
   G.starting = arg[1] == nil
   local scenario = arg[1] or "ERYTHEA"
