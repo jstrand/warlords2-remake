@@ -217,6 +217,10 @@ function love.load(arg)
   -- the quest's parchment, blitted through a mask (1997:027e)
   G.scrollPic = pck.toImage(dataDir .. "/PICS/SCROLL.PCK", palette, SCROLL_KEY)
   kit.init(G)
+  -- the music, effects and advisor (sound.lua), switched as DATA/OPTIONS.SND
+  -- says; FILE.DAT names every song and sample
+  G.audio = require("sound")
+  G.audio.init(dataDir, G.screen.ui.files)
 
   G.mapRect  = screen.region(G.screen, screen.REGION.MAP)
   G.stratRect = screen.region(G.screen, screen.REGION.STRATEGIC)
@@ -230,6 +234,8 @@ function love.load(arg)
   love.graphics.setBackgroundColor(0, 0, 0)
   if G.starting then
     openStart()
+    -- 7f77:0000 greets the player the first time round: "Greetings, Warlord!"
+    require("ui.advisor").say(require("warlords.cues").GREET)
     return
   end
   newGame(seed)
@@ -240,15 +246,22 @@ end
 --- The start screens (7f77:0000): a new game set up there, or a saved one.
 function openStart()
   G.starting = true
+  G.audio.music(require("warlords.cues").TITLE)
   require("ui.start").open(function(dir, options, sides, extra)
-    G.starting = false
-    G.scenario = dir
-    G.seed = os.time()
-    G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides,
-                                      greatest = extra and extra.greatest })
-    G.selection, G.over, G.stratImage = nil, nil, nil
-    beginGame()
-    if G.player.computer and G.playComputer then G.playComputer() end
+    -- 7bab:0cfe: the war begins to its own music, and the advisor says so
+    -- before anything is set up
+    local cues = require("warlords.cues")
+    G.audio.music(cues.BEGIN)
+    require("ui.advisor").say(cues.BEGIN_WAR, function()
+      G.starting = false
+      G.scenario = dir
+      G.seed = os.time()
+      G.g = game.new(G.dataDir, dir, { seed = G.seed, options = options, sides = sides,
+                                        greatest = extra and extra.greatest })
+      G.selection, G.over, G.stratImage = nil, nil, nil
+      beginGame()
+      if G.player.computer and G.playComputer then G.playComputer() end
+    end)
   end, function(g)
     G.starting = false
     G.takeLoaded(g)
@@ -557,8 +570,10 @@ local function selectNext()
   if not a then
     G.selection, G.route = nil, nil
     say("Every army has moved.")
+    G.audio.effect("chord")                     -- 8c07:019b: nothing left
     return
   end
+  G.audio.effect("ding")
   select(a.x, a.y, a)
   centreOn(a.x, a.y)
 end
@@ -633,6 +648,7 @@ local function moveSelection(x, y, attack)
     afterBattle(result)
   elseif r.stopped == "no route" then
     say("There is no way there.")
+    G.audio.effect("chord")                     -- 1a8b:0c4f, 1c8c:0007
   elseif r.steps == 0 then
     say("They cannot move: %s.", r.stopped)
   else
@@ -768,6 +784,7 @@ local BANNER_NAME_Y, BANNER_TURN_Y = 85, 130
 function showBanner(side)
   G.banner = { name = side.name, turn = G.g.turn,
                colour = side.colour or 15, edge = side.edge or 0 }
+  G.audio.effect("turn")                         -- the fanfare, TURN.8SN
 end
 
 --- Close the banner, and only then let the turn's first dialog through. The
@@ -775,13 +792,21 @@ end
 --- away and reaches the hero offer afterwards, so the two are never both up.
 function dismissBanner()
   G.banner = nil
-  -- the tutorial's pages for the second turn and the hero offer come first
-  local tutorial = require("ui.tutorial")
-  local moments = {}
-  if G.g.turn == 2 then moments[#moments + 1] = "turn2" end
-  if G.player.heroOffer then moments[#moments + 1] = "hero" end
-  tutorial.chain(moments, function()
-    if not presentOffer(G.player) then afterOffer() end
+  -- the advisor has his say (6dda:026f(5)) -- with Speech off the original
+  -- skips him before he so much as updates his marks -- and then 8cc6:04bd
+  -- puts on the hero's music or the turn's
+  local cues = require("warlords.cues")
+  local says = G.audio.speechOn() and cues.advisor(G.g, G.player, function(n) return math.random(n) end)
+  require("ui.advisor").say(says, function()
+    G.audio.music(G.player.heroOffer and cues.HERO or cues.PLAY)
+    -- the tutorial's pages for the second turn and the hero offer come first
+    local tutorial = require("ui.tutorial")
+    local moments = {}
+    if G.g.turn == 2 then moments[#moments + 1] = "turn2" end
+    if G.player.heroOffer then moments[#moments + 1] = "hero" end
+    tutorial.chain(moments, function()
+      if not presentOffer(G.player) then afterOffer() end
+    end)
   end)
 end
 
@@ -953,6 +978,8 @@ function playComputers(side)
   G.aiRun = coroutine.create(function()
     while side and side.computer do
       G.aiSide = side
+      -- 8065:2123: each computer turn opens with a song that plays once
+      G.audio.music(require("warlords.cues").COMPUTER, G.g.sides)
       ai.playTurn(G.g, side)
       side = game.endTurn(G.g)
       if G.g.ending and G.g.ending.noHumans then coroutine.yield("nohumans") end
@@ -1011,6 +1038,7 @@ local function takeLoaded(loaded)
   stratDirty()
   G.player = loaded.sides[loaded.current]
   centreOn(G.player.capital.x, G.player.capital.y)
+  G.audio.music(require("warlords.cues").PLAY)     -- 7721:02d3
 end
 
 G.takeLoaded = function(g) takeLoaded(g) end
@@ -1574,10 +1602,11 @@ local function drawBottomBar()
   end
 end
 
--- The window is exactly 640x480, so there is no transform: screen coordinates
--- and window coordinates are the same. That matters beyond tidiness --
--- love.graphics.setScissor takes window pixels and ignores any transform, so
--- scaling here would clip the map and the strategic map to the wrong place.
+-- Everything draws into a 640x480 frame with no transform (the scaling up to
+-- the window happens once, at the end of main.lua). That matters beyond
+-- tidiness -- love.graphics.setScissor takes target pixels and ignores any
+-- transform, so scaling here would clip the map and the strategic map to the
+-- wrong place.
 -- The city dialog's Vector mode paints the map its own way (834b:08df, and
 -- 834b:1817 for See All): no owner shields, but a marker on each of the
 -- side's cities from ATRANS2.PCK's row at y = 94, 16x10, and lines for the
@@ -1986,6 +2015,9 @@ function startAssault(x, y, result)
     atkSide = lines.attackers[1] and lines.attackers[1].owner or 8,
     step = 0, defDown = 0, atkDown = 0,
     phase = "cloud", at = now(),
+    -- on a human's turn 67cc:1836 plays WAR.8SN under the cloud and holds
+    -- it there until the sample ends
+    cloudTime = (G.g.side and not G.g.side.computer) and G.audio.effect("war") or 0,
     captured = result.captured,
     victor = victorName(lines.attackers),
     message = outcomeLines(result, lines.city, fled),
@@ -1998,7 +2030,7 @@ local function advanceAssault()
   local a = G.assault
   local t = now()
   if a.phase == "cloud" then
-    if t - a.at >= AS.cloudTime then a.phase, a.at = "battle", t end
+    if t - a.at >= math.max(AS.cloudTime, a.cloudTime) then a.phase, a.at = "battle", t end
     return
   end
   if a.phase ~= "battle" then return end
@@ -2010,6 +2042,9 @@ local function advanceAssault()
     a.step = a.step + 1
     if log[a.step] == 1 then a.atkDown = a.atkDown + 1
     else a.defDown = a.defDown + 1 end
+    -- 7dda:0181: a blow for each, ARMY.8SN when an attacker falls and
+    -- ARMY2.8SN a defender -- until Space hurries the fight on
+    if not a.fast then G.audio.effect(log[a.step] == 1 and "army" or "army2") end
     a.at = a.at + each
   end
   if a.step >= #log and t >= a.at then a.phase = "over" end
@@ -2154,6 +2189,15 @@ function takeCity(what)
   else
     say("%s is ours.", c.name)
   end
+end
+
+--- The samples queue behind one another and the advisor blinks by the clock;
+--- both are carried on here. Nothing else in the game needs an update: the
+--- walk and the battle run off the draw.
+function love.update()
+  G.audio.update()
+  local top = kit.top()
+  if top and top.update then top.update() end
 end
 
 function love.draw()
@@ -2620,7 +2664,10 @@ MENU_DOES = {
     local lines = {}
     for i = 1, 4 do lines[i] = uidata.text(G.screen.ui, 0x2c, i) end
     require("ui.input").open({ title = uidata.text(G.screen.ui, 0x2c, 0), lines = lines,
-                               confirm = true, ok = function() love.event.quit() end })
+                               confirm = true, ok = function()
+      -- 7721:0072: "Farewell, Warlord! We -shall- meet again!"
+      require("ui.advisor").say(require("warlords.cues").QUIT, function() love.event.quit() end)
+    end })
   end,
   ["alt N"] = function()
     local lines = {}
@@ -2862,6 +2909,71 @@ function love.textinput(text)
     G.offerName = G.offerName .. text
   end
 end
+
+--------------------------------------------------------------------- scaling
+
+-- Everything above works in the original's 640x480. Any other window (the
+-- game starts full screen) gets that frame drawn into a 640x480 canvas, blown
+-- up by the largest whole number that fits with nearest filtering, so each
+-- pixel becomes a crisp block, and centred with black around it. setScissor
+-- works in the canvas's pixels while it is the target, so the clipping stays
+-- right. The sums are in the display's real pixels (conf.lua asks for
+-- highdpi), so on a Retina screen the blocks are whole device pixels, not
+-- whole points the OS then resamples. The mouse comes back to 640x480 before
+-- any handler sees it. (A function rather than a do block: main.lua's chunk is at Lua's limit on
+-- locals.)
+;(function()
+  local W, H = 640, 480
+  local drawFrame = love.draw
+  local canvas, scale, ox, oy, dpi
+
+  -- a window position (LOVE gives it in points) in the game's pixels, held
+  -- to the frame
+  local function toGame(x, y)
+    x = math.floor((x * dpi - ox) / scale)
+    y = math.floor((y * dpi - oy) / scale)
+    return math.max(0, math.min(W - 1, x)), math.max(0, math.min(H - 1, y))
+  end
+
+  local function setUp()
+    if canvas ~= nil or not love.graphics.newCanvas then return end
+    dpi = love.graphics.getDPIScale()
+    local ww, wh = love.graphics.getPixelDimensions()
+    if ww == W and wh == H then canvas = false return end
+    scale = math.max(1, math.floor(math.min(ww / W, wh / H)))
+    ox = math.floor((ww - W * scale) / 2)
+    oy = math.floor((wh - H * scale) / 2)
+    canvas = love.graphics.newCanvas(W, H)
+    canvas:setFilter("nearest", "nearest")
+    local getPosition = love.mouse.getPosition
+    love.mouse.getPosition = function() return toGame(getPosition()) end
+    for _, name in ipairs({ "mousepressed", "mousereleased" }) do
+      local handle = love.handlers[name]
+      love.handlers[name] = function(x, y, ...)
+        x, y = toGame(x, y)
+        return handle(x, y, ...)
+      end
+    end
+    local moved = love.handlers.mousemoved
+    love.handlers.mousemoved = function(x, y, dx, dy, ...)
+      x, y = toGame(x, y)
+      return moved(x, y, dx * dpi / scale, dy * dpi / scale, ...)
+    end
+  end
+
+  function love.draw()
+    setUp()
+    if not canvas then return drawFrame() end
+    love.graphics.push("all")
+    love.graphics.setCanvas(canvas)
+    love.graphics.clear(love.graphics.getBackgroundColor())
+    drawFrame()
+    love.graphics.pop()
+    love.graphics.clear(0, 0, 0)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(canvas, ox / dpi, oy / dpi, 0, scale / dpi, scale / dpi)
+  end
+end)()
 
 -- LOVE ignores what main.lua returns; test/ui.lua uses it to inspect state.
 return G

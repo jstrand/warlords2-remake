@@ -49,7 +49,7 @@ Build a Python toolkit in `tools/` — one module per format, each with a dump-t
 Order, easiest first (each win makes the next easier):
 1. ~~`.PAL` → RGB palettes.~~ **Done** — `tools/pal.py`.
 2. ~~`DATA/STRING.DAT`~~ **Done** — 169 groups / 651 strings, whole UI corpus; see `docs/formats/string.md`. `.CTY` and `SOUND/*.TXT` are plain text.
-3. `.8SN` → WAV (`u8` PCM; sample rate is the unknown — try 11025, confirm by ear against DOSBox).
+3. ~~`.8SN`~~ **Done** — `u8` PCM at 11 000 Hz, the rate the game hands DIGPAK; see `docs/formats/sound.md`.
 4. ~~`.MAP` / `.RD`~~ **Done** — 112×156 u16 tile grid + 1-byte/tile road overlay, rendered via `tools/mapren.py`. Note the 156×112 guess was wrong; see `docs/formats/map.md`.
 5. ~~`.SCN` / `.SGN` / `.SPC`~~ **Mostly done** — sides (incl. starting gold and capitals), cities, sites, items, monsters and signposts all parse and verify against the map and against the running game. City owner and defence are derived at game start (`docs/rules.md`); still open: the 16-byte per-city block and the `160..2062` per-side region. See `docs/formats/scenario.md`. `.ITM` is decoded (`docs/formats/itm.md`) and read by `love2d/warlords/scn.lua`.
 6. ~~`ARMYTYPE.DAT`~~ **Done** — 29 x 62-byte records; strength/time/upkeep/move/cost solved, 6 of 15 bonus fields still open. See `docs/formats/armytype.md`.
@@ -89,7 +89,7 @@ Still open:
   check against a real save made in DOSBox (`docs/formats/save.md`).
 - the UI open questions in `docs/re/ui.md` (`UDB.DAT` item-to-command table,
   `.FIN` spacing fields).
-- sound plumbing (deliberately skipped until Phase 4).
+- ~~sound plumbing~~ — done, `docs/re/sound.md`.
 
 ### Phase 2.5 — Headless loader — **DONE**
 
@@ -207,12 +207,23 @@ Stack view sums every hero's bonus where the battle takes the strongest —
 check which the battle really does; `quest.lua` sets a revealed site's mask
 to 0, which reads as "shown to nobody" — check against the original.
 
-### Phase 4 — Audio — **not started**
+### Phase 4 — Audio — **mostly done**
 
-Nothing plays yet; `.8SN` → WAV (Phase 1, item 3) is still undone too.
-- XMI → MIDI conversion (or direct playback). Port ScummVM's XMIDI parser; it's the reference implementation.
-- Playback via FluidSynth with a soundfont, or emulate OPL2/AdLib (Nuked-OPL3) for period-accurate sound. The `.ADV` driver files tell you which devices were supported.
-- `.8SN` digitised sounds + advisor voice: straight PCM playback.
+What plays when is decoded (`docs/re/sound.md`) and the files are
+(`docs/formats/sound.md`). The engine plays the Sound Blaster FM version: the
+`S` songs through a port of `ADLIB.ADV` (`warlords/ailfm.lua`) into an
+emulated OPL2 (`warlords/opl.lua`, after Nuked-OPL3) on a thread; the `.8SN`
+samples at 11 000 Hz, one after another as DIGPAK plays them; the advisor's
+helmet and voice (`ui/advisor.lua`). `luajit tools/xmi2wav.lua SINT12 out.wav`
+renders a song to listen to.
+
+Still open:
+- the cues whose moment the engine does not have yet: the quest-done dialog
+  (cue 3), the promotion screen (7), medals (8), the random map's "One
+  moment...", `SPLASH` for armies sunk and a dead hero's items, most `CHORD`s,
+  and the subtitles shown when there is no digital sound;
+- the MT-32 (`M`) and Sound Canvas (`R`) songs, which would need a synth;
+- a check of the OPL emulation against a recording of the original.
 
 ### Phase 5 — Modernisation (post-parity)
 Window scaling/fullscreen, save-anywhere, hotseat/network, undo, larger maps, scenario editor. Don't touch any of this before parity.

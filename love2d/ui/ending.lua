@@ -23,8 +23,13 @@
 --   surrender offered (8065:1f68): the offer; Yes (8065:1e4e) puts every
 --     computer side out and goes on as a win, No (8065:1ecd) shows the heads
 --     on poles.
+--
+-- Each picture comes with its own music, put on as it opens: the offer
+-- INT19, the refusal INT20, the Congratulations INT12 or INT21.
 
 local kit      = require("ui.kit")
+local sound    = require("sound")
+local cues     = require("warlords.cues")
 local searchUi = require("ui.search")
 local game     = require("warlords.game")
 local uidata   = require("warlords.uidata")
@@ -65,6 +70,7 @@ end
 --- Congratulations (8065:1fbd), then the map shown whole (8065:2004).
 local function victory(after)
   local G = kit.G
+  sound.music(cues.TRIUMPH)                      -- 8065:1fbd
   picture(22, 32, { 483 }, 483, 483, function()
     G.g.map.options.hiddenMap = 0
     if G.stratDirty then G.stratDirty() end
@@ -80,11 +86,13 @@ function M.show(ending, after)
   if not ending then return after() end
   if ending.surrender and not ending.shown then
     ending.shown = true
+    sound.music(cues.SURRENDER)                  -- 8065:1f68
     return picture(20, 30, { 485, 486 }, 485, 486, function(id)
       if id == 485 then
         game.acceptSurrender(G.g, G.player)
         victory(after)
       else
+        sound.music(cues.DEFIANCE)               -- 8065:1ecd
         picture(21, 31, { 484 }, 484, 484, after)
       end
     end)

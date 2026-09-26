@@ -48,6 +48,20 @@ regions and fonts are the game's own, read from its data files at runtime
 | `Alt-E` | end the turn; the computer players then take theirs |
 | `F5` / `F9` | quick save and load (not the original's) |
 
+## Sound
+
+The music, effects and advisor are the game's own files, played as the
+Sound Blaster FM version plays them: `sound.lua` queues the `.8SN` samples
+one behind another, and `musicthread.lua` synthesises the songs on a thread
+of their own through `warlords/ailfm.lua` and `warlords/opl.lua`. Game ›
+Settings turns Music, Effects and Speech on and off, and writes them to
+`DATA/OPTIONS.SND` as the original does. What plays when is in
+`docs/re/sound.md`. To hear a song on its own:
+
+```sh
+luajit tools/xmi2wav.lua SSTARTUP title.wav
+```
+
 ## The rules core
 
 Everything under `warlords/` except `pal.lua`, `pck.lua` and the drawing in
@@ -112,6 +126,10 @@ for the cost grid's flags.
 | `screen.lua` | the 640×480 screen: background, controls, hit regions |
 | `menu.lua` | the menu bar and its items, laid out the original's way |
 | `ai.lua` | a computer player |
+| `cues.lua` | which song each moment gets, and what the advisor says |
+| `xmi.lua` | XMIDI, the songs' format |
+| `ailfm.lua` | the AIL AdLib driver the music was written for, ported from `ADLIB.ADV` |
+| `opl.lua` | the OPL2 FM chip it plays on |
 
 The dialogs sit in `ui/`, on top of the front end rather than inside the rules
 core. `ui/kit.lua` is what they are made of — the popup frame, the fonts by the
@@ -143,7 +161,8 @@ here.
 
 ## What is not here yet
 
-Sound, and the interface for much of what the rules core can already do:
+Some of the sounds (`docs/re/sound.md` lists which), and the interface for
+much of what the rules core can already do:
 there is no diplomacy screen and no quest log, and most of the menu's reports
 and views are not built yet — those systems run, but only the engine drives
 them. PLAN.md › Phase 3.5 has the list.

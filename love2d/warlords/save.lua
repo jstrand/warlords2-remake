@@ -136,6 +136,8 @@ function save.encode(g)
       diploScore = s.diploScore,
       income = s.income, upkeepTotal = s.upkeepTotal, produced = s.produced,
       ai = saveAI(s.ai, ids), aiSolidarity = s.aiSolidarity, card = s.card,
+      -- the advisor's marks, .SCN 0x100 and 0x108 (warlords/cues.lua)
+      advisor = s.advisor,
       quest = s.quest and {
         type = s.quest.type, hero = ids[s.quest.hero], done = s.quest.done,
         required = s.quest.required, targetKind = s.quest.targetKind,
@@ -296,6 +298,7 @@ function save.decode(text, dataDir)
       end
     end
     s.aiSolidarity, s.card = saved.aiSolidarity, saved.card
+    s.advisor = saved.advisor
     s.quest = nil
     if saved.quest then
       local q = {

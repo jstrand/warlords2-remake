@@ -223,7 +223,10 @@ function M.open()
     elseif c.id == UP then choose(d.item - 1)
     elseif c.id == DOWN then choose(d.item + 1)
     elseif c.id == DROP and d.item then
-      hero.dropItem(G.g, heroes[d.cur], items[d.item])
+      local it = items[d.item]
+      hero.dropItem(G.g, heroes[d.cur], it)
+      -- 7563:0943: dropped at sea it is gone, with a splash
+      if it.status == 0 then require("sound").effect("splash") end
       choose(math.min(d.item, #list()))
     elseif c.id == TAKE and d.item then
       hero.takeItem(G.g, heroes[d.cur], items[d.item])

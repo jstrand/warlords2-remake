@@ -221,11 +221,11 @@
 0000:0c5d  func  midpak_segue_sequence # AX=0703h
 0000:0c6f  func  midpak_register_xmidi # AX=0704h
 0000:0c8b  func  midpak_stop          # AX=0705h
-0000:0cfd  func  midpak_070c
+0000:0cfd  func  midpak_070c          # sequence status: 1 while playing (155e:04a8)
 0000:0d1b  func  midpak_070d          # probably SetRelativeVolume
 0000:0d3b  func  midpak_load_driver   # file must carry "MIDPAK" signature
 0000:0deb  func  midpak_unload_driver
-0000:0e15  func  midpak_0710
+0000:0e15  func  midpak_0710          # start the driver on an .ADV and the .AD timbres
 
 # Game file I/O wrappers (resident segment 070b)
 070b:0006  func  open                 | int open(char *name, int mode)
@@ -555,3 +555,35 @@
 463e:06e9  func  ai_assault_attack
 4db9:09d7  func  ai_record_battle
 49bf:084d  func  ai_data_init
+
+# -- the sound manager over DIGPAK and MIDPAK, and the game's sound calls.
+# docs/re/sound.md. Globals: 4125:37a2 digital driver loaded, 37a3 music
+# driver loaded (and switched on), 37a4 digitised speech available, 37ab the
+# PC-speaker stand-in, 37ac/37ad MT-32 / Sound Canvas (file prefix m / r,
+# else s); 4125:0bee Music on, 0bec Effects on, 26c8 Speech off; 2632 the
+# music cue playing.
+155e:0005  func  sound_init           # SOUND.DAT: "%s %s %d" digi driver, music .ADV
+155e:02ab  func  sound_poll           # main loop: restart a looping song, free a sample
+155e:032f  func  music_load_xmi       # "%s%s%s": SOUND\ + s/m/r + INT12.XMI
+155e:040b  func  music_is_loaded
+155e:0412  func  music_play           # (sequence, flags): 1 loop
+155e:0466  func  music_stop
+155e:04a8  func  music_playing
+155e:04e9  func  sample_load          # .8SN into a slot of 11-byte records at 451b:3108; 11000 Hz
+155e:065e  func  sample_play          # (slot, flags): waits for the one sounding first
+155e:06f7  func  sample_finish        # wait, and free it if flags & 2
+155e:0736  func  sample_wait          # block until the sample sounding ends
+155e:075a  func  sample_playing
+155e:0775  func  music_enable
+155e:0782  func  music_disable
+6dda:0000  func  music_cue            | void music_cue(int cue)
+6dda:0181  func  sound_casualty       | void sound_casualty(int defender)
+6dda:01a9  func  sound_dramatic       | void sound_dramatic(int orch)
+6dda:0206  func  sound_war
+6dda:023d  func  sound_splash
+6dda:026f  func  advisor_speak        | void advisor_speak(int what)
+6dda:0b5f  func  sound_chord          # "cannot": no route, no army left, a dead key
+6dda:0b79  func  sound_ding           # the next army found
+6dda:0b93  func  sound_turn
+6dda:0bc5  func  sound_options_load   # DATA\OPTIONS.SND, and the four resident samples
+6dda:0d01  func  advisor_subtitles    # the .TXT under the helmet, without speech

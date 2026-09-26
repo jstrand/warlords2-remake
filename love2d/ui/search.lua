@@ -22,11 +22,18 @@
 -- list chooser), a gem (Money, 280) or a patch of the hidden map (Maps, 281);
 -- one of them, then Done (282).
 --
+-- The sounds (docs/re/sound.md): the ruin popup opens to DRAMATIC.8SN,
+-- ruin and sage alike, and a guardian's appearance is met with ORCH.8SN once
+-- its line has been read. A temple and a sage have music of their own, which
+-- plays on after they close.
+--
 -- The **message box** (8065:1160) is popup 5 -- (144, 179) 352x64 -- with a
 -- line centred on (320, 190) and another on (320, 212), closed by any key or
 -- click.
 
 local kit    = require("ui.kit")
+local sound  = require("sound")
+local cues   = require("warlords.cues")
 local chooseUi = require("ui.choose")
 local game   = require("warlords.game")
 local hero   = require("warlords.hero")
@@ -106,6 +113,12 @@ end
 local function openRuin(r, after)
   local G = kit.G
   local d = { lines = r.lines or ruinLines(r), shown = 1, view = kit.view(RUIN_DIALOG) }
+  -- 6536:01ab: the orchestra comes in as the guardian's line is read on
+  local guarded = not r.lines and r.kind ~= "allies" and (r.monster or r.guardian)
+  local function advance()
+    if guarded and d.shown == 1 then sound.effect("orch") end
+    d.shown = d.shown + 1
+  end
   local canTake = r.kind == "item" and r.item and r.item.status == 1
   d.view.state[DONE] = uidata.NORMAL
   d.view.state[TAKE] = uidata.NORMAL
@@ -131,7 +144,7 @@ local function openRuin(r, after)
   end
 
   function d.mousepressed(x, y)
-    if not done() then d.shown = d.shown + 1 return end
+    if not done() then advance() return end
     if after then kit.pop(d) return after() end
     local c = kit.controlAt(d.view, x, y, d.hidden)
     if not c then return end
@@ -147,11 +160,12 @@ local function openRuin(r, after)
   end
 
   function d.keypressed(key)
-    if not done() then d.shown = d.shown + 1 return end
+    if not done() then advance() return end
     if after then kit.pop(d) return after() end
     if key == "return" or key == "kpenter" or key == "escape" then close() end
   end
 
+  sound.effect("dramatic")
   return kit.push(d)
 end
 
@@ -162,6 +176,7 @@ local TEMPLE_DIALOG, BLESS, QUEST = 15, 328, 329
 
 local function openTemple(r, stack)
   local G = kit.G
+  sound.music(cues.TEMPLE)                       -- 4976:0000
   local d = { view = kit.view(TEMPLE_DIALOG) }
   d.view.state[BLESS] = uidata.NORMAL
   local canQuest = G.g.map.options.quests ~= 0 and not G.player.quest and r.hero
@@ -333,6 +348,7 @@ function M.open(stack)
   if r.kind == "sage" then
     -- sage_visit (6536:0aa0): the searching popup says who was found, then
     -- the sage's own
+    sound.music(cues.SAGE)
     return openRuin({ lines = { kit.text(0x3a, 0):format(r.hero.name or "") } },
                     function() openSage(r) end)
   end

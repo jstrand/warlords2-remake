@@ -18,9 +18,12 @@
 -- Speech (256, 340), their words 24 to the right. 252-259 turn a side human
 -- or computer, 260-267 Enhanced, 268-275 Observe (64d2:04cc, 0508, 053f);
 -- 276-278 the sounds, Music and Effects greyed with no sound card; OK (251).
+-- A sound box is turned over by 64d2:0576, which writes DATA/OPTIONS.SND
+-- straight back (sound.lua).
 
 local kit    = require("ui.kit")
 local uidata = require("warlords.uidata")
+local sound  = require("sound")
 
 local M = {}
 
@@ -28,20 +31,19 @@ local R = { x = 120, y = 50, w = 400, h = 360 }     -- popup 4
 local DIALOG, OK = 9, 251
 local HUMAN, ENHANCED, OBSERVE, SOUND = 252, 260, 268, 276
 local LEVELS = { [0] = "Knight", "Lord", "Warlord" }            -- 4125:0bf2
-local SOUNDS = { { 152, 340, "Music" }, { 152, 370, "Effects" }, { 256, 340, "Speech" } }
+local SOUNDS = { { 152, 340, "Music", "music" }, { 152, 370, "Effects", "effects" },
+                 { 256, 340, "Speech", "speech" } }
 
 --- `after` runs when OK is pressed.
 function M.open(after)
   local G = kit.G
   local g = G.g
-  G.sound = G.sound or { false, false, false }
   local d = { view = kit.view(DIALOG) }
 
   local function refresh()
     local st = d.view.state
     st[OK] = uidata.NORMAL
-    -- the remake has no sound card: Music and Effects stay greyed
-    st[SOUND], st[SOUND + 1], st[SOUND + 2] = uidata.DISABLED, uidata.DISABLED, uidata.NORMAL
+    st[SOUND], st[SOUND + 1], st[SOUND + 2] = uidata.NORMAL, uidata.NORMAL, uidata.NORMAL
     d.hidden = {}
     for i = 0, 7 do
       local s = g.map.sides[i + 1]
@@ -87,8 +89,9 @@ function M.open(after)
         end
       end
     end
+    local on = sound.options()
     for k, sd in ipairs(SOUNDS) do
-      box(G.sound[k], sd[1], sd[2])
+      box(on[k], sd[1], sd[2])
       love.graphics.setColor(1, 1, 1)
       f.draw(sd[3], sd[1] + 24, sd[2])
     end
@@ -116,7 +119,7 @@ function M.open(after)
       local s = g.map.sides[id - OBSERVE + 1]
       if s.computer then s.observe = not s.observe end
     elseif id >= SOUND and id < SOUND + 3 then
-      G.sound[id - SOUND + 1] = not G.sound[id - SOUND + 1]
+      sound.toggle(SOUNDS[id - SOUND + 1][4])
     end
     refresh()
   end

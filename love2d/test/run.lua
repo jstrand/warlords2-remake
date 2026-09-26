@@ -2588,6 +2588,103 @@ testVectoring("ERYTHEA")
 testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")
+
+-- The music and the advisor: docs/re/sound.md. The synthesis itself is only
+-- run for a moment -- plain Lua is slow at it -- but the driver's decisions
+-- are what is checked.
+local function testSound()
+  print("sound")
+  local xmi = require("warlords.xmi")
+  local ailfm = require("warlords.ailfm")
+  local cues = require("warlords.cues")
+  local uidata = require("warlords.uidata")
+  local function read(p) local f = assert(io.open(p, "rb")) local s = f:read("*a") f:close() return s end
+
+  local seq = xmi.parse(read(DATA .. "/SOUND/SINT0.XMI"))
+  eq(seq.length, 17730, "INT0 runs 17730 intervals of 120 Hz")
+  local ons, offs, sorted = 0, 0, true
+  for i = 1, seq.n do
+    local hi = seq.st[i] - seq.st[i] % 16
+    if hi == 0x90 then ons = ons + 1 elseif hi == 0x80 then offs = offs + 1 end
+    if i > 1 and seq.t[i] < seq.t[i - 1] then sorted = false end
+  end
+  ok(ons > 0 and ons == offs, "every XMIDI note gets its note-off from its duration")
+  ok(sorted, "the events come out in time order")
+
+  local drv = ailfm.new(read(DATA .. "/ADLIB.ADV"), read(DATA .. "/MIDPAK.AD"))
+  local lib = drv.lib
+  ok(lib[0] and lib[0].len == 14, "MIDPAK.AD holds 14-byte OPL2 timbres")
+  eq(drv.T.velocity[0], 82, "the velocity curve starts at 82 (ADLIB.ADV 0x52b)")
+  eq(drv.T.velocity[15], 127, "and ends at 127")
+
+  -- the driver's octave: MIDI 69 sounds at 220 Hz, an octave under the
+  -- General MIDI pitch, and so does everything else
+  drv:message(0xc1, 0, 0)
+  drv:message(0x91, 69, 100)
+  local s = drv.slots[0]
+  ok(s.active and s.voice == 1, "a note takes the voice after the last one used")
+  local fnum = drv.fw % 1024
+  local hz = fnum * ailfm.RATE / 2 ^ (20 - drv.block)
+  ok(math.abs(hz - 220) < 2, ("MIDI 69 sounds at 220 Hz (%.1f)"):format(hz))
+  -- velocity 100 is 118 on the curve: the carrier's level (63 - TL) is
+  -- scaled by it, over 127
+  local level = 63 - lib[0][9] % 64
+  eq(drv.chip.slots[4].tl, 63 - math.floor(level * 118 / 127), "velocity scales the carrier's level")
+  drv:message(0x81, 69, 0)
+  ok(not s.active and not drv.owner[1], "a note-off frees the slot and the voice")
+
+  -- a drum plays at the pitch its timbre names, whatever the key
+  drv:message(0x99, 36, 100)
+  local d = drv.slots[0]
+  eq(d.note, lib[127 * 128 + 36][1], "a drum's pitch is its timbre's transpose byte")
+  drv:message(0x89, 36, 0)
+
+  -- ten notes on one channel: nine voices, and the tenth takes one over
+  for k = 60, 69 do drv:message(0x92, k, 100) end
+  local sounding, waiting = 0, 0
+  for i = 0, 15 do
+    local sl = drv.slots[i]
+    if sl.active then
+      if sl.voice then sounding = sounding + 1 else waiting = waiting + 1 end
+    end
+  end
+  eq(sounding, 9, "nine OPL2 voices sound at once")
+  eq(waiting, 0, "and the tenth note cuts another off rather than waiting")
+  local buf = {}
+  drv:render(buf, 500)
+  local loud = false
+  for i = 1, 500 do if buf[i] ~= 0 then loud = true break end end
+  ok(loud, "the chip makes a sound")
+
+  -- what plays when
+  local files = uidata.strings(DATA .. "/DATA/FILE.DAT")
+  local first = function() return 1 end
+  local name, loop = cues.song(files, cues.TITLE, {}, first)
+  eq(name, "STARTUP.XMI", "the start screens play STARTUP.XMI")
+  ok(loop, "and it starts again when it ends")
+  name, loop = cues.song(files, cues.COMPUTER, { { computer = false, alive = true } }, first)
+  eq(name, "INT2.XMI", "a computer's turn beside a human plays FILE.DAT group 11")
+  ok(not loop, "once")
+  eq(cues.song(files, cues.BEGIN, {}, first), "INT22.XMI", "the war begins to INT22")
+
+  -- the advisor's marks
+  local g = { turn = 1, map = { cities = {} }, armies = {} }
+  local side = { index = 0, gold = 500 }
+  for i = 1, 6 do g.map.cities[i] = { ownerIndex = 0 } end
+  eq(cues.advisor(g, side, first), nil, "the advisor never speaks on turn 1")
+  eq(side.advisor.mark, 5, "but he has marked six cities down as five")
+  g.turn = 2
+  eq(cues.advisor(g, side, first), nil, "nothing new, not a seventh turn: silence")
+  for i = 1, 5 do g.map.cities[i].ownerIndex = 1 end
+  eq(cues.advisor(g, side, first), 40, "down to one city: 'Thy sorry efforts...' (VLOSE05)")
+  eq(side.advisor.dir, 2, "and he remembers saying so")
+  for i = 1, 5 do g.map.cities[i].ownerIndex = 0 end
+  eq(cues.advisor(g, side, first), 47, "back to six: 'Thou art doing well... so far!'")
+  g.turn = 7
+  side.gold = 50
+  eq(cues.advisor(g, side, first), 54, "on a seventh turn, short of gold: VGOLD00")
+end
+
 testSage("ERYTHEA")
 testSetup()
 testHistory("ERYTHEA")
@@ -2615,6 +2712,7 @@ testComputerPlayers()
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
+testSound()
 
 print(("\n%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

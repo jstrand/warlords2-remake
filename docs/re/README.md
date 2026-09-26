@@ -11,6 +11,7 @@ What's here, and where to look first.
 | [`ai.md`](ai.md) | computer players: turn pipeline, AI data, decoded decisions |
 | [`random_map.md`](random_map.md) | random map generator: pipeline and `RANDOM.DAT` parameters |
 | [`ui.md`](ui.md) | the interface: 640×480 planar VGA, screen layout, the widget toolkit, event loop, fonts |
+| [`sound.md`](sound.md) | music, effects and the advisor: what plays when |
 
 The **rules** that came out of all this live in [`../rules.md`](../rules.md),
 and the file formats in [`../formats/`](../formats). `docs/rules.md` is the
@@ -29,7 +30,8 @@ diplomacy, city roles, production, garrisons, hero expeditions and assaults.
 
 ## Still open
 
-- Sound — deliberately skipped.
+- Sound — decoded in [`sound.md`](sound.md); what the engine does not play
+  yet is listed at its end.
 - Graphics and UI plumbing — the screen layout, widget model, event loop and
   fonts are in [`ui.md`](ui.md); the open ends are listed at the end of it.
 - A handful of small unknowns, listed at the end of `docs/rules.md`.
