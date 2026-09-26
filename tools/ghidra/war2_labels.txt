@@ -513,8 +513,10 @@
 0a8b:04c8  func  place_stack_at_step
 0a8b:07f9  func  walk_path
 0a8b:0c4f  func  move_stack_step
+0a8b:0d1a  func  sea_change_spend_moves  # zero moves after going to sea / ashore
 0b62:007d  func  armies_at_tile       | int armies_at_tile(int x, int y, int *count)
 0555:18be  func  path_step_costs
+0555:19e4  func  path_step_cost       # one step; 0x80 once past the shoreline
 463e:00ca  func  ai_run_assault_group
 463e:0607  func  ai_abandon_assaults
 54d2:0137  func  ui_side_setup_list
