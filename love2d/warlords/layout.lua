@@ -6,7 +6,7 @@
 --
 --   the menu bar          across the top, as wide as the screen
 --   the map and its frame from (16, 30), growing right and down
---   the bottom bar        under the map, at the bottom left, still 360 wide
+--   the bottom bar        at the bottom, centred under the map, still 360 wide
 --   the strategic map     at the top right
 --   the control panel     at the bottom right
 --
@@ -40,7 +40,7 @@ function layout.compute(w, h)
     offset = {
       strat = { x = ex, y = 0 },
       panel = { x = ex, y = ey },
-      bar   = { x = 0,  y = ey },
+      bar   = { x = math.floor(ex / 2), y = ey },
       map   = { x = 0,  y = 0 },
     },
     -- the popups' 640x480 frame, centred

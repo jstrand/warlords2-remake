@@ -35,7 +35,7 @@ original's 640 × 480 is **not** the original's:
 - The start screens stay the original's 640 × 480, centred.
 - On the main screen the fixed pieces keep their size and move to an edge —
   the strategic map to the top right, the control panel to the bottom right,
-  the bottom bar to the bottom left — and the map takes the rest
+  the bottom bar to the bottom, centred under the map — and the map takes the rest
   (`warlords/layout.lua`). The dialogs sit in a 640 × 480 frame centred on the
   screen, so each keeps the coordinates the original gives it.
 - The map has a zoom of its own, also a whole number of device pixels, and
