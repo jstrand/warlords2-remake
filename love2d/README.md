@@ -38,6 +38,11 @@ original's 640 × 480 is **not** the original's:
   the bottom bar to the bottom, centred under the map — and the map takes the rest
   (`warlords/layout.lua`). The dialogs sit in a 640 × 480 frame centred on the
   screen, so each keeps the coordinates the original gives it.
+- The stone between the pieces is the original's own 244 × 220 tile, repeated
+  as its border repeats it. The original only ever shows slices of that tile,
+  so the rest is filled from its own stone by `tools/stone_tile.py`, which
+  writes `warlords/stonetile.lua`: where each piece of the tile comes from on
+  the original's screen, not the pixels themselves.
 - The map has a zoom of its own, also a whole number of device pixels, and
   slides smoothly rather than a tile at a time.
 

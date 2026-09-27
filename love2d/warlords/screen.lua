@@ -154,12 +154,17 @@ end
 --------------------------------------------------------------------- drawing
 
 -- A screen bigger than the original has no art of its own. Its ground is the
--- original's speckled stone, taken from the gutter between the map and the
--- right-hand panels (a 20 x 432 strip, x 378-397 from y 32), and every panel
--- is the original's own -- marble in a black outline -- copied across whole.
--- The stone is a checkerboard dither, so the strips are laid on even x and
--- slid by even amounts, which keeps the checkerboard unbroken.
-local STONE = { x = 378, y = 32, w = 20, h = 432 }
+-- original's speckled stone, a 244 x 220 tile repeated from the screen's
+-- (0, 0) as the original's own border repeats it. The border shows only
+-- slices of that tile; stonetile.lua (tools/stone_tile.py) says where on the
+-- original's screen each piece of the whole of it comes from. Every panel is
+-- the original's own -- marble in a black outline -- copied across whole, and
+-- sunk into the stone, as the original sinks it, by a one-pixel bevel: dark
+-- above and to the left, light below and to the right. The screen's own edge
+-- is the other way round, raised: light along the top and left, dark along
+-- the bottom and right.
+local STONE = require("warlords.stonetile")
+local LIGHT, DARK = 2, 4
 local PANELS = {                       -- outline included
   { group = "strat", x = 399, y = 29,  w = 226, h = 314 },
   { group = "panel", x = 399, y = 354, w = 226, h = 116 },
@@ -179,14 +184,29 @@ local function composedArt(self)
   end
   for i = 1, 640 * 480 do px[i] = px[i] or 0 end
   self.bgImage = pck.imageFromPixels(640, 480, px, self.palette)
-  local strip = {}
-  for y = 0, STONE.h - 1 do
-    for x = 0, STONE.w - 1 do
-      strip[y * STONE.w + x + 1] = px[(STONE.y + y) * 640 + STONE.x + x + 1]
+  local tile = {}
+  for _, r in ipairs(STONE) do
+    local tx, ty, w, h, sx, sy = r[1], r[2], r[3], r[4], r[5], r[6]
+    for y = 0, h - 1 do
+      for x = 0, w - 1 do
+        tile[(ty + y) * STONE.w + tx + x + 1] = px[(sy + y) * 640 + sx + x + 1]
+      end
     end
   end
-  self.stoneImg = pck.imageFromPixels(STONE.w, STONE.h, strip, self.palette)
+  self.stoneImg = pck.imageFromPixels(STONE.w, STONE.h, tile, self.palette)
   self.stoneImg:setWrap("repeat", "repeat")
+end
+
+--- The bevel round a panel whose outline is the rect x, y, w, h.
+local function bevel(self, x, y, w, h)
+  local c = self.palette[DARK + 1]
+  love.graphics.setColor(c[1], c[2], c[3])
+  love.graphics.rectangle("fill", x - 1, y - 1, w + 2, 1)
+  love.graphics.rectangle("fill", x - 1, y, 1, h + 1)
+  c = self.palette[LIGHT + 1]
+  love.graphics.setColor(c[1], c[2], c[3])
+  love.graphics.rectangle("fill", x, y + h, w + 1, 1)
+  love.graphics.rectangle("fill", x + w, y, 1, h)
 end
 
 --- The main screen's ground for layout `L`: the original's own at 640x480,
@@ -200,22 +220,29 @@ function screen.drawBackground(self, L)
     return
   end
   composedArt(self)
-  local sw, sh = STONE.w, STONE.h
-  for k = 0, math.ceil(L.w / sw) - 1 do
-    local slide = (k * 146) % sh
-    slide = slide - slide % 2
-    love.graphics.draw(self.stoneImg, love.graphics.newQuad(0, slide, sw, L.h, sw, sh), k * sw, 0)
-  end
+  love.graphics.draw(self.stoneImg,
+    love.graphics.newQuad(0, 0, L.w, L.h, STONE.w, STONE.h), 0, 0)
+  -- the screen's frame
+  local c = self.palette[LIGHT + 1]
+  love.graphics.setColor(c[1], c[2], c[3])
+  love.graphics.rectangle("fill", 0, 0, L.w - 1, 1)
+  love.graphics.rectangle("fill", 0, 1, 1, L.h - 2)
+  c = self.palette[DARK + 1]
+  love.graphics.setColor(c[1], c[2], c[3])
+  love.graphics.rectangle("fill", 0, L.h - 1, L.w, 1)
+  love.graphics.rectangle("fill", L.w - 1, 0, 1, L.h - 1)
   -- the map's black outline, a pixel out all round
   local m = L.map
+  bevel(self, m.x - 1, m.y - 1, m.w + 2, m.h + 2)
   love.graphics.setColor(0, 0, 0)
   love.graphics.rectangle("fill", m.x - 1, m.y - 1, m.w + 2, 1)
   love.graphics.rectangle("fill", m.x - 1, m.y + m.h, m.w + 2, 1)
   love.graphics.rectangle("fill", m.x - 1, m.y - 1, 1, m.h + 2)
   love.graphics.rectangle("fill", m.x + m.w, m.y - 1, 1, m.h + 2)
-  love.graphics.setColor(1, 1, 1)
   for _, p in ipairs(PANELS) do
     local at = layout.move(L, p.group, p)
+    bevel(self, at.x, at.y, p.w, p.h)
+    love.graphics.setColor(1, 1, 1)
     love.graphics.draw(self.bgImage, love.graphics.newQuad(p.x, p.y, p.w, p.h, 640, 480), at.x, at.y)
   end
 end
