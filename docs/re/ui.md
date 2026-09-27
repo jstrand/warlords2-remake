@@ -134,9 +134,14 @@ Each walks the control array linearly comparing ids, so ids are opaque
 constants rather than indices.
 
 `1a0a:0005(control)` paints one control: `1771:0001` when it has no bitmap,
-`1a0a:02be` when it does, and then — only in keyboard mode (`4125:166a`) — a
-double rounded-rect **focus ring** drawn as about two dozen short line
-segments.
+`1a0a:02be` when it does. Then, while a dialog is up (`4125:166a`, set by
+each dialog as it opens and cleared as it closes) and the control is one of
+the **default buttons** (its id is in the Enter list at `4125:155c`, tested
+by `17be:0037`), it draws a **default ring**: two rounded rects in colour 0,
+the inner one a pixel clear of the control, each 12 runs of `2133:02fe`
+(across) and `2133:0344` (down). There is no focus that moves; every default
+button on the dialog wears the ring. Checked pixel for pixel against the
+hero offer's OK.
 
 ### The event loop
 
@@ -1093,7 +1098,9 @@ see *Panels repainted with marble* below.
 ### Default and cancel buttons
 
 Enter and Escape reach the first live control in one of two lists of control
-ids (`4125:155c` and `4125:1514`), whichever dialog is up; "live" is state 1.
+ids (`4125:155c` and `4125:1514`), whichever dialog is up; "live" means on
+the current screen in state 1, the ordinary look (`18a9:05ab` reads `+4`).
+The Enter list's controls are the ones ringed (see *Controls*).
 Among them: the city dialog's Done (192, 201), Build Production's Done (396),
 the text-entry dialog's OK (189) and Cancel (190), the hero offer's OK (287)
 and Cancel (288), and Occupy (285) on the spoils dialog, which is on **both**.

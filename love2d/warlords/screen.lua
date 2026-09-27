@@ -291,7 +291,41 @@ function screen.dialog(self, id)
   return { dialog = d, state = state, id = id }
 end
 
---- The controls of a loaded dialog, drawn from this screen's art.
+-- The default buttons: the controls Enter presses, the first live one of
+-- them in whatever dialog is up (DS:155c, read by 17be:0064).
+screen.DEFAULT_IDS = {}
+for _, id in ipairs({ 123, 103, 141, 174, 189, 192, 201, 223, 287, 242, 285, 251,
+                      292, 294, 330, 331, 332, 172, 356, 359, 368, 370, 396, 421,
+                      424, 425, 457, 469, 282, 485, 484, 483, 474, 489, 490, 495 }) do
+  screen.DEFAULT_IDS[id] = true
+end
+
+--- The ring round a default button (1a0a:0005): two rounded rects in colour
+--- 0, the inner one a pixel clear of the control, drawn as the original's own
+--- twelve runs apiece -- 2133:02fe across, 2133:0344 down.
+local function defaultRing(self, c)
+  local p = self.palette and self.palette[1] or { 0, 0, 0 }
+  love.graphics.setColor(p[1], p[2], p[3])
+  local function across(x, y, n) love.graphics.rectangle("fill", x, y, n, 1) end
+  local function down(x, y, n) love.graphics.rectangle("fill", x, y, 1, n) end
+  local X, Y, W, H = c.x - 2, c.y - 2, c.w + 3, c.h + 3
+  for _ = 1, 2 do
+    across(X + 1, Y, W - 2);        down(X + W - 1, Y, 2)
+    across(X + W - 1, Y + 1, 2);    down(X + W, Y + 1, H - 2)
+    across(X + W - 1, Y + H - 1, 2); down(X + W - 1, Y + H - 1, 2)
+    across(X + 1, Y + H, W - 2);    down(X + 1, Y + H - 1, 2)
+    across(X, Y + H - 1, 2);        down(X, Y + 1, H - 2)
+    across(X, Y + 1, 2);            down(X + 1, Y, 2)
+    X, Y, W, H = X - 1, Y - 1, W + 2, H + 2
+  end
+  love.graphics.setColor(1, 1, 1)
+end
+
+--- The controls of a loaded dialog, drawn from this screen's art, each
+--- default button with its ring -- which the original only draws while a
+--- dialog is up (4125:166a): never on the main screen, nor on a view marked
+--- `screen`, one the original shows with the flag clear (the start menu and
+--- the sides screen).
 function screen.drawDialogControls(self, view)
   love.graphics.setColor(1, 1, 1)
   for _, c in ipairs(view.dialog.controls) do
@@ -302,6 +336,9 @@ function screen.drawDialogControls(self, view)
         love.graphics.draw(art.image,
           love.graphics.newQuad(s.x, s.y, c.w, c.h, art.w, art.h), c.x, c.y)
       end
+    end
+    if screen.DEFAULT_IDS[c.id] and not view.screen and c.w > 0 and c.h > 0 then
+      defaultRing(self, c)
     end
   end
 end

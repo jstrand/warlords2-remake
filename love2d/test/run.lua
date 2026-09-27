@@ -535,6 +535,31 @@ local function testSetup()
   local cap = g.map.sides[3].capital
   eq(cap and cap.ownerIndex, nil, "and its capital neutral")
   for _, s in ipairs(g.sides) do ok(s.index ~= 2, "not among the sides in play") end
+
+  -- Quick Start deals every neutral city out, round the sides (79fa:07ca)
+  local quick = game.new(DATA, "ERYTHEA", { seed = 5, options = { quickStart = 1 },
+    sides = { [2] = { off = true } } })
+  local counts, neutral = {}, 0
+  for _, c in ipairs(quick.map.cities) do
+    if c.ownerIndex == nil then neutral = neutral + 1
+    else counts[c.ownerIndex] = (counts[c.ownerIndex] or 0) + 1 end
+  end
+  eq(neutral, 0, "with Quick Start no city is left neutral")
+  eq(counts[2], nil, "a side left out gets none")
+  local least, most = math.huge, 0
+  for _, s in ipairs(quick.sides) do
+    least, most = math.min(least, counts[s.index] or 0), math.max(most, counts[s.index] or 0)
+    ok(s.capital.ownerIndex == s.index, "each side keeps its capital")
+  end
+  ok(most - least <= 1, "and the cities go round evenly")
+  for _, a in ipairs(quick.armies) do
+    local c = game.cityAt(quick, a.x, a.y)
+    if c then eq(a.owner, c.ownerIndex, "a dealt city's garrison is its owner's") end
+  end
+  local slow = game.new(DATA, "ERYTHEA", { seed = 5, sides = { [2] = { off = true } } })
+  neutral = 0
+  for _, c in ipairs(slow.map.cities) do if c.ownerIndex == nil then neutral = neutral + 1 end end
+  ok(neutral > 0, "without it the other cities stay neutral")
 end
 
 local function testSage(scenario)
