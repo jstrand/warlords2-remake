@@ -31,6 +31,9 @@ local SCRIPT = os.getenv("W2_SCRIPT")
 -- we live in love2d/test/shot; the game is two directories up
 local ROOT = love.filesystem.getSource() .. "/../.."
 package.path = ROOT .. "/?.lua;" .. package.path
+-- the player's settings (prefs.lua) would change the shots: none are read,
+-- and the ones a script changes go nowhere lasting
+require("prefs").FILE = os.tmpname()
 -- main.lua hands back its state; a script may read it (`W2`) to find where
 -- to click, though it should still act only through the handlers
 W2 = assert(loadfile(ROOT .. "/main.lua"))()

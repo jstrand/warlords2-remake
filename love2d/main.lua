@@ -25,6 +25,7 @@ local saveMod  = require("warlords.save")
 local screen   = require("warlords.screen")
 local layoutMod = require("warlords.layout")
 local display  = require("display")
+local prefs    = require("prefs")
 local uidata   = require("warlords.uidata")
 local font     = require("warlords.font")
 local menuMod  = require("warlords.menu")
@@ -229,9 +230,13 @@ function love.load(arg)
 
   -- the screen: its real pixels, the UI's scale, and the map's zoom, which
   -- starts at the UI's own so the map looks as it always has (display.lua)
+  -- -- or all as they were left last time (prefs.lua)
   display.install()
+  if prefs.get("screen") == "window" then display.setWindowed(true) end
+  if prefs.get("4:3") == "on" then display.wanted = { w = layoutMod.W, h = layoutMod.H } end
+  display.chosen = tonumber(prefs.get("scale"))
   display.measure()
-  G.zoom = display.scale
+  G.zoom = tonumber(prefs.get("zoom")) or display.scale
   syncLayout()
 
   -- A third argument fixes the seed, so a run can be reproduced exactly.
@@ -384,6 +389,7 @@ local function maxZoom() return display.maxScale + 2 end
 function G.setZoom(z, x, y)
   z = math.max(1, math.min(maxZoom(), z))
   if z == G.zoom then return end
+  prefs.set("zoom", z)
   local r = G.mapRect
   x, y = x or r.x + r.w / 2, y or r.y + r.h / 2
   local tx, ty = G.uiToMap(x, y)
@@ -452,12 +458,14 @@ end
 --- Draw the interface at `n` device pixels a pixel (View > Interface).
 function G.setUIScale(n)
   relayout(function() display.choose(n) end)
+  prefs.set("scale", display.chosen)
 end
 
 --- The video mode: "full", the whole screen, or "window", a window on the
 --- desktop that can be resized (View > Full screen, Window).
 function G.setScreen(how)
   relayout(function() display.setWindowed(how == "window") end)
+  prefs.set("screen", G.screenMode())
 end
 
 function G.screenMode()
@@ -468,6 +476,7 @@ end
 --- round it (View > 4:3), in either video mode.
 function G.setOriginalSize(on)
   relayout(function() display.wanted = on and { w = layoutMod.W, h = layoutMod.H } or nil end)
+  prefs.set("4:3", on and "on" or "off")
 end
 
 --- Is this menu item the setting in use? The zoom items are ticked so,

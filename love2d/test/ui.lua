@@ -94,6 +94,11 @@ love = {
 --------------------------------------------------------------------- running
 
 print("loading the front end")
+-- the settings the menus change go to a file of the run's own, neither
+-- read from nor written over the player's
+local prefsMod = require("prefs")
+prefsMod.FILE = os.tmpname()
+os.remove(prefsMod.FILE)
 local chunk = assert(loadfile("love2d/main.lua"))
 local G = chunk()          -- main.lua hands back its view state, for tests
 
@@ -487,10 +492,6 @@ try("frame after the keys", love.draw)
 if G and G.menuLayout then
   local menuMod = require("warlords.menu")
   local picked = 0
-  -- picking Game's music items writes the choice; put the player's back
-  local f = io.open("warlords-music.txt", "rb")
-  local musicPrefs = f and f:read("*a")
-  if f then f:close() end
   for i, m in ipairs(G.menuLayout) do
     try(("open menu %s"):format(m.title), love.mousepressed, m.x + 2, 4, 1)
     if G.openMenu ~= i then
@@ -518,13 +519,12 @@ if G and G.menuLayout then
   -- the music's synthesizer is the one picked last, where it can be
   local last = G.menuEnabled("music sc55") and "music sc55" or "music fm"
   if not G.menuTicked(last) then fail("music", last .. " was not ticked") end
-  G.audio.setSynth("fm")
-  if musicPrefs then
-    f = io.open("warlords-music.txt", "wb")
-    f:write(musicPrefs)
-    f:close()
-  else
-    os.remove("warlords-music.txt")
+  -- and every choice was written down
+  prefsMod.reload()
+  if prefsMod.get("music") ~= last:match("%w+$") or prefsMod.get("4:3") ~= "on"
+     or prefsMod.get("screen") ~= "window" or not tonumber(prefsMod.get("scale"))
+     or not tonumber(prefsMod.get("zoom")) then
+    fail("prefs", "the menus' choices were not all written to " .. prefsMod.FILE)
   end
   -- the last of View's is 4:3: the original's 640x480, whatever the screen
   if G.layout.w ~= 640 or G.layout.h ~= 480 then
@@ -791,6 +791,7 @@ do
 end
 
 os.remove("warlords-save.lua")
+os.remove(prefsMod.FILE)
 
 if failures == 0 then
   print("\nthe front end ran clean")

@@ -22,10 +22,11 @@
 -- MT-32's M files and the Sound Canvas's R files, recorded through emulators
 -- of those modules to pre-rendered-sound/<M|R><song>.ogg. Tick 0 of the song
 -- is the recording's start, and a recording runs on past the song's end with
--- its reverb dying away. The choice is kept in warlords-music.txt, beside the
--- remake's saves.
+-- its reverb dying away. The choice is kept with the remake's other
+-- settings (prefs.lua).
 
 local cues = require("warlords.cues")
+local prefs = require("prefs")
 local xmi = require("warlords.xmi")
 
 local sound = {}
@@ -36,7 +37,6 @@ sound.SAMPLE_RATE = 11000
 -- (255e:032f: S for FM, M for MT32MPU.ADV, R for SC32MPU.ADV)
 sound.SYNTHS = { "fm", "mt32", "sc55" }
 local PREFIX = { fm = "S", mt32 = "M", sc55 = "R" }
-local PREFS = "warlords-music.txt"
 
 local S = {
   on = { music = false, effects = false, speech = false },
@@ -82,8 +82,8 @@ function sound.init(dataDir, files, recordings)
   S.on.music = opts:sub(1, 1) == "1"
   S.on.effects = opts:sub(2, 2) == "1"
   S.on.speech = opts:sub(3, 3) ~= "0"
-  local synth = (read(PREFS) or ""):match("%w+")
-  if PREFIX[synth] and synth ~= "fm" and sound.synthAvailable(synth) then S.synth = synth end
+  local synth = prefs.get("music")
+  if PREFIX[synth] and sound.synthAvailable(synth) then S.synth = synth end
   if not S.ok then return end
   local adv, ad = read(dataDir .. "/ADLIB.ADV"), read(dataDir .. "/MIDPAK.AD")
   if adv and ad and love.thread then
@@ -202,8 +202,7 @@ end
 function sound.setSynth(synth)
   if not PREFIX[synth] or synth == S.synth then return end
   S.synth = synth
-  local f = io.open(PREFS, "wb")
-  if f then f:write(synth, "\n") f:close() end
+  prefs.set("music", synth)
   if S.on.music and S.song and S.songPlaying then startSong(S.song[1], S.song[2]) end
 end
 
