@@ -57,12 +57,25 @@ menu.MENUS = {
 --- and each scale the interface can, run by its act ("map zoom 2",
 --- "ui scale 3") and ticked while it is the one in use; the video mode, full
 --- screen or a window on the desktop; and, in either, 4:3 on or off: the
---- original's own 640x480 with black round it.
+--- original's own 640x480 with black round it. Game gets the synthesizer
+--- the music plays on ("music fm", "music mt32", "music sc55"), under
+--- Settings and Shortcuts.
 function menu.withZooms(maxUI, maxMap)
   local out = {}
   for i, m in ipairs(menu.MENUS) do
     local items = m.items
-    if m.title == "View" then
+    if m.title == "Game" then
+      items = {}
+      for j, it in ipairs(m.items) do
+        items[#items + 1] = it
+        if j == 2 then
+          items[#items + 1] = { "-" }
+          items[#items + 1] = { "AdLib music", nil, "music fm" }
+          items[#items + 1] = { "MT-32 music", nil, "music mt32" }
+          items[#items + 1] = { "SC-55 music", nil, "music sc55" }
+        end
+      end
+    elseif m.title == "View" then
       items = {}
       for _, it in ipairs(m.items) do items[#items + 1] = it end
       items[#items + 1] = { "-" }

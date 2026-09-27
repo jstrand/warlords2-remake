@@ -487,6 +487,10 @@ try("frame after the keys", love.draw)
 if G and G.menuLayout then
   local menuMod = require("warlords.menu")
   local picked = 0
+  -- picking Game's music items writes the choice; put the player's back
+  local f = io.open("warlords-music.txt", "rb")
+  local musicPrefs = f and f:read("*a")
+  if f then f:close() end
   for i, m in ipairs(G.menuLayout) do
     try(("open menu %s"):format(m.title), love.mousepressed, m.x + 2, 4, 1)
     if G.openMenu ~= i then
@@ -510,6 +514,17 @@ if G and G.menuLayout then
       end
     end
     G.openMenu = nil
+  end
+  -- the music's synthesizer is the one picked last, where it can be
+  local last = G.menuEnabled("music sc55") and "music sc55" or "music fm"
+  if not G.menuTicked(last) then fail("music", last .. " was not ticked") end
+  G.audio.setSynth("fm")
+  if musicPrefs then
+    f = io.open("warlords-music.txt", "wb")
+    f:write(musicPrefs)
+    f:close()
+  else
+    os.remove("warlords-music.txt")
   end
   -- the last of View's is 4:3: the original's 640x480, whatever the screen
   if G.layout.w ~= 640 or G.layout.h ~= 480 then

@@ -89,6 +89,14 @@ Settings turns Music, Effects and Speech on and off, and writes them to
 luajit tools/xmi2wav.lua SSTARTUP title.wav
 ```
 
+The game also has its songs arranged for the Roland MT-32 and Sound Canvas,
+which the original played when installed for those modules. Game › AdLib
+music, MT-32 music and SC-55 music pick one in play (not the
+original's); the choice is kept in `warlords-music.txt`. The two Roland sets
+are not synthesised here but played from recordings in `pre-rendered-sound/`,
+made by `tools/prerender_music.sh` through Munt and 88emu with your own ROMs;
+an item is greyed while its recordings are missing.
+
 ## The rules core
 
 Everything under `warlords/` except `pal.lua`, `pck.lua` and the drawing in

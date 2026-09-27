@@ -7,3 +7,5 @@ build/
 # the remake's saved games
 warlords-save*.lua
 warlords-saveinfo.txt
+# and its choice of synthesizer for the music
+warlords-music.txt

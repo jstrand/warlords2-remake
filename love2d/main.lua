@@ -222,9 +222,10 @@ function love.load(arg)
   G.scrollPic = pck.toImage(dataDir .. "/PICS/SCROLL.PCK", palette, SCROLL_KEY)
   kit.init(G)
   -- the music, effects and advisor (sound.lua), switched as DATA/OPTIONS.SND
-  -- says; FILE.DAT names every song and sample
+  -- says; FILE.DAT names every song and sample. The songs recorded on the
+  -- MT-32 and the Sound Canvas are beside the saves, not in the game's data.
   G.audio = require("sound")
-  G.audio.init(dataDir, G.screen.ui.files)
+  G.audio.init(dataDir, G.screen.ui.files, "pre-rendered-sound")
 
   -- the screen: its real pixels, the UI's scale, and the map's zoom, which
   -- starts at the UI's own so the map looks as it always has (display.lua)
@@ -469,12 +470,13 @@ function G.setOriginalSize(on)
   relayout(function() display.wanted = on and { w = layoutMod.W, h = layoutMod.H } or nil end)
 end
 
---- Is this menu item the setting in use? The zoom items are ticked so, and
---- 4:3 while it is on.
+--- Is this menu item the setting in use? The zoom items are ticked so,
+--- 4:3 while it is on, and the synthesizer the music is played on.
 function G.menuTicked(key)
   return key == "map zoom " .. tostring(G.zoom) or key == "ui scale " .. display.scale
          or key == "screen " .. G.screenMode()
          or (key == "screen 4:3" and display.wanted ~= nil)
+         or (G.audio ~= nil and key == "music " .. G.audio.synth())
 end
 G.centreOn = function(x, y) centreOn(x, y) end
 
@@ -3045,17 +3047,26 @@ end
 MENU_DOES["screen full"] = function() G.setScreen("full") end
 MENU_DOES["screen window"] = function() G.setScreen("window") end
 MENU_DOES["screen 4:3"] = function() G.setOriginalSize(display.wanted == nil) end
+-- Game's music items (not the original's; menu.withZooms)
+for _, synth in ipairs(require("sound").SYNTHS) do
+  MENU_DOES["music " .. synth] = function() G.audio.setSynth(synth) end
+end
 
 function G.menuEnabled(key)
   if key == nil or MENU_DOES[key] == nil then return false end
+  -- a synthesizer whose recordings are not there is greyed
+  local synth = key:match("^music (%w+)$")
+  if synth and not (G.audio and G.audio.synthAvailable(synth)) then return false end
   -- 7f77:0200: on the start screens every menu is greyed but Game's Quit,
   -- and Load game while a slot holds one (7721:0e25; Load map likewise, by
   -- 7721:0e42, which the remake does not have). The interface's scale and
   -- the screen's shape are live there too, since they are the start
-  -- screens' size as well -- not the original's, which had no such thing.
+  -- screens' size as well, and the music's synthesizer, since the title
+  -- music plays there -- not the original's, which had no such things.
   if G.starting then
     return key == "^Q" or (key == "alt L" and require("ui.savegame").used() > 0)
            or key:match("^ui scale ") ~= nil or key:match("^screen ") ~= nil
+           or synth ~= nil
   end
   return true
 end
