@@ -424,6 +424,9 @@ if G and G.screen then
       -- must do both
       local off = hit and G.screen.state[hit.id] == uidata.DISABLED
       try(("press control %d"):format(c.id), love.mousepressed, cx, cy, 1)
+      -- held down across a frame: the refresh each frame runs must not
+      -- take the pressed look away
+      try(("draw with control %d held"):format(c.id), love.draw)
       if hit and not off and G.screen.state[hit.id] ~= uidata.ACTIVE then
         fail("control press", ("control %d did not light up"):format(hit.id))
       end
@@ -433,6 +436,10 @@ if G and G.screen then
       try(("release control %d"):format(c.id), love.mousereleased, cx, cy, 1)
       if hit and not off and G.screen.state[hit.id] == uidata.ACTIVE then
         fail("control release", ("control %d stayed lit"):format(hit.id))
+      end
+      -- a shortcut that opens a dialog (Heroes: Hero > Inspect): close it
+      for _ = 1, 3 do
+        if require("ui.kit").top() then try(("close what %d opened"):format(c.id), love.keypressed, "escape") end
       end
     end
   end

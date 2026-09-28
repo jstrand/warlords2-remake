@@ -420,6 +420,19 @@ any is left. The four configurable buttons are refreshed separately, at the
 end, by `545c:00aa`: each is greyed when `2372:0f9f` says its assigned menu
 item is not available.
 
+That is the menu's own enable bit. `2372:0ef8(item, on)` sets or clears it
+(bit `n` of the dword at `+0x1a` of the item's menu record; `2372:0d78` does
+the same at `+0x20`), and `8065:0519`, called from the refresh, turns every
+menu on with `2372:0eab` and then greys what does not apply. Two of its rules:
+
+| item | greyed unless |
+|---|---|
+| 517 Hero › Inspect (and 520 with it) | the side has an army of type `0x1c`, a hero |
+| 521 Hero › Search | the selected army (`451b:1f02`) stands on a site tile (terrain `0x0b`) with a site record, the tile is not searched (flag `0x40`), and the army is a hero or the site is of kind 1, a temple |
+
+So the shipped Heroes button is live only while the side has a hero, and
+Search only where there is something to search.
+
 ### The army cycle
 
 The five buttons above the pad are the turn's rhythm. The first walks the

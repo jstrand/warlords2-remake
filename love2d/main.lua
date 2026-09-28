@@ -2489,23 +2489,24 @@ local function search()
   stratDirty()
 end
 
-local SHORTCUT_DOES = {
-  ["Move All"] = function() moveAll() end,
-  ["Search"] = function() search() end,
-  ["End Turn"] = function() endTurn() end,
+-- The key of each menu item UDB.DAT lets a button carry, by its menu item
+-- id: the button runs the same command the key does, and is greyed when
+-- the menu item is (545c:00aa asks 2372:0f9f, the menu's own enable bit).
+local SHORTCUT_KEY = {
+  [507] = "m", [508] = "q", [510] = "a", [511] = "k", [512] = "g", [513] = "n",
+  [514] = "w", [516] = "=", [517] = ",", [518] = "f", [521] = "z", [524] = "b",
+  [525] = "c", [526] = "p", [527] = "v", [528] = ".", [529] = "s", [530] = "h",
+  [531] = "e", [534] = "l", [535] = "alt E",
 }
 
-local function shortcutName(n)
-  local id = G.screen.ui.shortcuts[n]
-  return id and G.screen.ui.shortcutNames[id] or nil
+local function shortcutKey(n)
+  return SHORTCUT_KEY[G.screen.ui.shortcuts[n] or -1]
 end
 
 for i = 0, uidata.SHORTCUT_COUNT - 1 do
   ACTION[uidata.SHORTCUT_FIRST + i] = function()
-    local name = shortcutName(i)
-    if not name then say("That button has nothing assigned.") return end
-    local act = SHORTCUT_DOES[name]
-    if act then act() else say("%s is not implemented yet.", name) end
+    local key = shortcutKey(i)
+    if key and G.menuEnabled(key) then MENU_DOES[key]() end
   end
 end
 
@@ -2563,9 +2564,12 @@ function refreshControls()
     for id in pairs(st) do st[id] = uidata.DISABLED end
     return
   end
+  -- a live button held down keeps its pressed look until it is let go
   local function set(id, live)
     if st[id] == nil then return end
-    st[id] = (live and ACTION[id]) and uidata.NORMAL or uidata.DISABLED
+    if not (live and ACTION[id]) then st[id] = uidata.DISABLED
+    elseif id == G.pressed then st[id] = uidata.ACTIVE
+    else st[id] = uidata.NORMAL end
   end
 
   -- 173: there is a route left to walk on along (2ea6 > 2ea8)
@@ -2600,8 +2604,8 @@ function refreshControls()
   set(241, sel ~= nil and grouped)
 
   for i = 0, uidata.SHORTCUT_COUNT - 1 do
-    local name = shortcutName(i)
-    set(uidata.SHORTCUT_FIRST + i, name ~= nil and SHORTCUT_DOES[name] ~= nil)
+    local key = shortcutKey(i)
+    set(uidata.SHORTCUT_FIRST + i, key ~= nil and G.menuEnabled(key))
   end
   for i = 0, 7 do set(320 + i, true) end       -- the pad is always live
 end
@@ -2776,6 +2780,27 @@ MENU_DOES = {
   ["w"] = function() reportsUi.open(4) end,
 }
 
+-- Hero > Inspect is live while the side has a hero (8065:0519: an army of
+-- type 0x1c that is its own).
+local function sideHasHero()
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.type == armytype.HERO then return true end
+  end
+  return false
+end
+
+-- Hero > Search is live (8065:0519) when the selected army stands on a site
+-- not yet searched (tile flag 0x40), and is a hero -- or the site is a
+-- temple, which any army may visit.
+local function canSearch()
+  local lead = G.selection and G.selection.stack[1]
+  if not lead then return false end
+  local m = G.g.map
+  local s = m.siteAt and m.siteAt[lead.y * m.width + lead.x]
+  if not s or s.searched then return false end
+  return lead.type == armytype.HERO or s.type == require("warlords.site").TEMPLE
+end
+
 -- A menu item this engine cannot do yet is greyed, the way the original greys
 -- one that is not available: saying so beats a pick that does nothing.
 function G.menuEnabled(key)
@@ -2786,6 +2811,10 @@ function G.menuEnabled(key)
   if G.starting then
     return key == "^Q" or (key == "alt L" and require("ui.savegame").used() > 0)
   end
+  -- 8065:0519, the menu's own refresh after every action, greys what does
+  -- not apply at the moment; these are the rules the remake has taken on
+  if key == "," then return sideHasHero() end
+  if key == "z" then return canSearch() end
   return true
 end
 
