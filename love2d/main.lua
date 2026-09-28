@@ -291,7 +291,9 @@ function beginGame()
   -- centre the 9x9 viewport on the capital
   G.cx = math.max(0, math.min(G.player.capital.x - 4, G.g.map.width - screen.VIEW_COLS))
   G.cy = math.max(0, math.min(G.player.capital.y - 4, G.g.map.height - screen.VIEW_ROWS))
-  showBanner(G.player)
+  -- the banner is a human's (8cc6:0259); a computer that opens the game goes
+  -- straight to its turn, shown in the status bar (8cc6:0000)
+  if not G.player.computer then showBanner(G.player) end
 end
 
 --------------------------------------------------------------------- camera
@@ -942,6 +944,55 @@ ai.onWalk = function(g, stack, r)
   if seen then coroutine.yield("walk", stack, r.walked) end
 end
 
+-- A line in the status bar, and the time 8065:11d1 then waits, in BIOS
+-- ticks (7ecb:0000) -- unless the rest of the round is being run through.
+local function status(text, ticks)
+  if G.aiStatus then G.aiStatus.text = text end
+  if ticks and ticks > 0 and not G.aiSkip then coroutine.yield("pause", ticks) end
+end
+
+-- ai_turn's progress bar after each phase (5db9:0000), by the names
+-- ai.playTurn gives them
+local PROGRESS = {
+  diplomacy = 10, ["move hero"] = 15, ["move search"] = 20, ["move explore"] = 25,
+  assault = 30, ["move #1"] = 40, rescue = 45, evaluate = 50, ["clean city"] = 55,
+  neutral = 60, ["move #2"] = 65, ["assault XX"] = 70, specials = 75,
+  rebuilding = 80, ["last rescue"] = 85, production = 90, vectoring = 95,
+}
+
+-- A computer's battle (auto_ui_being_attacked, 67cc:124a): who is attacked
+-- goes up in the status bar, and then how it went, five ticks each -- when
+-- the attacker's turn is watched or the defender is a human; with the map
+-- hidden and a single human, only where that human has seen.
+ai.onFight = function(g, stack, x, y, result)
+  local co = G.aiRun
+  if not co or coroutine.running() ~= co or not G.aiStatus then return end
+  local lines = result.lines or {}
+  local def
+  if lines.city then def = lines.city.ownerIndex
+  elseif lines.defenders and lines.defenders[1] then def = lines.defenders[1].owner end
+  local defSide = def and def < 8 and g.map.sides[def + 1] or nil
+  local human = defSide and not defSide.computer
+  if not (shown(G.aiSide) or human) then return end
+  local humans = {}
+  for _, s in ipairs(g.sides) do
+    if s.alive and not s.computer then humans[#humans + 1] = s end
+  end
+  if g.map.options.hiddenMap ~= 0 and #humans == 1 and not game.seen(g, humans[1], x, y) then
+    return
+  end
+  local t = function(grp) return uidata.text(G.screen.ui, grp, 0) end
+  status(defSide and t(0x94):format(defSide.name) or t(0x95), 5)
+  local hero
+  for _, a in ipairs(lines.attackers or {}) do
+    if a.type == armytype.HERO then hero = a break end
+  end
+  local me = G.aiSide.name
+  if not result.won then status(t(0x98):format(me), 5)
+  elseif hero then status(t(0x8e):format(hero.name or ""), 5)
+  else status(t(0x96):format(me), 5) end
+end
+
 function resumeComputer()
   local co = G.aiRun
   if not co then return end
@@ -954,7 +1005,10 @@ function resumeComputer()
     return
   end
   stratDirty()
-  if what == "walk" then
+  if what == "pause" then
+    G.aiResumeAt = now() + a / 18.2
+    G.aiWait = true
+  elseif what == "walk" then
     local armies = {}
     for _, army in ipairs(a) do armies[#armies + 1] = army end
     startWalk(armies, b)
@@ -974,6 +1028,10 @@ G.resumeComputer = function() resumeComputer() end
 --- Called every frame: carry the computer on once nothing is in its way.
 function stepComputer()
   if not G.aiRun or not G.aiWait or G.walk or kit.top() then return end
+  if G.aiResumeAt then
+    if now() < G.aiResumeAt and not G.aiSkip then return end
+    G.aiResumeAt = nil
+  end
   if held("lshift", "rshift") or held("lalt", "ralt") then
     G.aiSkip = nil
     require("ui.settings").open()
@@ -989,7 +1047,21 @@ function playComputers(side)
       G.aiSide = side
       -- 8065:2123: each computer turn opens with a song that plays once
       G.audio.music(require("warlords.cues").COMPUTER, G.g.sides)
-      ai.playTurn(G.g, side)
+      -- start_of_turn (8cc6:0000): no banner, but the side's name in the
+      -- status bar and its progress bar at 5; then, if it is watched, what
+      -- its diplomacy came to as the turn opened (484e:0db3, 20 ticks each)
+      G.aiStatus = { side = side, text = side.name, progress = 5 }
+      coroutine.yield("progress")
+      if shown(side) then
+        for _, m in ipairs(side.diploNews or {}) do status(m, 20) end
+      end
+      side.diploNews = nil
+      ai.playTurn(G.g, side, function(phase)
+        G.aiStatus.progress = PROGRESS[phase] or G.aiStatus.progress
+        coroutine.yield("progress")
+      end)
+      G.aiStatus.progress = 100
+      coroutine.yield("progress")
       side = game.endTurn(G.g)
       if G.g.ending and G.g.ending.noHumans then coroutine.yield("nohumans") end
       coroutine.yield("turn")
@@ -1013,12 +1085,14 @@ end
 function finishRound(side)
   local ending = require("ui.ending")
   if not side then
+    G.aiStatus = nil
     G.over = true
     say("%s", G.g.log[#G.g.log] or "The game is over.")
     ending.over(G.g.ending)
     return
   end
   G.player = side
+  G.aiStatus = nil                      -- 8065:0aeb: the bar is the player's again
   stratDirty()
   cycleReset()
   -- 8cc6:0259 centres on the side's capital (its record's +6/+8) as the turn
@@ -1610,12 +1684,42 @@ end
 -- before either face is drawn. Checked against the original running.
 local BAR_GROUND = { x = 16, y = 403, w = 360, h = 66, sx = 0, sy = 60 }
 
+-- A computer's turn in the status bar (start_of_turn, 8cc6:0000, and
+-- ai_turn, 5db9:0000). 8065:11d1 repaints the bar's marble and writes a line
+-- centred on (196, 415) in font 2, in the playing side's own colours -- its
+-- name, then whatever it has to say; 8065:1291 draws a black frame at
+-- (36, 442) 320x22; and 8065:131b(n) blits the first n / 5 * 16 pixels of
+-- the side's MOVEBAR<n>.PCK, a chain of its shields 320x18, at (32, 444)
+-- through its mask: 5 as the turn opens, then 10 to 100 as ai_turn gets
+-- through its phases.
+function G.drawComputerStatus()
+  local st = G.aiStatus
+  local side = st.side
+  love.graphics.setColor(1, 1, 1)
+  kit.centred(G.bigFont.colours(side.colour or 15, side.edge or 0), st.text or "", 196, 415)
+  palColour(0)
+  kit.outline(36, 442, 320, 22)
+  local w = math.floor((st.progress or 0) / 5) * 16
+  if w > 0 then
+    G.moveBars = G.moveBars or {}
+    local i = side.index
+    if not G.moveBars[i] then
+      G.moveBars[i] = pck.toImage(("%s/TERRAIN0/MOVEBAR%d.PCK"):format(G.dataDir, i), G.palette, "corner")
+    end
+    local img = G.moveBars[i]
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(img, love.graphics.newQuad(0, 0, math.min(w, 320), 18, img:getDimensions()), 32, 444)
+  end
+end
+
 local function drawBottomBar()
   love.graphics.setColor(1, 1, 1)
   local b = BAR_GROUND
   love.graphics.draw(G.marble,
     love.graphics.newQuad(b.sx, b.sy, b.w, b.h, G.marble:getDimensions()), b.x, b.y)
-  if G.selection then
+  if G.aiStatus then
+    G.drawComputerStatus()
+  elseif G.selection then
     drawArmySlots()
   else
     drawStatus()

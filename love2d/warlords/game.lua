@@ -424,7 +424,9 @@ function game.startTurn(g, side)
   end
   game.tidyExplored(g, side)
   local heroMod = require("warlords.hero")
-  for _, m in ipairs(require("warlords.diplomacy").apply(g, side)) do
+  -- what changed is said in the status bar, for a watched computer
+  side.diploNews = require("warlords.diplomacy").apply(g, side)
+  for _, m in ipairs(side.diploNews) do
     g.log[#g.log + 1] = m
   end
   side.heroOffer = heroMod.offer(g, side)

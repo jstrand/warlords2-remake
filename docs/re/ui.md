@@ -595,6 +595,30 @@ the start of each side's turn `8cc6:0000` copies the side's Observe into
 drawn for that turn (`8611:006c`); with it on, the walk (`1a8b:04c8`) centres
 on the stack step by step as it does for the player's own.
 
+A computer's turn has **no banner**: that is `8cc6:0259`'s, a human's. Its
+start, `start_of_turn` (`8cc6:0000`), puts the turn in the status bar
+instead. `8065:11d1(text, ticks)` repaints the top of the bar from
+MARBLE.PCK — the rect at `4125:2a9c`, (16, 403) 360 × 66, from marble (0, 60)
+— and writes the line centred on (196, 415) (`4125:2aa4`) in font 2 in the
+playing side's colours, then waits `ticks` BIOS ticks (`7ecb:0000`);
+`8065:1291` repaints below it and draws a black frame at (36, 442) 320 × 22
+(`216d:01fd`, four lines); and `8065:131b(n)` blits the first `n / 5 · 16`
+pixels of bitmap `0x47 + side` — `TERRAIN0/MOVEBAR<side>.PCK`, a chain of the
+side's shields 320 × 18, keyed like the army sheets — at (32, 444) through its
+mask. The side's name and 5 come first; `ai_turn` (`5db9:0000`) then sets 10
+after its setup and 15, 20, 25, 30, 40, 45, 50 … 95 after its phases, and
+100 at the end; a side with no city left goes 25, 50, 75, 100 at once.
+
+Lines that replace the name meanwhile: a watched computer's diplomacy as the
+turn opens (`484e:0db3`, group 111 — *War declared with %s!*, *Peace
+negotiated with %s!* — 20 ticks each), and every battle it fights where the
+turn is watched or the defender is human (`67cc:124a`: with the map hidden
+and one human, only on ground that human has seen) — *%s, you are being
+attacked!* or *Neutrals are being attacked!* (groups 148, 149), then *%s, you
+are victorious!*, *%s has won the battle!* for a hero, or *%s, you have lost!*
+(150, 142, 152), five ticks each. When a human is attacked and the turn is
+watched, the battle window is shown between the two as well.
+
 During the computer's turns `5db9:045e` watches the keyboard: **Shift or Alt**
 held opens Settings (`64d2:0000(0)`), where a side can be handed back to a
 human or its watching turned off. When the last human falls, `8065:1c6f` says

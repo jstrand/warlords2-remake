@@ -117,7 +117,12 @@ function finishComputer()
   local kit = require("ui.kit")
   for _ = 1, 20000 do
     -- with no human left the computers fight on, as long as they like
-    if not G.aiRun or (not humanLeft() and G.g.noHumansSaid and not kit.top()) then return end
+    if not G.aiRun or (not humanLeft() and G.g.noHumansSaid and not kit.top()) then
+      if not G.aiRun and G.aiStatus and not G.over then
+        fail("computer turn", "the status bar stayed the computer's")
+      end
+      return
+    end
     if kit.top() then love.keypressed("return")
     elseif not G.aiSkip then love.keypressed("x") end
     love.draw()
@@ -794,10 +799,27 @@ do
   local turn = G.g.turn
   try("end a watched turn", endTurn, true)
   local frames = 0
+  -- a computer's turn has no banner; its name and a progress bar that only
+  -- grows are in the status bar (8cc6:0000, 5db9:0000)
+  local lastSide, lastProgress, grew = nil, 0, false
   while G.aiRun and not (G.walk and G.walk.computer) and frames < 2000 do
     try("watch a frame", love.draw)
     frames = frames + 1
+    if G.banner then fail("computer turn", "a banner went up for a computer") break end
+    local st = G.aiStatus
+    if G.aiRun and not st then fail("computer turn", "no status during a computer's turn") break end
+    if st then
+      if not st.side.computer then fail("computer turn", "the status is a human's") break end
+      if st.side ~= lastSide then lastSide, lastProgress = st.side, 0 end
+      if st.progress < lastProgress then fail("computer turn", "the progress bar went back") break end
+      if st.progress > lastProgress and lastProgress > 0 then grew = true end
+      lastProgress = st.progress
+    end
   end
+  if frames > 0 and not grew and G.aiRun and not (G.walk and G.walk.computer) then
+    fail("computer turn", "the progress bar never moved")
+  end
+  print(("  computer turns: status bar, progress to %d over %d frames"):format(lastProgress, frames))
   local watched = G.walk ~= nil and G.walk.computer
   -- holding Shift between the computer's turns opens Settings (5db9:045e)
   if G.aiRun then
