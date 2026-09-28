@@ -98,25 +98,29 @@ end
 
 --------------------------------------------------------------- the cost grid
 
---- Is a city a port -- does any tile of its 2x2 footprint touch bridge, water
---- or shore? Only a port city lets a stack change between land and sea.
--- FUN_1555_109d.
+-- 1555:109d walks round a city from its top left tile, a step at a time in
+-- these directions (4125:01f8): the twelve tiles that border it
+local PORT_TOUR = { 0, 2, 2, 4, 4, 4, 6, 6, 6, 0, 0, 0 }
+
+--- Is a city a port -- does any tile bordering its 2x2 footprint hold a
+--- bridge, water or shore? Only a port city lets a stack change between land
+--- and sea. 1555:109d, which gives up -- not a port -- the moment its walk
+--- round the city would leave the map.
 function move.isPort(g, city)
-  for dx = -1, 2 do
-    for dy = -1, 2 do
-      local x, y = city.x + dx, city.y + dy
-      if x >= 0 and y >= 0 and x < g.map.width and y < g.map.height then
-        local t = scn.terrainAt(g.map, x, y)
-        if t == move.BRIDGE or t == move.WATER or t == move.SHORE then return true end
-      end
-    end
+  local x, y = city.x, city.y
+  for _, d in ipairs(PORT_TOUR) do
+    x, y = x + move.DIRS[d][1], y + move.DIRS[d][2]
+    if x < 0 or y < 0 or x >= g.map.width or y >= g.map.height then return false end
+    local t = scn.terrainAt(g.map, x, y)
+    if t == move.BRIDGE or t == move.WATER or t == move.SHORE then return true end
   end
   return false
 end
 
---- Build the cost grid for one side. Cached on the game state; call
---- move.invalidate(g) when city ownership changes -- or when the side sees
---- more of the map.
+--- Build the cost grid for one side (path_build_cost_grid, 1555:0d9e).
+--- Cached on the game state; call move.invalidate(g) when city ownership
+--- changes. What a side has not seen is not in it: the search itself shuts
+--- that out (path_prepare_grid, 1555:08bf; see findPath).
 function move.grid(g, sideIndex)
   g.grids = g.grids or {}
   local cached = g.grids[sideIndex or -1]
@@ -144,36 +148,30 @@ function move.grid(g, sideIndex)
   end
 
   -- cities occupy a 2x2 footprint: passable only to their owner, and a port
-  -- city of the moving side is also a crossing
+  -- city of the moving side is also a crossing. A razed city's tiles are
+  -- ruins, not city ground, and so are no city at all; but the ruins of a
+  -- port are a crossing for every side (the second loop of 1555:0d9e).
   for _, c in ipairs(g.map.cities) do
-    local mine = c.ownerIndex == sideIndex
-    local port = mine and move.isPort(g, c)
+    local mine = c.ownerIndex == sideIndex and not c.razed
+    local port = (mine or c.razed) and move.isPort(g, c)
     for dx = 0, 1 do
       for dy = 0, 1 do
         local x, y = c.x + dx, c.y + dy
         if x < W and y < H then
           local i = y * W + x
-          local byte = with(grid[i], move.CITY_F)
-          if mine then
+          local byte = grid[i]
+          if c.razed then
             if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
           else
-            byte = byte - (byte % 8)          -- cost 0: impassable
+            byte = with(byte, move.CITY_F)
+            if mine then
+              if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
+            else
+              byte = byte - (byte % 8)          -- cost 0: impassable
+            end
           end
           grid[i] = byte
         end
-      end
-    end
-  end
-
-  -- with Hidden Map on, a human cannot path through what it has not seen; a
-  -- computer player's paths ignore the fog (path_prepare_grid, 1555:08bf,
-  -- applies it only when is_computer_turn is false)
-  local side = sideIndex ~= nil and g.map.sides[sideIndex + 1]
-  if g.map.options.hiddenMap ~= 0 and side and not side.computer then
-    local gameMod = require("warlords.game")
-    for i = 0, W * H - 1 do
-      if not gameMod.seen(g, sideIndex, i % W, math.floor(i / W)) then
-        grid[i] = grid[i] - (grid[i] % 8)          -- cost 0: impassable
       end
     end
   end
@@ -201,6 +199,9 @@ function move.stepCost(fromByte, toByte, mode, woods, hills, penalty)
   local toCross = has(toByte, move.CROSS_F)
 
   if mode == move.FLYING then
+    -- never into a city that is not its own (1555:08bf shuts every city of
+    -- cost 0 out of a flier's search)
+    if cost == 0 and has(toByte, move.CITY_F) then return nil end
     -- 2 per tile, water and mountains included; 1 where the tile costs 1
     if toWater and not toCross then return 2 end
     if cost == 0 or cost > 2 then return 2 end
@@ -282,12 +283,238 @@ end
 
 --------------------------------------------------------------- pathfinding
 
---- Cheapest path from (sx,sy) to (dx,dy) for a stack, as a list of
---- { x, y, cost } steps, or nil if there is no route.
---
--- The original floods the whole map from the destination; this is A* with a
--- Chebyshev heuristic, which is admissible because no step costs less than 1
--- and diagonals are allowed. Same paths, a fraction of the tiles visited.
+-- The search, as 1555:000a runs it. It works on one number a tile
+-- (path_prepare_grid, 1555:08bf): UNREACHED until the flood gets there,
+-- SHUT where the stack may never go, and then the distance from the
+-- destination -- negative while the tile still has to spread it further,
+-- positive once it has.
+local UNREACHED, SHUT = 30000, 30001
+move.SHUT = SHUT
+
+-- Where the wavefront spreads from a tile, by where the tile lies: inside,
+-- or along one of the map's edges or corners (4125:00e2, 00f6, 0162)
+local NB_FIRST = { [0] = 0, 9, 13, 19, 23, 29, 35, 39, 45, 49 }
+local NB_DX = { [0] = -1, 0, 1, 1, 1, 0, -1, -1, -10, 1, 1, 0, -10, 1, 1, 0, -1, -1,
+  -10, 0, -1, -1, -10, 0, 1, 1, 1, 0, -10, -1, 0, 0, -1, -1, -10, 0, 1, 1, -10,
+  -1, 0, 1, 1, -1, -10, -1, 0, -1, -10, 0, 1, 0, -1, -10 }
+local NB_DY = { [0] = -1, -1, -1, 0, 1, 1, 1, 0, -10, 0, 1, 1, -10, 0, 1, 1, 1, 0,
+  -10, 1, 1, 0, -10, -1, -1, 0, 1, 1, -10, -1, -1, 1, 1, 0, -10, -1, -1, 0, -10,
+  -1, -1, -1, 0, 0, -10, -1, -1, 0, -10, -1, 0, 1, 0, -10 }
+
+-- the order path_trace tries the neighbours in, turning from straight at the
+-- destination (4125:0212)
+local TRACE_ORDER = { 0, 7, 1, 6, 2, 5, 3, 4 }
+
+--- The compass direction from one tile towards another (1a8b:0ae4): by
+--- the signs alone, so anything up and to the right is north-east.
+function move.direction(x1, y1, x2, y2)
+  if x1 == x2 and y1 == y2 then return nil end
+  if x1 == x2 then return y2 < y1 and 0 or 4 end
+  if y1 == y2 then return x2 < x1 and 6 or 2 end
+  if x1 <= x2 then return y2 < y1 and 1 or 3 end
+  return y2 < y1 and 7 or 5
+end
+
+--- map_distance (1a8b:0acc): the straight-line distance, rounded down.
+function move.distance(x1, y1, x2, y2)
+  local ax, ay = x1 - x2, y1 - y2
+  return math.floor(math.sqrt(ax * ax + ay * ay))
+end
+
+local function absval(v) return v < 0 and -v or v end
+
+-- path_prepare_grid (1555:08bf): nothing reached, and what the stack can
+-- never enter shut -- a land stack's impassable ground, a boat's dry land, a
+-- flier's cities that are not its own. With Hidden Map on and a human
+-- moving, ground it has not seen is shut too: all but the destination for a
+-- land stack, all but the destination's own row and column for a boat or a
+-- flier, as the original tests them.
+function move.prepare(g, grid, sideIndex, mode, dx, dy)
+  local W, H = g.map.width, g.map.height
+  local side = sideIndex ~= nil and g.map.sides[sideIndex + 1]
+  local fog = g.map.options.hiddenMap ~= 0 and side and not side.computer
+  local seen = fog and require("warlords.game").seen
+  local dist = {}
+  for y = 0, H - 1 do
+    for x = 0, W - 1 do
+      local k = y * W + x
+      local b = grid[k]
+      local hidden = fog and not seen(g, sideIndex, x, y)
+      local shut
+      if mode == move.LAND then
+        shut = b % 8 == 0 or (hidden and not (x == dx and y == dy))
+      elseif mode == move.BOAT then
+        shut = not has(b, move.WATER_F) or (hidden and x ~= dx and y ~= dy)
+      else
+        shut = (b % 8 == 0 and has(b, move.CITY_F)) or (hidden and x ~= dx and y ~= dy)
+      end
+      dist[k] = shut and SHUT or UNREACHED
+    end
+  end
+  return dist
+end
+
+-- path_wavefront (1555:0373). Not a best-first search: it sweeps squares
+-- ever wider round the destination, each tile still to spread passing its
+-- distance on to its neighbours -- and taking back any it learns a shorter
+-- way to -- and stops once the sweep has passed the start. Only tiles in
+-- the rectangle round start and destination, `margin` wider on every side,
+-- spread: 6 on the first pass, 50 on the second, which carries on from the
+-- square the first had reached. 1 when the start was reached.
+local function wavefront(q, pass)
+  local W, H = q.W, q.H
+  local sx, sy, dx, dy = q.sx, q.sy, q.dx, q.dy
+  local dist, grid, mode = q.dist, q.grid, q.mode
+  local margin = pass == 0 and 6 or 50
+  if pass == 0 then q.ring = 0 end
+  local lox, loy = math.min(sx, dx), math.min(sy, dy)
+  local hix, hiy = math.max(sx, dx), math.max(sy, dy)
+  local bx0 = lox < margin and 0 or lox - margin
+  local by0 = loy < margin and 0 or loy - margin
+  local bx1 = hix + margin < W and hix + margin or W - 1
+  local by1 = hiy + margin < H and hiy + margin or H - 1
+  local LAND, FLYING, BOAT = move.LAND, move.FLYING, move.BOAT
+  local WATER, CROSS, CITY = move.WATER_F, move.CROSS_F, move.CITY_F
+  local found, going = 1, true
+  while going do
+    local any = false
+    local r = q.ring
+    -- the square at this distance, as far as it lies in the rectangle
+    local x0, x1 = math.max(dx - r, 0, bx0), math.min(dx + r, W - 1, bx1)
+    local y0, y1 = math.max(dy - r, 0, by0), math.min(dy + r, H - 1, by1)
+    for x = x0, x1 do
+      for y = y0, y1 do
+        local k = y * W + x
+        local v = dist[k]
+        if v < 1 then
+          any = true
+          local cur = grid[k]
+          local nd = -v
+          dist[k] = nd
+          local curWater, curCross = has(cur, WATER), has(cur, CROSS)
+          local class = 0
+          if y == 0 then class = x == 0 and 1 or (x == W - 1 and 3 or 2)
+          elseif y == H - 1 then class = x == 0 and 6 or (x == W - 1 and 8 or 7)
+          elseif x == 0 then class = 4
+          elseif x == W - 1 then class = 5 end
+          local i = NB_FIRST[class]
+          while NB_DX[i] ~= -10 do
+            local nx, ny = x + NB_DX[i], y + NB_DY[i]
+            i = i + 1
+            local nk = ny * W + nx
+            local nv = dist[nk]
+            if nv ~= SHUT then
+              local nb = grid[nk]
+              local c = nb % 8
+              local ok = true
+              local nWater, nCross = has(nb, WATER), has(nb, CROSS)
+              if nx == sx and ny == sy then
+                -- stepping off the start costs 1, and never over the shoreline
+                if mode == LAND and not curCross and not nCross and nWater ~= curWater then
+                  ok = false
+                end
+                c = 1
+              elseif mode == FLYING then
+                if (not nWater or nCross) and c ~= 0 and c < 3 then
+                  -- as dear as the tile, where that is 1 or 2
+                else
+                  c = 2
+                end
+              elseif mode == BOAT then
+                if not nWater and not has(nb, CITY) then
+                  dist[nk] = SHUT
+                  ok = false
+                end
+              else
+                if not curCross and not nCross and nWater ~= curWater then
+                  ok = false
+                else
+                  if c > 2 and ((q.hills and has(nb, move.HILLS_F))
+                                or (q.woods and has(nb, move.FOREST_F))) then
+                    c = 2
+                  end
+                  -- the walk coming out of open water onto land or a crossing
+                  if (not curWater or curCross) and nWater and not nCross then
+                    c = c + q.penalty
+                  end
+                end
+              end
+              if ok and nd + c < absval(nv) then dist[nk] = v - c end
+            end
+          end
+          if x == sx and y == sy then going = false end
+        end
+      end
+    end
+    q.ring = r + 1
+    if not any then going, found = false, 0 end
+  end
+  return found
+end
+
+-- path_trace (1555:117b): from the start, each step to whichever neighbour
+-- the flood put nearest the destination -- strictly nearer than here -- the
+-- first found in TRACE_ORDER winning a tie; a land stack does not step over
+-- the shoreline except at a crossing. At most 198 steps; where it can go no
+-- further the path simply ends there.
+local function trace(q)
+  local W, H = q.W, q.H
+  local dist, grid = q.dist, q.grid
+  local x, y = q.sx, q.sy
+  local tx, ty = q.dx, q.dy
+  local d = absval(dist[y * W + x])
+  local steps = {}
+  while not (x == tx and y == ty) do
+    local cur = grid[y * W + x]
+    local land = q.mode == move.LAND
+    local curWater = land and has(cur, move.WATER_F)
+    local curCross = land and has(cur, move.CROSS_F)
+    local toward = move.direction(x, y, tx, ty)
+    local bx, by, bdir
+    for _, turn in ipairs(TRACE_ORDER) do
+      local dir = (toward + turn) % 8
+      local nx, ny = x + move.DIRS[dir][1], y + move.DIRS[dir][2]
+      if nx >= 0 and ny >= 0 and nx < W and ny < H then
+        local v = dist[ny * W + nx]
+        if v ~= UNREACHED and v ~= SHUT then
+          local nb = grid[ny * W + nx]
+          local blocked = land and not curCross and not has(nb, move.CROSS_F)
+                          and has(nb, move.WATER_F) ~= curWater
+          if not blocked and absval(v) < d then
+            bx, by, bdir, d = nx, ny, dir, absval(v)
+          end
+        end
+      end
+    end
+    if bx and #steps < 198 then
+      x, y = bx, by
+      steps[#steps + 1] = { x = x, y = y, dir = bdir }
+    else
+      tx, ty = x, y
+    end
+  end
+  return steps
+end
+
+-- path_single_step (1555:020e): a destination one tile away (diagonals
+-- included, map_distance being 1) is simply stepped to, unless a land or
+-- boat stack would cross between land and water, or the ground there is
+-- impassable. Its terrain alone decides, whoever holds it.
+local function singleStep(g, mode, sx, sy, dx, dy)
+  local function wet(t) return t == move.WATER or t == move.SHORE end
+  local from, to = scn.terrainAt(g.map, sx, sy), scn.terrainAt(g.map, dx, dy)
+  if mode ~= move.FLYING then
+    if wet(from) ~= wet(to) then return false end
+    if move.COST[to] == 0 then return false end
+  end
+  return true
+end
+
+--- The path from (sx,sy) to (dx,dy) for a stack, as a list of { x, y, cost }
+--- steps, or nil if there is no route: 1555:000a, step for step. The
+--- original also keeps its last paths to hand them back unasked for
+--- (1555:1508); with nothing changed in between they are the same path, so
+--- that is not copied.
 function move.findPath(g, stack, sx, sy, dx, dy)
   if sx == dx and sy == dy then return {} end
   local W, H = g.map.width, g.map.height
@@ -297,131 +524,68 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   local mode, woods, hills, atSea = move.stackMode(g, stack)
   local grid = move.grid(g, side)
 
-  -- the destination's own terrain decides the water charge for the whole move
-  local destTerrain = scn.terrainAt(g.map, dx, dy)
-  local penalty = (destTerrain == move.WATER or destTerrain == move.SHORE)
-                  and move.WATER_PENALTY_TO or move.WATER_PENALTY
-
-  -- a stack may always path *to* a city, just never through one it does not
-  -- own: its footprint opens at the city cost for this search, and a port is
-  -- a crossing, so a stack at sea can attack it (path_mark_cities, 1555:0bde)
-  local goal = dy * W + dx
-  local goalByte = grid[goal]
-  local restore = {}
-  local city = g.map.cityTile[goal]
-  if city and goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
-    local port = move.isPort(g, city)
-    for ox = 0, 1 do
-      for oy = 0, 1 do
-        local x, y = city.x + ox, city.y + oy
-        if x < W and y < H then
-          local k = y * W + x
-          restore[k] = grid[k]
-          local byte = grid[k] - grid[k] % 8 + move.COST[move.CITY]
-          if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
-          grid[k] = byte
-        end
-      end
-    end
-  end
-
-  local dist, prev, done = {}, {}, {}
-  local start = sy * W + sx
-  dist[start] = 0
-
-  local function heuristic(k)
-    local x, y = k % W, math.floor(k / W)
-    local ax, ay = x - dx, y - dy
-    if ax < 0 then ax = -ax end
-    if ay < 0 then ay = -ay end
-    return ax > ay and ax or ay
-  end
-
-  local heap, n = { { start, heuristic(start) } }, 1
-  local function push(k, d)
-    n = n + 1
-    heap[n] = { k, d }
-    local i = n
-    while i > 1 do
-      local p = math.floor(i / 2)
-      if heap[p][2] <= heap[i][2] then break end
-      heap[p], heap[i] = heap[i], heap[p]
-      i = p
-    end
-  end
-  local function pop()
-    local top = heap[1]
-    heap[1] = heap[n]; heap[n] = nil; n = n - 1
-    local i = 1
-    while true do
-      local l, r, best = i * 2, i * 2 + 1, i
-      if l <= n and heap[l][2] < heap[best][2] then best = l end
-      if r <= n and heap[r][2] < heap[best][2] then best = r end
-      if best == i then break end
-      heap[best], heap[i] = heap[i], heap[best]
-      i = best
-    end
-    return top
-  end
-
-  while n > 0 do
-    local top = pop()
-    local k = top[1]
-    if k == goal then break end
-    if not done[k] then
-      done[k] = true
-      local d = dist[k]
-      local x, y = k % W, math.floor(k / W)
-      for _, dir in pairs(move.DIRS) do
-        local nx, ny = x + dir[1], y + dir[2]
-        if nx >= 0 and ny >= 0 and nx < W and ny < H then
-          local nk = ny * W + nx
-          if not done[nk] then
-            local c = move.stepCost(grid[k], grid[nk], mode, woods, hills, 0)
-            -- the flood runs from the destination, so its water charge falls
-            -- where the walk comes out of open water -- never off the start
-            if c and mode == move.LAND and k ~= start
-               and has(grid[k], move.WATER_F) and not has(grid[k], move.CROSS_F)
-               and (not has(grid[nk], move.WATER_F) or has(grid[nk], move.CROSS_F)) then
-              c = c + penalty
-            end
-            if c and (dist[nk] == nil or d + c < dist[nk]) then
-              dist[nk] = d + c
-              prev[nk] = { k, c }
-              push(nk, d + c + heuristic(nk))
-            end
+  local path, restore = nil, {}
+  if move.distance(dx, dy, sx, sy) == 1 and singleStep(g, mode, sx, sy, dx, dy) then
+    path = { { x = dx, y = dy } }
+  else
+    -- a stack may always path *to* a city, just never through one it does
+    -- not own: its footprint opens at the city cost for this search, and a
+    -- port is a crossing, so a stack at sea can attack it (path_mark_cities,
+    -- 1555:0bde)
+    local goal = dy * W + dx
+    local goalByte = grid[goal]
+    local city = g.map.cityTile[goal]
+    if city and goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
+      local port = move.isPort(g, city)
+      for ox = 0, 1 do
+        for oy = 0, 1 do
+          local x, y = city.x + ox, city.y + oy
+          if x < W and y < H then
+            local k = y * W + x
+            restore[k] = grid[k]
+            local byte = grid[k] - grid[k] % 8 + move.COST[move.CITY]
+            if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
+            grid[k] = byte
           end
         end
       end
     end
-  end
 
-  if dist[goal] == nil then
-    for k, byte in pairs(restore) do grid[k] = byte end
-    return nil
-  end
-
-  local path, k = {}, goal
-  while k ~= start do
-    table.insert(path, 1, { x = k % W, y = math.floor(k / W), k = k })
-    k = prev[k][1]
+    -- the water charge, set once for the move: 20 when it is aimed at water
+    local penalty = 0
+    if mode == move.LAND then
+      local t = scn.terrainAt(g.map, dx, dy)
+      penalty = (t == move.WATER or t == move.SHORE) and move.WATER_PENALTY_TO
+                or move.WATER_PENALTY
+    end
+    local q = { W = W, H = H, sx = sx, sy = sy, dx = dx, dy = dy, grid = grid,
+                mode = mode, woods = woods, hills = hills, penalty = penalty,
+                dist = move.prepare(g, grid, side, mode, dx, dy) }
+    local found = 0
+    if q.dist[goal] ~= SHUT or has(grid[goal], move.CITY_F) then
+      q.dist[goal] = -1
+      for pass = 0, 1 do
+        if found == 0 then found = wavefront(q, pass) end
+      end
+    end
+    if found == 1 then path = trace(q) end
   end
 
   -- what the walk spends on each step (path_step_costs, 1555:18be): a land
   -- stack's move ends where it goes to sea or comes ashore
   local ashore = false
-  for _, step in ipairs(path) do
-    local byte = grid[step.k]
+  for _, step in ipairs(path or {}) do
+    local byte = grid[step.y * W + step.x]
     if ashore then
       step.cost = move.PAST_SHORE
     else
       step.cost = move.walkCost(byte, mode, woods, hills)
       ashore = mode == move.LAND and move.crossesShore(byte, atSea)
     end
-    step.k = nil
+    step.dir = nil
   end
-  for k2, byte in pairs(restore) do grid[k2] = byte end
-  if #path > move.MAX_PATH then return nil end
+  for k, byte in pairs(restore) do grid[k] = byte end
+  if path and #path == 0 then path = nil end
   return path
 end
 
@@ -452,7 +616,7 @@ function move.walk(g, stack, path)
     local city = g.map.cityTile[step.y * g.map.width + step.x]
     local here = stackAt(g, step.x, step.y)
     local diplomacy = require("warlords.diplomacy")
-    if city and city.ownerIndex ~= side then
+    if city and not city.razed and city.ownerIndex ~= side then
       if not diplomacy.mayAttack(g, side, city.ownerIndex) then
         result.stopped = "at peace"
         break

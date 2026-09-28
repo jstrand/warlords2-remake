@@ -276,7 +276,38 @@ the moving side** (one whose footprint touches bridge, water or shore —
 `1555:109d`), and a tile whose **map word has bit 15 set**, which scenario
 authors placed by hand (Erythea has none; Tutoria has three).
 
-With *Hidden Map* on, a human player's unexplored tiles are impassable too.
+With *Hidden Map* on, a human player's unexplored tiles are impassable too —
+all but the destination for a land stack, and for a boat or a flier all but
+the destination's own row and column, which is how `1555:08bf` tests it. A
+flier may cross mountains but never a city it does not own. A **razed**
+city's tiles are ruins (terrain 11), not city ground, so they are ordinary
+ground at cost 2; the ruins of a port are a crossing for every side.
+
+### The search (`pathfind`, `1555:000a`)
+
+It is not a best-first search, and its routes are not always the cheapest:
+
+1. A destination **one tile away** — `map_distance`, the straight line rounded
+   down, so diagonals too — is simply stepped to (`1555:020e`), unless a land
+   or boat stack would cross between land and water or the ground there is
+   impassable. What it costs does not enter into it: a stack beside a forest
+   walks straight in rather than round by the road.
+2. Otherwise `path_wavefront` (`1555:0373`) floods out from the destination,
+   **sweeping squares ever wider round it**, each tile passing its distance on
+   to its eight neighbours and taking back any it later learns a shorter way
+   to — and it **stops once a sweep has passed the start**. Only tiles inside
+   the rectangle round start and destination, grown by a **margin of 6**,
+   spread at all; if that finds nothing a second pass grows it to **50** and
+   carries on from where the first stopped. A route that would have to swing
+   wider than that does not exist.
+3. `path_trace` (`1555:117b`) walks back from the start, each step to the
+   neighbour with the smallest distance — strictly smaller than here — trying
+   them in the order straight at the destination, then 45°, 90° and 135° to
+   either side (left first), then straight away (`4125:0212`); a land stack
+   does not step over the shoreline but at a crossing. At most 198 steps.
+
+It also keeps its last twenty paths (`1555:1508`, `16f0`) and hands one back
+when asked for it again; with nothing changed since, that is the same path.
 
 ### Terrain costs (`DS:1274`, static)
 

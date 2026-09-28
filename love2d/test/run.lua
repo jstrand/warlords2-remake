@@ -725,6 +725,16 @@ local function testMovement(scenario)
      "a flier pays 1 on a road")
   eq(movement.stepCost(land, 6 | movement.HILLS_F, movement.FLYING, false, false, 10), 2,
      "a flier pays 2 over hills")
+  eq(movement.stepCost(land, 0 + movement.CITY_F, movement.FLYING, false, false, 10), nil,
+     "a flier cannot cross a city that is not its own (1555:08bf)")
+
+  -- map_distance rounds the straight line down, so a diagonal is one away;
+  -- direction_between goes by the signs alone
+  eq(movement.distance(5, 5, 6, 6), 1, "a diagonal neighbour is one away")
+  eq(movement.distance(5, 5, 7, 6), 2, "a knight's move is two")
+  eq(movement.direction(5, 5, 6, 4), 1, "up and right is north-east")
+  eq(movement.direction(5, 5, 9, 4), 1, "however far right")
+  eq(movement.direction(5, 5, 5, 9), 4, "straight down is south")
 
   -- a boat keeps to water and cities
   eq(movement.stepCost(water, land, movement.BOAT, false, false, 10), nil,
@@ -1198,6 +1208,10 @@ local function testCityChoices(scenario)
     if other then eq(other.vectorTo, nil, "vectoring to it was cancelled") end
     local d = (side.diploScore or 0) - score0
     ok(d >= 11 and d <= 25, "raze costs 1d15+10 diplomatic score: " .. d)
+    -- its ruins are ground again, not a city: 1555:0d9e goes by the terrain
+    local rb = movement.grid(g, side.index)[city3.y * g.map.width + city3.x]
+    ok(not movement.has(rb, movement.CITY_F) and rb % 8 ~= 0,
+       "a razed city's ruins can be walked over: " .. rb)
   end
 
   -- pillaging a city with nothing to take does nothing
@@ -2476,11 +2490,13 @@ local function testComputerPlayers()
   -- a computer's path ignores the fog; a human's does not (1555:08bf)
   local h = game.new(DATA, "ERYTHEA", { seed = 73, sides = sides, options = { hiddenMap = 1 } })
   local human, comp = h.map.sides[1], h.map.sides[2]
-  local hg, cg = move.grid(h, human.index), move.grid(h, comp.index)
-  local fogged, open = 0, 0
+  -- the fog is shut out as the search starts (path_prepare_grid): the same
+  -- ground, prepared for the human and for the computer
+  local hp = move.prepare(h, move.grid(h, human.index), human.index, move.LAND, 0, 0)
+  local cp = move.prepare(h, move.grid(h, human.index), comp.index, move.LAND, 0, 0)
+  local fogged = 0
   for k2 = 0, h.map.width * h.map.height - 1 do
-    if hg[k2] % 8 == 0 and cg[k2] % 8 ~= 0 then fogged = fogged + 1 end
-    if cg[k2] % 8 ~= 0 then open = open + 1 end
+    if hp[k2] == move.SHUT and cp[k2] ~= move.SHUT then fogged = fogged + 1 end
   end
   ok(fogged > 1000, "unseen ground blocks the human's paths only: " .. fogged)
 
