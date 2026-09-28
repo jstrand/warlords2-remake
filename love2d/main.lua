@@ -982,15 +982,31 @@ ai.onFight = function(g, stack, x, y, result)
     return
   end
   local t = function(grp) return uidata.text(G.screen.ui, grp, 0) end
-  status(defSide and t(0x94):format(defSide.name) or t(0x95), 5)
   local hero
   for _, a in ipairs(lines.attackers or {}) do
     if a.type == armytype.HERO then hero = a break end
   end
   local me = G.aiSide.name
-  if not result.won then status(t(0x98):format(me), 5)
-  elseif hero then status(t(0x8e):format(hero.name or ""), 5)
-  else status(t(0x96):format(me), 5) end
+  local outcome
+  if not result.won then outcome = t(0x98):format(me)
+  elseif hero then outcome = t(0x8e):format(hero.name or "")
+  else outcome = t(0x96):format(me) end
+  -- the battle window when the turn is watched and the defender is a side,
+  -- or the defender is human; the fire cloud before it whenever the line
+  -- goes up -- but with the map hidden and several humans, the line alone
+  local hiddenMany = g.map.options.hiddenMap ~= 0 and #humans > 1
+  local window = not hiddenMany and ((shown(G.aiSide) and defSide ~= nil) or human)
+  local cloud = not hiddenMany
+  status(defSide and t(0x94):format(defSide.name) or t(0x95), 5)
+  if cloud and not G.aiSkip then
+    startAssault(x, y, result)
+    local a = G.assault
+    a.computer, a.window, a.outcome = true, window, outcome
+    a.message = { outcome }
+    coroutine.yield("assault")
+    if window then return end            -- the outcome was said in the window
+  end
+  status(outcome, 5)
 end
 
 function resumeComputer()
@@ -1027,7 +1043,7 @@ G.resumeComputer = function() resumeComputer() end
 
 --- Called every frame: carry the computer on once nothing is in its way.
 function stepComputer()
-  if not G.aiRun or not G.aiWait or G.walk or kit.top() then return end
+  if not G.aiRun or not G.aiWait or G.walk or G.assault or kit.top() then return end
   if G.aiResumeAt then
     if now() < G.aiResumeAt and not G.aiSkip then return end
     G.aiResumeAt = nil
@@ -2037,7 +2053,10 @@ local AS = {
   cloudTime = 0.7,                                    -- before the window
   -- One casualty (6a35:0094): the blast goes on, then 7ecb:0000 waits 5, 3
   -- and 5 BIOS ticks; once space is pressed, 2 and 3. 18.2 ticks a second.
+  -- The first wait is 6a35:0000's own, after which the army's place is
+  -- painted back to the popup's marble: the army and its fire are gone.
   fellTime = 13 / 18.2, fellFast = 5 / 18.2,
+  blastTime = 5 / 18.2, blastFast = 2 / 18.2,
   -- STRING.DAT groups: how a fight ends, and what the spoils dialog says
   fled = 141, wonCityHero = 142, wonCity = 143,
   wonHero = 144, won = 145, lost = 146, loot = 147,
@@ -2138,6 +2157,8 @@ function startAssault(x, y, result)
     defSide = lines.defenders[1] and lines.defenders[1].owner or 8,
     atkSide = lines.attackers[1] and lines.attackers[1].owner or 8,
     step = 0, defDown = 0, atkDown = 0,
+    -- when each army fell, and how long its fire burned: { at, burn }
+    defFell = {}, atkFell = {},
     phase = "cloud", at = now(),
     -- on a human's turn 67cc:1836 plays WAR.8SN under the cloud and holds
     -- it there until the sample ends
@@ -2154,7 +2175,24 @@ local function advanceAssault()
   local a = G.assault
   local t = now()
   if a.phase == "cloud" then
-    if t - a.at >= math.max(AS.cloudTime, a.cloudTime) then a.phase, a.at = "battle", t end
+    if t - a.at >= math.max(AS.cloudTime, a.cloudTime) then
+      -- a computer's battle nobody is to see: the cloud was all of it
+      if a.computer and not a.window then G.assault = nil return end
+      a.phase, a.at = "battle", t
+      -- 67cc:124a waits five ticks on the drawn-up lines before the fight
+      if a.computer then a.at = t + 5 / 18.2 end
+    end
+    return
+  end
+  if a.phase == "over" and a.computer then
+    -- the outcome in the status bar (five ticks) and in the window (6a35:04c5),
+    -- ten more, and the window closes by itself (6a35:04f6)
+    if not a.closeAt then
+      a.closeAt = t + 15 / 18.2
+      if G.aiStatus then G.aiStatus.text = a.outcome end
+    elseif t >= a.closeAt then
+      G.assault = nil
+    end
     return
   end
   if a.phase ~= "battle" then return end
@@ -2164,8 +2202,14 @@ local function advanceAssault()
   local log = a.result.log or {}
   while a.step < #log and t >= a.at do
     a.step = a.step + 1
-    if log[a.step] == 1 then a.atkDown = a.atkDown + 1
-    else a.defDown = a.defDown + 1 end
+    local fell = { at = a.at, burn = a.fast and AS.blastFast or AS.blastTime }
+    if log[a.step] == 1 then
+      a.atkDown = a.atkDown + 1
+      a.atkFell[a.atkDown] = fell
+    else
+      a.defDown = a.defDown + 1
+      a.defFell[a.defDown] = fell
+    end
     -- 7dda:0181: a blow for each, ARMY.8SN when an attacker falls and
     -- ARMY2.8SN a defender -- until Space hurries the fight on
     if not a.fast then G.audio.effect(log[a.step] == 1 and "army" or "army2") end
@@ -2185,7 +2229,7 @@ function pressAssault()
     return
   end
   G.assault = nil
-  if a.captured then presentVictory(a.captured, a.victor) end
+  if a.captured and not a.computer then presentVictory(a.captured, a.victor) end
 end
 
 local function drawCloud()
@@ -2200,13 +2244,16 @@ local function drawCloud()
 end
 
 --- One line of armies. They are struck off from the front, which is the order
---- combat_setup drew them up in and the order they fall.
-local function drawBattleLine(armies, slots, side, down)
+--- combat_setup drew them up in and the order they fall. A fallen army burns
+--- for 6a35:0000's wait, and then its place is bare marble.
+local function drawBattleLine(armies, slots, side, down, fell)
   local sheet = G.armyImg[side] or G.armyImg[8]
   local quads = G.armyQuads[side] or G.armyQuads[8]
+  local t = now()
   for i, army in ipairs(armies) do
     local at = slots[i]
-    if at then
+    local gone = i <= down and fell[i] and t >= fell[i].at + fell[i].burn
+    if at and not gone then
       love.graphics.setColor(1, 1, 1)
       if army.atSea then
         love.graphics.draw(G.warPic,
@@ -2214,7 +2261,7 @@ local function drawBattleLine(armies, slots, side, down)
           at.x, at.y + AS.seaDrop)
       end
       love.graphics.draw(sheet, quads[army.type % 32], at.x, at.y)
-      -- a fallen army keeps its place, under the blast that took it
+      -- the blast that takes it, over it
       if i <= down then
         love.graphics.draw(G.atransShields, G.blastQuad, at.x, at.y)
       end
@@ -2239,8 +2286,8 @@ local function drawBattle()
   shield(a.defSide, AS.shieldDef)
   shield(a.atkSide, AS.shieldAtk)
 
-  drawBattleLine(a.def, a.defSlots, a.defSide, a.defDown)
-  drawBattleLine(a.atk, a.atkSlots, a.atkSide, a.atkDown)
+  drawBattleLine(a.def, a.defSlots, a.defSide, a.defDown, a.defFell)
+  drawBattleLine(a.atk, a.atkSlots, a.atkSide, a.atkDown, a.atkFell)
 
   if a.phase == "over" then
     local f, y = G.bigFont, AS.textY
@@ -2254,6 +2301,7 @@ end
 
 local function drawAssault()
   advanceAssault()
+  if not G.assault then return end
   if G.assault.phase == "cloud" then drawCloud() else drawBattle() end
 end
 
@@ -2417,6 +2465,9 @@ function love.mousepressed(x, y, button)
   if G.busyWalking() then return end
   -- the computer's moves being shown: a key or a click runs the rest through
   if G.aiRun and not kit.top() then
+    -- a computer's battle on screen: a key hurries it, as Space does
+    -- (6a35:0094), and nothing else
+    if G.assault and G.assault.computer then pressAssault() return end
     -- Shift and Alt are held to reach Settings, not pressed to skip
     if key and key:match("shift$") or key and key:match("alt$") then return end
     G.aiSkip = true
@@ -3055,6 +3106,9 @@ function love.keypressed(key)
   end
   -- the computer's moves being shown: a key or a click runs the rest through
   if G.aiRun and not kit.top() then
+    -- a computer's battle on screen: a key hurries it, as Space does
+    -- (6a35:0094), and nothing else
+    if G.assault and G.assault.computer then pressAssault() return end
     -- Shift and Alt are held to reach Settings, not pressed to skip
     if key and key:match("shift$") or key and key:match("alt$") then return end
     G.aiSkip = true

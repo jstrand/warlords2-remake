@@ -616,8 +616,13 @@ turn is watched or the defender is human (`67cc:124a`: with the map hidden
 and one human, only on ground that human has seen) — *%s, you are being
 attacked!* or *Neutrals are being attacked!* (groups 148, 149), then *%s, you
 are victorious!*, *%s has won the battle!* for a hero, or *%s, you have lost!*
-(150, 142, 152), five ticks each. When a human is attacked and the turn is
-watched, the battle window is shown between the two as well.
+(150, 142, 152), five ticks each. Between the two, when the turn is watched
+and the defender is a side, or the defender is human, `67cc:1836`'s fire
+cloud goes up over the tile, then the battle window (`6a35:0160`), five
+ticks' wait, and the fight (`6a35:0094`); the outcome is written in the
+window as well (`6a35:04c5`), and ten ticks after it the window closes of
+itself (`6a35:04f6`). A watched attack on a neutral gets the cloud and no
+window; with the map hidden and more than one human, neither.
 
 During the computer's turns `5db9:045e` watches the keyboard: **Shift or Alt**
 held opens Settings (`64d2:0000(0)`), where a side can be handed back to a
@@ -688,7 +693,7 @@ on screen can change the outcome.
 | `67cc:1836` | the fire cloud from `WAR.PCK` over the tile — the rect at `4125:0cfa` is `(0, 0) 128 × 120`, three tiles across — with `WAR.8SN`. Skipped when no human can see the tile |
 | `6a35:041c` | opens **popup 8**, `(160, 60) 320 × 312` of marble from the sheet's origin, and draws the two sides' shields from `BSHIELD.PCK` (32 × 36 cells, one per side across the sheet): the defender's at `(176, 86)`, the attacker's at `(176, 246)` |
 | `6a35:0160` | draws both lines |
-| `6a35:0094` | plays the log back, one casualty at a time: a sound (`7dda:0181`), then `6a35:0000` masks `ATRANS2.PCK`'s blast, `(32, 0) 32 × 29`, over the fallen army — which stays drawn beneath it — and `7ecb:0000` waits 5, 3 and 5 BIOS ticks (18.2 a second), so about 0.7 s each. **Space** (it polls `kbhit`) cuts the rest to 2 and 3 ticks; any input also ends the wait in hand |
+| `6a35:0094` | plays the log back, one casualty at a time: a sound (`7dda:0181`), then `6a35:0000` masks `ATRANS2.PCK`'s blast, `(32, 0) 32 × 29`, over the fallen army, waits 5 ticks, and paints the army's 32 × 30 place back from the popup's marble (`54f6:07e4`) — army and fire gone; `7ecb:0000` then waits 3 and 5 BIOS ticks (18.2 a second), so about 0.7 s each. **Space** (it polls `kbhit`) cuts the rest to 2 and 3 ticks; any input also ends the wait in hand |
 | `6a35:04c5` | writes how it ended, centred on x = 320 from y = 298 (`4125:4366`), each line 20 below the last |
 | `6a35:04f6` | closes the popup |
 | `67cc:04f7` | and, if a city fell, opens the spoils dialog |

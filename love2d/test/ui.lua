@@ -563,6 +563,55 @@ do
   print("  told how quests end")
 end
 
+-- A computer attacking a human (67cc:124a): the battle window opens and
+-- closes by itself, and the outcome goes up in the status bar; a fallen
+-- army's fire burns out and leaves its place bare (6a35:0000)
+do
+  local g, ai = G.g, require("warlords.ai")
+  local game2 = require("warlords.game")
+  local comp, human
+  for _, s in ipairs(g.sides) do
+    if s.alive and s.computer and not comp then comp = s end
+    if s.alive and not s.computer and not human then human = s end
+  end
+  local att, def
+  for _, a in ipairs(g.armies) do
+    if comp and a.owner == comp.index and a.x and not att then att = a end
+    if human and a.owner == human.index and a.x and not def then def = a end
+  end
+  if att and def and not G.over then
+    G.selection, G.assault, G.banner, G.offer = nil, nil, nil, nil
+    human.observe = false
+    local result = game2.resolveAttack(g, { att }, def.x, def.y)
+    G.aiSide, G.aiSkip = comp, nil
+    G.aiStatus = { side = comp, text = comp.name, progress = 50 }
+    G.aiRun = coroutine.create(function() ai.onFight(g, { att }, def.x, def.y, result) end)
+    local ok1, what = coroutine.resume(G.aiRun)
+    if not ok1 then fail("computer battle", tostring(what)) end
+    -- the "being attacked" line waits its five ticks first
+    local start = os.clock()
+    while what == "pause" and os.clock() - start < 5 do
+      ok1, what = coroutine.resume(G.aiRun)
+    end
+    local a = G.assault
+    if not (a and a.computer and a.window) then
+      fail("computer battle", "no battle window for an attack on a human")
+    else
+      while G.assault and os.clock() - start < 20 do try("frame of a computer battle", love.draw) end
+      if G.assault then fail("computer battle", "the window never closed by itself")
+      elseif G.aiStatus.text ~= a.outcome then fail("computer battle", "the outcome was not in the status bar") end
+      local t = love.timer.getTime()
+      for _, fell in ipairs(a.defFell) do
+        if t < fell.at + fell.burn then fail("computer battle", "a fire still burned at the end") end
+      end
+      if #a.defFell + #a.atkFell == 0 then fail("computer battle", "nobody fell") end
+    end
+    G.aiRun, G.aiSide, G.aiStatus, G.assault = nil, nil, nil, nil
+    print("  a computer's battle with a human is shown, and closes itself")
+  end
+end
+
+
 -- Order > Move All (1c8c:04c4) walks each stack under orders in turn, the view
 -- following, and leaves the last one moved selected
 do
