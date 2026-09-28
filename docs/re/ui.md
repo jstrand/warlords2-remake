@@ -697,7 +697,25 @@ victor is the hero leading the assault if there is one (`451b:1efe`, the
 selection's hero) and otherwise the name of its best army.
 
 What each choice does to the city is in
-[`../rules.md`](../rules.md) › Capturing a city.
+[`../rules.md`](../rules.md) › Capturing a city. What follows it:
+
+- **Occupy** (`city_occupy`, `63fa:03fe`) pops the dialog, refreshes, and
+  asks the quest (`quest_check(4, …)`); unless that has something to say,
+  `63fa:043a` opens the city in **Production** — `auto_tutorial_hook_3(2,
+  x, y)`, the call that opens the capital on the first turn. The occupy
+  quest is asked here, not when the city falls.
+- **Pillage** and **Sack** (`63fa:046b`, `035e`) show a human what was taken
+  (`63fa:0508`) over the spoils dialog and pop the two together: popup 12,
+  (176, 60) 288 × 300; *Pillage!* or *Sack!* (group 68) in font 1 centred on
+  (320, 64); groups 69–72 in font 2 centred on 320 at y = 115, 135, 165 and
+  185 — the city, the gold, how many types were lost, how many remain; a box
+  bevelled (4, 2) at (184, 220) 272 × 130 and (2, 4) one pixel inside it,
+  headed *Destroyed* at (192, 230) and *Gold* at (368, 230); three rows 30
+  apart from y = 250, each the lost army on a grey ring at x = 208
+  (`8611:08be` with ring 1), its name at (248, y + 6) and `"%d gp"` at
+  (368, y + 6), or the ring alone.
+- **Raze** (`63fa:029f`) says `"%s is in ruins!"` (`4125:0a56`) in the
+  one-line box over the dialog, and only then makes the ruins.
 
 ### The army slots
 

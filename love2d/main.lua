@@ -1060,6 +1060,7 @@ end
 
 G.takeLoaded = function(g) takeLoaded(g) end
 G.startAssault = function(x, y, result) startAssault(x, y, result) end
+G.presentVictory = function(city, victor) presentVictory(city, victor) end
 
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
@@ -2171,8 +2172,8 @@ function presentVictory(city, victor)
   v.state[AS.sack] = #city.slots >= 2 and uidata.NORMAL or uidata.DISABLED
 end
 
-local function drawVictory()
-  local R, v, ui = AS.vPopup, G.victory, G.screen.ui
+local function drawVictory(v)
+  local R, ui = AS.vPopup, G.screen.ui
   popupFrame(R)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.victoryPic, R.x, R.y)
@@ -2187,24 +2188,35 @@ local function drawVictory()
   screen.drawDialogControls(G.screen, G.victoryView)
 end
 
---- What the player chose to do with the city they have just taken.
+--- What the player chose to do with the city they have just taken. Pillage
+--- and Sack (63fa:046b, 035e) show what was taken, and Raze (63fa:029f) says
+--- the city is in ruins, over the spoils dialog, which goes with them; Occupy
+--- (63fa:03fe) closes it, asks the quest, and opens the city in Production
+--- (63fa:043a), as the first turn opens the capital.
 function takeCity(what)
   local v = G.victory
   if not v then return end
   local c, stack = v.city, G.selection and G.selection.stack or {}
   G.victory = nil
-  if what == AS.pillage then
-    local gold = game.pillage(G.g, G.player, c, stack)
-    say("%s is pillaged: %d gold.", c.name, gold)
-  elseif what == AS.sack then
-    local gold = game.sack(G.g, G.player, c, stack)
-    say("%s is sacked: %d gold.", c.name, gold)
-  elseif what == AS.raze then
-    game.raze(G.g, G.player, c, stack)
-    say("%s is burned to the ground.", c.name)
+  local function done()
+    G.victoryUnder = nil
     stratDirty()
+    refreshControls()
+  end
+  if what == AS.pillage or what == AS.sack then
+    local sacked = what == AS.sack
+    local gold, lost = (sacked and game.sack or game.pillage)(G.g, G.player, c, stack)
+    G.victoryUnder = v
+    require("ui.spoils").open(sacked, c, gold, lost, #c.slots, done)
+  elseif what == AS.raze then
+    G.victoryUnder = v
+    require("ui.search").say(("%s is in ruins!"):format(c.name), function()   -- 4125:0a56
+      game.raze(G.g, G.player, c, stack)
+      done()
+    end)
   else
-    say("%s is ours.", c.name)
+    game.occupy(G.g, G.player, c, stack)
+    cityUi.open(c, cityUi.PRODUCTION)
   end
 end
 
@@ -2239,13 +2251,15 @@ function love.draw()
   screen.drawControls(G.screen)
   drawShortcutIcons()
   drawBottomBar()
+  -- a city's spoils dialog stays up under what its choice shows
+  if G.victoryUnder then drawVictory(G.victoryUnder) end
   -- the dialogs, bottom of the stack first
   for _, d in ipairs(G.modals) do d.draw() end
   drawMenuBar()
   -- the turn opens with the banner over the offer, and is dismissed first
   if G.offer then drawHeroOffer() end
   if G.assault then drawAssault() end
-  if G.victory then drawVictory() end
+  if G.victory then drawVictory(G.victory) end
   if G.banner then drawBanner() end
   drawPointer()
 end

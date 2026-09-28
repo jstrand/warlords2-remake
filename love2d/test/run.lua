@@ -1165,8 +1165,13 @@ local function testCityChoices(scenario)
       want = want + math.floor(math.abs(g.types.byId[city2.slots[i].type].price) / 2)
     end
     local gold0, score0 = side.gold, side.diploScore or 0
-    local got = game.sack(g, side, city2)
+    local n2 = #city2.slots
+    local got, lost = game.sack(g, side, city2)
     eq(got, want, "sack pays for every type it strips")
+    eq(#lost, n2 - 1, "sack lists every type it strips")
+    local sum = 0
+    for _, l in ipairs(lost) do sum = sum + l.gold end
+    eq(sum, want, "and what each was worth adds up to the gold")
     eq(side.gold, gold0 + want, "the gold was paid")
     eq(#city2.slots, 1, "only the cheapest type is left")
     eq(city2.slots[1], cheapest, "and it is the cheapest one")

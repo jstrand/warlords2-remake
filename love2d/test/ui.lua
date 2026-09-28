@@ -465,6 +465,57 @@ if G and G.screen then
   print("  exercised every control on the main screen")
 end
 
+-- The spoils of a city (63fa:0000): Occupy opens the city in Production
+-- (63fa:043a); Pillage and Sack show what they took and Raze says the city
+-- is in ruins, each over the spoils dialog, which goes when they are closed.
+do
+  local kitMod = require("ui.kit")
+  local cityMod = require("ui.city")
+  local uidata = require("warlords.uidata")
+  local function clickChoice(id)
+    for _, c in ipairs(G.victoryView.dialog.controls) do
+      if c.id == id then
+        try("choose " .. id, love.mousepressed, c.x + 2, c.y + 2, 1)
+        return
+      end
+    end
+    fail("spoils", "no control " .. id)
+  end
+  local cap = G.player.capital
+  G.presentVictory(cap, "Tester")
+  try("occupy", love.keypressed, "return")
+  local top = kitMod.top()
+  if not (top and top.mode == cityMod.PRODUCTION) then
+    fail("occupy", "the city did not open in Production")
+  end
+  for _ = 1, 3 do if kitMod.top() then try("close the city", love.keypressed, "escape") end end
+  for _, id in ipairs({ 286, 283 }) do                  -- Sack, Pillage
+    G.presentVictory(cap, "Tester")
+    if G.victoryView.state[id] == uidata.DISABLED then
+      try("occupy instead", love.keypressed, "return")
+      for _ = 1, 3 do if kitMod.top() then try("close the city", love.keypressed, "escape") end end
+    else
+      clickChoice(id)
+      if not kitMod.top() then fail("spoils", ("choice %d showed nothing"):format(id)) end
+      try("draw the spoils " .. id, love.draw)
+      try("close the spoils " .. id, love.keypressed, "return")
+      if kitMod.top() then fail("spoils", ("choice %d would not close"):format(id)) end
+    end
+  end
+  local enemy
+  for _, c in ipairs(G.g.map.cities) do
+    if c.ownerIndex ~= G.player.index and not c.razed then enemy = c break end
+  end
+  G.presentVictory(enemy, "Tester")
+  clickChoice(284)                                      -- Raze
+  try("draw the ruins message", love.draw)
+  if enemy.razed then fail("raze", "the city fell before the message was read") end
+  try("read it", love.keypressed, "return")
+  if not enemy.razed then fail("raze", "the city was not razed") end
+  try("frame after the spoils", love.draw)
+  print("  took a city every way")
+end
+
 -- the rest of the keys: the original's own (17be:0064, 17be:0444), and the
 -- letters that open a dialog -- which is closed again with its Done
 local kitMod = require("ui.kit")

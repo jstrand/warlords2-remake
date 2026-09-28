@@ -586,7 +586,9 @@ function game.resolveAttack(g, stack, x, y)
     -- when that is the quest
     local handled = winner.computer
       and require("warlords.ai").questCapture(g, winner, city, result.attackers)
-    if not handled then
+    -- a human's occupy quest is asked only if Occupy is chosen (city_occupy,
+    -- 63fa:03fe); choosing Raze instead must not have failed a raze quest
+    if not handled and winner.computer then
       result.quest = questMod.event(g, winner, "occupy",
                                     { city = city, stack = result.attackers })
                      or result.quest
@@ -627,33 +629,46 @@ function game.addDiploScore(g, side, n)
   side.diploScore = (side.diploScore or 0) + n
 end
 
+--- Keep the city as it is (city_occupy, 63fa:03fe): all that is left to do
+--- is to ask the quest. Returns what quest.event does.
+function game.occupy(g, side, city, stack)
+  return require("warlords.quest").event(g, side, "occupy", { city = city, stack = stack or {} })
+end
+
 --- Strip the most expensive production type for gold. docs/rules.md >
---- Capturing a city.
+--- Capturing a city. Returns the gold, and what was lost as a list of
+--- { type = , gold = } (city_apply_pillage, 63fa:0886).
 function game.pillage(g, side, city, stack)
-  if #city.slots < 1 then return 0 end
+  if #city.slots < 1 then return 0, {} end
   local slot = table.remove(city.slots)          -- slots are sorted cheapest first
   local gold = slotValue(g, slot)
+  local lost = { { type = slot.type, gold = gold } }
   side.gold = side.gold + gold
   game.addDiploScore(g, side, g.rng:dice(1, 5, 0))
   recompute(g, city)
   require("warlords.quest").event(g, side, "pillage",
                                   { city = city, gold = gold, stack = stack or {} })
-  return gold
+  return gold, lost
 end
 
---- Strip every production type but the cheapest.
+--- Strip every production type but the cheapest. Returns as pillage does,
+--- the lost in the order city_apply_sack (63fa:0941) takes them, cheapest
+--- first.
 function game.sack(g, side, city, stack)
-  if #city.slots < 2 then return 0 end
-  local gold = 0
-  while #city.slots > 1 do
-    gold = gold + slotValue(g, table.remove(city.slots))
+  if #city.slots < 2 then return 0, {} end
+  local gold, lost = 0, {}
+  for i = 2, #city.slots do
+    local v = slotValue(g, city.slots[i])
+    lost[#lost + 1] = { type = city.slots[i].type, gold = v }
+    gold = gold + v
   end
+  while #city.slots > 1 do table.remove(city.slots) end
   side.gold = side.gold + gold
   game.addDiploScore(g, side, g.rng:dice(1, 10, 5))
   recompute(g, city)
   require("warlords.quest").event(g, side, "pillage",
                                   { city = city, gold = gold, stack = stack or {} })
-  return gold
+  return gold, lost
 end
 
 --- The city becomes ruins (649c:016b), with nothing else said or scored.
