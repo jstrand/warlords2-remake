@@ -67,7 +67,9 @@ from output position 0, giving `1 + 34*256 + 31 = 8736 = (224/8) * 312`. ✔
 
 Sprite sheets use a **colour-key**, not an alpha channel or a skip opcode.
 `TERRAIN0/A?.PCK` (512×64 army sheets) key on **index 10** — the bright green
-that fills 22620 of their 32768 pixels. Full-screen art such as `PICS/CURS.PCK`
+that fills 22620 of their 32768 pixels — except **`A4.PCK`**, the fifth
+side's: its own colour is 10, and it stands on **index 11** instead. The
+sheet's top left pixel is its ground in every case. Full-screen art such as `PICS/CURS.PCK`
 and the `START/` screens uses index 0 (black) as its background instead, so the
 key is per-asset convention rather than a fixed index.
 

@@ -41,7 +41,10 @@ local TILE = screen.TILE
 -- the cell width suggests.
 local ARMY_CELL, ARMY_COLS, ARMY_ROW, ARMY_H = 32, 16, 30, 29
 local ROAD_STRIDE, ROAD_COLS = 48, 13
-local ROAD_KEY, ARMY_KEY, SHADOW_KEY = 1, 10, 15
+-- The army sheets stand on 10, bright green -- all but the fifth side's,
+-- A4, whose own colour is 10 and which stands on 11 instead; each is keyed
+-- on its own ground, the colour of its corner.
+local ROAD_KEY, ARMY_KEY, SHADOW_KEY = 1, "corner", 15
 local SCROLL_KEY = 10                  -- SCROLL.PCK stands on green, as the armies do
 -- WAR.PCK sits on colour 1 and BSHIELD.PCK on the green it is drawn over
 local WAR_KEY, SHIELD_KEY = 1, 12

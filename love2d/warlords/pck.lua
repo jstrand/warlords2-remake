@@ -122,11 +122,14 @@ end
 -- Decode straight to a LOVE image. keyIndex (optional) becomes transparent.
 --- Decode a .PCK into an image. `keyIndex` is the palette index to make
 --- transparent, or a table of them -- ATRANS2.PCK's map markers are white on
---- a two-colour mask and need both dropped.
+--- a two-colour mask and need both dropped -- or "corner", whatever colour
+--- the sheet's top left pixel is.
 function pck.toImage(path, palette, keyIndex)
   local w, h, px = pck.decode(path)
   local keys = {}
-  if type(keyIndex) == "table" then
+  if keyIndex == "corner" then
+    keys[px[1]] = true
+  elseif type(keyIndex) == "table" then
     for _, k in ipairs(keyIndex) do keys[k] = true end
   elseif keyIndex then
     keys[keyIndex] = true
