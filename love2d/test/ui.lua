@@ -516,6 +516,42 @@ do
   print("  took a city every way")
 end
 
+-- Order > Move All (1c8c:04c4) walks each stack under orders in turn, the view
+-- following, and leaves the last one moved selected
+do
+  local moveMod = require("warlords.move")
+  local sent = 0
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and not a.transit and sent == 0 then
+      -- somewhere a few tiles off that it can get to this turn
+      for r = 3, 2, -1 do
+        for dx = -r, r do
+          local p = sent == 0 and moveMod.preview(G.g, { a }, a.x + dx, a.y + r)
+          if p and p.path and #p.path > 0 and (p.reach or 0) > 0 then
+            a.target, a.fortified, sent = { x = a.x + dx, y = a.y + r }, false, 1
+          end
+        end
+      end
+    end
+  end
+  G.selection = nil
+  try("move all", love.keypressed, "m")
+  local frames, start = 0, os.clock()
+  while G.moveAll and os.clock() - start < 20 do
+    try("frame of move all", love.draw)
+    frames = frames + 1
+  end
+  if G.moveAll then fail("move all", "the walks never finished") end
+  local sel = G.selection
+  if sent > 0 and sel then
+    local x, y = sel.stack[1].x, sel.stack[1].y
+    if x < G.cx or x >= G.cx + 9 or y < G.cy or y >= G.cy + 9 then
+      fail("move all", "the view did not follow the last stack moved")
+    end
+  end
+  print(("  moved all: %d armies sent, %d frames"):format(sent, frames))
+end
+
 -- the rest of the keys: the original's own (17be:0064, 17be:0444), and the
 -- letters that open a dialog -- which is closed again with its Done
 local kitMod = require("ui.kit")

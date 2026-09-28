@@ -500,7 +500,12 @@ The destination is kept in the army record itself — the move target at
 `1c8c:041f` clears it for the whole selection when the player steps the stack
 by hand; **Order › Move All** (`1c8c:04c4`) does the opposite, walking every
 stack that still has one, stepping through the armies with a cursor of its own
-so a stack that has run out of movement cannot hold the loop up.
+so a stack that has run out of movement cannot hold the loop up. The selected
+stack goes first, if it has a target; then `8c07:05c4` hands out each army
+with one, marking it `0x200`, and it is **selected** (`8c07:06eb`) and walked
+to its own target (`auto_tutorial_hook_2`) — the ordinary walk, which centres
+on the stack at every step. So the view follows each stack in turn, and the
+last one moved is left selected.
 
 **The route.** `stack_movement_mode` pathfinds to the target and
 `1c8c:0963(x, y, dirs)` turns the pathfinder's direction bytes into tiles,

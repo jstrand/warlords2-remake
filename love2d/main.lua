@@ -381,8 +381,9 @@ local function advanceWalk()
   if w.i >= #w.tiles and t - w.at >= WALK.stepTime then
     G.walk = nil
     refreshRoute()
-    -- a computer's walk shown, the computer goes on
+    -- a computer's walk shown, the computer goes on; Move All, to the next
     if w.computer and G.resumeComputer then G.resumeComputer() end
+    if G.moveAll and G.moveAllStep then G.moveAllStep() end
   end
 end
 
@@ -2469,45 +2470,52 @@ end
 -- the menu item assigned to button n from UDB/UDB.CUR, turns it into a command
 -- code and runs it through the same dispatcher a key press uses. The shipped
 -- assignment is Search, Move All, Heroes, End Turn.
---- Order > Move All (1c8c:04c4): every stack that still has somewhere to be
---- walks on as far as it can. The original steps through the armies with a
---- cursor of its own and never looks at one twice, which is what keeps a
---- stack that has run out of movement from holding the loop up.
-local function moveAll()
-  local seen, moved = {}, 0
-  while true do
+--- Order > Move All (1c8c:04c4). The selected stack walks on first, if it
+--- has somewhere to be; then 8c07:05c4 hands out, one at a time, every army
+--- of the side that has a destination -- marking each 0x200 so none is
+--- taken twice -- and each is picked up (8c07:06eb) and walked there
+--- (1a8b:04c8), the view following it step by step as any walk does. Each
+--- walk plays out before the next begins (advanceWalk calls back here), and
+--- the last stack moved is left selected.
+function G.moveAllStep()
+  local m = G.moveAll
+  while m do
+    if G.walk then return end
     local lead
     for _, a in ipairs(G.g.armies) do
-      if a.owner == G.player.index and a.target and not a.transit and not seen[a] then
+      if a.owner == G.player.index and a.target and not a.transit and not m.seen[a] then
         lead = a break
       end
     end
-    if not lead then break end
+    if not lead then
+      G.moveAll = nil
+      if m.moved == 0 then say("Nothing is under orders.") end
+      refreshControls()
+      return
+    end
+    m.seen[lead] = true
+    select(lead.x, lead.y, lead)
+    local sel = G.selection
+    -- the stack goes where the army picked is going (1c8c:04c4 walks to
+    -- the selected army's own +0x12/+0x14)
+    if sel then
+      for _, a in ipairs(sel.stack) do m.seen[a] = true end
+      moveSelection(lead.target.x, lead.target.y)
+      m.moved = m.moved + 1
+    end
+  end
+end
 
-    local stack = {}
-    for _, a in ipairs(game.armiesAt(G.g, lead.x, lead.y)) do
-      if a.owner == G.player.index and a.target and not a.transit
-         and a.target.x == lead.target.x and a.target.y == lead.target.y then
-        stack[#stack + 1] = a
-        seen[a] = true
-      end
-    end
-    local target = { x = lead.target.x, y = lead.target.y }
-    local r = move.moveTo(G.g, stack, target.x, target.y)
-    if r.steps and r.steps > 0 then
-      moved = moved + 1
-      for _, a in ipairs(stack) do
-        if a.x == target.x and a.y == target.y then a.target = nil end
-      end
-      stratDirty()
-    end
+local function moveAll()
+  G.moveAll = { seen = {}, moved = 0 }
+  local sel = G.selection
+  local t = sel and sel.stack[1] and sel.stack[1].target
+  if t then
+    for _, a in ipairs(sel.stack) do G.moveAll.seen[a] = true end
+    moveSelection(t.x, t.y)
+    G.moveAll.moved = 1
   end
-  if moved == 0 then say("Nothing is under orders.")
-  else say("%d stack%s moved on.", moved, moved == 1 and "" or "s") end
-  if G.selection then
-    reslot(selectableAt(G.selection.stack[1].x, G.selection.stack[1].y))
-  end
-  refreshRoute()
+  G.moveAllStep()
 end
 
 --- Hero > Search (6536:0000) with the selected stack. The search is decided
