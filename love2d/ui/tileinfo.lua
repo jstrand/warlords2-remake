@@ -3,7 +3,9 @@
 -- Only on a tile the side has seen, and gone when the button comes up
 -- (740d:11cf). The box is 256x75, centred on the tile's centre -- x rounded
 -- to the byte grid, then kept within x in [128, 512] and y in [37, 441]
--- (740d:131a) -- with POPUP.PCK's (0, 0) 256x75 behind it (740d:1201). Its
+-- (740d:131a) -- with POPUP.PCK's (0, 0) 256x75 behind it (740d:1201),
+-- blitted through its mask (the [0x69c8] blit with 4125:546d) so the map
+-- shows round the stone and through its dithered shadow: colour 1 is keyed. Its
 -- two lines of text are centred on the box's middle less 8, at y + 11 and
 -- y + 35. What it shows, first that applies:
 --
@@ -146,15 +148,16 @@ function M.open(tx, ty)
   end
 
   function d.draw()
-    local b = art(back)
-    if back == 36 then
-      if not G.signBoard then
-        local pck = require("warlords.pck")
-        local img, w, h = pck.toImage(G.dataDir .. "/PICS/POPUP2.PCK", G.palette, 1)
-        G.signBoard = { image = img, w = w, h = h }
-      end
-      b = G.signBoard
+    -- both boards go through the same mask, 740d:1201's blit: bitmap 29
+    -- (POPUP.PCK) or 36 (POPUP2.PCK), keyed on colour 1
+    G.tileBoards = G.tileBoards or {}
+    if not G.tileBoards[back] then
+      local pck = require("warlords.pck")
+      local name = back == 36 and "POPUP2.PCK" or "POPUP.PCK"
+      local img, w, h = pck.toImage(G.dataDir .. "/PICS/" .. name, G.palette, 1)
+      G.tileBoards[back] = { image = img, w = w, h = h }
     end
+    local b = G.tileBoards[back]
     love.graphics.setColor(1, 1, 1)
     if b then love.graphics.draw(b.image, love.graphics.newQuad(0, 0, W, H, b.w, b.h), bx, by) end
     love.graphics.setColor(1, 1, 1)
