@@ -541,6 +541,12 @@ it clamps the tile to 4..107 and 4..151, puts the scroll origin four tiles up
 and left of it, and remembers it as the cursor tile at `3c04:017d`/`017f` —
 which is what the white box is drawn around.
 
+Nothing is read while it walks. Between steps it only keeps the pointer up to
+date (`251d:008a` → `22bf:02ac`, `18a9:0885`) and waits two BIOS ticks —
+`7ecb:0a7c`, which skips the wait, is only true at 23:59:59, the clock about
+to wrap. A mouse click meanwhile is lost; keys wait in the BIOS buffer and are
+read when the walk is over — for Move All, when every stack has walked.
+
 ### A stack on the map, and the selection box
 
 `8611:0335(dst, side, type, count, col, row)` draws a stack on its tile: the

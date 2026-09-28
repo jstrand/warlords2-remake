@@ -384,6 +384,7 @@ local function advanceWalk()
     -- a computer's walk shown, the computer goes on; Move All, to the next
     if w.computer and G.resumeComputer then G.resumeComputer() end
     if G.moveAll and G.moveAllStep then G.moveAllStep() end
+    if not G.walk and not G.moveAll then G.flushKeys() end
   end
 end
 
@@ -2277,7 +2278,25 @@ local function menuPick(key)
   if act then act() else say("%s is not implemented yet.", key) end
 end
 
+-- 1a8b:04c8 reads no input while a stack walks -- between steps it only moves
+-- the pointer (251d:008a) -- and Move All walks one stack after another. A
+-- click meanwhile is lost; a key waits in the keyboard's buffer, fifteen of
+-- them, and is read once it is all over. A dialog that opens on the way
+-- (the tutorial's) still takes its own input.
+function G.busyWalking()
+  return ((G.walk ~= nil and not G.walk.computer) or G.moveAll ~= nil) and not kit.top()
+end
+
+G.keyBuffer = {}
+function G.flushKeys()
+  local keys = G.keyBuffer
+  G.keyBuffer = {}
+  -- a key that starts another walk sends the rest back to the buffer
+  for _, k in ipairs(keys) do love.keypressed(k) end
+end
+
 function love.mousepressed(x, y, button)
+  if G.busyWalking() then return end
   -- the computer's moves being shown: a key or a click runs the rest through
   if G.aiRun and not kit.top() then
     -- Shift and Alt are held to reach Settings, not pressed to skip
@@ -2912,6 +2931,10 @@ function G.menuEnabled(key)
 end
 
 function love.keypressed(key)
+  if G.busyWalking() then
+    if #G.keyBuffer < 15 then G.keyBuffer[#G.keyBuffer + 1] = key end
+    return
+  end
   -- the computer's moves being shown: a key or a click runs the rest through
   if G.aiRun and not kit.top() then
     -- Shift and Alt are held to reach Settings, not pressed to skip

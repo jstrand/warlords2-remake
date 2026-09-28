@@ -536,12 +536,29 @@ do
   end
   G.selection = nil
   try("move all", love.keypressed, "m")
+  -- while it walks, a click is lost and a key waits (1a8b:04c8)
+  if G.moveAll then
+    local sel = G.selection
+    try("click during move all", love.mousepressed, 200, 200, 1)
+    try("release during move all", love.mousereleased, 200, 200, 1)
+    if G.selection ~= sel then fail("move all", "a click during the walks was acted on") end
+    try("key during move all", love.keypressed, "a")
+    if require("ui.kit").top() then fail("move all", "a key during the walks was acted on") end
+    if #G.keyBuffer ~= 1 then fail("move all", "the key was not kept for later") end
+  end
   local frames, start = 0, os.clock()
   while G.moveAll and os.clock() - start < 20 do
     try("frame of move all", love.draw)
     frames = frames + 1
   end
   if G.moveAll then fail("move all", "the walks never finished") end
+  if sent > 0 then
+    if #G.keyBuffer ~= 0 then fail("move all", "the key kept was never read") end
+    if not require("ui.kit").top() then fail("move all", "the key kept did nothing once read") end
+    for _ = 1, 3 do
+      if require("ui.kit").top() then try("close the report", love.keypressed, "escape") end
+    end
+  end
   local sel = G.selection
   if sent > 0 and sel then
     local x, y = sel.stack[1].x, sel.stack[1].y
