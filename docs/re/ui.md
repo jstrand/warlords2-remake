@@ -956,6 +956,13 @@ FUN_7ecb_0142()                                     -- block until any input
 FUN_54f6_069c()                                     -- pop, restoring the screen
 ```
 
+Before the popup it **centres the view on the side's capital** —
+`8611:0629` with the side record's `+6`/`+8`, `3c04:0189`/`018b` for side 0,
+the capital's x and y (`../formats/scenario.md`). Where the map is hidden and
+more than one human side is in play, the map redraw and the centring wait
+until the banner has been clicked away, so nothing of the next player's
+lands shows while the last one may still be at the screen.
+
 `7ecb:00d6` is **draw centred**: it calls `21e2:04aa(x - width(s)/2, y, s)`, so
 320 is the screen's centre line, and 85 and 130 are the tops of the two lines.
 `7ecb:0142` is the blocking wait — the banner goes away on *any* key or click,

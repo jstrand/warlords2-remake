@@ -795,6 +795,10 @@ end
 --- away and reaches the hero offer afterwards, so the two are never both up.
 function dismissBanner()
   G.banner = nil
+  if G.centreAfterBanner and G.player.capital then
+    centreOn(G.player.capital.x, G.player.capital.y)
+  end
+  G.centreAfterBanner = nil
   -- the advisor has his say (6dda:026f(5)) -- with Speech off the original
   -- skips him before he so much as updates his marks -- and then 8cc6:04bd
   -- puts on the hero's music or the turn's
@@ -1015,6 +1019,16 @@ function finishRound(side)
   G.player = side
   stratDirty()
   cycleReset()
+  -- 8cc6:0259 centres on the side's capital (its record's +6/+8) as the turn
+  -- opens -- but where the map is hidden and more than one human plays,
+  -- only once the banner is gone, so one player's lands are not shown to
+  -- whoever is still at the screen
+  local humans = 0
+  for _, s in ipairs(G.g.map.sides) do
+    if s.inUse and s.alive ~= false and not s.computer then humans = humans + 1 end
+  end
+  G.centreAfterBanner = G.g.map.options.hiddenMap ~= 0 and humans > 1
+  if not G.centreAfterBanner and side.capital then centreOn(side.capital.x, side.capital.y) end
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   -- what the round's end found comes first, then the turn's banner
   ending.show(G.g.ending, function() showBanner(side) end)

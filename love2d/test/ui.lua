@@ -243,9 +243,16 @@ end
 -- the turn sequence, several times over: this runs every computer player too
 for i = 1, 3 do
   local turn = G.g.turn
+  -- the view left in a corner: the next turn opens on the capital (8cc6:0259)
+  G.cx, G.cy = 0, 0
   try("end turn " .. i, endTurn)
   if G.g.turn == turn and not G.over then fail("end turn", "alt E did not end the turn") end
   dismissBanner("dismiss the banner on turn " .. i)
+  local cap = G.player.capital
+  if cap and not G.over and (cap.x < G.cx or cap.x >= G.cx + 9 or cap.y < G.cy or cap.y >= G.cy + 9) then
+    fail("turn view", ("turn %d opened at %d,%d, away from the capital at %d,%d"):format(
+      G.g.turn, G.cx, G.cy, cap.x, cap.y))
+  end
   dismissOffer()
 end
 try("frame after the turns", love.draw)
