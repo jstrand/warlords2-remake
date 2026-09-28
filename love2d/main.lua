@@ -2780,25 +2780,82 @@ MENU_DOES = {
   ["w"] = function() reportsUi.open(4) end,
 }
 
--- Hero > Inspect is live while the side has a hero (8065:0519: an army of
--- type 0x1c that is its own).
-local function sideHasHero()
-  for _, a in ipairs(G.g.armies) do
-    if a.owner == G.player.index and a.type == armytype.HERO then return true end
+-- What greys a menu item, by its key (below).
+local MENU_LIVE
+do
+  local L = {}
+  -- The side has a hero (8065:0519: an army of type 0x1c that is its own).
+  function L.sideHasHero()
+    for _, a in ipairs(G.g.armies) do
+      if a.owner == G.player.index and a.type == armytype.HERO then return true end
+    end
+    return false
   end
-  return false
-end
 
--- Hero > Search is live (8065:0519) when the selected army stands on a site
--- not yet searched (tile flag 0x40), and is a hero -- or the site is a
--- temple, which any army may visit.
-local function canSearch()
-  local lead = G.selection and G.selection.stack[1]
-  if not lead then return false end
-  local m = G.g.map
-  local s = m.siteAt and m.siteAt[lead.y * m.width + lead.x]
-  if not s or s.searched then return false end
-  return lead.type == armytype.HERO or s.type == require("warlords.site").TEMPLE
+  -- Hero > Search is live (8065:0519) when the selected army stands on a site
+  -- not yet searched (tile flag 0x40), and is a hero -- or the site is a
+  -- temple, which any army may visit.
+  function L.canSearch()
+    local lead = G.selection and G.selection.stack[1]
+    if not lead then return false end
+    local m = G.g.map
+    local s = m.siteAt and m.siteAt[lead.y * m.width + lead.x]
+    if not s or s.searched then return false end
+    return lead.type == armytype.HERO or s.type == require("warlords.site").TEMPLE
+  end
+
+  -- Hero > Plant Flag is live (8065:0519) when the selected army is the hero
+  -- carrying the side's standard, on open ground -- not water, shore, a city
+  -- or a site -- where no standard is planted already.
+  function L.canPlantFlag()
+    local lead = G.selection and G.selection.stack[1]
+    if not lead or lead.type ~= armytype.HERO then return false end
+    local std = G.g.map.items[G.player.index + 1]
+    local carried = false
+    for _, it in ipairs(lead.items or {}) do if it == std then carried = true end end
+    if not carried then return false end
+    local t = scn.terrainAt(G.g.map, lead.x, lead.y)
+    if t == move.WATER or t == move.SHORE or t == move.CITY or t == move.SITE then return false end
+    for _, it in ipairs(G.g.map.items) do
+      if it.planted and it.x == lead.x and it.y == lead.y then return false end
+    end
+    return true
+  end
+
+  function L.sideHasCities()
+    for _, c in ipairs(G.g.map.cities) do
+      if c.ownerIndex == G.player.index and not c.razed then return true end
+    end
+    return false
+  end
+
+  function L.selected() return G.selection ~= nil and G.selection.stack[1] ~= nil end
+  function L.notFirstTurn() return G.g.turn ~= 1 end
+
+  -- 8065:0519, the menu's own refresh after every action: every item is
+  -- turned on, then these greyed while they do not apply -- the item ids of
+  -- the table at 4125:1798 given here as their keys (docs/re/ui.md).
+  MENU_LIVE = {
+    ["alt L"] = function() return require("ui.savegame").used() > 0 end,  -- 502, 7721:0e25
+    ["q"] = L.selected,                                                   -- 508 Disband
+    ["x"] = function()                                                    -- 519 Signpost
+      return L.selected() and scn.terrainAt(G.g.map, G.selection.stack[1].x,
+                                          G.selection.stack[1].y) == move.TOWER
+    end,
+    ["r"] = L.sideHasCities,                                              -- 509 Resign
+    ["d"] = function() return G.g.map.options.diplomacy ~= 0 end,         -- 515 Diplomacy
+    [","] = L.sideHasHero,                                                -- 517 Inspect
+    ["u"] = L.sideHasHero,                                                -- 520 Levels
+    ["f"] = L.canPlantFlag,                                               -- 518 Plant Flag
+    ["z"] = L.canSearch,                                                  -- 521 Search
+    ["b"] = L.sideHasCities,                                              -- 524 Build
+    ["p"] = L.sideHasCities,                                              -- 526 Production
+    ["v"] = L.sideHasCities,                                              -- 527 Vectoring
+    ["s"] = L.selected,                                                   -- 529 Stack
+    ["h"] = L.notFirstTurn, ["e"] = L.notFirstTurn,                       -- 530-533 History
+    ["j"] = L.notFirstTurn, ["y"] = L.notFirstTurn,
+    ["alt E"] = function() return not G.g.won end,                        -- 535 End Turn
+  }
 end
 
 -- A menu item this engine cannot do yet is greyed, the way the original greys
@@ -2811,11 +2868,8 @@ function G.menuEnabled(key)
   if G.starting then
     return key == "^Q" or (key == "alt L" and require("ui.savegame").used() > 0)
   end
-  -- 8065:0519, the menu's own refresh after every action, greys what does
-  -- not apply at the moment; these are the rules the remake has taken on
-  if key == "," then return sideHasHero() end
-  if key == "z" then return canSearch() end
-  return true
+  local live = MENU_LIVE[key]
+  return live == nil or live()
 end
 
 function love.keypressed(key)

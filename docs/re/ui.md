@@ -423,12 +423,27 @@ item is not available.
 That is the menu's own enable bit. `2372:0ef8(item, on)` sets or clears it
 (bit `n` of the dword at `+0x1a` of the item's menu record; `2372:0d78` does
 the same at `+0x20`), and `8065:0519`, called from the refresh, turns every
-menu on with `2372:0eab` and then greys what does not apply. Two of its rules:
+menu on with `2372:0eab` and then greys what does not apply. The items are
+numbered as the table at `4125:1798` numbers them (*The menu*, below); the
+selected army is the far pointer at `451b:1f02`, and the terrain its tile's
+type through the table at `0x710`.
 
-| item | greyed unless |
+| item | greyed when |
 |---|---|
-| 517 Hero › Inspect (and 520 with it) | the side has an army of type `0x1c`, a hero |
-| 521 Hero › Search | the selected army (`451b:1f02`) stands on a site tile (terrain `0x0b`) with a site record, the tile is not searched (flag `0x40`), and the army is a hero or the site is of kind 1, a temple |
+| 502 Load game | no slot holds a game (`7721:0e25`) |
+| 504 Load map | no map saved (`7721:0e42`) |
+| 503 Save map | `3c04:0120` is 0 or `3c04:0130` is not |
+| 508 Disband | nothing selected |
+| 519 Signpost | nothing selected, or its terrain is not 9 (a tower) |
+| 509 Resign | the side has no city |
+| 515 Diplomacy | diplomacy is off (`opt_diplomacy`) |
+| 517 Inspect, 520 Levels | the side has no army of type `0x1c`, a hero |
+| 518 Plant Flag | unless the selected army is a hero, the side's standard is carried (`+0xcff` of its 0x1d-byte record is 3) by that very army (`+0xd00`), its tile is not flagged `0x40` in the 0x70-stride map, and the terrain is not 2, 3, 10 or 11 |
+| 521 Search | unless the selected army stands on a site tile (terrain 11) with a site record, the tile is not searched (flag `0x40`), and the army is a hero or the site is of kind 1, a temple |
+| 524 Build, 526 Production, 527 Vectoring | the side has no city |
+| 529 Stack | nothing selected |
+| 530–533 History › City, Events, Gold, Winners | on turn 1 |
+| 535 End Turn | the game is won |
 
 So the shipped Heroes button is live only while the side has a hero, and
 Search only where there is something to search.
@@ -1873,8 +1888,6 @@ What is worth taking is the part that is **observable to the player**:
 
 ## Open questions
 
-- Where `7ae8:0000`'s item-to-command table is assembled, which would join
-  `UDB.DAT`'s item ids to the command codes.
 - Which control ids get their text from which `STRING.DAT` group — assigned by
   each dialog's own code, so it is per-dialog work rather than one table.
 - What distinguishes the two identical width tables in a `.FIN`, and the 17
@@ -1913,7 +1926,22 @@ Bonus, `p` Production, `q` Disband, `s` Stack, `v` Vectoring, `x` Signpost).
 
 The item ids in `UDB.DAT` (507–535) are a **third** numbering, distinct from
 both control ids and command codes. `7ae8:0000` maps one to a command code by
-scanning an 8-byte-per-entry table for the id and returning the code at `+6`,
-but that table is assembled at run time and has not been located in the data.
-The names in `UDB.DAT` line up with the menu labels above, so nothing is lost
-by it for now.
+scanning a table of 8-byte entries for the id and returning the code at `+6`.
+The menu's descriptor (`7ae8:0198`, `4125:1cac`) points at it: 39 entries at
+`4125:1798`, each the item id, the menu's index, the item's row counting from
+1 without separators, and its command code. In menu order:
+
+| menu | items and ids |
+|---|---|
+| SSG | About 497 |
+| Game | Settings 498, Shortcuts 499, New game 500, Save game 501, Load game 502, Save map 503, Load map 504, Quit 505 |
+| Order | Fight Order 506, Move All 507, Disband 508, Signpost **519**, Resign **509** |
+| Report | Army 510, City 511, Gold 512, Production 513, Winning 514, Diplomacy 515, Quest 516 |
+| Hero | Inspect 517, Plant Flag 518, Levels 520, Search 521 |
+| View | Army Bonus 522, Items 523, Build 524, Cities 525, Production 526, Vectoring 527, Ruins 528, Stack 529 |
+| History | City 530, Events 531, Gold 532, Winners 533, Triumphs 534 |
+| Turn | End Turn 535 |
+
+Signpost and Resign are the one pair out of order. The same entry's menu
+index and row find the item's enable bit, which `2372:0ef8` sets and
+`2372:0f9f` reads.
