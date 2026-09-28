@@ -2217,8 +2217,16 @@ function takeCity(what)
       done()
     end)
   else
-    game.occupy(G.g, G.player, c, stack)
-    cityUi.open(c, cityUi.PRODUCTION)
+    -- quest_check(4): a quest done is its reward instead of the city; one
+    -- failed is said, and the city opens after
+    local news = game.occupy(G.g, G.player, c, stack)
+    local function production() cityUi.open(c, cityUi.PRODUCTION) end
+    if news then
+      G.player.questNews = nil
+      require("ui.questnews").show(news, news.failed and production or nil)
+    else
+      production()
+    end
   end
 end
 
@@ -2240,6 +2248,12 @@ function love.draw()
     return
   end
   advanceWalk()
+  -- a quest that ended is told once the screen is the player's again
+  if G.player and G.player.questNews and not (G.over or G.banner or G.offer or G.assault
+     or G.victory or G.victoryUnder or G.walk or G.moveAll or G.aiRun or G.openMenu
+     or kit.top()) then
+    require("ui.questnews").poll(G)
+  end
   refreshControls()
   screen.drawBackground(G.screen)
   drawMap()

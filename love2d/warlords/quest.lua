@@ -156,17 +156,25 @@ local function heroInStack(q, stack)
   return false
 end
 
-local function finish(g, side, reason)
+-- The quest is over. A failure carries the STRING.DAT group quest_check
+-- tells a human it with (0x20-0x2a, two lines in the message box); a human
+-- side keeps the outcome as `questNews` for the front end to show -- the
+-- computer's quests end unannounced (is_computer_turn).
+local function finish(g, side, reason, why)
   local q = side.quest
   side.quest = nil
   if not q then return nil end
+  local out
   if reason == "done" then
     local history = require("warlords.history")
     history.deed(g, side, history.QUEST_DONE, 0, 0, q.hero and q.hero.name)   -- 4976:1da8
     require("warlords.hero").addExperience(g, q.hero, quest.EXPERIENCE)
-    return { quest = q, reward = quest.reward(g, side, q) }
+    out = { quest = q, reward = quest.reward(g, side, q) }
+  else
+    out = { quest = q, failed = reason, why = why }
   end
-  return { quest = q, failed = reason }
+  if not side.computer then side.questNews = out end
+  return out
 end
 
 --- Tell the quest what just happened. `event` is one of "battle", "item",
@@ -182,23 +190,24 @@ function quest.event(g, side, event, data)
     for _, a in ipairs(g.armies) do
       if a == q.hero and a.owner == side.index then alive = true end
     end
-    if not alive then return finish(g, side, "the hero is lost") end
+    if not alive then return finish(g, side, "the hero is lost", 0x20) end
     if q.type == quest.OCCUPY or q.type == quest.RAZE then
-      if q.target.razed and q.type == quest.OCCUPY then
-        return finish(g, side, "the city is ruins")
+      -- razed by another hand, or taken without being razed
+      if q.target.razed then
+        return finish(g, side, "the city is ruins", 0x21)
       end
-      if q.target.ownerIndex == side.index and q.type == quest.OCCUPY then
+      if q.target.ownerIndex == side.index then
         -- taken, but not by the quest hero
-        return finish(g, side, "another took the city")
+        return finish(g, side, "another took the city", 0x2a)
       end
     elseif q.type == quest.SLAUGHTER then
-      if not q.target.alive then return finish(g, side, "that side is gone") end
+      if not q.target.alive then return finish(g, side, "that side is gone", 0x27) end
     elseif q.type == quest.SLAY_HERO then
       local still = false
       for _, a in ipairs(g.armies) do if a == q.target then still = true end end
-      if not still then return finish(g, side, "the quarry is gone") end
+      if not still then return finish(g, side, "the quarry is gone", 0x29) end
     elseif q.type == quest.RETRIEVE_ITEM then
-      if q.target.status == 0 then return finish(g, side, "the item is lost") end
+      if q.target.status == 0 then return finish(g, side, "the item is lost", 0x28) end
     end
     return nil
   end
@@ -237,23 +246,23 @@ function quest.event(g, side, event, data)
       if q.done >= q.required then return finish(g, side, "done") end
     elseif (q.type == quest.OCCUPY or q.type == quest.RAZE)
            and data.city == q.target then
-      return finish(g, side, "that was not to pillage")
+      return finish(g, side, "that was not to pillage", 0x24)
     end
 
   elseif event == "occupy" then
     if q.type == quest.OCCUPY and data.city == q.target then
       if heroInStack(q, data.stack or {}) then return finish(g, side, "done") end
-      return finish(g, side, "the hero was not there")
+      return finish(g, side, "the hero was not there", 0x22)
     elseif q.type == quest.RAZE and data.city == q.target then
-      return finish(g, side, "the quest was to raze it")
+      return finish(g, side, "the quest was to raze it", 0x23)
     end
 
   elseif event == "raze" then
     if q.type == quest.RAZE and data.city == q.target then
       if heroInStack(q, data.stack or {}) then return finish(g, side, "done") end
-      return finish(g, side, "the hero was not there")
+      return finish(g, side, "the hero was not there", 0x25)
     elseif q.type == quest.OCCUPY and data.city == q.target then
-      return finish(g, side, "the quest was to keep it")
+      return finish(g, side, "the quest was to keep it", 0x26)
     end
   end
   return nil

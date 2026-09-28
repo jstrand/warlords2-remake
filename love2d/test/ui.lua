@@ -514,6 +514,48 @@ do
   if not enemy.razed then fail("raze", "the city was not razed") end
   try("frame after the spoils", love.draw)
   print("  took a city every way")
+
+  -- a quest's end (quest_check, 4976:1ded): Occupy without the quest's hero
+  -- says why the quest failed, and only then opens the city
+  local quests = require("warlords.quest")
+  local hero
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.type == 28 then hero = a end
+  end
+  hero = hero or { name = "Tester", x = cap.x, y = cap.y }
+  G.selection = nil
+  G.player.quest = { type = quests.OCCUPY, hero = hero, target = cap, done = 0 }
+  G.presentVictory(cap, "Tester")
+  try("occupy the quest's city without its hero", love.keypressed, "return")
+  local top = kitMod.top()
+  if not top or top.mode ~= nil then fail("quest", "the failure was not said first") end
+  try("draw the failure", love.draw)
+  try("read it", love.keypressed, "return")
+  top = kitMod.top()
+  if not (top and top.mode == cityMod.PRODUCTION) then
+    fail("quest", "the city did not open after the failure")
+  end
+  for _ = 1, 3 do if kitMod.top() then try("close the city", love.keypressed, "escape") end end
+  if G.player.questNews then fail("quest", "the failure was told twice") end
+
+  -- and whatever else ends a quest is told once the screen is free: each
+  -- kind of reward, and a failure
+  local q = { hero = hero }
+  for _, news in ipairs({
+    { quest = q, reward = { kind = "gold", gold = 1500 } },
+    { quest = q, reward = { kind = "allies", armies = {}, type = G.g.types.byId[1] } },
+    { quest = q, reward = { kind = "item", item = G.g.map.items[1] } },
+    { quest = q, reward = { kind = "revealed", site = G.g.map.sites[1] } },
+    { quest = q, failed = "the hero is lost", why = 0x20 },
+  }) do
+    G.player.questNews = news
+    try("frame with quest news", love.draw)
+    if not kitMod.top() then fail("quest", "news was not shown: " .. (news.failed or news.reward.kind)) end
+    try("draw quest news", love.draw)
+    try("close quest news", love.keypressed, "return")
+    if kitMod.top() then fail("quest", "news would not close") end
+  end
+  print("  told how quests end")
 end
 
 -- Order > Move All (1c8c:04c4) walks each stack under orders in turn, the view

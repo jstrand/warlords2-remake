@@ -2061,12 +2061,39 @@ local function testQuests()
   eq(h.experience, q.EXPERIENCE, "the hero gains 10 experience")
   ok(r.reward ~= nil, "a reward was given")
 
+  -- a human is told (quest_check's reward screen); a computer is not
+  local wasComputer = side.computer
+  side.computer, side.questNews = false, nil
+  side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[2], done = 0 }
+  r = q.event(g, side, "occupy", { city = g.map.cities[2], stack = { h } })
+  eq(side.questNews, r, "the human keeps the news to be shown")
+  side.computer, side.questNews = true, nil
+  side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[2], done = 0 }
+  q.event(g, side, "occupy", { city = g.map.cities[2], stack = { h } })
+  eq(side.questNews, nil, "the computer's quest ends unannounced")
+  side.computer, side.questNews = wasComputer, nil
+
   -- ... but not without the hero
   h.experience = 0
   side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[3], done = 0 }
   r = q.event(g, side, "occupy", { city = g.map.cities[3], stack = {} })
   ok(r and r.failed, "occupying without the hero fails the quest: " .. tostring(r.failed))
+  eq(r.why, 0x22, "said as 'Alas! The city was not taken by thy hero!'")
   eq(h.experience, 0, "and pays no experience")
+
+  -- a raze quest's city razed by another, or taken and kept, fails it at
+  -- the turn's start (quest_check(-1): groups 33 and 42)
+  local c5 = g.map.cities[5]
+  local owner5, razed5 = c5.ownerIndex, c5.razed
+  side.quest = { type = q.RAZE, hero = h, target = c5, done = 0 }
+  c5.razed = true
+  r = q.event(g, side, "turn")
+  ok(r and r.failed and r.why == 0x21, "a raze quest's city razed by another fails it")
+  c5.razed, c5.ownerIndex = false, side.index
+  side.quest = { type = q.RAZE, hero = h, target = c5, done = 0 }
+  r = q.event(g, side, "turn")
+  ok(r and r.failed and r.why == 0x2a, "one taken and kept fails it too")
+  c5.razed, c5.ownerIndex = razed5, owner5
 
   -- raze: razing the occupy target is the wrong thing to do
   side.quest = { type = q.OCCUPY, hero = h, target = g.map.cities[4], done = 0 }

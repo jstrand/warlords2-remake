@@ -1904,6 +1904,39 @@ target (`828e:08cd`) inside an orange 8 × 8 box (`828e:099e`); a quest to slay
 a kind of army, or a side's armies, puts a banner on every such stack
 instead. The hero's figure goes on top.
 
+## A quest's end
+
+`quest_check` (`4976:1ded`) tells a human — never a computer — how a quest
+ended. A failure is the two-line message box (`8065:1160`) with a pair of
+STRING.DAT lines, the quest cleared:
+
+| group | when |
+|---|---|
+| 32 | the hero is no longer the side's (checked as the turn opens) |
+| 33 | an occupy or raze quest's city is razed — by another hand |
+| 42 | an occupy or raze quest's city is the side's, not taken by the hero |
+| 41 | a hero to slay is gone |
+| 39 | a side to slaughter is gone |
+| 40 | an item to fetch is lost |
+| 34 / 35 | occupied without the hero / occupied when it was to be razed |
+| 36 | pillaged or sacked when it was to be taken or razed |
+| 37 / 38 | razed without the hero / razed when it was to be kept |
+
+Done, it chooses and gives the reward (`4976:1909`, `1c02`), puts on the
+music and shows it (`4976:1520`): popup 2 with dialog 17 — Done (331) — the
+strategic map without shields and the hero's figure on it, *Quest* in font 1
+centred on (432, 64), and SCROLL.PCK at (304, 95) with, in font 2 black on
+yellow centred on x = 440 (`4976:160e`): *%s's Quest* at y = 145 over a
+black rule at (360, 165) 160 long; group 28's two lines at 175 and 195; the
+reward's two at 225 and 245 — group 29 for a site shown, 30 an item, 31
+allies or gold — and at 265 the site's name, the item's, or group 31's
+`"%d %s"` with the army type or `"gold"`. A site shown is marked on the map
+as the quest report marks a target.
+
+Occupy asks the quest (`quest_check(4)`); a quest done there is its reward
+*instead* of the city in Production, and one failed is said and the city
+opens after.
+
 ## What a remake needs, and what it does not
 
 Almost none of this needs reimplementing faithfully. The planar VGA layer, the
