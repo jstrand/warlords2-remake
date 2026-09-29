@@ -563,49 +563,77 @@ do
   print("  told how quests end")
 end
 
--- A city taken by the player: until the battle window closes the map keeps
--- the castle in its old colours, the defenders in it and the attackers where
--- they stood (after_battle, 67cc:0a6b, changes the map only then)
+-- A city taken by the player: the map shows the fight as it began until the
+-- battle window closes (after_battle, 67cc:0a6b), then the city changes
+-- hands and the spoils are asked for
 do
   local g = G.g
   local game2, scn = require("warlords.game"), require("warlords.scn")
-  local target, stack
+  local target
   for _, c in ipairs(g.map.cities) do
     if not target and not c.razed and c.ownerIndex ~= G.player.index then target = c end
   end
   if target and not G.over then
     local x, y = target.x - 1, target.y
-    stack = {}
+    -- a garrison of one, for a fight that is sure to be won
+    local kept = false
+    for i2 = #g.armies, 1, -1 do
+      local a = g.armies[i2]
+      if a.x and a.x >= target.x and a.x <= target.x + 1 and a.y >= target.y and a.y <= target.y + 1 then
+        if kept then table.remove(g.armies, i2) else kept = true end
+      end
+    end
+    local stack = {}
     for k = 1, 8 do
       local a = { owner = G.player.index, type = 11, name = "Giants", strength = 9,
                   maxMoves = 20, moves = 20, upkeep = 1, x = x, y = y }
       g.armies[#g.armies + 1] = a
       stack[k] = a
     end
+    G.selection, G.banner, G.offer, G.assault = nil, nil, nil, nil
+    for _ = 1, 5 do
+      if require("ui.kit").top() then try("close a dialog", love.keypressed, "escape") end
+    end
+    try("select the attackers", G.selectAt, x, y)
+    if G.selection then
+      require("warlords.slots").all(G.selection.slots, g)
+      G.afterSlotChange()
+    end
     local i = target.y * scn.MAP_W + target.x + 1
-    local was = g.map.tiles[i]
-    local result = game2.resolveAttack(g, stack, target.x, target.y)
-    if result.captured then
-      G.selection, G.banner, G.offer = nil, nil, nil
-      G.startAssault(target.x, target.y, result)
-      local held = G.assault.held
-      if g.map.tiles[i] == was then fail("held map", "the capture did not restamp the castle") end
-      if not held or held.tiles[i] ~= was then fail("held map", "the old castle is not kept to show") end
-      if held and held.owners[target] ~= false and held.owners[target] == target.ownerIndex then
-        fail("held map", "the old owner's shield is not kept to show")
+    local tile, owner = g.map.tiles[i], target.ownerIndex
+    -- a click on the city with the sword up (740d:0179)
+    G.cx, G.cy = target.x - 4, target.y - 4
+    local px = G.mapRect.x + (target.x - G.cx) * 40 + 20
+    local py = G.mapRect.y + (target.y - G.cy) * 40 + 20
+    -- whatever selecting them opened (the tutorial's notes)
+    for _ = 1, 5 do
+      if require("ui.kit").top() then try("close a dialog", love.keypressed, "escape") end
+    end
+    try("attack the city", love.mousepressed, px, py, 1)
+    try("release on the city", love.mousereleased, px, py, 1)
+    if not G.assault then
+      fail("assault", "no battle for a city beside the stack")
+    else
+      local start = os.clock()
+      while G.assault and os.clock() - start < 20 do
+        try("frame of an assault", love.draw)
+        if G.assault and (g.map.tiles[i] ~= tile or target.ownerIndex ~= owner or stack[1].x ~= x) then
+          fail("assault", "the map changed before the battle was seen") break
+        end
+        try("hurry the assault", love.keypressed, "space")
       end
-      local there = held and held.stacks[x + y * 1000] or {}
-      local n = 0
-      for _, a in ipairs(there) do
-        for _, s in ipairs(stack) do if a == s then n = n + 1 end end
+      if G.assault then fail("assault", "the window never closed") end
+      if target.ownerIndex ~= G.player.index then fail("assault", "the city was not taken")
+      elseif g.map.tiles[i] == tile then fail("assault", "the castle kept its old colours")
+      elseif not G.victory then fail("assault", "no spoils asked for") end
+      G.victory = nil
+      for _ = 1, 3 do
+        if require("ui.kit").top() then try("close the tutorial", love.keypressed, "escape") end
       end
-      if n ~= #stack then fail("held map", "the attackers are not shown where they stood") end
-      try("frame of a held map", love.draw)
-      G.assault = nil
-      print("  a taken city keeps its old colours until the battle is seen")
+      print("  a city changes hands only once its battle has been seen")
     end
     for i2 = #g.armies, 1, -1 do
-      for _, s in ipairs(stack) do if g.armies[i2] == s then table.remove(g.armies, i2) break end end
+      for _, s2 in ipairs(stack) do if g.armies[i2] == s2 then table.remove(g.armies, i2) break end end
     end
     G.selection = nil
   end
@@ -630,7 +658,8 @@ do
   if att and def and not G.over then
     G.selection, G.assault, G.banner, G.offer = nil, nil, nil, nil
     human.observe = false
-    local result = game2.resolveAttack(g, { att }, def.x, def.y)
+    local result = game2.decideAttack(g, { att }, def.x, def.y)
+    local armies = #g.armies
     G.aiSide, G.aiSkip = comp, nil
     G.aiStatus = { side = comp, text = comp.name, progress = 50 }
     G.aiRun = coroutine.create(function() ai.onFight(g, { att }, def.x, def.y, result) end)
@@ -645,7 +674,11 @@ do
     if not (a and a.computer and a.window) then
       fail("computer battle", "no battle window for an attack on a human")
     else
-      while G.assault and os.clock() - start < 20 do try("frame of a computer battle", love.draw) end
+      while G.assault and os.clock() - start < 20 do
+        if #g.armies ~= armies then fail("computer battle", "the dead left the map before the battle was seen") break end
+        try("frame of a computer battle", love.draw)
+      end
+      if #g.armies == armies then fail("computer battle", "the fight never took effect") end
       if G.assault then fail("computer battle", "the window never closed by itself")
       elseif G.aiStatus.text ~= a.outcome then fail("computer battle", "the outcome was not in the status bar") end
       local t = love.timer.getTime()

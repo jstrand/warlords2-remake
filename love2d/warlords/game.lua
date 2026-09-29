@@ -521,25 +521,44 @@ function game.loot(g, loser)
   return math.floor(share / 2)
 end
 
---- Fight for a tile and apply the outcome: the dead are removed, and a city
---- whose last defender falls changes hands. Returns the combat result with
---- `captured` set to the city, if any.
-function game.resolveAttack(g, stack, x, y)
+--- Fight for a tile, deciding it and nothing more (combat_resolve,
+--- 67cc:08a6): the game is left as it was, for the battle to be shown over
+--- it. Returns the combat result, with the loot a city taken will pay; the
+--- fight takes effect with game.applyAttack.
+function game.decideAttack(g, stack, x, y)
   local combat = require("warlords.combat")
-  local move = require("warlords.move")
-  local heroMod = require("warlords.hero")
   local attackers, defenders, defOwner, city = combat.lines(g, stack, x, y)
   local result = combat.resolve(g, attackers, defenders, x, y)
   -- the lines as they were drawn up, which is what the battle window shows:
   -- `result.log` then kills them off in the order the fight went
   result.lines = { attackers = attackers, defenders = defenders, city = city }
-  -- and the map as it stood before the fight -- the tiles stamped over, who
-  -- held the city (false for no one) and where each army that moves stood --
-  -- for the front end to keep showing
-  -- until the battle has been seen: the original stamps the city and walks
-  -- the survivors in only in after_battle (67cc:0a6b), once the window has
-  -- closed
-  result.before = { tiles = {}, at = {}, owners = {} }
+  -- what a city taken from a side pays, reckoned while it is still the
+  -- loser's
+  local loser = defOwner and g.map.sides[defOwner + 1] or nil
+  if result.won and city and loser then result.loot = game.loot(g, loser) end
+  result.fought = { stack = stack, x = x, y = y, defOwner = defOwner }
+  return result
+end
+
+--- Fight for a tile and apply the outcome at once. Returns the combat
+--- result with `captured` set to the city, if any.
+function game.resolveAttack(g, stack, x, y)
+  return game.applyAttack(g, game.decideAttack(g, stack, x, y))
+end
+
+--- Let a decided fight take effect (after_battle, 67cc:0a6b), which the
+--- original does once the battle window has closed: the dead are removed,
+--- a city whose last defender falls changes hands, and the survivors walk
+--- in. Once only; returns the result with `captured` set to the city taken.
+function game.applyAttack(g, result)
+  local f = result.fought
+  if not f then return result end
+  result.fought = nil
+  local move = require("warlords.move")
+  local heroMod = require("warlords.hero")
+  local stack, x, y, defOwner = f.stack, f.x, f.y, f.defOwner
+  local attackers, defenders = result.lines.attackers, result.lines.defenders
+  local city = result.lines.city
 
   -- a dead hero drops what it carried where it fell, and is remembered as
   -- killed in the city the fight was for, or in battle (67cc:0ba1, 0c5a)
@@ -579,18 +598,12 @@ function game.resolveAttack(g, stack, x, y)
     local winner = g.map.sides[stack[1].owner + 1]
     local loser = defOwner and g.map.sides[defOwner + 1] or nil
     if loser then
-      local loot = game.loot(g, loser)
+      local loot = result.loot or 0
       winner.gold = winner.gold + loot
       loser.gold = math.max(0, loser.gold - 2 * loot)
-      result.loot = loot
     end
     city.producing, city.countdown, city.vectorTo = nil, 0, nil
-    result.before.owners[city] = city.ownerIndex or false
     city.ownerIndex = winner.index
-    for _, d in ipairs({ 0, 1, scn.MAP_W, scn.MAP_W + 1 }) do
-      local i = city.y * scn.MAP_W + city.x + 1 + d
-      result.before.tiles[i] = g.map.tiles[i]
-    end
     scn.setCityTiles(g.map, city)
     move.invalidate(g)
     result.captured = city
@@ -616,7 +629,6 @@ function game.resolveAttack(g, stack, x, y)
     local room = rules.MAX_STACK - #game.armiesAt(g, x, y)
     for _, a in ipairs(result.attackers) do
       if room <= 0 then break end
-      result.before.at[a] = { x = a.x, y = a.y }
       a.x, a.y, room = x, y, room - 1
     end
   end

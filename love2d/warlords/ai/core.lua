@@ -623,9 +623,11 @@ end
 --- Fight for (x, y) with the selection, for real. Returns the result.
 function core.fight(g, sel, x, y)
   local game = require("warlords.game")
-  local result = game.resolveAttack(g, sel.armies, x, y)
+  -- decided, shown, and only then taken effect (after_battle, 67cc:0a6b)
+  local result = game.decideAttack(g, sel.armies, x, y)
   local ai = require("warlords.ai")
   if ai.onFight then ai.onFight(g, sel.armies, x, y, result) end
+  game.applyAttack(g, result)
   -- the dead are gone from the selection
   local keep = {}
   for _, a in ipairs(sel.armies) do if core.alive(g, a) then keep[#keep + 1] = a end end

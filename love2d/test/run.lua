@@ -1062,7 +1062,27 @@ local function testCapture(scenario)
   end
 
   local before = #game.sideCities(g, side)
-  local r = game.resolveAttack(g, stack, target.x, target.y)
+  -- the fight is decided first and takes effect only after it has been shown
+  -- (combat_resolve, then after_battle 67cc:0a6b)
+  local r
+  do
+    local scn = require("warlords.scn")
+    local i = target.y * scn.MAP_W + target.x + 1
+    local tile, armies, from = g.map.tiles[i], #g.armies, stack[1].x
+    r = game.decideAttack(g, stack, target.x, target.y)
+    ok(r.won, "the fight is decided")
+    eq(target.ownerIndex, nil, "but the city is not yet taken")
+    eq(g.map.tiles[i], tile, "nor its castle repainted")
+    eq(#g.armies, armies, "nor the dead removed")
+    eq(stack[1].x, from, "nor the survivors moved in")
+    eq(r.captured, nil, "and nothing is said to be captured")
+    game.applyAttack(g, r)
+    ok(g.map.tiles[i] ~= tile, "applied, the castle is in the victor's colours")
+    local owner, n = target.ownerIndex, #g.armies
+    game.applyAttack(g, r)
+    eq(#g.armies, n, "and applying again changes nothing")
+    eq(target.ownerIndex, owner, "")
+  end
   ok(r.won, "the overwhelming stack took the city")
   -- the battle window is drawn from the lines as they were drawn up, and
   -- replays result.log over them
@@ -1083,19 +1103,6 @@ local function testCapture(scenario)
   eq(target.producing, nil, "a captured city is not building anything")
   for _, a in ipairs(r.attackers) do
     eq(a.x, target.x, "the survivors moved in")
-  end
-  -- what the map looked like before, for the battle window to be shown over
-  -- (after_battle, 67cc:0a6b, changes the map only once it has closed)
-  do
-    local scn = require("warlords.scn")
-    local i = target.y * scn.MAP_W + target.x + 1
-    eq(r.before.tiles[i], 96, "the neutral castle is kept to show")
-    eq(r.before.tiles[i + scn.MAP_W + 1], 96 + 17, "all four of its tiles")
-    ok(g.map.tiles[i] ~= 96, "while the map has the new owner's")
-    for _, a in ipairs(r.attackers) do
-      local p = r.before.at[a]
-      ok(p and (p.x ~= target.x or p.y ~= target.y), "where each survivor stood is kept")
-    end
   end
   -- the dead are gone from the game
   for _, dead in ipairs(r.deadDefenders) do
