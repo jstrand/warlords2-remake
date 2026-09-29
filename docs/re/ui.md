@@ -696,7 +696,16 @@ on screen can change the outcome.
 | `6a35:0094` | plays the log back, one casualty at a time: a sound (`7dda:0181`), then `6a35:0000` masks `ATRANS2.PCK`'s blast, `(32, 0) 32 × 29`, over the fallen army, waits 5 ticks, and paints the army's 32 × 30 place back from the popup's marble (`54f6:07e4`) — army and fire gone; `7ecb:0000` then waits 3 and 5 BIOS ticks (18.2 a second), so about 0.7 s each. **Space** (it polls `kbhit`) cuts the rest to 2 and 3 ticks; any input also ends the wait in hand |
 | `6a35:04c5` | writes how it ended, centred on x = 320 from y = 298 (`4125:4366`), each line 20 below the last |
 | `6a35:04f6` | closes the popup |
+| `67cc:0a6b` | `after_battle`: takes the dead off the map, walks the survivors in, and, if a city fell, stamps its castle in the victor's colours (`6bd8:0000`, at `0ee0`) |
 | `67cc:04f7` | and, if a city fell, opens the spoils dialog |
+
+So while the cloud and the window are up, the **map still shows the fight
+as it began**: the castle and its shield on the strategic map in the old
+owner's colours, the defenders in it, and the attackers — with the selection
+box — on the tile they struck from. The remake decides and applies the fight
+at once (`game.resolveAttack`), so the result keeps `before` — the city's four
+old tiles, its old owner, and where each army that moved stood — and the map
+is drawn from that until the assault closes.
 
 **The lines.** The defender's is on top and may wrap to four rows —
 `4125:0d14` gives them as y = 86, 116, 146, 176 — and the attacker's is the

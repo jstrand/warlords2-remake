@@ -563,6 +563,54 @@ do
   print("  told how quests end")
 end
 
+-- A city taken by the player: until the battle window closes the map keeps
+-- the castle in its old colours, the defenders in it and the attackers where
+-- they stood (after_battle, 67cc:0a6b, changes the map only then)
+do
+  local g = G.g
+  local game2, scn = require("warlords.game"), require("warlords.scn")
+  local target, stack
+  for _, c in ipairs(g.map.cities) do
+    if not target and not c.razed and c.ownerIndex ~= G.player.index then target = c end
+  end
+  if target and not G.over then
+    local x, y = target.x - 1, target.y
+    stack = {}
+    for k = 1, 8 do
+      local a = { owner = G.player.index, type = 11, name = "Giants", strength = 9,
+                  maxMoves = 20, moves = 20, upkeep = 1, x = x, y = y }
+      g.armies[#g.armies + 1] = a
+      stack[k] = a
+    end
+    local i = target.y * scn.MAP_W + target.x + 1
+    local was = g.map.tiles[i]
+    local result = game2.resolveAttack(g, stack, target.x, target.y)
+    if result.captured then
+      G.selection, G.banner, G.offer = nil, nil, nil
+      G.startAssault(target.x, target.y, result)
+      local held = G.assault.held
+      if g.map.tiles[i] == was then fail("held map", "the capture did not restamp the castle") end
+      if not held or held.tiles[i] ~= was then fail("held map", "the old castle is not kept to show") end
+      if held and held.owners[target] ~= false and held.owners[target] == target.ownerIndex then
+        fail("held map", "the old owner's shield is not kept to show")
+      end
+      local there = held and held.stacks[x + y * 1000] or {}
+      local n = 0
+      for _, a in ipairs(there) do
+        for _, s in ipairs(stack) do if a == s then n = n + 1 end end
+      end
+      if n ~= #stack then fail("held map", "the attackers are not shown where they stood") end
+      try("frame of a held map", love.draw)
+      G.assault = nil
+      print("  a taken city keeps its old colours until the battle is seen")
+    end
+    for i2 = #g.armies, 1, -1 do
+      for _, s in ipairs(stack) do if g.armies[i2] == s then table.remove(g.armies, i2) break end end
+    end
+    G.selection = nil
+  end
+end
+
 -- A computer attacking a human (67cc:124a): the battle window opens and
 -- closes by itself, and the outcome goes up in the status bar; a fallen
 -- army's fire burns out and leaves its place bare (6a35:0000)

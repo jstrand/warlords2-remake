@@ -1084,6 +1084,19 @@ local function testCapture(scenario)
   for _, a in ipairs(r.attackers) do
     eq(a.x, target.x, "the survivors moved in")
   end
+  -- what the map looked like before, for the battle window to be shown over
+  -- (after_battle, 67cc:0a6b, changes the map only once it has closed)
+  do
+    local scn = require("warlords.scn")
+    local i = target.y * scn.MAP_W + target.x + 1
+    eq(r.before.tiles[i], 96, "the neutral castle is kept to show")
+    eq(r.before.tiles[i + scn.MAP_W + 1], 96 + 17, "all four of its tiles")
+    ok(g.map.tiles[i] ~= 96, "while the map has the new owner's")
+    for _, a in ipairs(r.attackers) do
+      local p = r.before.at[a]
+      ok(p and (p.x ~= target.x or p.y ~= target.y), "where each survivor stood is kept")
+    end
+  end
   -- the dead are gone from the game
   for _, dead in ipairs(r.deadDefenders) do
     local stillThere = false

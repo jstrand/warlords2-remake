@@ -533,6 +533,13 @@ function game.resolveAttack(g, stack, x, y)
   -- the lines as they were drawn up, which is what the battle window shows:
   -- `result.log` then kills them off in the order the fight went
   result.lines = { attackers = attackers, defenders = defenders, city = city }
+  -- and the map as it stood before the fight -- the tiles stamped over, who
+  -- held the city (false for no one) and where each army that moves stood --
+  -- for the front end to keep showing
+  -- until the battle has been seen: the original stamps the city and walks
+  -- the survivors in only in after_battle (67cc:0a6b), once the window has
+  -- closed
+  result.before = { tiles = {}, at = {}, owners = {} }
 
   -- a dead hero drops what it carried where it fell, and is remembered as
   -- killed in the city the fight was for, or in battle (67cc:0ba1, 0c5a)
@@ -578,7 +585,12 @@ function game.resolveAttack(g, stack, x, y)
       result.loot = loot
     end
     city.producing, city.countdown, city.vectorTo = nil, 0, nil
+    result.before.owners[city] = city.ownerIndex or false
     city.ownerIndex = winner.index
+    for _, d in ipairs({ 0, 1, scn.MAP_W, scn.MAP_W + 1 }) do
+      local i = city.y * scn.MAP_W + city.x + 1 + d
+      result.before.tiles[i] = g.map.tiles[i]
+    end
     scn.setCityTiles(g.map, city)
     move.invalidate(g)
     result.captured = city
@@ -604,6 +616,7 @@ function game.resolveAttack(g, stack, x, y)
     local room = rules.MAX_STACK - #game.armiesAt(g, x, y)
     for _, a in ipairs(result.attackers) do
       if room <= 0 then break end
+      result.before.at[a] = { x = a.x, y = a.y }
       a.x, a.y, room = x, y, room - 1
     end
   end

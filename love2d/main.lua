@@ -1232,7 +1232,9 @@ local function drawMap()
       if mx < G.g.map.width and my < G.g.map.height then
         -- every tile is drawn; the hidden map is laid over it afterwards
         do
-          local t = scn.tileAt(G.g.map, mx, my)
+          local held = G.assault and G.assault.held
+          local t = held and held.tiles[my * scn.MAP_W + mx + 1]
+                    or scn.tileAt(G.g.map, mx, my)
           local sheet = math.floor(t / 96) + 1
           love.graphics.setColor(1, 1, 1)
           love.graphics.draw(G.sheets[sheet], G.tileQuads[sheet][t % 96], sx, sy)
@@ -1252,7 +1254,8 @@ local function drawMap()
             end
           end
 
-          local stack = game.armiesAt(G.g, mx, my)
+          local stack = held and held.stacks[mx + my * 1000]
+                        or game.armiesAt(G.g, mx, my)
           -- a stack still walking is drawn where the walk has got to, not
           -- where it has already arrived
           if G.walk then
@@ -1287,8 +1290,10 @@ local function drawMap()
 
   -- the selection box, which follows the walk
   if G.selection then
-    local col, row = (at and at.x or G.selection.x) - G.cx,
-                     (at and at.y or G.selection.y) - G.cy
+    -- during an assault, on the tile the attack was made from
+    local from = G.assault and G.assault.held and G.assault.held.from
+    from = from and not G.assault.computer and from or at or G.selection
+    local col, row = from.x - G.cx, from.y - G.cy
     if col >= 0 and col < screen.VIEW_COLS and row >= 0 and row < screen.VIEW_ROWS then
       love.graphics.setColor(1, 1, 1)
       -- 828e:0afd / 0b27: the small box for one army, the large for a group
@@ -1319,11 +1324,16 @@ function G.drawStrategicMap(x, y, mark, noCities, owners)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.stratImage, x, y)
   local w, h = G.atransShields:getDimensions()
+  -- a city taken in the battle still showing keeps its old shield
+  local held = G.assault and G.assault.held and G.assault.held.owners or {}
   for i, c in ipairs(noCities and {} or G.g.map.cities) do
     local owner = owners and owners[i]
     local gone = owners and owner == 0xff or (not owners and c.razed)
     if not gone and game.seen(G.g, G.player, c.x, c.y) then
-      local side = owners and owner or c.ownerIndex or 8
+      local side
+      if owners then side = owner
+      elseif held[c] ~= nil then side = held[c] or 8
+      else side = c.ownerIndex or 8 end
       love.graphics.draw(G.atransShields, love.graphics.newQuad(side * 16, 30, 8, 8, w, h),
                          x + c.x * 2 - 1, y + c.y * 2 - 1)
     end
@@ -2166,7 +2176,54 @@ function startAssault(x, y, result)
     captured = result.captured,
     victor = victorName(lines.attackers),
     message = outcomeLines(result, lines.city, fled),
+    held = G.heldMap(result),
   }
+end
+
+--- The map as it stood before the fight, which the assault shows until it
+--- closes (after_battle, 67cc:0a6b, changes the map only then): the city's
+--- old tiles by index, its old owner, the stacks of each tile the fight
+--- touched keyed x + y * 1000, and where the attackers stood.
+function G.heldMap(result)
+  local before = result.before
+  if not before then return nil end
+  local lines = result.lines or { attackers = {}, defenders = {} }
+  local held = { tiles = before.tiles, owners = before.owners, stacks = {} }
+  local fought = {}
+  local function stood(a)
+    local p = before.at[a]
+    if p then return p.x, p.y end
+    return a.x, a.y
+  end
+  for _, list in ipairs({ lines.attackers, lines.defenders }) do
+    for _, a in ipairs(list) do fought[a] = true end
+  end
+  for _, list in ipairs({ lines.attackers, lines.defenders }) do
+    for _, a in ipairs(list) do
+      local x, y = stood(a)
+      local k = x + y * 1000
+      if not held.stacks[k] then
+        held.stacks[k] = {}
+        for _, o in ipairs(game.armiesAt(G.g, x, y)) do
+          if not fought[o] then
+            held.stacks[k][#held.stacks[k] + 1] = o
+          end
+        end
+      end
+    end
+  end
+  for _, list in ipairs({ lines.attackers, lines.defenders }) do
+    for _, a in ipairs(list) do
+      local x, y = stood(a)
+      local stack = held.stacks[x + y * 1000]
+      stack[#stack + 1] = a
+    end
+  end
+  if lines.attackers[1] then
+    held.from = {}
+    held.from.x, held.from.y = stood(lines.attackers[1])
+  end
+  return held
 end
 
 --- Carry the playback on by the clock. The draw calls it, so the animation
