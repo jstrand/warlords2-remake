@@ -2836,6 +2836,8 @@ function love.mousepressed(x, y, button)
   -- The assault is modal while it plays: a click runs it through, and the
   -- click that ends it opens the question of what to do with the city.
   if G.assault then pressAssault() return end
+  -- the right button is not a click on a dialog's button (18a9:012c)
+  if (G.victory or G.offer) and button == 2 then return end
   if G.victory then
     local c = screen.dialogControlAt(G.victoryView, fx, fy)
     if c and G.victoryView.state[c.id] ~= uidata.DISABLED then takeCity(c.id) end
