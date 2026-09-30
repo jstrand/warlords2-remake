@@ -89,7 +89,7 @@ function M.open()
     end
   end
   if #heroes == 0 then return nil end
-  local cx, cy = G.cx + 4, G.cy + 4
+  local cx, cy = G.viewCentre()
   local cur, best = 1, nil
   for i, h in ipairs(heroes) do
     local d = math.max(math.abs(h.x - cx), math.abs(h.y - cy))

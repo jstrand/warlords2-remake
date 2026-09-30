@@ -18,6 +18,14 @@ local SCENARIO = arg[2] or "TUTORIA"
 -- A fixed seed, so a run is reproducible: without one the harness plays a
 -- different game every time and its runtime swings wildly.
 local SEED = arg[3] or "20250918"
+-- The screen, in pixels: the original's 640x480 unless a fourth argument
+-- asks for another ("980x615"), which lays the main screen out bigger
+-- (warlords/layout.lua) and moves every dialog into a centred frame.
+local SCREEN_W, SCREEN_H = 640, 480
+if arg[4] then
+  SCREEN_W, SCREEN_H = arg[4]:match("^(%d+)x(%d+)$")
+  SCREEN_W, SCREEN_H = tonumber(SCREEN_W), tonumber(SCREEN_H)
+end
 local failures = 0
 
 local function fail(what, err)
@@ -54,9 +62,9 @@ love = {
     setFont = function() end,
     setColor = function() end,
     setBackgroundColor = function() end,
-    getDimensions = function() return 1024, 768 end,
-    getWidth = function() return 1024 end,
-    getHeight = function() return 768 end,
+    getDimensions = function() return SCREEN_W, SCREEN_H end,
+    getWidth = function() return SCREEN_W end,
+    getHeight = function() return SCREEN_H end,
     draw = function() drawCalls = drawCalls + 1 end,
     rectangle = function() end,
     line = function() end,
@@ -86,10 +94,23 @@ love = {
 --------------------------------------------------------------------- running
 
 print("loading the front end")
+-- the settings the menus change go to a file of the run's own, neither
+-- read from nor written over the player's
+local prefsMod = require("prefs")
+prefsMod.FILE = os.tmpname()
+os.remove(prefsMod.FILE)
 local chunk = assert(loadfile("love2d/main.lua"))
 local G = chunk()          -- main.lua hands back its view state, for tests
 
 print("  scenario: " .. SCENARIO .. ", seed " .. SEED)
+if arg[4] then print(("  screen: %dx%d"):format(SCREEN_W, SCREEN_H)) end
+
+--- A click in a dialog, at the dialog's own 640x480 coordinates: on a bigger
+--- screen the dialogs sit in a centred frame (warlords/layout.lua).
+local function dialogClick(x, y, button)
+  local d = G.layout and G.layout.dialog or { x = 0, y = 0 }
+  return love.mousepressed(x + d.x, y + d.y, button)
+end
 if not try("love.load", love.load, { SCENARIO, DATA, SEED }) then
   print(("\n%d failed"):format(failures))
   os.exit(1)
@@ -186,7 +207,7 @@ else
   end
   try("draw the hero dialog", love.draw)
   local wasFemale = G.offerFemale
-  try("tick the other box", love.mousepressed, wasFemale and 390 or 494, 320, 1)
+  try("tick the other box", dialogClick, wasFemale and 390 or 494, 320, 1)
   if G.offerFemale == wasFemale then
     fail("turn-1 hero", "the checkbox did not change the hero's sex")
   end
@@ -196,11 +217,11 @@ else
   try("rub it out again", love.keypressed, "backspace")
 
   -- the first hero is free, so Cancel must be refused
-  try("press the disabled Cancel", love.mousepressed, 350, 350, 1)
+  try("press the disabled Cancel", dialogClick, 350, 350, 1)
   if not G.offer then fail("turn-1 hero", "Cancel closed an offer that cannot be refused") end
 
   local before = heroesOf(G.g, G.player)
-  try("press OK", love.mousepressed, 510, 350, 1)
+  try("press OK", dialogClick, 510, 350, 1)
   local after = heroesOf(G.g, G.player)
   if after ~= before + 1 then
     fail("turn-1 hero", ("accepting gave %d heroes, wanted %d"):format(after, before + 1))
@@ -254,7 +275,8 @@ for i = 1, 3 do
   if G.g.turn == turn and not G.over then fail("end turn", "alt E did not end the turn") end
   dismissBanner("dismiss the banner on turn " .. i)
   local cap = G.player.capital
-  if cap and not G.over and (cap.x < G.cx or cap.x >= G.cx + 9 or cap.y < G.cy or cap.y >= G.cy + 9) then
+  local vw, vh = G.viewSize()
+  if cap and not G.over and (cap.x < G.cx or cap.x >= G.cx + vw or cap.y < G.cy or cap.y >= G.cy + vh) then
     fail("turn view", ("turn %d opened at %d,%d, away from the capital at %d,%d"):format(
       G.g.turn, G.cx, G.cy, cap.x, cap.y))
   end
@@ -480,7 +502,7 @@ do
   local function clickChoice(id)
     for _, c in ipairs(G.victoryView.dialog.controls) do
       if c.id == id then
-        try("choose " .. id, love.mousepressed, c.x + 2, c.y + 2, 1)
+        try("choose " .. id, dialogClick, c.x + 2, c.y + 2, 1)
         return
       end
     end
@@ -790,6 +812,36 @@ if G and G.menuLayout then
     end
     G.openMenu = nil
   end
+  -- the music's synthesizer is the one picked last, where it can be
+  local last = G.menuEnabled("music sc55") and "music sc55" or "music fm"
+  if not G.menuTicked(last) then fail("music", last .. " was not ticked") end
+  -- and every choice was written down
+  prefsMod.reload()
+  if prefsMod.get("music") ~= last:match("%w+$") or prefsMod.get("4:3") ~= "on"
+     or prefsMod.get("screen") ~= "window" or not tonumber(prefsMod.get("scale"))
+     or not tonumber(prefsMod.get("zoom")) then
+    fail("prefs", "the menus' choices were not all written to " .. prefsMod.FILE)
+  end
+  -- the last of View's is 4:3: the original's 640x480, whatever the screen
+  if G.layout.w ~= 640 or G.layout.h ~= 480 then
+    fail("4:3", ("the screen is %dx%d, not 640x480"):format(G.layout.w, G.layout.h))
+  end
+  -- 4:3 stays on in a window (here with no real one to open), and off it
+  -- the window has the whole of the screen
+  G.setScreen("window")
+  if G.screenMode() ~= "window" or G.layout.w ~= 640 or G.layout.h ~= 480 then
+    fail("window, 4:3", ("the screen is %s %dx%d, not window 640x480"):format(
+      G.screenMode(), G.layout.w, G.layout.h))
+  end
+  G.setOriginalSize(false)
+  if G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then
+    fail("window", ("the screen is %dx%d, not %dx%d"):format(G.layout.w, G.layout.h, SCREEN_W, SCREEN_H))
+  end
+  G.setScreen("full")
+  if G.screenMode() ~= "full" or G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then
+    fail("full screen", ("the screen is %s %dx%d, not full %dx%d"):format(
+      G.screenMode(), G.layout.w, G.layout.h, SCREEN_W, SCREEN_H))
+  end
   print(("  opened %d menus and picked %d items"):format(#G.menuLayout, picked))
 end
 
@@ -806,7 +858,7 @@ if G and G.g then
   local function press(view, id, what)
     local c = control(view, id)
     if not c then fail("city dialog", ("no control %d"):format(id)) return end
-    try(what or ("press %d"):format(id), love.mousepressed, c.x + 2, c.y + 2, 1)
+    try(what or ("press %d"):format(id), dialogClick, c.x + 2, c.y + 2, 1)
     try("draw after " .. (what or id), love.draw)
   end
 
@@ -871,13 +923,13 @@ if G and G.g then
     press(view, 197, "build something to vector")
     press(view, 196, "Vector mode")
     press(view, 210, "send the armies elsewhere")
-    try("click the other city on the map", love.mousepressed,
+    try("click the other city on the map", dialogClick,
         80 + other.x * 2 + 1, 60 + other.y * 2 + 1, 1)
     try("draw the vector map", love.draw)
     if mine.vectorTo ~= other.index then fail("vector", "the click did not set the vector") end
     press(view, 212, "See All")
     press(view, 216, "See All off")
-    try("click the other city again", love.mousepressed,
+    try("click the other city again", dialogClick,
         80 + other.x * 2 + 1, 60 + other.y * 2 + 1, 1)
     if G.city ~= other then fail("vector", "a plain click did not move the dialog") end
     try("back to our city", function() love.keypressed("escape") G.openCity(mine) end)
@@ -921,6 +973,41 @@ try("click the status bar", love.mousepressed, 100, 750, 1)
 finishComputer()
 G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
 for i = #G.modals, 1, -1 do G.modals[i] = nil end
+
+-- The map's zoom (not the original's): at every zoom a click on the middle of
+-- a stack's tile picks that stack up, and the view stays on the map.
+do
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.selection, G.openMenu, G.route = nil, nil, nil
+  local mine
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.x and not a.transit then mine = a break end
+  end
+  local was, zooms = G.zoom, 0
+  for z = 1, 5 do
+    G.setZoom(z)
+    if mine and G.zoom == z then
+      zooms = zooms + 1
+      G.centreOn(mine.x, mine.y)
+      local x, y = G.mapToUI(mine.x + 0.5, mine.y + 0.5)
+      try(("click a stack at zoom %d"):format(z), love.mousepressed, math.floor(x), math.floor(y), 1)
+      local sel = G.selection
+      if not sel or sel.x ~= mine.x or sel.y ~= mine.y then
+        fail("zoom", ("at zoom %d the click missed the stack at %d,%d"):format(z, mine.x, mine.y))
+      end
+      local vw, vh = G.viewSize()
+      if G.cx < 0 or G.cy < 0 or G.cx + vw > G.g.map.width + 1e-6
+         or G.cy + vh > G.g.map.height + 1e-6 then
+        fail("zoom", ("at zoom %d the view left the map"):format(z))
+      end
+      try(("draw at zoom %d"):format(z), love.draw)
+      for i = #G.modals, 1, -1 do G.modals[i] = nil end   -- the tutorial's page
+      G.selection = nil
+    end
+  end
+  G.setZoom(was)
+  print(("  clicked a stack at %d zooms"):format(zooms))
+end
 
 -- Observe (8cc6:0000): a watched computer's walks are shown one by one, the
 -- camera on each, and a key runs the rest of the round through
@@ -1006,6 +1093,8 @@ do
     if G.openMenu ~= 2 then fail("start menu bar", "the Game menu did not open") end
     try("draw it open", love.draw)
     if G.menuEnabled("alt S") then fail("start menu bar", "Save game was live") end
+    if not G.menuEnabled("ui scale 1") then fail("start menu bar", "the interface's scale was greyed") end
+    if G.menuEnabled("map zoom 1") then fail("start menu bar", "the map's zoom was live") end
     if not G.menuEnabled("^Q") then fail("start menu bar", "Quit was greyed") end
     try("close it", love.keypressed, "escape")
     if G.openMenu then fail("start menu bar", "escape left the menu open") end
@@ -1015,6 +1104,7 @@ do
 end
 
 os.remove("warlords-save.lua")
+os.remove(prefsMod.FILE)
 
 if failures == 0 then
   print("\nthe front end ran clean")

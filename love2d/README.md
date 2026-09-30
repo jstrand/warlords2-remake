@@ -21,11 +21,33 @@ love love2d ISLADIA                # straight into a scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
 ```
 
-The window is the original's own **640 × 480** screen, at exactly that size —
-so screen and window coordinates are the same, which `love.graphics.setScissor`
-quietly depends on. The chrome is not a lookalike: the background, buttons,
-regions and fonts are the game's own, read from its data files at runtime
-(`docs/formats/screens.md`).
+The game opens full screen, in the display's own biggest mode — on a Mac set
+to a scaled resolution, the panel's real pixels rather than a bigger picture
+macOS shrinks to fit — with a notch's strip along the top left clear. The chrome is not a lookalike: the background,
+buttons, regions and fonts are the game's own, read from its data files at
+runtime (`docs/formats/screens.md`). How it fills a screen bigger than the
+original's 640 × 480 is **not** the original's:
+
+- The interface is drawn at a whole-number scale in the display's real pixels,
+  the biggest that still fits 640 × 480, so every pixel of the art stays a
+  sharp block (`display.lua`). View › Interface 1x is one game pixel to one
+  pixel of the screen.
+- The start screens stay the original's 640 × 480, centred.
+- On the main screen the fixed pieces keep their size and move to an edge —
+  the strategic map to the top right, the control panel to the bottom right,
+  the bottom bar to the bottom, centred under the map — and the map takes the rest
+  (`warlords/layout.lua`). The dialogs sit in a 640 × 480 frame centred on the
+  screen, so each keeps the coordinates the original gives it.
+- The stone between the pieces is the original's own 244 × 220 tile, repeated
+  as its border repeats it. The original only ever shows slices of that tile,
+  so the rest is filled from its own stone by `tools/stone_tile.py`, which
+  writes `warlords/stonetile.lua`: where each piece of the tile comes from on
+  the original's screen, not the pixels themselves.
+- The map has a zoom of its own, also a whole number of device pixels, and
+  slides smoothly rather than a tile at a time.
+
+On a 640 × 480 screen all of this comes back to the original's layout, pixel
+for pixel.
 
 | input | does |
 |---|---|
@@ -39,6 +61,11 @@ regions and fonts are the game's own, read from its data files at runtime
 | `Enter` / `Esc` | next army / quit army (done for this turn) — the first live button of the original's default and cancel lists |
 | `1`–`9` | step the stack one tile, laid out like the numeric pad; `5` centres on it |
 | arrows, the 3×3 pad | move the view a tile |
+| drag the map | slide the view with the pointer |
+| mouse wheel / `PageUp` `PageDown` / keypad `+` `-` | zoom the map in and out (not the original's) |
+| View › Map 1x… / Interface 1x… | pick the map's zoom, or the interface's scale (not the original's); the one in use is ticked |
+| View › Full screen / Window | the video mode: the whole screen, or a resizable window on the desktop (not the original's) |
+| View › 4:3 | on or off, in either mode: only the original's 640 × 480, with black round it (not the original's) |
 | `Space` | group the whole stack |
 | `Tab` / `Backspace` | look at where the stack is going, and back / forget its destination |
 | `Home` / `End` / `Del` | centre on the stack / put it down / walk on along its route |
@@ -47,6 +74,9 @@ regions and fonts are the game's own, read from its data files at runtime
 | the five buttons above the pad | walk on, next army, quit army, fortify (dug in until picked up again), deselect |
 | `Alt-E` | end the turn; the computer players then take theirs |
 | `F5` / `F9` | quick save and load (not the original's) |
+
+The View menu's choices, the zoom and the music's synthesizer are kept for
+next time in `warlords-prefs.txt`, beside the saves (`prefs.lua`).
 
 ## Sound
 
@@ -61,6 +91,14 @@ Settings turns Music, Effects and Speech on and off, and writes them to
 ```sh
 luajit tools/xmi2wav.lua SSTARTUP title.wav
 ```
+
+The game also has its songs arranged for the Roland MT-32 and Sound Canvas,
+which the original played when installed for those modules. Game › AdLib
+music, MT-32 music and SC-55 music pick one in play (not the
+original's). The two Roland sets
+are not synthesised here but played from recordings in `pre-rendered-sound/`,
+made by `tools/prerender_music.sh` through Munt and 88emu with your own ROMs;
+an item is greyed while its recordings are missing.
 
 ## The rules core
 
@@ -82,6 +120,7 @@ only that the code runs:
 ```sh
 luajit love2d/test/ui.lua           # Tutoria
 luajit love2d/test/ui.lua original ERYTHEA
+luajit love2d/test/ui.lua original TUTORIA 20250918 980x615   # a bigger screen
 ```
 
 **That it runs is not that it looks right.** The stub's `setColor` is a no-op
@@ -100,7 +139,9 @@ W2_OUT=/tmp/shots W2_SCRIPT=love2d/test/shot/shots.lua \
 
 The arguments are the game's own, and passing the seed is what makes two runs
 comparable. `W2_SCRIPT` names a file of `{name, fn}` steps — see
-`test/shot/shots.lua`.
+`test/shot/shots.lua`. The window is 640 × 480 unless `W2_SIZE=980x615` asks for
+another size, `W2_FULLSCREEN=1` for desktop full screen, or `W2_NATIVE=1` for the
+window the game opens for itself.
 
 **Write for Lua 5.1.** LÖVE embeds LuaJIT, so the engine avoids `//` and the
 `&`/`|` operators — they parse under a modern `lua` binary and then fail to
@@ -123,7 +164,8 @@ for the cost grid's flags.
 | `save.lua` | saving and loading a game in progress |
 | `uidata.lua` | `JOIN.DAT`, `AREA.DAT`, `BUTTON.DAT`, `FILE.DAT`: the screen layout |
 | `font.lua` | the `.FNT`/`.FIN` proportional fonts |
-| `screen.lua` | the 640×480 screen: background, controls, hit regions |
+| `screen.lua` | the main screen: background, controls, hit regions |
+| `layout.lua` | where the main screen's pieces go on a screen of any size (not the original's) |
 | `menu.lua` | the menu bar and its items, laid out the original's way |
 | `ai.lua` | a computer player |
 | `cues.lua` | which song each moment gets, and what the advisor says |

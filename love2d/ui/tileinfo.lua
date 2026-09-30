@@ -37,15 +37,18 @@ local M = {}
 
 local W, H = 256, 75
 
---- The box for a tile on the main map (740d:131a).
+--- The box for a tile on the main map (740d:131a): centred on the tile, on
+--- the screen, and given back in the dialogs' own frame (layout.lua), which
+--- is where it is drawn.
 local function box(tx, ty)
   local G = kit.G
-  local cx = (tx - G.cx) * 40 + 36
-  local cy = (ty - G.cy) * 40 + 50
+  local L = G.layout
+  local cx, cy = G.mapToUI(tx + 0.5, ty + 0.5)
+  cx, cy = math.floor(cx), math.floor(cy)
   cx = math.floor((cx + 4) / 8) * 8
-  cx = math.max(W / 2, math.min(640 - W / 2, cx))
-  cy = math.max(math.floor(H / 2), math.min(478 - math.floor(H / 2), cy))
-  return cx - W / 2, cy - math.floor(H / 2)
+  cx = math.max(W / 2, math.min(L.w - W / 2, cx))
+  cy = math.max(math.floor(H / 2), math.min(L.h - 2 - math.floor(H / 2), cy))
+  return cx - W / 2 - L.dialog.x, cy - math.floor(H / 2) - L.dialog.y
 end
 
 local function art(id) return kit.G.screen.art_for(id) end

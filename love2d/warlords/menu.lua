@@ -52,6 +52,47 @@ menu.MENUS = {
   } },
 }
 
+--- The menus with the screen's zooms added to View -- not the original's,
+--- which had one size of everything. An item for each zoom the map can take
+--- and each scale the interface can, run by its act ("map zoom 2",
+--- "ui scale 3") and ticked while it is the one in use; the video mode, full
+--- screen or a window on the desktop; and, in either, 4:3 on or off: the
+--- original's own 640x480 with black round it. Game gets the synthesizer
+--- the music plays on ("music fm", "music mt32", "music sc55"), under
+--- Settings and Shortcuts.
+function menu.withZooms(maxUI, maxMap)
+  local out = {}
+  for i, m in ipairs(menu.MENUS) do
+    local items = m.items
+    if m.title == "Game" then
+      items = {}
+      for j, it in ipairs(m.items) do
+        items[#items + 1] = it
+        if j == 2 then
+          items[#items + 1] = { "-" }
+          items[#items + 1] = { "AdLib music", nil, "music fm" }
+          items[#items + 1] = { "MT-32 music", nil, "music mt32" }
+          items[#items + 1] = { "SC-55 music", nil, "music sc55" }
+        end
+      end
+    elseif m.title == "View" then
+      items = {}
+      for _, it in ipairs(m.items) do items[#items + 1] = it end
+      items[#items + 1] = { "-" }
+      for z = 1, maxMap do items[#items + 1] = { ("Map %dx"):format(z), nil, "map zoom " .. z } end
+      items[#items + 1] = { "-" }
+      for s = 1, maxUI do items[#items + 1] = { ("Interface %dx"):format(s), nil, "ui scale " .. s } end
+      items[#items + 1] = { "-" }
+      items[#items + 1] = { "Full screen", nil, "screen full" }
+      items[#items + 1] = { "Window", nil, "screen window" }
+      items[#items + 1] = { "-" }
+      items[#items + 1] = { "4:3 (original)", nil, "screen 4:3" }
+    end
+    out[i] = { title = m.title, items = items }
+  end
+  return out
+end
+
 -- The bar is 17 pixels deep -- the font's line height plus two -- and white
 -- (7ae8:02d8 fills (0, 0, 640, 17) with colour 15).
 menu.BAR_H = 17
@@ -67,10 +108,11 @@ menu.BAR_H = 17
 --- 3 in), the accelerators start in a column 5 past the widest labelled
 --- item, and the whole is 5 wider than its widest line. Rows are the line
 --- height plus 2, a separator 2, with 2 above the first and 1 below the last.
-function menu.layout(font, barHeight, screenWidth)
+--- `menus` is the list to lay out, menu.MENUS unless given.
+function menu.layout(font, barHeight, screenWidth, menus)
   local out, x = {}, menu.BAR_X
   local lh = font.lineHeight
-  for i, m in ipairs(menu.MENUS) do
+  for i, m in ipairs(menus or menu.MENUS) do
     local tw = math.ceil(font.width(m.title) / 8) * 8
 
     local w, keyCol, keyW = 0, 0, 0
