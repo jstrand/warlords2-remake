@@ -16,12 +16,27 @@
 --
 -- Everything is optional: with no audio device, or the files missing, the
 -- calls do nothing.
+--
+-- The music can also be the game's other two arrangements (not the
+-- original's choice to make in play: INSTALL.EXE's driver decided it) -- the
+-- MT-32's M files and the Sound Canvas's R files, recorded through emulators
+-- of those modules to pre-rendered-sound/<M|R><song>.ogg. Tick 0 of the song
+-- is the recording's start, and a recording runs on past the song's end with
+-- its reverb dying away. The choice is kept with the remake's other
+-- settings (prefs.lua).
 
 local cues = require("warlords.cues")
+local prefs = require("prefs")
+local xmi = require("warlords.xmi")
 
 local sound = {}
 
 sound.SAMPLE_RATE = 11000
+
+-- the synthesizers, and each one's letter before the song's file name
+-- (255e:032f: S for FM, M for MT32MPU.ADV, R for SC32MPU.ADV)
+sound.SYNTHS = { "fm", "mt32", "sc55" }
+local PREFIX = { fm = "S", mt32 = "M", sc55 = "R" }
 
 local S = {
   on = { music = false, effects = false, speech = false },
@@ -29,8 +44,12 @@ local S = {
   queue = {},     -- samples waiting their turn
   playing = nil,  -- the Source sounding now
   cue = nil,      -- the music cue asked for last
+  song = nil,     -- { name, loop } of the song started last
   songId = 0,
   songPlaying = false,
+  synth = "fm",
+  rec = nil,      -- the recording playing: { data, src, loop, at }
+  tails = {},     -- recordings let run on to their end under a new start
 }
 
 local function read(path)
@@ -54,14 +73,17 @@ local function path(name)
 end
 
 --- Start up: the settings from DATA/OPTIONS.SND, the music thread.
---- `files` is DATA/FILE.DAT as uidata.strings reads it.
-function sound.init(dataDir, files)
-  S.dataDir, S.files = dataDir, files
+--- `files` is DATA/FILE.DAT as uidata.strings reads it; `recordings` the
+--- folder of pre-rendered songs, if there is one.
+function sound.init(dataDir, files, recordings)
+  S.dataDir, S.files, S.recDir = dataDir, files, recordings
   S.ok = love.audio ~= nil and love.sound ~= nil
   local opts = read(dataDir .. "/DATA/OPTIONS.SND") or "111"
   S.on.music = opts:sub(1, 1) == "1"
   S.on.effects = opts:sub(2, 2) == "1"
   S.on.speech = opts:sub(3, 3) ~= "0"
+  local synth = prefs.get("music")
+  if PREFIX[synth] and sound.synthAvailable(synth) then S.synth = synth end
   if not S.ok then return end
   local adv, ad = read(dataDir .. "/ADLIB.ADV"), read(dataDir .. "/MIDPAK.AD")
   if adv and ad and love.thread then
@@ -103,25 +125,85 @@ end
 
 ------------------------------------------------------------------ the music
 
+-- "INT12.XMI" -> <recordings>/RINT12.ogg
+local function recordingPath(synth, name)
+  return S.recDir and (S.recDir .. "/" .. PREFIX[synth] .. name:upper():gsub("%.XMI$", "") .. ".ogg")
+end
+
+local function stopRecordings()
+  if S.rec then S.rec.src:stop() S.rec = nil end
+  for _, t in ipairs(S.tails) do t:stop() end
+  S.tails = {}
+end
+
+local function playRecording(data)
+  local src = love.audio.newSource(data, "stream")
+  src:play()
+  return src
+end
+
+-- Start a song, `loop`ing or not, on the synthesizer chosen. False when it
+-- cannot play: the recording, or the FM driver, missing.
+local function startSong(name, loop)
+  if S.synth ~= "fm" and S.ok then
+    -- the recording, and the song's own length from the file it was made
+    -- of: ailfm:interval starts a loop again one tick after it
+    local bytes = read(recordingPath(S.synth, name) or "")
+    local seq = bytes and xmi.parse(read(S.dataDir .. "/SOUND/" .. PREFIX[S.synth] .. name:upper()) or "")
+    if seq then
+      if S.inbox then S.inbox:push({ "stop" }) end
+      stopRecordings()
+      local data = love.filesystem.newFileData(bytes, name .. ".ogg")
+      S.rec = { data = data, src = playRecording(data), loop = loop,
+                at = (seq.length + 1) / xmi.TICK_RATE }
+      S.songId = S.songId + 1
+      S.song, S.songPlaying = { name, loop }, true
+      return true
+    end
+  end
+  -- the FM version's files carry an S: SINT12.XMI (255e:032f)
+  local bytes = S.inbox and read(S.dataDir .. "/SOUND/S" .. name:upper())
+  if not bytes then return false end
+  stopRecordings()
+  S.songId = S.songId + 1
+  S.song, S.songPlaying = { name, loop }, true
+  S.inbox:push({ "play", bytes, loop, S.songId })
+  return true
+end
+
 --- Play a cue (warlords/cues.lua) -- unless it is the one already playing,
 --- which goes on undisturbed (6dda:0000). `sides` feed the computer's cue.
 function sound.music(cue, sides)
-  if not S.on.music or not S.inbox then return end
+  if not S.on.music then return end
   if cue == S.cue and S.songPlaying then return end
   local name, loop = cues.song(S.files, cue, sides, roll)
-  if not name then return end
-  -- the FM version's files carry an S: SINT12.XMI (255e:032f)
-  local bytes = read(S.dataDir .. "/SOUND/S" .. name:upper())
-  if not bytes then return end
-  S.cue = cue
-  S.songId = S.songId + 1
-  S.songPlaying = true
-  S.inbox:push({ "play", bytes, loop, S.songId })
+  if name and startSong(name, loop) then S.cue = cue end
 end
 
 function sound.stopMusic()
-  S.cue, S.songPlaying = nil, false
+  S.cue, S.song, S.songPlaying = nil, nil, false
   if S.inbox then S.inbox:push({ "stop" }) end
+  stopRecordings()
+end
+
+--- The synthesizer the music is played on: "fm", "mt32" or "sc55".
+function sound.synth() return S.synth end
+
+--- Can it be? FM wants ADLIB.ADV, the others their recordings.
+function sound.synthAvailable(synth)
+  if synth == "fm" then return true end
+  local f = PREFIX[synth] and io.open(recordingPath(synth, "STARTUP.XMI") or "", "rb")
+  if f then f:close() end
+  return f ~= nil
+end
+
+--- Play the music on another synthesizer from now on; the song playing
+--- starts again on it.
+function sound.setSynth(synth)
+  if not PREFIX[synth] or synth == S.synth then return end
+  S.synth = synth
+  prefs.set("music", synth)
+  if S.on.music and S.song and S.songPlaying then startSong(S.song[1], S.song[2]) end
 end
 
 ------------------------------------------------------------------ samples
@@ -205,6 +287,21 @@ function sound.update()
       if m[1] == "ended" and m[2] == S.songId then S.songPlaying = false end
       m = S.outbox:pop()
     end
+  end
+  -- a recording past its song's end: a loop starts over while the old one's
+  -- tail runs out beneath it, as the module's reverb would have rung on
+  local r = S.rec
+  if r and (r.src:tell() >= r.at or not r.src:isPlaying()) then
+    if r.loop then
+      S.tails[#S.tails + 1] = r.src
+      r.src = playRecording(r.data)
+    else
+      S.tails[#S.tails + 1] = r.src
+      S.rec, S.songPlaying = nil, false
+    end
+  end
+  for i = #S.tails, 1, -1 do
+    if not S.tails[i]:isPlaying() then table.remove(S.tails, i) end
   end
 end
 
