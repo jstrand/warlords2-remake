@@ -1774,6 +1774,53 @@ y + 35. The first that applies:
   it is (group 129) in white; a tile with a road is terrain 0, and a crossing
   (bit 15 of the map word) reads *Port* / *A way for armies to put to sea*.
 
+### The right button everywhere else
+
+A right-button press does two things at once, and whichever puts a box up
+first sets `4125:1174`, which keeps the other quiet until the button comes up
+(`740d:11cf` then puts the screen back).
+
+**Over a control** (`18a9:012c`, on any screen or dialog, greyed controls
+included) it is help: `54bd:0000` reads `HELP\WARLORD2.HLP` for the first
+record with the control's id. A record with sub-id 0 is two lines in the
+256 × 75 `POPUP.PCK` box centred on the pointer (`740d:1201` with its third
+argument 0, then `740d:1158`: the title in colour 7 at y + 11, the text in
+white at y + 35). Any other sub-id is a case of `54bd:00df`:
+
+| sub-id | controls | shows |
+|---|---|---|
+| 1–4 | the city dialog's production slots, 197–200 | the slot's type (`ui_army_type_info`) |
+| 5–24 | Build Production's types, 401–420 | the nth type for sale, from ARMYTYPE (`7087:11f4`) |
+| 33–36 | the configurable buttons, 179–182 | *- User-Defined Button -* and the menu item on it (`545c:03f8`) |
+| 37–44 | View › Stack's rows, 336–343 | the row's army (`ui_army_info`), or *Select Army* past the stack (`89e0:1747`) |
+| 45–71 | Fight Order's places, 430–456 | the type fighting in that place (`6a89:1475`) |
+| 65535 | the bottom bar's slots, 224–241 | nothing: the bar's region answers |
+
+**Over a region** (`1726:0009`, the jump table at `1726:0493`):
+
+| region | right button |
+|---|---|
+| 2, the map | the tile's box (› The right button: what is on a tile) |
+| 9, the bottom bar | `89e0:0ad9`: with a selection, a slot's army (`(x − 16) / 40` below x = 336), *Select Army* / *Select armies when present* for an empty one, *Group/Ungroup* / *Manipulate all armies* beside them; with nothing selected (`4125:30f8`), the figure `(x − 16) / 90`: *Number of Cities* / *You have %d cities!*, *Your Treasury* / *You have %d gold!*, *Your Income* / *You earn %d gold!*, *Your Upkeep* / *You pay %d gold!* |
+| 13, the map's frame | *- Drag Screen -* / *Move mouse to drag the screen* |
+| 6, the city dialog's map | group 122's two lines for the mode (`7204:1afa`) |
+| 14, the city dialog's list | `7204:1c35`: the slot `(x − 308) / 56`'s type in its owner's colours; *Info about city production* for an empty one, *A picture of the city!* where the list is a picture, under the city's name |
+| 8, 10, 11, 15 | the hero, history and sage maps' two lines (*- Select Hero -*, *- Select Turn -*, *- Reveal Map -*) |
+
+**The army boxes** are `POPUP3.PCK` (bitmap 40), 240 × 128, placed by
+`740d:1486` — centred on the pointer, x on the byte grid, within x ∈ [120,
+520] and y ∈ [64, 414]. `ui_army_info` (`740d:0626`) takes an army's type,
+full movement, strength, upkeep, movement left and hero slot or medals;
+`ui_army_type_info` (`740d:032a`) a type, its time, strength, cost and
+movement. Both draw in font 2, white edged in black: the name (a hero's own)
+centred on (x + 112, y + 8); the army on the grey ring at (x + 96, y + 31)
+and, for a non-hero, its medals at (x + 128, y + 36), (x + 88, y + 36),
+(x + 128, y + 45), (x + 88, y + 45); *Strength* and *Movement*, then *Remain*
+and *Upkeep* — or *Time* and *Cost* for a type — right-aligned ending at
+x + 104 and from x + 120, at y + 66 and y + 86; and at (x + 96, y + 103)
+ABITS' 32 × 10 for how the type moves: (184, 30) flying, (216, 30) woods and
+hills, (248, 30) woods, (152, 30) hills.
+
 ## The end of the game
 
 `8065:1aed` runs as the round ends. What it finds, and what the player sees:

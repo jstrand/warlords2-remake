@@ -153,6 +153,16 @@ function M.open()
     refresh()
   end
 
+  -- the right button on a row (sub-ids 37-44, 89e0:1747): its army, or for a
+  -- row past the stack "Select Army"
+  function d.info(sub, sx, sy)
+    local infobox = require("ui.infobox")
+    local n = sub - 37
+    if n < d.s.n then infobox.army(sx, sy, d.s.army[n + 1])
+    else infobox.lines(sx, sy, "Select Army", "Select armies when present") end
+    return true
+  end
+
   function d.keypressed(key)
     if key == "return" or key == "kpenter" then keep()
     elseif key == "escape" then kit.pop(d) end

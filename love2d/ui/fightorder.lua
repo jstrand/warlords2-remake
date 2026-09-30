@@ -111,6 +111,16 @@ function M.open()
     refresh()
   end
 
+  -- the right button on a place (sub-ids 45-71, 6a89:1475): the type that
+  -- fights there, as ARMYTYPE.DAT has it
+  function d.info(sub, sx, sy)
+    local t = typeAt(sub - 45)
+    local rec = t and G.g.types.byId[t]
+    if not rec then return false end
+    require("ui.infobox").armyType(sx, sy, t, rec, side.index)
+    return true
+  end
+
   function d.keypressed(key)
     if key == "return" or key == "kpenter" then close(true)
     elseif key == "escape" then close(false) end

@@ -123,6 +123,15 @@ function M.open(city, done)
     end
   end
 
+  -- the right button on a type for sale (sub-ids 5-24, 7087:11f4): what one
+  -- would be, from ARMYTYPE.DAT
+  function d.info(sub, sx, sy)
+    local a = d.types[sub - 4]
+    if not a then return false end
+    require("ui.infobox").armyType(sx, sy, a.id, a)
+    return true
+  end
+
   -- Done is both the default and the cancel button
   function d.keypressed(key)
     if key == "return" or key == "kpenter" or key == "escape" then d.close() end

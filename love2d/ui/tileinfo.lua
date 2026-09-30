@@ -153,14 +153,8 @@ function M.open(tx, ty)
   function d.draw()
     -- both boards go through the same mask, 740d:1201's blit: bitmap 29
     -- (POPUP.PCK) or 36 (POPUP2.PCK), keyed on colour 1
-    G.tileBoards = G.tileBoards or {}
-    if not G.tileBoards[back] then
-      local pck = require("warlords.pck")
-      local name = back == 36 and "POPUP2.PCK" or "POPUP.PCK"
-      local img, w, h = pck.toImage(G.dataDir .. "/PICS/" .. name, G.palette, 1)
-      G.tileBoards[back] = { image = img, w = w, h = h }
-    end
-    local b = G.tileBoards[back]
+    local infobox = require("ui.infobox")
+    local b = infobox.board(back == 36 and infobox.POPUP2 or infobox.LINES)
     love.graphics.setColor(1, 1, 1)
     if b then love.graphics.draw(b.image, love.graphics.newQuad(0, 0, W, H, b.w, b.h), bx, by) end
     love.graphics.setColor(1, 1, 1)

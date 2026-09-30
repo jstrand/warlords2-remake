@@ -501,6 +501,35 @@ function M.open(city, mode)
     refresh(d)
   end
 
+  -- the right button on a production slot (sub-ids 1-4, 54bd:00df): the type
+  -- it builds, as the city has it
+  function d.info(sub, sx, sy)
+    local slot = city.slots[sub]
+    if not slot then return false end
+    require("ui.infobox").armyType(sx, sy, slot.type, slot)
+    return true
+  end
+
+  --- The right button off the controls (1726:0009, screen 3). In Info, the
+  --- production list is region 14 (7204:1c35): a slot, 56 pixels apart from
+  --- x = 308, shows its type in the owner's colours; an empty one says
+  --- "Info about city production", and where the list is a picture -- a
+  --- razed city, or someone else's with View Production on -- "A picture of
+  --- the city!", each under the city's name.
+  function d.rightpressed(x, y, sx, sy)
+    local infobox = require("ui.infobox")
+    if d.mode == M.INFO and x >= 308 and x < 532 and y >= 180 and y < 230 then
+      if city.razed or (G.g.map.options.viewProduction ~= 0
+                        and city.ownerIndex ~= G.player.index) then
+        infobox.lines(sx, sy, city.name, "A picture of the city!")          -- 4125:0fe7
+        return
+      end
+      local slot = city.slots[math.min(3, math.floor((x - 308) / 56)) + 1]
+      if slot then infobox.armyType(sx, sy, slot.type, slot, city.ownerIndex or 8)
+      else infobox.lines(sx, sy, city.name, "Info about city production") end -- 4125:0fcc
+    end
+  end
+
   -- Done heads both the cancel and the default lists (4125:1514, :155c)
   function d.keypressed(key)
     if key == "escape" or key == "return" or key == "kpenter" then d.close() end

@@ -1964,6 +1964,38 @@ function G.drawComputerStatus()
   end
 end
 
+--- The right button on the bottom bar (89e0:0ad9). With a stack selected, a
+--- slot shows its army (ui_army_info), an empty slot "Select Army" and the
+--- column at x = 336 on the Group/Ungroup lines; with nothing selected, each
+--- of the four figures 90 pixels apart says what it counts (4125:318d on).
+local STATUS_HELP = {
+  [0] = { "Number of Cities", "You have %d cities!" },
+  { "Your Treasury", "You have %d gold!" },
+  { "Your Income", "You earn %d gold!" },
+  { "Your Upkeep", "You pay %d gold!" },
+}
+local function barInfo(x, y)
+  local infobox = require("ui.infobox")
+  local bx = x - G.layout.offset.bar.x               -- the original's own x
+  local sel = G.selection
+  if G.aiStatus then return end
+  if sel then
+    if bx < 336 then
+      local n = math.floor((bx - 16) / 40)
+      if n >= 0 and n < sel.slots.n then infobox.army(x, y, sel.slots.army[n + 1])
+      else infobox.lines(x, y, "Select Army", "Select armies when present") end    -- 4125:3222
+    else
+      infobox.lines(x, y, "Group/Ungroup", "Manipulate all armies")              -- 4125:3169
+    end
+    return
+  end
+  local help = STATUS_HELP[math.floor((bx - 16) / 90)]
+  if help then
+    local st = STATUS[math.floor((bx - 16) / 90) + 1]
+    infobox.lines(x, y, help[1], help[2]:format(st.value()))
+  end
+end
+
 local function drawBottomBar()
   love.graphics.setColor(1, 1, 1)
   local b = BAR_GROUND
@@ -2796,6 +2828,17 @@ function love.mousepressed(x, y, button)
     top = nil
   end
   if top then
+    -- The right button on a dialog is not a click: over a control it shows
+    -- the control's help (18a9:012c -> 54bd:0000), and elsewhere only what
+    -- the dialog's own regions say (1726:0009's cases for screens 3-6).
+    if button == 2 and top.view then
+      local infobox = require("ui.infobox")
+      local c = infobox.controlAt(top.view, fx, fy, top.hidden)
+      if not (c and infobox.control(x, y, c.id, top)) and top.rightpressed then
+        top.rightpressed(fx, fy, x, y)
+      end
+      return
+    end
     if top.mousepressed then top.mousepressed(fx, fy, button) end
     return
   end
@@ -2816,7 +2859,11 @@ function love.mousepressed(x, y, button)
   end
 
   local c = screen.controlAt(G.screen, x, y)
-  if c then
+  -- the right button on a control shows what it does (18a9:012c); the bar's
+  -- slots say nothing of their own, and the bar's region answers for them
+  if c and button == 2 then
+    if require("ui.infobox").control(x, y, c.id) then return end
+  elseif c then
     -- a disabled button does not light up and does not arm
     if G.screen.state[c.id] == uidata.DISABLED then return end
     G.pressed = c.id
@@ -2872,6 +2919,13 @@ function love.mousepressed(x, y, button)
     else
       centreOn(tx, ty)
     end
+
+  elseif r.id == screen.REGION.BOTTOMBAR and button == 2 then
+    barInfo(x, y)
+
+  -- the frame round the map says what the hand does there (1726:026d)
+  elseif r.id == screen.REGION.MAPPANEL and button == 2 then
+    require("ui.infobox").lines(x, y, "- Drag Screen -", "Move mouse to drag the screen")
   end
 end
 

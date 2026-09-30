@@ -484,6 +484,72 @@ do
   end
 end
 
+-- The right button off the map shows a box while it is held: the bar's
+-- figures say what they count and its slots show their armies (89e0:0ad9),
+-- a control its help (54bd:0000), and in a dialog it is not a click -- Build
+-- Production shows the type and buys nothing (7087:11f4).
+do
+  G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  local function top() return G.modals[#G.modals] end
+  local function control(view, id)
+    for _, c in ipairs(view.dialog.controls) do if c.id == id then return c end end
+  end
+  local function rclick(x, y, inDialog)
+    if inDialog then try("right press", dialogClick, x, y, 2)
+    else try("right press", love.mousepressed, x, y, 2) end
+    local box = top() and top().infobox
+    local d = G.layout and G.layout.dialog or { x = 0, y = 0 }
+    try("right release", love.mousereleased, x + (inDialog and d.x or 0), y + (inDialog and d.y or 0), 2)
+    return box
+  end
+  local ok = true
+  G.selection = nil
+  local o = G.layout.offset.bar
+  local box = rclick(40 + o.x, 430 + o.y)
+  if not (box and box.title == "Number of Cities") then
+    ok = false fail("right button", "the bar's cities did not say what they count")
+  end
+  if top() then ok = false fail("right button", "the box outlived the button") end
+  local nextArmy = control(G.screen, 174)
+  box = rclick(nextArmy.x + 2, nextArmy.y + 2)
+  if not (box and box.title and box.title ~= "") then
+    ok = false fail("right button", "Next Army showed no help")
+  end
+  local mine
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.x then mine = a break end
+  end
+  if mine then
+    try("select for the slots", function() G.selectAt(mine.x, mine.y) end)
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+    local slot = control(G.screen, 224)
+    box = rclick(slot.x + 4, slot.y + 4)
+    if not (box and box.army == G.selection.slots.army[1]) then
+      ok = false fail("right button", "a slot did not show its army")
+    end
+    G.selection = nil
+  end
+  local city
+  for _, c in ipairs(G.g.map.cities) do
+    if c.ownerIndex == G.player.index and not c.razed then city = c break end
+  end
+  if city then
+    local d = require("ui.buyprod").open(city)
+    local gold, slots = G.player.gold, #city.slots
+    local first = control(d.view, 401)
+    box = rclick(first.x + 2, first.y + 2, true)
+    if not (box and box.type == d.types[1].id) then
+      ok = false fail("right button", "Build Production did not show the type")
+    end
+    if G.player.gold ~= gold or #city.slots ~= slots then
+      ok = false fail("right button", "a right click in Build Production bought the type")
+    end
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  end
+  if ok then print("  the right button shows armies, types and help") end
+end
+
 -- press and release every control of the main screen, on and off the button,
 -- so the state handling runs for all of them
 if G and G.screen then
