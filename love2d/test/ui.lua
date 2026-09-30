@@ -1140,6 +1140,51 @@ if G and G.g then
   end
 end
 
+-- The diplomacy button (183-185, 484e:0346): greyed with the option off;
+-- on, the face says what the others propose, and a click opens the
+-- Diplomatic Action screen.
+do
+  local diplomacy = require("warlords.diplomacy")
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.selection, G.city = nil, nil
+  local g, me = G.g, G.player.index
+  local opts = g.map.options
+  local was = opts.diplomacy
+  local saved = g.diplomacy
+  local st = G.screen.state
+  local ok = true
+  opts.diplomacy = 0
+  try("draw", love.draw)
+  if st[183] ~= 2 then ok = false fail("diplomacy", "the button was live with Diplomacy off") end
+  opts.diplomacy = 1
+  diplomacy.init(g)
+  try("draw", love.draw)
+  if st[183] == 2 or st[184] ~= 2 or st[185] ~= 2 then
+    ok = false fail("diplomacy", "with nothing proposed the button was not face 183")
+  end
+  local other = (me + 1) % 8
+  g.diplomacy.state[other * 8 + me], g.diplomacy.state[me * 8 + other] = 2, 2
+  diplomacy.propose(g, other, me, 0)
+  try("draw", love.draw)
+  if st[185] == 2 then ok = false fail("diplomacy", "an offer of peace did not show face 185") end
+  diplomacy.propose(g, (me + 2) % 8, me, 2)
+  g.diplomacy.state[((me + 2) % 8) * 8 + me] = 0
+  try("draw", love.draw)
+  if st[184] == 2 then ok = false fail("diplomacy", "a threat of war did not show face 184") end
+  local c
+  for _, k in ipairs(G.screen.dialog.controls) do if k.id == 184 then c = k end end
+  try("press diplomacy", love.mousepressed, c.x + 2, c.y + 2, 1)
+  try("release diplomacy", love.mousereleased, c.x + 2, c.y + 2, 1)
+  local d = G.modals[#G.modals]
+  if not (d and d.view and d.view.id == 22) then
+    ok = false fail("diplomacy", "the button did not open the Diplomatic Action screen")
+  end
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  opts.diplomacy, g.diplomacy = was, saved
+  try("draw", love.draw)
+  if ok then print("  the diplomacy button shows the offers and opens Diplomatic Action") end
+end
+
 -- The city dialog's map (7204:1afa): a click moves the dialog to the city
 -- nearest it, in the same mode -- any city in Info, one's own in Production.
 do

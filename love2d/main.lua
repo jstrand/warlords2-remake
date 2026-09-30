@@ -3128,6 +3128,12 @@ ACTION[187] = function()
   G.route = nil
 end
 
+-- 183-185 are one button in three faces, at one rect (568, 415): the
+-- diplomacy button, which opens the Diplomatic Action screen (484e:0346).
+for id = 183, 185 do
+  ACTION[id] = function() require("ui.diplomacy").action() end
+end
+
 -- The pad's centre, id 177, shares its handler (8065:0f02) with the Home key.
 ACTION[177] = function()
   if G.selection then centreOn(G.selection.x, G.selection.y)
@@ -3193,6 +3199,11 @@ function refreshControls()
     set(uidata.SHORTCUT_FIRST + i, key ~= nil and G.menuEnabled(key))
   end
   for i = 0, 7 do set(320 + i, true) end       -- the pad is always live
+  -- the diplomacy button: greyed with the option off, else the one face of
+  -- the three that says what the other sides propose (8065:0174); the
+  -- others stay off the screen
+  local face = require("ui.diplomacy").buttonFor(G.g, G.player.index)
+  for id = 183, 185 do set(id, id == face) end
 end
 
 --- The drag's own sums, as 8065:0e04 keeps them: the map goes the way the

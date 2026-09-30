@@ -76,6 +76,7 @@ for pixel.
 | `m` | Move All: every stack under orders walks on as far as it can |
 | `c` `b` `p` `v` | the city dialog on the city nearest the view's centre, in Info, City, Production or Vector |
 | the five buttons above the pad | walk on, next army, quit army, fortify (dug in until picked up again), deselect |
+| the shield button at the bottom right | Diplomatic Action; its face shows whether the other sides propose peace or threaten war |
 | `Alt-E` | end the turn; the computer players then take theirs |
 | `F5` / `F9` | quick save and load (not the original's) |
 

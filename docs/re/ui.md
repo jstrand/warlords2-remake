@@ -412,7 +412,7 @@ through `18a9:066e`, and these are its rules:
 | 241 ungroup | a selection, and all of it grouped |
 | 224–231, 232–239 | slot below the stack's size; the rest are cleared outright |
 | 320–327 | always |
-| 183/184/185 | the diplomacy option, then the side's own flags pick which of the three |
+| 183/184/185 | one button in three faces at (568, 415), a click opening the Diplomatic Action screen (`484e:0346`). With Diplomacy off 183 is greyed; on, the side's own diagonal byte (`0x153b + side · 9`) picks the face: 183 without `0x10`, 184 with `0x10` alone, 185 with `0x10` and `0x20`. `diplomacy_flag_pending` (`484e:0cc7`) sets them as each turn opens (`8065:2123`): `0x10` when some side's proposal to this one differs from the state between them, `0x20` when every such proposal is friendlier than the state |
 
 `8c07:09e7` is `8c07:040e` with its side effects taken out: the same filter —
 the side's armies, on the map, in the cycle, not done — asking only whether

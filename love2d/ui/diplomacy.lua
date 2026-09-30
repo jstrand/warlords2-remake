@@ -208,4 +208,31 @@ function M.open()
   return openReport()
 end
 
+--- The control panel's diplomacy button (183-185, 484e:0346): straight to
+--- the Diplomatic Action screen, and nothing with the option off.
+function M.action()
+  if kit.G.g.map.options.diplomacy == 0 then return nil end
+  return openAction()
+end
+
+--- Which of the three faces the button wears (8065:0174), from what the
+--- other sides propose to `me` against where things stand with them
+--- (diplomacy_flag_pending, 484e:0cc7): 183 when nobody proposes a change,
+--- 185 when every change proposed is friendlier, 184 when any is more
+--- hostile. Nil with the option off, when 183 is greyed.
+function M.buttonFor(g, me)
+  if g.map.options.diplomacy == 0 then return nil end
+  local friendlier, hostile = false, false
+  for s = 0, 7 do
+    if s ~= me then
+      local st, p = diplomacy.state(g, s, me), proposal(g, s, me)
+      if p ~= st then
+        if p < st then friendlier = true else hostile = true end
+      end
+    end
+  end
+  if not (friendlier or hostile) then return 183 end
+  return hostile and 184 or 185
+end
+
 return M
