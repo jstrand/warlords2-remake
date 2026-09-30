@@ -78,6 +78,25 @@ for pixel.
 The View menu's choices, the zoom and the music's synthesizer are kept for
 next time in `warlords-prefs.txt`, beside the saves (`prefs.lua`).
 
+### In a browser
+
+```sh
+tools/build-web.sh                                             # -> build/web/
+node build/tools/node_modules/http-server/bin/http-server build/web   # then open http://localhost:8080
+```
+
+[love.js](https://github.com/Davidobot/love.js) builds LÖVE 11.4 for
+WebAssembly, and `build/web/` is a static site: `original/` and the MT-32
+recordings go into it, about 70 MB. What changes in the browser:
+
+- The game reads and writes through `love.filesystem`, not a disk: `web.lua`
+  puts `io.open` on it there, and nowhere else. Saves, prefs and
+  `OPTIONS.SND` go to the browser's IndexedDB, synced every two seconds.
+- No threads, so no FM synthesis: the music is the MT-32's recordings
+  (`SYNTHS="M R"` puts the Sound Canvas's in as well).
+- The game is a 1280 × 960 canvas on the page, not full screen.
+- Lua is interpreted, not LuaJIT: the computer players' turns are slower.
+
 ## Sound
 
 The music, effects and advisor are the game's own files, played as the

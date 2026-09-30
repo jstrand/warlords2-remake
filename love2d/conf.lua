@@ -5,5 +5,6 @@
 -- warlords/layout.lua then fit the interface to it.
 function love.conf(t)
   t.window = nil
+  t.identity = "warlords2"   -- the save directory, used only in the browser (web.lua)
   t.console = false
 end

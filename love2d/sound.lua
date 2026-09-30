@@ -27,6 +27,7 @@
 
 local cues = require("warlords.cues")
 local prefs = require("prefs")
+local web = require("web")
 local xmi = require("warlords.xmi")
 
 local sound = {}
@@ -82,16 +83,25 @@ function sound.init(dataDir, files, recordings)
   S.on.music = opts:sub(1, 1) == "1"
   S.on.effects = opts:sub(2, 2) == "1"
   S.on.speech = opts:sub(3, 3) ~= "0"
+  -- the browser's build has no threads (web.lua), and so no FM
+  S.fm = love.thread ~= nil and not web.on
+  if S.ok and S.fm then
+    local adv, ad = read(dataDir .. "/ADLIB.ADV"), read(dataDir .. "/MIDPAK.AD")
+    if adv and ad then
+      S.thread = love.thread.newThread("musicthread.lua")
+      S.thread:start()
+      S.inbox = love.thread.getChannel("music")
+      S.outbox = love.thread.getChannel("music-out")
+      S.inbox:push({ "init", adv, ad })
+    end
+  end
   local synth = prefs.get("music")
-  if PREFIX[synth] and sound.synthAvailable(synth) then S.synth = synth end
-  if not S.ok then return end
-  local adv, ad = read(dataDir .. "/ADLIB.ADV"), read(dataDir .. "/MIDPAK.AD")
-  if adv and ad and love.thread then
-    S.thread = love.thread.newThread("musicthread.lua")
-    S.thread:start()
-    S.inbox = love.thread.getChannel("music")
-    S.outbox = love.thread.getChannel("music-out")
-    S.inbox:push({ "init", adv, ad })
+  if PREFIX[synth] and sound.synthAvailable(synth) then
+    S.synth = synth
+  elseif not sound.synthAvailable(S.synth) then
+    for _, s in ipairs(sound.SYNTHS) do
+      if sound.synthAvailable(s) then S.synth = s break end
+    end
   end
 end
 
@@ -191,7 +201,7 @@ function sound.synth() return S.synth end
 
 --- Can it be? FM wants ADLIB.ADV, the others their recordings.
 function sound.synthAvailable(synth)
-  if synth == "fm" then return true end
+  if synth == "fm" then return S.fm ~= false end
   local f = PREFIX[synth] and io.open(recordingPath(synth, "STARTUP.XMI") or "", "rb")
   if f then f:close() end
   return f ~= nil

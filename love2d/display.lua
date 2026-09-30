@@ -61,6 +61,14 @@ local lg = love.graphics
 function display.openWindow(title)
   local win = love.window
   if not (win and win.setMode and win.isOpen) or win.isOpen() then return end
+  -- in the browser the window is the page's canvas: twice the original, and
+  -- the pointer free to leave it (web.lua)
+  if love.system and love.system.getOS and love.system.getOS() == "Web" then
+    win.setMode(display.W * 2, display.H * 2, { resizable = true })
+    display.windowed = true
+    if title then win.setTitle(title) end
+    return
+  end
   local _, deskH = win.getDesktopDimensions()
   win.setMode(0, 0, { fullscreen = true, fullscreentype = "desktop", highdpi = true })
   local _, fullH = lg.getDimensions()

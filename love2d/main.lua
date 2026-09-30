@@ -11,6 +11,9 @@
 --     love love2d ISLADIA                       -- pick a scenario
 --     love love2d ERYTHEA ../mygame/original    -- point at your own copy
 
+-- first: in the browser, io.open goes through love.filesystem (web.lua)
+require("web")
+
 local pal      = require("warlords.pal")
 local pck      = require("warlords.pck")
 local scn      = require("warlords.scn")
