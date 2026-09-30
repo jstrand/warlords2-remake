@@ -601,7 +601,7 @@ end
 -- Returns { steps, spent, stopped, attack }. `stopped` is one of "arrived",
 -- "out of moves", "blocked" or "attack"; on "attack" the caller resolves the
 -- fight and may walk again. docs/rules.md > Moving a stack.
-function move.walk(g, stack, path)
+local function walkPath(g, stack, path)
   local side = stack[1] and stack[1].owner
   local left = move.stackMoves(stack)
   local result = { steps = 0, spent = 0, stopped = "arrived" }
@@ -718,6 +718,17 @@ function move.settleSea(g, stack, x, y, mode, wasAtSea)
     return "ashore"
   end
   return nil
+end
+
+--- Walk `stack` along `path`, stopping where the rules say to stop. A tile
+--- left empty loses its encampment on the way (1b62:01a7), and a stale one
+--- is gone before anyone can walk onto it.
+function move.walk(g, stack, path)
+  local game = require("warlords.game")
+  game.tidyTowers(g)
+  local result = walkPath(g, stack, path)
+  game.tidyTowers(g)
+  return result
 end
 
 --- Move a stack towards a tile: pathfind, then walk.

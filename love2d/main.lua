@@ -1445,6 +1445,7 @@ local function drawMap()
       G.itemsOnTile[it.x + it.y * 1000] = it
     end
   end
+  local standing = {}          -- the stacks, drawn once the ground is down
   for my = v[2], v[4] do
     for mx = v[1], v[3] do
       local sx, sy = mx * TILE, my * TILE
@@ -1482,11 +1483,32 @@ local function drawMap()
             stack = left
           end
           if #stack > 0 then
-            local a = topArmy(stack)
-            drawStack(a.owner or 8, stackFigure(stack), #stack, sx, sy)
+            standing[#standing + 1] = { stack = stack, x = mx, y = my, sx = sx, sy = sy }
           end
         end
       end
+    end
+  end
+  -- 8611:1a79 paints the ground everywhere first, then the encampments, then
+  -- the stacks, so a tower or a flag reaching into the next tile stays whole.
+  -- An encampment is a small tower in its owner's colours, ROAD.PCK's
+  -- (owner * 48 + 192, 40) 48 x 40, and it hides the stack in it -- unless
+  -- that is the stack selected, which is drawn over it.
+  local sel = G.selection
+  for _, s in ipairs(standing) do
+    if game.towerAt(G.g, s.x, s.y) then
+      local owner = s.stack[1].owner or 8
+      if owner == 15 then owner = 8 end
+      local w, h = G.roadImg:getDimensions()
+      love.graphics.setColor(1, 1, 1)
+      love.graphics.draw(G.roadImg, love.graphics.newQuad(owner * 48 + 192, 40, 48, 40, w, h), s.sx, s.sy)
+      s.hidden = not (sel and sel.x == s.x and sel.y == s.y)
+    end
+  end
+  for _, s in ipairs(standing) do
+    if not s.hidden then
+      local a = topArmy(s.stack)
+      drawStack(a.owner or 8, stackFigure(s.stack), #s.stack, s.sx, s.sy)
     end
   end
   drawFog()

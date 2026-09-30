@@ -431,6 +431,21 @@ difference is called out.
 | **hills** | Hills, Mountains |
 | **open** | everything else: Road, Bridge, Water, Shore, Plain, Marsh, the Tower terrain type |
 
+**The tower flag is an encampment.** Nothing in the scenario sets it: a
+stack given the Defend order (control 176, `8c07:03a6`, which takes it out
+of the army cycle) encamps as its side's next turn opens. `8c07:0000`, run
+by `start_of_turn` right after `reset_movement`, flags the tile (bit `0x20`
+of the map word's high byte) for every army of the side that is out of the
+cycle, has at least its full movement, and stands on Plain, Forest, Hills,
+Bridge, Marsh or the Tower terrain type, or on a road. The map then shows a
+small tower in the owner's colours instead of the stack (`ROAD.PCK`,
+`(owner · 48 + 192, 40)` 48 × 40, `8611:1a79`), and the manual's "+1 in
+defence" is this fortify of 1. The flag goes when the tile is left empty
+(`1b62:01a7`, `refresh_map_owners`) or taken (`after_battle`). Since the
+movement reset has already run, "full movement" holds for nearly any army;
+and since only Defend clears the in-cycle bit that `1b62:0309` gives every
+new army, only a human's stacks encamp.
+
 Army bonus fields are indexed in the order **city, open, woods, hills**
 (`ARMYTYPE.DAT +32..+38` individual, `+40..+46` stack).
 

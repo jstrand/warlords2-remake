@@ -8,6 +8,7 @@ local armytype = require("warlords.armytype")
 local rules    = require("warlords.rules")
 local rng      = require("warlords.rng")
 local scn      = require("warlords.scn")
+local move     = require("warlords.move")
 
 local game = {}
 
@@ -402,6 +403,54 @@ local function resetMovement(g, side)
   end
 end
 
+--------------------------------------------------------------- encampments
+
+-- A stack given the Defend order (control 176, 8c07:03a6 -- out of the army
+-- cycle until it is picked up again) encamps as its side's next turn opens:
+-- 8c07:0000, straight after the movement reset, marks its tile with the
+-- tower flag (0x20 of the map word's high byte) when the army still has its
+-- full movement and stands on plain, forest, hills, a bridge, marsh or the
+-- tower terrain, or on a road. The map then shows a small tower in the
+-- owner's colours instead of the stack (8611:1a79), and the tile fights as
+-- a fortification of 1 (combat.fortify). The flag lasts while anyone stands
+-- there (1b62:01a7, refresh_map_owners 828e:0000), and goes when the tile
+-- is taken (after_battle, 67cc:0a6b). Only the Defend order takes an army
+-- out of the cycle, so only a human's stacks ever encamp.
+local ENCAMP_ON = {
+  [move.PLAIN] = true, [move.FOREST] = true, [move.HILLS] = true,
+  [move.BRIDGE] = true, [move.MARSH] = true, [move.TOWER] = true,
+}
+
+local function encamp(g, side)
+  for _, a in ipairs(g.armies) do
+    if a.owner == side.index and a.fortified and not a.transit and a.x
+       and (a.moves or 0) >= (a.maxMoves or 0) then
+      local road = (scn.roadAt(g.map, a.x, a.y) or 0) % 32 ~= 0
+      if road or ENCAMP_ON[scn.terrainAt(g.map, a.x, a.y)] then
+        g.towerAt = g.towerAt or {}
+        g.towerAt[a.y * g.map.width + a.x] = true
+      end
+    end
+  end
+end
+
+--- Is (x, y) an encampment? Only while someone stands there.
+function game.towerAt(g, x, y)
+  return g.towerAt ~= nil and g.towerAt[y * g.map.width + x] == true
+end
+
+--- Take the tower flag off every tile nobody stands on any more.
+function game.tidyTowers(g)
+  if not g.towerAt or next(g.towerAt) == nil then return end
+  local held = {}
+  for _, a in ipairs(g.armies) do
+    if a.x and not a.transit then held[a.y * g.map.width + a.x] = true end
+  end
+  for k in pairs(g.towerAt) do
+    if not held[k] then g.towerAt[k] = nil end
+  end
+end
+
 --- Is one of the side's heroes carrying a double-movement item on this tile?
 function game.heroWithDoubleMoveAt(g, side, x, y)
   for _, a in ipairs(g.armies) do
@@ -438,6 +487,8 @@ function game.startTurn(g, side)
   applyIncome(g, side)
   runProduction(g, side)
   resetMovement(g, side)
+  game.tidyTowers(g)
+  encamp(g, side)
   return true
 end
 
@@ -593,6 +644,7 @@ function game.applyAttack(g, result)
 
   removeArmies(g, result.deadAttackers)
   removeArmies(g, result.deadDefenders)
+  game.tidyTowers(g)
 
   if result.won and city then
     local winner = g.map.sides[stack[1].owner + 1]
@@ -626,6 +678,8 @@ function game.applyAttack(g, result)
   -- fit. The rest stay where they are, as they would if the walk had been
   -- blocked (docs/rules.md > Moving a stack).
   if result.won then
+    -- a taken encampment is gone (after_battle, 67cc:0a6b)
+    if g.towerAt then g.towerAt[y * g.map.width + x] = nil end
     local room = rules.MAX_STACK - #game.armiesAt(g, x, y)
     for _, a in ipairs(result.attackers) do
       if room <= 0 then break end

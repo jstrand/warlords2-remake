@@ -29,7 +29,7 @@ is the tile index. The code uses the **high byte** for state:
 
 - low nibble: owner of the tile (15 = nobody), refreshed from armies and cities
 - `0x10`: occupied by an army
-- `0x20`: tower
+- `0x20`: tower — an encampment, set as a defended stack's turn opens (`docs/rules.md` › Terrain class of the battle tile)
 
 ## Army record (22 bytes, block 3)
 

@@ -180,6 +180,11 @@ function save.encode(g)
   local signs = {}
   for i, sg in ipairs(g.map.signs or {}) do signs[i] = { sg[1], sg[2] } end
 
+  -- the encampments, the tiles with the tower flag (game.lua), by index
+  local towers = {}
+  for k in pairs(g.towerAt or {}) do towers[#towers + 1] = k end
+  table.sort(towers)
+
   local state = {
     version = save.VERSION,
     scenario = g.map.name,
@@ -190,7 +195,7 @@ function save.encode(g)
     options = g.map.options,
     diplomacy = g.diplomacy,
     sides = sides, cities = cities, sites = sites, items = items, armies = armies,
-    signs = signs, fightOrder = g.map.fightOrder,
+    signs = signs, fightOrder = g.map.fightOrder, towers = towers,
     history = g.history, deeds = g.deeds, triumphs = g.triumphs,
     tutorialSeen = g.tutorialSeen,
     log = g.log,
@@ -259,6 +264,8 @@ function save.decode(text, dataDir)
   if state.fightOrder then g.map.fightOrder = state.fightOrder end
   g.history, g.deeds, g.triumphs = state.history, state.deeds, state.triumphs
   g.tutorialSeen = state.tutorialSeen
+  g.towerAt = {}
+  for _, k in ipairs(state.towers or {}) do g.towerAt[k] = true end
   for i, saved in ipairs(state.signs or {}) do    -- older saves lack them
     local sg = g.map.signs[i]
     if sg then sg[1], sg[2] = saved[1], saved[2] end

@@ -2597,6 +2597,59 @@ end
 
 -- Going to sea and coming ashore (1a8b:04c8): only a land move changes it,
 -- a flier never goes to sea, and a hero flying with a flier does not either.
+--------------------------------------------------------------- encampments
+
+-- A stack given the Defend order encamps as its side's next turn opens
+-- (8c07:0000): on open ground its tile takes the tower flag, fights as a
+-- fortification of 1, and loses it once nobody stands there (1b62:01a7).
+local function testEncampment()
+  print("encampments")
+  local scn = require("warlords.scn")
+  local g = game.new(DATA, "ERYTHEA", { seed = 5 })
+  local side = game.begin(g)
+  local cap = side.capital
+  local a
+  for _, b in ipairs(g.armies) do
+    if b.owner == side.index and not b.transit then a = b break end
+  end
+  local function freePlain(avoid)
+    for r = 2, 8 do
+      for dx = -r, r do
+        for dy = -r, r do
+          local x, y = cap.x + dx, cap.y + dy
+          if x >= 0 and y >= 0 and x < g.map.width - 1 and y < g.map.height
+             and scn.terrainAt(g.map, x, y) == movement.PLAIN
+             and scn.terrainAt(g.map, x + 1, y) == movement.PLAIN
+             and (scn.roadAt(g.map, x, y) or 0) % 32 == 0
+             and #game.armiesAt(g, x, y) == 0 and #game.armiesAt(g, x + 1, y) == 0
+             and not (avoid and avoid.x == x and avoid.y == y) then
+            return x, y
+          end
+        end
+      end
+    end
+  end
+  local x, y = freePlain()
+  ok(a ~= nil and x ~= nil, "an army and open ground to encamp on")
+  if not (a and x) then return end
+  a.x, a.y = x, y
+  ok(not game.towerAt(g, x, y), "a stack on open ground is no encampment")
+  game.startTurn(g, side)
+  ok(not game.towerAt(g, x, y), "nor after a turn in the army cycle")
+  a.fortified = true
+  game.startTurn(g, side)
+  ok(game.towerAt(g, x, y), "a defended stack encamps as its turn opens")
+  eq(combat.fortify(g, {}, x, y, combat.terrainClass(g, x, y)), 1,
+     "an encampment fights as a fortification of 1")
+  local r = movement.moveTo(g, { a }, x + 1, y)
+  eq(r.steps, 1, "the encamped stack walks off")
+  ok(not game.towerAt(g, x, y), "and the empty tile is no encampment any more")
+  -- a city is never an encampment
+  a.x, a.y = cap.x, cap.y
+  game.startTurn(g, side)
+  ok(not game.towerAt(g, cap.x, cap.y), "a defended stack in a city does not encamp")
+end
+
 local function testSea()
   print("going to sea")
   local move = require("warlords.move")
@@ -2844,6 +2897,7 @@ testMovement("ERYTHEA")
 testMovement("ISLADIA")
 testStackLimit("ERYTHEA")
 testSea()
+testEncampment()
 testCombat("ERYTHEA")
 testCapture("ERYTHEA")
 testCityChoices("ERYTHEA")
