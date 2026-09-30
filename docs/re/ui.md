@@ -533,6 +533,15 @@ All three come out of **`ASHADOW.PCK`**, the same ghost sheet the army slots
 use: the plain ring is the 16 × 14 cell at `(496, 31)` and the crossed one at
 `(496, 48)`, at the right-hand end past the army cells.
 
+**Planning without walking.** Alt and a click — the slanted arrow, pointer
+11 — is `1c8c:0007(1, 1)`: every selected army's move target becomes the
+tile clicked, the route is found and drawn, and nothing moves; the legs
+button, Del or Move All walk it later. A click on the stack's own tile clears
+the target instead, and a tile not yet seen is ignored. When no route is
+found the target is kept anyway and `7dda:0b5f` sounds. Alt over the
+strategic map does the same with the tile under the pointer there
+(`1726:0186` → `1c8c:0007(0, 1)`).
+
 **The walk itself**, `1a8b:04c8`: one tile per pass, and each pass moves the
 armies, bumps `4125:2ea8` so the route drawn behind the stack shortens as it
 goes, **re-centres the view on the stack** (`8611:0565` → `8611:0629`) and

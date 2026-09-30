@@ -424,6 +424,66 @@ do
   end
 end
 
+-- Alt and a click (1c8c:0007) plans a route without walking it; Alt and a
+-- click on the stack's own tile takes the destination away again.
+do
+  local game = require("warlords.game")
+  local move = require("warlords.move")
+  local mine
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.x and a.moves > 0 then mine = a break end
+  end
+  G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  if mine then
+    try("select a stack to plan for", function() G.selectAt(mine.x, mine.y) end)
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+    local lead = G.selection and G.selection.stack[1]
+    -- somewhere two to four tiles off it can reach
+    local goal
+    for r = 2, 4 do
+      for dx = -r, r do
+        for dy = -r, r do
+          local tx, ty = lead.x + dx, lead.y + dy
+          if not goal and tx >= 0 and ty >= 0 and tx < G.g.map.width and ty < G.g.map.height
+             and #game.armiesAt(G.g, tx, ty) == 0
+             and not game.cityAt(G.g, tx, ty)
+             and move.preview(G.g, G.selection.stack, tx, ty) then
+            goal = { x = tx, y = ty }
+          end
+        end
+      end
+    end
+    if goal then
+      local function at(tx, ty)
+        G.cx, G.cy = lead.x - 4, lead.y - 4
+        return G.mapRect.x + (tx - G.cx) * 40 + 20, G.mapRect.y + (ty - G.cy) * 40 + 20
+      end
+      local fx, fy = lead.x, lead.y
+      HELD = { lalt = true }
+      local px, py = at(goal.x, goal.y)
+      if G.pointerKind(px, py) ~= 11 then
+        fail("alt", ("Alt over open ground showed pointer %s, not 11"):format(G.pointerKind(px, py)))
+      end
+      try("alt click", love.mousepressed, px, py, 1)
+      try("alt release", love.mousereleased, px, py, 1)
+      if lead.x ~= fx or lead.y ~= fy then fail("alt", "Alt and a click walked the stack")
+      elseif not lead.target or lead.target.x ~= goal.x or lead.target.y ~= goal.y then
+        fail("alt", "Alt and a click did not set the destination")
+      elseif not G.route then fail("alt", "the planned route is not drawn")
+      else
+        px, py = at(lead.x, lead.y)
+        try("alt click the stack", love.mousepressed, px, py, 1)
+        try("alt release", love.mousereleased, px, py, 1)
+        if lead.target or G.route then fail("alt", "Alt on the stack kept the destination")
+        else print("  Alt and a click plans a route, and takes it away") end
+      end
+      HELD = nil
+    end
+    G.selection = nil
+  end
+end
+
 -- press and release every control of the main screen, on and off the button,
 -- so the state handling runs for all of them
 if G and G.screen then

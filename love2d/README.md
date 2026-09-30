@@ -58,6 +58,7 @@ for pixel.
 | | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
 | right click the map | what is on a tile, while the button is held |
 | click the strategic map | recentre the view |
+| `Alt`-click the map or the strategic map | plan the selection's route there without walking it; on the stack itself, forget it |
 | `Enter` / `Esc` | next army / quit army (done for this turn) — the first live button of the original's default and cancel lists |
 | `1`–`9` | step the stack one tile, laid out like the numeric pad; `5` centres on it |
 | arrows, the 3×3 pad | move the view a tile |

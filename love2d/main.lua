@@ -546,6 +546,26 @@ local function orderTo(stack, x, y)
   end
 end
 
+--- Alt and a click (1c8c:0007): the selection is given somewhere to be and
+--- the route is drawn, but it does not move -- the legs button, Del or Move
+--- All walk it later. A click on the stack's own tile takes the destination
+--- away; one on ground the side has not seen does nothing. When no way
+--- there is found the destination is kept all the same, and the chord says
+--- so (7dda:0b5f).
+local function planRoute(x, y)
+  local sel = G.selection
+  if not sel or #sel.stack == 0 then return end
+  if not game.seen(G.g, G.player, x, y) then return end
+  if sel.stack[1].x == x and sel.stack[1].y == y then
+    orderTo(sel.stack, nil)
+    G.route = nil
+    return
+  end
+  orderTo(sel.stack, x, y)
+  refreshRoute()
+  if not G.route then G.audio.effect("chord") end
+end
+
 --- Play the walk back a tile at a time, centring on the stack as it goes.
 --- The armies are already where they finished -- this only decides where they
 --- are drawn until it catches up.
@@ -2834,12 +2854,24 @@ function love.mousepressed(x, y, button)
     elseif k == PTR.CITY or k == PTR.SITE then
       local city = game.cityAt(G.g, tx, ty)    -- 7204:0000
       if city then openCity(city) end
-    elseif k == PTR.SELECT or k == PTR.ALT then
+    elseif k == PTR.SELECT then
       select(tx, ty)                           -- 1b62:0405
+    elseif k == PTR.ALT then
+      planRoute(tx, ty)                        -- 1c8c:0007(1, 1)
+      refreshControls()
     end
 
   elseif r.id == screen.REGION.STRATEGIC then
-    centreOn(math.floor((x - r.x) / 2), math.floor((y - r.y) / 2))
+    -- with Alt the strategic map plans a route as the map does
+    -- (1726:0186 -> 1c8c:0007(0, 1)); without it, it moves the view
+    local tx, ty = math.floor((x - r.x) / 2), math.floor((y - r.y) / 2)
+    if button ~= 1 then return end
+    if held("lalt", "ralt") then
+      planRoute(tx, ty)
+      refreshControls()
+    else
+      centreOn(tx, ty)
+    end
   end
 end
 
