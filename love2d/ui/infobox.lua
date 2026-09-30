@@ -1,8 +1,10 @@
 -- What the right button shows off the map: a box that stays up while the
 -- button is held, and goes when it comes up (740d:11cf).
 --
--- Two boards, both blitted through the mask 4125:546d so that colour 1 lets
--- what is behind show through:
+-- Two boards, both blitted through their masks so that what is behind shows
+-- round them. The mask colour is the bitmap's own, byte +10 of its 12-byte
+-- record in the table at 4125:1f56: 1 for POPUP.PCK and POPUP2.PCK, but 10
+-- -- the green round the board -- for POPUP3.PCK.
 --
 --   POPUP.PCK (bitmap 29), 256x75: two lines, as the map's tile box has them
 --     (740d:1201, 740d:1158) -- the first in colour 7, the second in white,
@@ -38,8 +40,8 @@ local kit    = require("ui.kit")
 
 local M = {}
 
-local LINES = { bitmap = 29, file = "POPUP.PCK",  w = 256, h = 75 }
-local ARMY  = { bitmap = 40, file = "POPUP3.PCK", w = 240, h = 128 }
+local LINES = { bitmap = 29, file = "POPUP.PCK",  w = 256, h = 75,  key = 1 }
+local ARMY  = { bitmap = 40, file = "POPUP3.PCK", w = 240, h = 128, key = 10 }
 
 -- ABITS' 32 x 10 icons for how a type moves (740d:0626), and the medals'
 -- 8 x 8s (4125:2fa6) at the four places round the army
@@ -47,18 +49,18 @@ local MOVE_ICON = { fly = { 184, 30 }, both = { 216, 30 }, woods = { 248, 30 }, 
 local MEDALS = { { 424, 22 }, { 432, 22 }, { 440, 22 }, { 456, 32 } }
 local MEDAL_AT = { { 128, 36 }, { 88, 36 }, { 128, 45 }, { 88, 45 } }
 
---- A board, loaded once and keyed on colour 1.
+--- A board, loaded once and keyed on its mask colour.
 function M.board(which)
   local G = kit.G
   G.tileBoards = G.tileBoards or {}
   if not G.tileBoards[which.bitmap] then
     local pck = require("warlords.pck")
-    local img, w, h = pck.toImage(G.dataDir .. "/PICS/" .. which.file, G.palette, 1)
+    local img, w, h = pck.toImage(G.dataDir .. "/PICS/" .. which.file, G.palette, which.key)
     G.tileBoards[which.bitmap] = { image = img, w = w, h = h }
   end
   return G.tileBoards[which.bitmap]
 end
-M.LINES, M.ARMY, M.POPUP2 = LINES, ARMY, { bitmap = 36, file = "POPUP2.PCK", w = 256, h = 75 }
+M.LINES, M.ARMY, M.POPUP2 = LINES, ARMY, { bitmap = 36, file = "POPUP2.PCK", w = 256, h = 75, key = 1 }
 
 --- Where a board goes for a point on the screen (740d:131a, 740d:1486):
 --- centred on it, x on the byte grid, kept on the screen with two rows to

@@ -280,4 +280,4 @@ are kept below for the record.
 
 ## 6. Legal
 
-The engine is a clean reimplementation and is yours. The contents of `original/` are copyrighted (SSG / Strategic Studies Group, 1993) and must never be committed to a public repository or redistributed. Ship the engine; require the player to point it at their own installed copy. This is exactly the ScummVM/DevilutionX model and it is well-settled practice.
+The engine is a clean reimplementation and is yours. The contents of `original/` are copyrighted (SSG / Strategic Studies Group, 1993). Permission has been granted to ship the original assets in a recreated game.

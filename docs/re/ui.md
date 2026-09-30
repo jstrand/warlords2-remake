@@ -1840,7 +1840,10 @@ white at y + 35). Any other sub-id is a case of `54bd:00df`:
 | 14, the city dialog's list | `7204:1c35`: the slot `(x − 308) / 56`'s type in its owner's colours; *Info about city production* for an empty one, *A picture of the city!* where the list is a picture, under the city's name |
 | 8, 10, 11, 15 | the hero, history and sage maps' two lines (*- Select Hero -*, *- Select Turn -*, *- Reveal Map -*) |
 
-**The army boxes** are `POPUP3.PCK` (bitmap 40), 240 × 128, placed by
+**The army boxes** are `POPUP3.PCK` (bitmap 40), 240 × 128, masked on
+colour 10 — the green round the board, where `POPUP.PCK` and `POPUP2.PCK`
+are masked on 1; each bitmap's mask colour is byte +10 of its 12-byte
+record at `4125:1f56` — placed by
 `740d:1486` — centred on the pointer, x on the byte grid, within x ∈ [120,
 520] and y ∈ [64, 414]. `ui_army_info` (`740d:0626`) takes an army's type,
 full movement, strength, upkeep, movement left and hero slot or medals;
