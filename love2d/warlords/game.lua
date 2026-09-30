@@ -1075,14 +1075,23 @@ function game.vector(g, city, destCity)
   return true
 end
 
---- The side's city nearest a tile, by map distance -- the larger of the two
---- steps -- and the first of equals (828e:04fa). The map in the city dialog
+--- The city nearest a tile by map_distance -- as the crow flies, rounded
+--- down -- and the first of equals (828e:04fa). The map in the city dialog
 --- picks a city this way, so a click near one is as good as a click on it.
-function game.nearestCity(g, x, y, side)
+--- `side` keeps to that side's cities, or any city when nil (the 14 the
+--- original passes); with `seer`, on a hidden map, only a city with one of
+--- its four tiles seen by that side counts.
+function game.nearestCity(g, x, y, side, seer)
+  local move = require("warlords.move")
   local best, bestD
   for _, c in ipairs(g.map.cities) do
-    if c.ownerIndex == side.index then
-      local d = math.max(math.abs(c.x - x), math.abs(c.y - y))
+    local ok = side == nil or c.ownerIndex == side.index
+    if ok and seer then
+      ok = game.seen(g, seer, c.x, c.y) or game.seen(g, seer, c.x + 1, c.y)
+           or game.seen(g, seer, c.x, c.y + 1) or game.seen(g, seer, c.x + 1, c.y + 1)
+    end
+    if ok then
+      local d = move.distance(x, y, c.x, c.y)
       if not bestD or d < bestD then best, bestD = c, d end
     end
   end

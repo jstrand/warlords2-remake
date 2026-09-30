@@ -452,10 +452,52 @@ function M.open(city, mode)
       end
       return
     end
-    if d.mode == M.VECTOR and x >= MAP.x and x < MAP.x + MAP.w
-       and y >= MAP.y and y < MAP.y + MAP.h then
-      d.mapClick(math.floor((x - MAP.x) / 2), math.floor((y - MAP.y) / 2))
+    if x >= MAP.x and x < MAP.x + MAP.w and y >= MAP.y and y < MAP.y + MAP.h then
+      local mx, my = math.floor((x - MAP.x) / 2), math.floor((y - MAP.y) / 2)
+      if d.mode == M.VECTOR then d.mapClick(mx, my) else d.pickOnMap(mx, my) end
     end
+  end
+
+  --- Move the dialog to another city, in the mode it is in (7204:0000).
+  function d.switchTo(target, mode)
+    kit.pop(d)
+    G.city = nil
+    M.open(target, mode or d.mode)
+  end
+
+  --- A click on the map in Info, City or Production (7204:1afa, region 6):
+  --- the dialog moves to the city nearest the click -- any city the side
+  --- has seen for Info, one of its own for the others (7204:0000 through
+  --- 828e:04fa). In Production, Shift and a click sends this city's armies
+  --- there instead (7087:028b).
+  function d.pickOnMap(mx, my)
+    local shift = love.keyboard and love.keyboard.isDown
+                  and love.keyboard.isDown("lshift", "rshift")
+    if d.mode == M.PRODUCTION and shift then
+      d.sendTo(mx, my)
+      refresh(d)
+      return
+    end
+    local target
+    if d.mode == M.INFO then target = game.nearestCity(G.g, mx, my, nil, G.player)
+    elseif d.mode == M.PRODUCTION then target = game.nearestCity(G.g, mx, my, G.player)
+    else target = game.nearestCity(G.g, mx, my, G.player, G.player) end
+    if target and target ~= city then d.switchTo(target) end
+  end
+
+  --- Send what this city builds to the side's city nearest (mx, my), or to
+  --- its planted standard if that is nearer (828e:0651): only while it is
+  --- building, four to a city at most, and this city itself lifts the
+  --- vector (7087:028b).
+  function d.sendTo(mx, my)
+    if not city.producing then return end
+    local target = game.nearestCity(G.g, mx, my, G.player)
+    if not target then return end
+    local sx, sy = game.standardAt(G.g, G.player)
+    local toStandard = sx and math.max(math.abs(sx - mx), math.abs(sy - my))
+                       < math.max(math.abs(target.x - mx), math.abs(target.y - my))
+    if toStandard then game.vectorToStandard(G.g, city, G.player)
+    else game.vector(G.g, city, target) end
   end
 
   --- A click on the map in Vector mode (7087:072e, 7087:028b). It means the
@@ -469,19 +511,11 @@ function M.open(city, mode)
   function d.mapClick(mx, my)
     local target = game.nearestCity(G.g, mx, my, G.player)
     if not target then return end
-    -- the planted standard, if it is nearer the click than the city is
-    -- (828e:0651)
-    local sx, sy = game.standardAt(G.g, G.player)
-    local toStandard = sx and math.max(math.abs(sx - mx), math.abs(sy - my))
-                       < math.max(math.abs(target.x - mx), math.abs(target.y - my))
     local shift = love.keyboard and love.keyboard.isDown
                   and love.keyboard.isDown("lshift", "rshift")
     local sub = d.sub
     if shift or sub == 1 then
-      if city.producing then
-        if toStandard then game.vectorToStandard(G.g, city, G.player)
-        else game.vector(G.g, city, target) end
-      end
+      d.sendTo(mx, my)
       if shift then d.sub = 0 refresh(d) return end
     elseif sub == 2 then
       local incoming = game.vectoredTo(G.g, city)
@@ -494,8 +528,7 @@ function M.open(city, mode)
     end
     d.sub = 0
     if sub ~= 1 and target ~= city then
-      d.close()
-      M.open(target, M.VECTOR)
+      d.switchTo(target, M.VECTOR)
       return
     end
     refresh(d)
@@ -518,6 +551,14 @@ function M.open(city, mode)
   --- the city!", each under the city's name.
   function d.rightpressed(x, y, sx, sy)
     local infobox = require("ui.infobox")
+    -- the map, region 6 (7204:1afa): group 122's two lines for the mode --
+    -- "Select City" in Info and City, "Left-click to select city" / "Shift-
+    -- click for vectoring" in Production and Vector
+    if x >= MAP.x and x < MAP.x + MAP.w and y >= MAP.y and y < MAP.y + MAP.h then
+      local first = ({ [M.INFO] = 0, [M.CITY] = 0, [M.PRODUCTION] = 4, [M.VECTOR] = 6 })[d.mode]
+      infobox.lines(sx, sy, kit.text(0x7a, first), kit.text(0x7a, first + 1))
+      return
+    end
     if d.mode == M.INFO and x >= 308 and x < 532 and y >= 180 and y < 230 then
       if city.razed or (G.g.map.options.viewProduction ~= 0
                         and city.ownerIndex ~= G.player.index) then

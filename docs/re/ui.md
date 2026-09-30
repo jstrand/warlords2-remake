@@ -1276,6 +1276,18 @@ outline at (311, 169) 242 × 88, a (4, 2) bevel round it, `CITYBACK.PCK`'s
 240 × 86 at (312, 170), and the city's own four map tiles at (392, 176) 40
 apart.
 
+**The map** is region 6 of area screen 3, and a click on it is `7204:1afa`,
+by mode. In Info and City it moves the dialog, in the same mode, to the city
+nearest the click by `map_distance` (`7204:0000` → `828e:04fa`): any city
+with a tile the side has seen for Info, one of the side's own for City. In
+Production (`7087:028b`) it moves to the nearest of the side's own cities,
+or with Shift sends this city's armies there as Vector mode does. Vector
+mode's clicks are below; the ruins' mode 4 moves to the nearest site shown
+(`828e:06fd`). The right button there shows group 122's two lines for the
+mode: *- Select City -* in Info and City, *- Select Special -* for a site,
+and *Left-click to select city* / *Shift-click for vectoring* in Production
+and Vector.
+
 **Choosing production** (`7087:00c8`): the slot's type becomes the chosen one
 and the city builds it, the countdown starting again even if it was already
 building that. The chosen type is remembered separately from what is being

@@ -92,9 +92,27 @@ function M.open(s)
     kit.drawControls(d.view, d.hidden)
   end
 
+  local function onMap(x, y) return x >= MAP.x and x < MAP.x + 224 and y >= MAP.y and y < MAP.y + 312 end
+
+  -- a click on the map moves to the site nearest it (7204:1afa, mode 4 ->
+  -- 7204:0000 -> 828e:06fd)
   function d.mousepressed(x, y)
     local c = kit.controlAt(d.view, x, y, d.hidden)
-    if c and c.id == DONE then kit.pop(d) end
+    if c and c.id == DONE then kit.pop(d) return end
+    if not c and onMap(x, y) then
+      local other = M.nearest(math.floor((x - MAP.x) / 2), math.floor((y - MAP.y) / 2))
+      if other and other ~= s then
+        kit.pop(d)
+        M.open(other)
+      end
+    end
+  end
+
+  -- and the right button on it says so (group 122, 2 and 3)
+  function d.rightpressed(x, y, sx, sy)
+    if onMap(x, y) then
+      require("ui.infobox").lines(sx, sy, kit.text(0x7a, 2), kit.text(0x7a, 3))
+    end
   end
 
   function d.keypressed(key)

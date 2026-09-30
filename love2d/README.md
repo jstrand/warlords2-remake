@@ -54,6 +54,7 @@ for pixel.
 | any key or click | dismiss the start-of-turn banner, and nothing else |
 | the menu bar, or a letter | open a menu and pick an item; a letter is its accelerator, `Alt`-letter the Game menu's, `Ctrl-Q` Quit |
 | left click a city | open it: Info, City (rename, raze, buy production), Production, Vector |
+| click the city dialog's map | move the dialog to the city nearest the click, in the same mode (`Shift` in Production and Vector: send the city's armies there) |
 | left click the map | pick up a stack of yours, or send the selection there |
 | | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
 | `Shift`-click an enemy beside the stack | the Military Advisor's verdict, with that option on |

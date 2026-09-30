@@ -1140,6 +1140,40 @@ if G and G.g then
   end
 end
 
+-- The city dialog's map (7204:1afa): a click moves the dialog to the city
+-- nearest it, in the same mode -- any city in Info, one's own in Production.
+do
+  local game = require("warlords.game")
+  local cityUi = require("ui.city")
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.city = nil
+  local own = game.sideCities(G.g, G.player)
+  local other
+  for _, c in ipairs(G.g.map.cities) do
+    if c ~= own[1] and game.seen(G.g, G.player, c.x, c.y) then other = c break end
+  end
+  local function clickMap(c) dialogClick(80 + 2 * c.x + 1, 60 + 2 * c.y + 1, 1) end
+  local ok = true
+  if own[1] and other then
+    try("open Info", cityUi.open, own[1], cityUi.INFO)
+    try("click the map", clickMap, other)
+    if G.city ~= other or G.cityMode ~= cityUi.INFO then
+      ok = false fail("city map", "a click on the map did not move Info to that city")
+    end
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  end
+  if own[2] then
+    try("open Production", cityUi.open, own[1], cityUi.PRODUCTION)
+    try("click the map", clickMap, own[2])
+    if G.city ~= own[2] or G.cityMode ~= cityUi.PRODUCTION then
+      ok = false fail("city map", "a click on the map did not move Production to that city")
+    end
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  end
+  G.city = nil
+  if ok and other then print("  the city dialog's map moves it to another city") end
+end
+
 -- clicking the status bar must be ignored, not crash
 try("click the status bar", love.mousepressed, 100, 750, 1)
 
