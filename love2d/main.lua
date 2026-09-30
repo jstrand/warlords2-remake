@@ -2901,6 +2901,10 @@ function love.mousepressed(x, y, button)
     elseif k == PTR.CITY or k == PTR.SITE then
       local city = game.cityAt(G.g, tx, ty)    -- 7204:0000
       if city then openCity(city) end
+    elseif k == PTR.ADVISE then
+      -- Shift over an enemy beside the stack asks the Military Advisor
+      -- (military_advisor, 67cc:1f19)
+      require("ui.miladvisor").open(G.selection and G.selection.stack, tx, ty)
     elseif k == PTR.SELECT then
       select(tx, ty)                           -- 1b62:0405
     elseif k == PTR.ALT then

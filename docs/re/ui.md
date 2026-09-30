@@ -729,6 +729,20 @@ The strings are `STRING.DAT` groups 141-147: a random one of 141 when the
 garrison had already fled, then 142 or 143 for a city (with or without a hero
 to name), 144/145 for a tile, 146 for a loss, and 147 for the loot.
 
+### The Military Advisor
+
+With the option on, Shift over an enemy beside the stack shows the "?"
+(pointer 9) and a click is `military_advisor` (`67cc:1f19`): popup 12,
+(176, 60) 288 × 300, with dialog 25's one button, 424 (on both the default
+and cancel lists; `67cc:2050` pops it). *Advisor!* (group 123) in font 1
+centred on (320, 67); `ADVISOR.PCK` (bitmap 48), (0, 0) 128 × 130, at
+(256, 117); then in font 2 centred on x = 320 a random line of group 124 at
+y = 258, one of group 125 at 278, and at 298 group 126's line *wins / 2*.
+The wins are `advisor_simulate_wins` (`67cc:2065`): nineteen battles fought
+through `67cc:124a` with its third argument 0 — `combat_setup` and
+`combat_resolve` on the game's own dice, nothing shown and nothing kept — a
+win being one with an attacker still alive.
+
 ### The spoils of a city
 
 **Dialog 11**, behind **popup 7** — `(160, 90) 320 × 200`, which is exactly

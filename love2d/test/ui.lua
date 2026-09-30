@@ -424,6 +424,55 @@ do
   end
 end
 
+-- Shift beside an enemy city shows the Military Advisor's "?" (18a9:0896),
+-- and a click asks it (67cc:1f19): 19 battles, the verdict wins / 2.
+do
+  local mine
+  for _, a in ipairs(G.g.armies) do
+    if a.owner == G.player.index and a.x then mine = a break end
+  end
+  local target
+  for _, c in ipairs(G.g.map.cities) do
+    if c.ownerIndex ~= G.player.index and not c.razed then target = c break end
+  end
+  G.city, G.openMenu, G.offer, G.banner = nil, nil, nil, nil
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  if mine and target then
+    local opts = G.g.map.options
+    local was = opts.militaryAdvisor
+    opts.militaryAdvisor = 1
+    try("select a stack for the advisor", function() G.selectAt(mine.x, mine.y) end)
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+    local stack = G.selection.stack
+    local back = {}
+    for i, a in ipairs(stack) do back[i] = { a.x, a.y } a.x, a.y = target.x - 1, target.y end
+    G.selection.x, G.selection.y = target.x - 1, target.y
+    G.cx, G.cy = target.x - 4, target.y - 4
+    local px, py = G.mapRect.x + 4 * 40 + 20, G.mapRect.y + 4 * 40 + 20
+    HELD = { lshift = true }
+    local k = G.pointerKind(px, py)
+    if k ~= 9 then fail("advisor", ("Shift beside a city showed pointer %s, not 9"):format(k)) end
+    local before = #G.g.armies
+    try("ask the advisor", love.mousepressed, px, py, 1)
+    HELD = nil
+    local d = G.modals[#G.modals]
+    if not (d and d.verdict and d.wins and d.wins >= 0 and d.wins <= 19) then
+      fail("advisor", "the click did not open the Military Advisor")
+    elseif #G.g.armies ~= before or G.selection.stack[1].x ~= target.x - 1 then
+      fail("advisor", "asking the advisor fought the battle")
+    else
+      try("draw the advisor", love.draw)
+      try("close the advisor", love.keypressed, "return")
+      if G.modals[#G.modals] == d then fail("advisor", "Enter did not close it")
+      else print("  Shift and a click asks the Military Advisor") end
+    end
+    for i, a in ipairs(stack) do a.x, a.y = back[i][1], back[i][2] end
+    opts.militaryAdvisor = was
+    G.selection = nil
+    for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  end
+end
+
 -- Alt and a click (1c8c:0007) plans a route without walking it; Alt and a
 -- click on the stack's own tile takes the destination away again.
 do

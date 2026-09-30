@@ -56,6 +56,7 @@ for pixel.
 | left click a city | open it: Info, City (rename, raze, buy production), Production, Vector |
 | left click the map | pick up a stack of yours, or send the selection there |
 | | a stack under orders shows its route as rings, crossed where this turn's movement runs out |
+| `Shift`-click an enemy beside the stack | the Military Advisor's verdict, with that option on |
 | right click the map | what is on a tile, while the button is held |
 | right click anything else | while the button is held: an army's or an army type's numbers (the bar's slots, a city's production, Build Production, View › Stack, Fight Order), what the bar's figures count, or a button's help from `WARLORD2.HLP` |
 | click the strategic map | recentre the view |
