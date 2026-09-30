@@ -1505,10 +1505,22 @@ local function drawMap()
       s.hidden = not (sel and sel.x == s.x and sel.y == s.y)
     end
   end
+  -- A tile shows the top army of everyone on it in the fight order, but the
+  -- selected stack's tile shows the lead of the group that moves (8611:2985
+  -- writes 451b:1f02's type over the tile's figure, a boat when it is at
+  -- sea): armies left out of the group are not what the map shows. The flag
+  -- still counts everyone on the tile.
+  local lead = sel and #sel.stack > 0 and topArmy(sel.stack)
+  if lead and G.walk and G.walk.armies[lead] then lead = nil end
+  G.figures = {}                 -- what each tile shows, for the tests
   for _, s in ipairs(standing) do
     if not s.hidden then
-      local a = topArmy(s.stack)
-      drawStack(a.owner or 8, stackFigure(s.stack), #s.stack, s.sx, s.sy)
+      local a, figure = topArmy(s.stack), stackFigure(s.stack)
+      if lead and sel.x == s.x and sel.y == s.y then
+        a, figure = lead, lead.atSea and NAVY or lead.type
+      end
+      G.figures[s.x + s.y * 1000] = figure
+      drawStack(a.owner or 8, figure, #s.stack, s.sx, s.sy)
     end
   end
   drawFog()

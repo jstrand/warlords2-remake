@@ -349,6 +349,31 @@ do
     else
       print("  an army's slot takes it out of the group and back")
     end
+    -- The map shows the lead of the group that moves on the selected tile
+    -- (8611:2985), not an army left out of it: drop the top army out and
+    -- the tile shows the next one instead.
+    local slot1
+    for _, c in ipairs(G.screen.dialog.controls) do if c.id == 224 then slot1 = c end end
+    local top = G.selection.slots.army[1]
+    local second = G.selection.slots.army[2]
+    if top and second and top.type ~= second.type then
+      try("draw", love.draw)
+      try("press slot 1", love.mousepressed, slot1.x + 2, slot1.y + 2, 1)
+      try("release slot 1", love.mousereleased, slot1.x + 2, slot1.y + 2, 1)
+      local sel = G.selection
+      local moving = {}
+      for _, a in ipairs(sel.stack) do moving[a] = true end
+      G.cx, G.cy = sel.x - 4, sel.y - 4
+      try("draw", love.draw)
+      local shown = G.figures and G.figures[sel.x + sel.y * 1000]
+      if moving[top] then
+        fail("slots", "clicking the top army did not take it out of the group")
+      elseif shown == top.type then
+        fail("map", "the tile shows an army left out of the group that moves")
+      else
+        print("  the map shows the group that moves, not the armies left out")
+      end
+    end
     G.selection = nil
   else
     print("  (no stack of two to try Grp on)")
@@ -1173,8 +1198,13 @@ do
   if st[184] == 2 then ok = false fail("diplomacy", "a threat of war did not show face 184") end
   local c
   for _, k in ipairs(G.screen.dialog.controls) do if k.id == 184 then c = k end end
+  -- a computer's turn may still be playing out from the tests before: the
+  -- player's click is what is being tried, so set it aside meanwhile
+  local run, walk = G.aiRun, G.walk
+  G.aiRun, G.walk = nil, nil
   try("press diplomacy", love.mousepressed, c.x + 2, c.y + 2, 1)
   try("release diplomacy", love.mousereleased, c.x + 2, c.y + 2, 1)
+  G.aiRun, G.walk = run, walk
   local d = G.modals[#G.modals]
   if not (d and d.view and d.view.id == 22) then
     ok = false fail("diplomacy", "the button did not open the Diplomatic Action screen")

@@ -567,6 +567,13 @@ y = 29, 38, 47, 56 for one to four (`4125:2d4e`). A stack of more than four
 flies the smallest flag 8 lower down as well, and the flag for the rest at
 the top.
 
+Which army a tile shows is `8611:2985`'s choice: of everyone standing there,
+the highest in the owner's fight order, a boat when one of them is at sea off
+a crossing — **except on the selected stack's tile**, where it writes the
+anchor's type over it (`451b:1f02`, the lead of the group that moves) and
+the anchor's owner. An army dropped out of the moving group is not what the
+map shows; the flag still counts everyone on the tile.
+
 The selected stack is boxed by **`177b`**, off the clock rather than the map
 redraw. `177b:0020(x, y, mode, …)` sets the box up — `828e:0afd` with mode 1
 when one army moves, `828e:0b27` with mode 2 for a group (`4125:2bda`) — and
