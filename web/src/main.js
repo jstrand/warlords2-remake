@@ -85,6 +85,8 @@ const DATA = "";                     // the game's files, as the vfs holds them
 /** The front end's state, shared with the dialogs through kit.G. */
 const G = { modals: [], mouse: { x: -1, y: -1 } };
 window.W2 = G;                       // for looking at from the console
+// where the frame sits on the page, for scripts that drive the game
+G.displayInfo = () => ({ ox: display.ox, oy: display.oy, scale: display.scale, dpi: display.dpi });
 
 function quadsFor(cols, cellW, cellH, stride, count, rowStride) {
   const qs = [];
@@ -1028,7 +1030,12 @@ function stepComputer() {
     if (now() < G.aiResumeAt && !G.aiSkip) return;
     G.aiResumeAt = null;
   }
-  if (held("lshift", "rshift") || held("lalt", "ralt")) {
+  // only a Shift or Alt pressed since the round began: the Alt of Alt-E
+  // is still down as the computer starts
+  const mods = held("lshift", "rshift") || held("lalt", "ralt");
+  if (!mods) G.aiModsHeld = false;
+  if (mods && !G.aiModsHeld) {
+    G.aiModsHeld = true;
     G.aiSkip = null;
     settingsUi.open();
     return;
@@ -1067,6 +1074,7 @@ function* computerTurns(side) {
 
 /** Play computer sides from `side` on, until a human's turn or the end. */
 function playComputers(side) {
+  G.aiModsHeld = held("lshift", "rshift") || held("lalt", "ralt");
   G.aiRun = computerTurns(side);
   resumeComputer();
 }
