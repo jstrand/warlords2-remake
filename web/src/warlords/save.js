@@ -253,6 +253,23 @@ export function decode(text, dataDir) {
     }
   }
 
+  // saves made before the walk kept to 1a8b:04c8 could put a flier at sea,
+  // and a hero flying with one: nothing the original can reach, so undone
+  const fliers = new Set(), walkers = new Set();
+  for (const a of g.armies) {
+    if (a.x != null) {
+      const k = a.y * g.map.width + a.x;
+      if (g.types.byId[a.type].flies) fliers.add(k);
+      else if (a.type !== 28) walkers.add(k);
+    }
+  }
+  for (const a of g.armies) {
+    if (a.atSea && a.x != null) {
+      const k = a.y * g.map.width + a.x;
+      if (g.types.byId[a.type].flies || (a.type === 28 && fliers.has(k) && !walkers.has(k))) a.atSea = false;
+    }
+  }
+
   g.side = g.sides[g.current];
   move.invalidate(g);
   return g;

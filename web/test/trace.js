@@ -8,7 +8,7 @@ import * as ai from "../src/warlords/ai.js";
 import { fmt } from "../src/util.js";
 import * as save from "../src/warlords/save.js";
 
-loadData();
+loadData({ images: false });
 const [scen = "ERYTHEA", seedS = "1", turnsS = "10", ...flags] = process.argv.slice(2);
 const hidden = flags.includes("hidden") ? "hidden" : null;
 // "save": write the game out and read it back after every turn, which must
