@@ -3,7 +3,8 @@
 //
 // tools/web_assets.py writes web/assets/: data/ mirrors the original's
 // folders, with every .PCK as a greyscale PNG (grey = colour index x 17) and
-// every .8SN as a WAV, and manifest.json lists what is there. Lookups ignore
+// every .8SN as a WAV, and manifest.json lists what is there.
+// An image is fetched as <its own name>.png: TERRAIN0/A0.PCK.png. Lookups ignore
 // case and take either slash, as DOS did.
 
 import { latin1 } from "./util.js";
@@ -88,8 +89,8 @@ export async function boot(assetBase = "assets/", progress = () => {}) {
   for (const path of manifest.files) {
     const ext = path.slice(path.lastIndexOf(".")).toUpperCase();
     if (ext === ".8SN") { tick(); continue; }     // played straight from its WAV
-    if (ext === ".PCK") {
-      jobs.push(fetch(base + "data/" + path.slice(0, -4) + ".png")
+    if (manifest.images[path]) {
+      jobs.push(fetch(base + "data/" + path + ".png")
         .then((r) => r.blob()).then(decodePng)
         .then((img) => { images.set(key(path), img); tick(); }));
     } else {

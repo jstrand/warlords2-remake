@@ -118,3 +118,6 @@ export function remove(t, i) {
 
 /** Lua's math.random(n): 1..n. */
 export const random = (n) => Math.floor(Math.random() * Math.max(1, n)) + 1;
+
+/** Wall time in seconds, for what plays out by the clock. */
+export const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000;

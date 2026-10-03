@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warlords II</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%; }
+  canvas { display: block; cursor: none; touch-action: none; image-rendering: pixelated; }
+  #loading { position: fixed; left: 0; right: 0; top: 40%; text-align: center; color: #aaa;
+             font: 14px sans-serif; }
+  #error { display: none; position: fixed; left: 16px; right: 16px; bottom: 16px; max-height: 40%;
+           overflow: auto; background: #400; color: #fdd; font: 12px monospace; padding: 8px;
+           white-space: pre-wrap; z-index: 2; }
+</style>
+</head>
+<body>
+<canvas id="screen" width="640" height="480"></canvas>
+<div id="loading">Loading Warlords II&hellip;</div>
+<div id="error"></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

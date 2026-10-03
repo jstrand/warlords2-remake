@@ -4,9 +4,11 @@
 
 Run from the repository root. Writes, under the output directory:
 
-  data/<path>.png   every .PCK, as an 8-bit greyscale PNG whose grey is the
-                    colour index times 17 -- the JS reads the indices back, so
-                    palettes, colour keys and remaps work as they do in Lua
+  data/<path>.png   every .PCK -- and the fonts' .FNT, which are .PCKs too -- as
+                    an 8-bit greyscale PNG whose grey is the colour index times
+                    17, named <original name>.png (A0.PCK.png); the JS reads
+                    the indices back, so palettes, colour keys and remaps work
+                    as they do in Lua
   data/<path>.wav   every .8SN, unsigned 8-bit mono at 11000 Hz
   data/<path>       every other data file the remake reads, byte for byte
   music/S*.ogg      the AdLib songs, rendered through the remake's own OPL
@@ -99,8 +101,8 @@ def main():
             if rel.upper().startswith(('SAVE/', 'START/', 'RANDOM/')):
                 continue
             os.makedirs(os.path.join(data, os.path.dirname(rel)), exist_ok=True)
-            if ext == '.PCK':
-                images[rel] = convert_pck(src, os.path.join(data, rel[:-4] + '.png'))
+            if ext in ('.PCK', '.FNT'):
+                images[rel] = convert_pck(src, os.path.join(data, rel + '.png'))
             elif ext == '.8SN':
                 convert_8sn(src, os.path.join(data, rel[:-4] + '.wav'))
             else:
