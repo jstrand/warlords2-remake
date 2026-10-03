@@ -269,11 +269,26 @@ local function testTurnLoop(scenario)
     eq(built.x, city.x, "the new army stands in its city")
   end
 
-  -- a side with no cities is eliminated at the start of its turn
+  -- a side with no cities stays in play until the round ends (8065:18ab),
+  -- then goes, with its armies, its gold and its diplomacy
   local victim = g.sides[#g.sides]
-  victim.capital.ownerIndex = nil
-  for _ = 1, #g.sides * 2 do game.endTurn(g) end
-  ok(not victim.alive, "a side with no cities is eliminated")
+  for _, c in ipairs(game.sideCities(g, victim)) do c.ownerIndex = nil end
+  victim.gold = 500
+  local diplomacy = require("warlords.diplomacy")
+  g.diplomacy.state[victim.index * 8] = diplomacy.WAR
+  ok(#game.sideArmies(g, victim) > 0, "the beaten side still has armies")
+  g.eliminated = nil
+  local roundOf = g.turn
+  while g.turn == roundOf do
+    ok(victim.alive, "a side with no cities is in play until the round ends")
+    game.endTurn(g)
+  end
+  ok(not victim.alive, "a side with no cities is eliminated as the round ends")
+  eq(#game.sideArmies(g, victim), 0, "the eliminated side's armies are gone")
+  eq(victim.gold, 0, "the eliminated side's gold is gone")
+  eq(diplomacy.state(g, victim.index, 0), diplomacy.INTERMEDIATE,
+     "the eliminated side's diplomacy is reset to uneasy")
+  ok(g.eliminated and g.eliminated[1].side == victim, "the elimination is announced")
 
   -- the turn counter advances once per full round
   local g2 = game.new(DATA, scenario, { seed = 6 })

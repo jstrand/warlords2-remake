@@ -1859,7 +1859,11 @@ hills, (248, 30) woods, (152, 30) hills.
 
 ## The end of the game
 
-`8065:1aed` runs as the round ends. What it finds, and what the player sees:
+`8065:1aed` runs as the round ends. Just before it, `8065:18ab` tells of each
+side put out for owning no city (docs/rules.md > Elimination): a random line
+of group 11 with the side's name, through `8065:10fb` when the side is human
+or a human is in play, otherwise `8065:11d1` for 100 ticks. What
+`8065:1aed` finds, and what the player sees:
 
 - **nobody in play**: *Alas!* / *No more players are left!*, then *So I bid
   thee a fond 'FAREWELL'* / *Hit any key to return to DOS.* (group 12), and

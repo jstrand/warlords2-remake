@@ -104,7 +104,11 @@ Active).
 `start_of_turn` (Ghidra `8cc6:0000`) runs these steps in this order:
 
 1. Reports and diplomacy messages.
-2. **A side with no cities is eliminated** (`8cc6:0952`); nothing below runs.
+2. **A side with no cities sits the turn out:** the turn strip is redrawn and
+   nothing below runs. It stays in play until the round ends (see
+   [Elimination](#elimination)). This is the computer's turn start; a
+   human's (`8cc6:0259`) has no such check, so a human with no cities still
+   plays the turn.
 3. **Hero offer** (see Heroes), then **hero promotions**.
 4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
    `8cc6:0827`).
@@ -949,6 +953,24 @@ Bits 4 and 5 of the side's own diagonal byte flag "has pending
 proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
 ## End of the game
+
+### Elimination
+
+When the turn order wraps, the round's end (`8065:17f6`) puts out every
+side in play that owns no city (`8065:18ab`), before `end_game_check` runs.
+For each such side, in side order:
+
+- **All its armies are removed**, wherever they are. A hero first drops its
+  items where it stood.
+- It gets a *vanquished* deed (history deed 4).
+- A line of `STRING.DAT` group 11 at random (*%s, thou art vanquished!* and
+  so on) is shown: in a popup if the side is human or any human is in play,
+  otherwise in the status bar for 100 ticks.
+- It leaves play (`.SCN` `0x137` = 0) and its gold goes to 0.
+- Diplomacy between it and every side, both ways, is set to uneasy (1), for
+  the state and the proposal alike.
+
+### Victory and surrender
 
 `end_game_check` (Ghidra `8065:1aed`) counts sides in play by controller, and
 counts the cities that still exist (razed ones excluded):

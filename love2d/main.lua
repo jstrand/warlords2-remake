@@ -1239,6 +1239,8 @@ function resumeComputer()
     for _, army in ipairs(a) do armies[#armies + 1] = army end
     startWalk(armies, b)
     G.walk.computer = true
+  elseif what == "say" then
+    searchUi.say(a, function() G.aiWait = true end)
   elseif what == "nohumans" then
     -- 8065:1c6f: the last human is gone, and the war goes on
     local t = function(i) return uidata.text(G.screen.ui, 0xd, i) end
@@ -1250,6 +1252,18 @@ function resumeComputer()
   end
 end
 G.resumeComputer = function() resumeComputer() end
+
+--- What the round's end said of the sides it put out (8065:18ab): each
+--- side's line of STRING.DAT group 11, and whether it is a popup.
+function takeEliminated()
+  local out = {}
+  for _, e in ipairs(G.g.eliminated or {}) do
+    out[#out + 1] = { popup = e.popup,
+                      text = uidata.text(G.screen.ui, 0xb, e.line):format(e.side.name or "") }
+  end
+  G.g.eliminated = nil
+  return out
+end
 
 --- Called every frame: carry the computer on once nothing is in its way.
 function stepComputer()
@@ -1289,6 +1303,9 @@ function playComputers(side)
       G.aiStatus.progress = 100
       coroutine.yield("progress")
       side = game.endTurn(G.g)
+      for _, e in ipairs(takeEliminated()) do
+        if e.popup then coroutine.yield("say", e.text) else status(e.text, 100) end
+      end
       if G.g.ending and G.g.ending.noHumans then coroutine.yield("nohumans") end
       coroutine.yield("turn")
     end
@@ -1301,10 +1318,16 @@ end
 local function endTurn()
   G.selection = nil
   local side = game.endTurn(G.g)
-  -- the computer plays its sides; a human side, one or several, is handed
-  -- to whoever sits at the keyboard
-  if side and side.computer then return playComputers(side) end
-  finishRound(side)
+  -- the sides the round's end put out are told of first (a human was in
+  -- play, so each in a popup); then the computer plays its sides, and a
+  -- human side, one or several, is handed to whoever sits at the keyboard
+  local told = takeEliminated()
+  local function tell(i)
+    if told[i] then return searchUi.say(told[i].text, function() tell(i + 1) end) end
+    if side and side.computer then return playComputers(side) end
+    finishRound(side)
+  end
+  tell(1)
 end
 
 --- The round is over: the next human side takes the keyboard.

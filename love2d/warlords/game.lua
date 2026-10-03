@@ -274,11 +274,44 @@ end
 
 --------------------------------------------------------------- turn sequence
 
-local function eliminate(g, side)
-  side.alive = false
+--- Put out of play every side left without a city (8065:18ab), as the round
+--- ends. Its armies go, a hero's items dropping where it stood; it takes the
+--- vanquished deed, its gold goes to 0, and every state and proposal between
+--- it and the others becomes uneasy. What is said is queued on g.eliminated
+--- -- STRING.DAT group 11, a line at random, `popup` when a human is still
+--- in play (else the status bar, 100 ticks).
+local function eliminateBeaten(g)
+  local heroMod = require("warlords.hero")
   local history = require("warlords.history")
-  history.deed(g, side, history.VANQUISHED, side.index, 0, "")     -- 8065:19f1
-  g.log[#g.log + 1] = ("%s has been eliminated."):format(side.name)
+  local diplomacy = require("warlords.diplomacy")
+  local humans = false
+  for _, s in ipairs(g.sides) do
+    if s.alive and not s.computer then humans = true end
+  end
+  for _, side in ipairs(g.sides) do
+    if side.alive and #game.sideCities(g, side) == 0 then
+      for i = #g.armies, 1, -1 do
+        local a = g.armies[i]
+        if a.owner == side.index then
+          if a.type == armytype.HERO and a.x then heroMod.dropItems(g, a, a.x, a.y) end
+          table.remove(g.armies, i)
+        end
+      end
+      history.deed(g, side, history.VANQUISHED, side.index, 0, "")   -- 8065:19f1
+      g.eliminated = g.eliminated or {}
+      g.eliminated[#g.eliminated + 1] = { side = side, line = g.rng:dice(1, 5, -1),
+                                          popup = humans or not side.computer }
+      g.log[#g.log + 1] = ("%s has been eliminated."):format(side.name)
+      side.alive = false
+      side.gold = 0
+      for other = 0, 7 do
+        for _, k in ipairs({ side.index * 8 + other, other * 8 + side.index }) do
+          g.diplomacy.state[k] = diplomacy.INTERMEDIATE
+          g.diplomacy.proposal[k] = diplomacy.INTERMEDIATE
+        end
+      end
+    end
+  end
 end
 
 --- Step 4: gold += income - upkeep, never below 0.
@@ -464,11 +497,12 @@ function game.heroWithDoubleMoveAt(g, side, x, y)
   return false
 end
 
---- Run the start of `side`'s turn. Returns false if the side was eliminated.
--- The order is the original's (start_of_turn, Ghidra 8cc6:0000).
+--- Run the start of `side`'s turn. Returns false if the turn is passed over.
+-- The order is the original's (start_of_turn, Ghidra 8cc6:0000). A computer
+-- side without a city sits the turn out; a human one still plays (8cc6:0259
+-- has no such check). Either way it stays in play until the round ends.
 function game.startTurn(g, side)
-  if #game.sideCities(g, side) == 0 then
-    eliminate(g, side)
+  if side.computer and #game.sideCities(g, side) == 0 then
     return false
   end
   game.tidyExplored(g, side)
@@ -514,6 +548,7 @@ function game.endTurn(g)
     if g.current > #g.sides then
       g.current = 1
       g.turn = g.turn + 1
+      eliminateBeaten(g)                         -- 8065:17f6 -> 8065:18ab
       require("warlords.history").record(g)     -- 8065:17f6 -> 6d51:0d60
     end
     local side = g.sides[g.current]
