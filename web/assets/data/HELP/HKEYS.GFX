@@ -1,0 +1,45 @@
+#H
+#C(200,005)|Keys|
+#F015
+#L(008,050)|The following keys are available on the main screen:|
+#F007
+#G(000,000,048,019)062(016,073)
+#L(072,073)|Get next army group.|
+#F008
+#G(048,000,048,019)062(016,093)
+#L(072,093)|Quit this army group, then get next one.|
+#F007
+#G(096,000,048,019)062(016,113)
+#L(072,113)|Group all armies.|
+#F008
+#G(144,000,048,019)062(016,133)
+#L(072,133)|Move between army and its destination.|
+#F007
+#G(192,000,048,019)062(016,153)
+#L(072,153)|Centre the current army group.|
+#F008
+#G(240,000,048,019)062(016,173)
+#L(072,173)|Move the army group along its path.|
+#F007
+#G(432,000,048,019)062(016,193)
+#L(072,193)|Deselect the current army group.|
+#F008
+#G(000,019,048,019)062(016,213)
+#L(072,213)|Cancel the current movement path.|
+#G(112,036,120,012)062(136,235)
+#F007
+#G(288,000,048,019)062(016,250)
+#L(072,250)|Holding this key switches between the cursors|
+#G(208,019,016,016)062(072,270)
+#G(192,019,016,016)062(088,270)
+#L(112,270)|,used for moving and selecting.|
+#F008
+#G(336,000,048,019)062(016,290)
+#L(072,290)|Holding this forces the city or ruin cursor on|
+#F007
+#G(384,000,048,019)062(016,310)
+#L(072,310)|Over the play area or the map, this brings up|
+#G(288,019,016,016)062(072,330)
+#L(096,330)|which lets you define a move path|
+#E
+

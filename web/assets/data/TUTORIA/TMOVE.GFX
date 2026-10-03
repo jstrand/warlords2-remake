@@ -1,0 +1,24 @@
+#H
+#C(168,005)|Moving an Army|
+#F015
+#G(360,000,040,040)026(016,049)
+#G(384,030,032,030)016(024,053)
+#L(056,050)| Now that you have selected an army|
+#L(056,070)| you'll probably want to move it!|
+#F007
+#L(016,095)|When you move the cursor around the map,|
+#L(016,115)|you will see it change into either a pair|
+#L(016,135)|of feet - over land - or a boat - over water.|
+#L(016,155)|To move your army towards the cursor, simply|
+#L(016,175)|left-click.|
+#F015
+#L(016,200)|If your army runs out of movement on the|
+#L(016,220)|way to where you clicked, it will remember|
+#L(016,240)|where it was heading on your next turn.|
+#F007
+#L(016,260)|To make an army continue down its path -|
+#L(016,280)|shown in black circles - click the "feet" button|
+#L(016,300)|on the bottom right of the screen.|
+#G(448,000,024,022)004(256,300)
+#E
+

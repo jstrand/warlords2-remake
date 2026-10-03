@@ -1,0 +1,43 @@
+#H
+#C(200,005)|Mouse|
+#F015
+#L(008,050)|The different mouse cursors are explained below:|
+#F007
+#G(128,019,016,016)062(016,073)
+#L(040,073)|This appears on the overview map.|  
+#L(040,093)|It moves the play area to where you click.|
+#F008
+#G(208,019,016,016)062(016,113)
+#L(040,113)|This moves an army group on land.|
+#F007
+#G(144,019,016,016)062(016,133)
+#L(040,133)|This moves an army group on the water.|
+#F008
+#G(160,019,016,016)062(016,153)
+#L(040,153)|This pops up the City Information dialog.|
+#F007
+#G(176,019,016,016)062(016,173)
+#L(040,173)|Use the hand to drag the play area around.|
+#F008
+#G(192,019,016,016)062(016,193)
+#L(040,193)|Use the target to select a group of armies.|
+#L(040,213)|Double-clicking will select the whole stack!|
+#F007
+#G(224,019,016,016)062(016,233)
+#L(040,233)|This pops up the Ruin Information dialog.|
+#F008
+#G(240,019,016,016)062(016,253)
+#L(040,253)|Use the sword to enter a fight with an enemy!|
+#F007
+#G(256,019,016,016)062(016,273)
+#L(040,273)|This pops up your Miltary Advisor! Hold the|
+#G(336,000,048,019)062(040,292)
+#L(096,293)|key down when the cursor is a sword!|
+#F008
+#G(272,019,016,016)062(016,313)
+#L(040,313)|Like the sword, but you're not at war yet!|
+#F007
+#G(288,019,016,016)062(016,333)
+#L(040,333)|Gives a movement path without moving the army!|
+#E
+

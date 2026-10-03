@@ -1,0 +1,22 @@
+#D001
+#H
+#C(168,005)|More Production|
+#F015
+#L(016,050)|So now you have more cities!|
+#F007
+#L(016,075)|Each time you occupy a city, this screen|
+#L(016,095)|will appear, prompting you to set up|
+#L(016,115)|production for your new city.|
+#F015
+#L(016,140)|Now that you have multiple cities, you|
+#L(016,160)|can do some new things! |
+#L(016,180)|Like "vectoring" production - which is|
+#L(016,200)|sending armies produced in one city|
+#L(016,220)|directly to another.|
+#F007
+#L(016,245)|To do this, simply move the mouse cursor|
+#L(016,265)|over the destination city on the left-hand|
+#L(016,285)|map, then hold down the "shift-key" and|
+#L(016,305)|"left-click" the mouse.|
+#E
+

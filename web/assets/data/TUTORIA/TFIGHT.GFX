@@ -1,0 +1,22 @@
+#H
+#C(168,005)|Fighting|
+#F015
+#L(016,050)|Now you are within fighting distance!|
+#F007
+#L(016,075)|To fight, simply move the cursor over the|
+#L(016,095)|enemy city and watch it change into a sword.|
+#L(016,115)|Left-click once, and you'll go into|
+#L(016,135)|battle!|
+#F015
+#L(016,160)|After you have won, you will be shown a|
+#L(016,180)|screen with four options: Occupy, Pillage,|
+#L(016,200)|Sack, and Raze.|
+#F007
+#L(016,220)|The simplest option is to occupy the city.|
+#L(016,240)|This does very little damage and you can|
+#L(016,260)|start producing immediately.|
+#F015
+#L(016,285)|Sacking and Pillaging damage the city but|
+#L(016,305)|earn you money.  Razing destroys it all!|
+#E
+

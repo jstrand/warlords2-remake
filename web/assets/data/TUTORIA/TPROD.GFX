@@ -1,0 +1,31 @@
+#D001
+#H
+#C(168,005)|Production|
+#F015
+#L(016,050)|The most common way to get new armies in|
+#L(016,070)|Warlords is to produce them in a city.  A city|
+#L(016,090)|can produce up to four different army types.|
+#F007
+#L(016,115)|On the Production Screen you will see a row|
+#L(016,135)|of armies like this:|
+#G(000,000,032,030)008(144,135)
+#G(000,000,032,030)008(184,135)
+#G(000,000,032,030)008(228,135)
+#G(000,000,032,030)008(264,135)
+#G(000,000,032,030)016(144,135)
+#G(032,000,032,030)016(184,135)
+#G(064,000,032,030)016(224,135)
+#G(096,000,032,030)016(264,135)
+#F015
+#L(016,170)|Left-click on an army to begin producing it.|
+#L(016,190)|You will then be shown information about that|
+#L(016,210)|army on the right-hand side of the screen.|
+#F007
+#L(016,235)|If you want to see the information without|
+#L(016,255)|selecting the army for production, then you|
+#L(016,275)|should right-click on it.|
+#F015
+#L(016,300)|The right mouse button is used throughout|
+#L(016,320)|the game to get "more information" about things!|
+#E
+

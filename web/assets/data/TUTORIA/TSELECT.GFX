@@ -1,0 +1,24 @@
+#H
+#C(168,005)|Selecting an Army|
+#F015
+#G(360,000,040,040)026(016,049)
+#G(384,030,032,030)016(024,053)
+#L(056,050)| In order to move armies around the|
+#L(056,070)| map, you must first select them!|
+#L(016,090)|There are two main ways of doing this:|
+#L(016,110)|directly and indirectly.|
+#F007
+#L(016,135)|To select an army directly, simply move the|
+#L(016,155)|mouse cursor over the army and left-click.|
+#L(016,175)|You will see an animated square appear around|
+#L(016,195)|the army telling you it is selected|
+#F015
+#L(016,220)|To select an army indirectly, you must use the|
+#L(016,240)|buttons on the bottom right of the screen:|
+#G(496,000,024,022)004(016,263)
+#L(048,263)|- Select the closest army to this square|
+#G(472,000,024,022)004(016,286)
+#L(048,286)|- Finish with the current army, then select|
+#L(048,306)|the closest army to this square|
+#E
+
