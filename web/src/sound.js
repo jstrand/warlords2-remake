@@ -19,7 +19,7 @@
 import * as vfs from "./vfs.js";
 import * as cues from "./warlords/cues.js";
 import * as prefs from "./prefs.js";
-import { bytesOf } from "./util.js";
+import { bytesOf, now } from "./util.js";
 
 export const SAMPLE_RATE = 11000;
 export const SYNTHS = ["fm", "mt32", "sc55"];
@@ -256,6 +256,9 @@ export function busy() {
  *  start a looping song again at its end. */
 export function update() {
   if (!S.ctx) return;
+  // a sample is over when Web Audio says so -- or, should its clock stall
+  // (no output device, a tab in the background), once its length has passed
+  if (S.playing && !S.playing.ended && now() >= S.playing.endsAt) S.playing.ended = true;
   if (S.playing && S.playing.ended) {
     const done = S.playing.done;
     S.playing = null;
@@ -268,6 +271,7 @@ export function update() {
     src.connect(S.ctx.destination);
     q.src = src;
     src.onended = () => { q.ended = true; };
+    q.endsAt = now() + q.buf.duration + 0.25;
     if (S.ctx.state !== "running") q.ended = true;   // no sound yet: it is over at once
     else src.start();
     S.playing = q;
@@ -286,3 +290,12 @@ export function update() {
   if (S.tails.length > 4) S.tails.splice(0, S.tails.length - 4);
 }
 
+
+/** What the queue holds, for looking at from the console. */
+export function debugState() {
+  return {
+    ctx: S.ctx && S.ctx.state, time: S.ctx && S.ctx.currentTime, now: now(),
+    playing: S.playing && { ended: !!S.playing.ended, endsAt: S.playing.endsAt, dur: S.playing.buf.duration },
+    queue: S.queue.length,
+  };
+}

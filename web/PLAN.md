@@ -41,7 +41,7 @@ The browser cannot read the 1993 formats directly, so:
 
 | original | becomes | how it is used |
 |---|---|---|
-| `*.PCK` (planar LZ77, 16 colours) | 8-bit greyscale PNG, value = colour index × 17 | decoded back to indices at boot, so palettes and colour remaps still work |
+| `*.PCK`, `*.FNT` (planar LZ77, 16 colours) | 8-bit greyscale PNG, value = colour index × 17, named `<file>.png` | decoded back to indices at boot, so palettes and colour remaps still work |
 | `*.8SN` (u8 PCM 11 kHz) | WAV | Web Audio buffers |
 | `SOUND/*.XMI` (AdLib songs) | OGG, rendered with the remake's own OPL synth (`tools/xmi2wav.lua`) | Web Audio, looped where the game loops |
 | `pre-rendered-sound/*.ogg` (MT-32 / SC-55) | copied | the Game menu's music choice |
@@ -49,14 +49,29 @@ The browser cannot read the 1993 formats directly, so:
 
 ## Steps
 
-- [ ] 1. Asset pipeline: `tools/web_assets.py`, manifest, generated assets
-- [ ] 2. Core plumbing: `vfs`, `rng`, `pal`, `pck` (from PNG), `armytype`, `scn`, `rules`
-- [ ] 3. Rules: `move`, `combat`, `game`, `hero`, `site`, `quest`, `diplomacy`, `slots`, `history`, `report`, `save`
-- [ ] 4. Computer player: `aicard`, `ai`, `ai/*` (as generators)
-- [ ] 5. Node harness: port the rules tests that matter; a Lua-vs-JS all-computer game diff
-- [ ] 6. Graphics shim (`gfx.js`), `display`, `layout`, `font`, `uidata`, `screen`, `stonetile`, `menu`
-- [ ] 7. Front end: `main.js` — map, strategic map, bars, banner, hero offer, assault, input
-- [ ] 8. Dialogs: `ui/kit` then every `ui/*.lua`
-- [ ] 9. Start screens (`ui/start`), saves and prefs in localStorage
-- [ ] 10. Sound: effects, advisor, music, Settings switches
+- [x] 1. Asset pipeline: `tools/web_assets.py`, manifest, generated assets
+- [x] 2. Core plumbing: `vfs`, `rng`, `pal`, `pck` (from PNG), `armytype`, `scn`, `rules`
+- [x] 3. Rules: `move`, `combat`, `game`, `hero`, `site`, `quest`, `diplomacy`, `slots`, `history`, `report`, `save`
+- [x] 4. Computer player: `aicard`, `ai`, `ai/*` (as generators)
+- [x] 5. Node harness: port the rules tests that matter; a Lua-vs-JS all-computer game diff
+- [x] 6. Graphics shim (`gfx.js`), `display`, `layout`, `font`, `uidata`, `screen`, `stonetile`, `menu`
+- [x] 7. Front end: `main.js` — map, strategic map, bars, banner, hero offer, assault, input
+- [x] 8. Dialogs: `ui/kit` then every `ui/*.lua`
+- [x] 9. Start screens (`ui/start`), saves and prefs in localStorage
+- [x] 10. Sound: effects, advisor, music, Settings switches
 - [ ] 11. Browser check (headless Chrome screenshots), README, polish
+
+## Notes along the way
+
+- `web/test/compare.sh` plays the same all-computer games in Lua and JS and
+  compares them turn by turn (gold, armies, the RNG's state, a hash of every
+  army, every city's owner). Every scenario, hidden maps and a save round trip
+  come out identical, so the rules core and the AI are a faithful port.
+- The songs with a loop in them never end by themselves, so each is rendered
+  once through to its own length plus a few seconds of tail, and looped the
+  way the Lua plays its Roland recordings: started again at the song's
+  length while the old copy's tail rings out.
+- Not the Lua's: a Shift or Alt still held from Alt-E no longer opens
+  Settings as the computer's turn starts; a sample whose end Web Audio never
+  reports (no output device) counts as over once its length has passed; the
+  hidden map is kept in a save.

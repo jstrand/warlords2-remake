@@ -86,6 +86,7 @@ const DATA = "";                     // the game's files, as the vfs holds them
 const G = { modals: [], mouse: { x: -1, y: -1 } };
 window.W2 = G;                       // for looking at from the console
 // where the frame sits on the page, for scripts that drive the game
+G.soundState = () => sound.debugState();
 G.displayInfo = () => ({ ox: display.ox, oy: display.oy, scale: display.scale, dpi: display.dpi });
 
 function quadsFor(cols, cellW, cellH, stride, count, rowStride) {
