@@ -60,7 +60,7 @@ cpp/
 - [x] 7. Front end: main — map, strategic map, bars, banner, hero offer, assault, input
 - [x] 8. Dialogs: kit, then every ui/*
 - [x] 9. Start screens, saves and prefs
-- [ ] 10. Sound: samples, the advisor, OPL2 music, recordings
+- [x] 10. Sound: samples, the advisor, OPL2 music, recordings
 - [ ] 11. Check (offscreen screenshots and a scripted run), README, polish
 
 ## Notes along the way
@@ -80,3 +80,9 @@ cpp/
   frame waits, screenshots (.bmp) and a line of state. With
   `SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software` it runs without a
   window; fifteen skipped rounds and a watched one have been run that way.
+- The FM music is checked sample for sample against the Lua: `w2fm` and
+  `test/fmrender.lua` render a song through the AIL driver and the OPL2 and
+  print a checksum per second; SSTARTUP, SINT0, SINT7 and SINT12 match.
+- Sound is mixed in one SDL callback: the DIGPAK queue, the FM driver at the
+  chip's rate and the recordings, each resampled to the device's rate.
+  `SDL_AUDIODRIVER=disk` writes the mix to a file for checking.
