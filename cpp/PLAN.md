@@ -54,7 +54,7 @@ cpp/
 - [x] 2. Core plumbing: util (fmt, luaSort, json), rng, bytes, pal, pck, armytype, scn, rules
 - [x] 3. Rules: move, combat, game, hero, site, quest, diplomacy, slots, history, report, save
 - [x] 4. Computer player: aicard, ai, ai/* (with the AI thread handoff)
-- [ ] 5. Tests: trace + compare.sh against the Lua; the rules suite (run.lua) ported
+- [x] 5. Tests: trace + compare.sh against the Lua; the rules suite (run.lua) ported
 - [ ] 6. Screen plumbing: font, uidata, layout, stonetile, menu, screen, display
 - [ ] 7. Front end: main — map, strategic map, bars, banner, hero offer, assault, input
 - [ ] 8. Dialogs: kit, then every ui/*
