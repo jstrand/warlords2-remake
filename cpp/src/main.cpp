@@ -2845,6 +2845,9 @@ void front::openStart() {
 //   text STRING     type
 //   shot FILE       write the frame as a .bmp
 //   eval            print the game's state (turn, side, modals)
+//   select TX TY    pick up the stack on a tile
+//   attack TX TY    send the selection at a tile, fighting if it must
+//   near            list the cities nearest the selection not the player's
 //   quit
 struct Script {
   std::vector<std::string> lines;
@@ -2894,10 +2897,12 @@ static void stepScript() {
       if (!(in >> b)) b = 1;
       G.mouseX = x;
       G.mouseY = y;
+      display::d.mouseInside = true;
       mousepressed(x, y, b);
       mousereleased(x, y, b);
     } else if (cmd == "move") {
       in >> G.mouseX >> G.mouseY;
+      display::d.mouseInside = true;
     } else if (cmd == "text") {
       std::string t;
       std::getline(in, t);
@@ -2913,6 +2918,25 @@ static void stepScript() {
       if (G.g && G.player && G.player->capital)
         printf("  cam=%.2f,%.2f zoom=%d map=%d,%d,%d,%d capital=%d,%d\n", G.cx, G.cy, G.zoom, G.mapRect.x, G.mapRect.y,
                G.mapRect.w, G.mapRect.h, G.player->capital->x, G.player->capital->y);
+      fflush(stdout);
+    } else if (cmd == "select") {
+      int x, y;
+      in >> x >> y;
+      select(x, y);
+    } else if (cmd == "attack") {
+      int x, y;
+      in >> x >> y;
+      moveSelection(x, y, true);
+    } else if (cmd == "near" && G.g && G.selection) {
+      std::vector<std::pair<int, City*>> found;
+      for (auto& c : G.g->map->cities) {
+        if (c.ownerIndex != G.player->index && !c.razed)
+          found.push_back({std::max(std::abs(c.x - G.selection->x), std::abs(c.y - G.selection->y)), &c});
+      }
+      std::sort(found.begin(), found.end(), [](auto& a, auto& b) { return a.first < b.first; });
+      for (size_t i = 0; i < found.size() && i < 3; i++)
+        printf("  %s at %d,%d owner %d, %d away\n", found[i].second->name.c_str(), found[i].second->x, found[i].second->y,
+               found[i].second->ownerIndex, found[i].first);
       fflush(stdout);
     } else if (cmd == "quit") {
       G.quitRequested = true;
@@ -2997,6 +3021,14 @@ int main(int argc, char** argv) {
   }
 
   double lastX = 0, lastY = 0;
+  {
+    int mx, my;
+    SDL_GetMouseState(&mx, &my);
+    lastX = mx;
+    lastY = my;
+    display::d.mouseInside = (SDL_GetWindowFlags(win) & SDL_WINDOW_MOUSE_FOCUS) != 0;
+    std::tie(G.mouseX, G.mouseY) = display::toUI(mx, my);
+  }
   while (!G.quitRequested) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -3016,8 +3048,10 @@ int main(int argc, char** argv) {
           case SDL_KEYDOWN: {
             std::string k = keys::loveName(e.key.keysym.sym);
             if (k.empty()) break;
+            // the Lua remake leaves LÖVE's key repeat off
+            if (e.key.repeat) break;
             keys::press(k);
-            if (!e.key.repeat || k.size() > 1 || true) keypressed(k);
+            keypressed(k);
             break;
           }
           case SDL_KEYUP: {

@@ -61,7 +61,7 @@ cpp/
 - [x] 8. Dialogs: kit, then every ui/*
 - [x] 9. Start screens, saves and prefs
 - [x] 10. Sound: samples, the advisor, OPL2 music, recordings
-- [ ] 11. Check (offscreen screenshots and a scripted run), README, polish
+- [x] 11. Check (offscreen screenshots and a scripted run), README, polish
 
 ## Notes along the way
 
