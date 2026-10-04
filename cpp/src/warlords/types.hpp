@@ -284,6 +284,7 @@ struct HistoryRecord {
 };
 struct Ending {
   bool over = false, won = false, surrender = false, noHumans = false;
+  bool shown = false;   // the front end has told it
   Side* winner = nullptr;
   std::string message;
 };

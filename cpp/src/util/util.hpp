@@ -66,6 +66,27 @@ void luaSort(std::vector<T>& v, Lt lt) {
 template <class T>
 void luaSort(std::vector<T>& v) { luaSort(v, [](const T& a, const T& b) { return a < b; }); }
 
+/** An argument to sfmt: a number or a string. */
+struct FmtArg {
+  bool str = false;
+  long n = 0;
+  std::string s;
+  FmtArg(int v) : n(v) {}
+  FmtArg(long v) : n(v) {}
+  FmtArg(unsigned v) : n((long)v) {}
+  FmtArg(unsigned long v) : n((long)v) {}
+  FmtArg(long long v) : n((long)v) {}
+  FmtArg(const std::string& v) : str(true), s(v) {}
+  FmtArg(const char* v) : str(true), s(v ? v : "") {}
+};
+/** string.format for a format string from the game's own files: %d, %s, %x,
+ *  %c and %%, with flags and widths, read safely whatever the arguments. */
+std::string sfmt(const std::string& f, const std::vector<FmtArg>& args);
+template <class... A>
+std::string format(const std::string& f, A&&... a) {
+  return sfmt(f, {FmtArg(std::forward<A>(a))...});
+}
+
 /** Lua's floor division and modulo, for numbers that may be negative. */
 inline long floorDiv(long a, long b) { long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) q--; return q; }
 inline long luaMod(long a, long b) { long m = a % b; if (m != 0 && ((m < 0) != (b < 0))) m += b; return m; }

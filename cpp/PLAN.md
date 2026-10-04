@@ -46,19 +46,20 @@ cpp/
   division all follow the Lua. `test/compare.sh` plays the same all-computer
   games in LuaJIT and in C++ and compares them turn by turn.
 - **Files:** saves are JSON in the C++ port's own format (not the Lua's).
-  Saves, prefs and shortcuts sit in the working directory, as `w2-*`.
+  Saves, prefs and shortcuts sit in SDL's per-user folder for the game
+  (SDL_GetPrefPath), as `w2-*.json`.
 
 ## Steps
 
-- [ ] 1. Scaffold: CMake, SDL2 window, platform layer (files, gfx, input, timer)
+- [x] 1. Scaffold: CMake, SDL2 window, platform layer (files, gfx, input, timer)
 - [x] 2. Core plumbing: util (fmt, luaSort, json), rng, bytes, pal, pck, armytype, scn, rules
 - [x] 3. Rules: move, combat, game, hero, site, quest, diplomacy, slots, history, report, save
 - [x] 4. Computer player: aicard, ai, ai/* (with the AI thread handoff)
 - [x] 5. Tests: trace + compare.sh against the Lua; the rules suite (run.lua) ported
-- [ ] 6. Screen plumbing: font, uidata, layout, stonetile, menu, screen, display
-- [ ] 7. Front end: main — map, strategic map, bars, banner, hero offer, assault, input
-- [ ] 8. Dialogs: kit, then every ui/*
-- [ ] 9. Start screens, saves and prefs
+- [x] 6. Screen plumbing: font, uidata, layout, stonetile, menu, screen, display
+- [x] 7. Front end: main — map, strategic map, bars, banner, hero offer, assault, input
+- [x] 8. Dialogs: kit, then every ui/*
+- [x] 9. Start screens, saves and prefs
 - [ ] 10. Sound: samples, the advisor, OPL2 music, recordings
 - [ ] 11. Check (offscreen screenshots and a scripted run), README, polish
 
@@ -75,3 +76,7 @@ cpp/
   Lua trace (`cpp/test/trace.lua`) points the table at the loaded game's
   cities, so the save round trip can be compared at all.
 - The save keeps no per-turn marks (done, offered), as the Lua's does not.
+- `warlords2 --script FILE` drives the game for checking: keys, clicks,
+  frame waits, screenshots (.bmp) and a line of state. With
+  `SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software` it runs without a
+  window; fifteen skipped rounds and a watched one have been run that way.

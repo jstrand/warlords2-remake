@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -32,6 +33,67 @@ std::string fmt(const char* f, ...) {
     out.resize(n);
   }
   va_end(ap2);
+  return out;
+}
+
+std::string sfmt(const std::string& f, const std::vector<FmtArg>& args) {
+  std::string out;
+  size_t n = 0;
+  for (size_t i = 0; i < f.size(); i++) {
+    char c = f[i];
+    if (c != '%' || i + 1 >= f.size()) { out += c; continue; }
+    size_t j = i + 1;
+    std::string flags;
+    while (j < f.size() && strchr("-+ 0#", f[j])) flags += f[j++];
+    int width = 0;
+    while (j < f.size() && isdigit((unsigned char)f[j])) width = width * 10 + (f[j++] - '0');
+    int prec = -1;
+    if (j < f.size() && f[j] == '.') {
+      prec = 0;
+      j++;
+      while (j < f.size() && isdigit((unsigned char)f[j])) prec = prec * 10 + (f[j++] - '0');
+    }
+    while (j < f.size() && (f[j] == 'l' || f[j] == 'h')) j++;
+    if (j >= f.size()) { out += f.substr(i); break; }
+    char conv = f[j];
+    i = j;
+    if (conv == '%') { out += '%'; continue; }
+    FmtArg a = n < args.size() ? args[n] : FmtArg("nil");
+    n++;
+    std::string s;
+    switch (conv) {
+      case 'd': case 'i': case 'u': {
+        long v = a.str ? (toInt(a.s) ? *toInt(a.s) : 0) : a.n;
+        s = std::to_string(v < 0 ? -v : v);
+        if (prec >= 0) while ((int)s.size() < prec) s = "0" + s;
+        if (v < 0) s = "-" + s;
+        else if (flags.find('+') != std::string::npos) s = "+" + s;
+        break;
+      }
+      case 'x': case 'X': {
+        char buf[32];
+        snprintf(buf, sizeof buf, conv == 'x' ? "%lx" : "%lX", (unsigned long)(a.str ? 0 : a.n));
+        s = buf;
+        break;
+      }
+      case 'c': s = std::string(1, (char)(a.str ? (a.s.empty() ? ' ' : a.s[0]) : a.n)); break;
+      case 's': default:
+        s = a.str ? a.s : std::to_string(a.n);
+        if (prec >= 0 && (int)s.size() > prec) s = s.substr(0, prec);
+        break;
+    }
+    if ((int)s.size() < width) {
+      if (flags.find('-') != std::string::npos) s += std::string(width - s.size(), ' ');
+      else if (flags.find('0') != std::string::npos && conv != 's') {
+        bool sign = !s.empty() && (s[0] == '-' || s[0] == '+');
+        std::string body = sign ? s.substr(1) : s;
+        s = (sign ? s.substr(0, 1) : "") + std::string(width - s.size(), '0') + body;
+      } else {
+        s = std::string(width - s.size(), ' ') + s;
+      }
+    }
+    out += s;
+  }
   return out;
 }
 
