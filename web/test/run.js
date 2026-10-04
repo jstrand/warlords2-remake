@@ -1616,6 +1616,22 @@ function testEndGame() {
 
 // ------------------------------------------------------------ saving a game
 
+// The computer's neighbour table is shared by every game of a map, but each
+// game must read it as its own cities, not the first game's.
+function testNeighbourCache() {
+  console.log("neighbour table across games");
+  const g1 = newGame("ERYTHEA", { seed: 5 });
+  const [first, firstDist] = aicore.neighbours(g1, g1.map.cities[0]);
+  ok(first.length > 0, "a city has neighbours");
+  const g2 = newGame("ERYTHEA", { seed: 6 });
+  const mine = new Set(g2.map.cities);
+  const [again, dist] = aicore.neighbours(g2, g2.map.cities[0]);
+  eq(again.length, first.length, "the second game gets as many neighbours");
+  ok(again.every((c, i) => mine.has(c) && c.index === first[i].index),
+     "and they are the second game's own cities, the same ones by index");
+  eq(dist[0], firstDist[0], "at the same distances");
+}
+
 function testSave() {
   console.log("save and load");
   const q = quest;
@@ -2040,6 +2056,7 @@ testQuests();
 testEndGame();
 testHiddenMap();
 testSave();
+testNeighbourCache();
 testSites("ERYTHEA");
 testSites("DRAGON");
 testSlots();

@@ -228,7 +228,9 @@ function core.clearCflag(d, c, bit) d.flags[c.index] = core.clear(d.flags[c.inde
 --- The shared neighbour table (623c:0398, at game start): each city's six
 --- nearest cities by land path, spread over the four directions, with the
 --- path length to each. Kept on the game; built on first use.
--- the table depends on the map alone, so it is kept per scenario too
+-- The table depends on the map alone, so it is kept per scenario too -- as
+-- city indices, since another game of the map (or a loaded save) has city
+-- objects of its own.
 local neighbourCache = {}
 
 function core.neighbours(g, c)
@@ -237,8 +239,25 @@ function core.neighbours(g, c)
     local parts = { g.map.name or "" }
     for _, o in ipairs(g.map.cities) do parts[#parts + 1] = o.x .. "," .. o.y end
     local key = table.concat(parts, ";")
-    g.aiNeighbours = neighbourCache[key] or core.buildNeighbours(g)
-    neighbourCache[key] = g.aiNeighbours
+    local shared = neighbourCache[key]
+    if shared then
+      local t = {}
+      for k, e in pairs(shared) do
+        local cs = {}
+        for i, index in ipairs(e.cities) do cs[i] = g.map.cities[index + 1] end
+        t[k] = { cities = cs, dist = e.dist }
+      end
+      g.aiNeighbours = t
+    else
+      g.aiNeighbours = core.buildNeighbours(g)
+      shared = {}
+      for k, e in pairs(g.aiNeighbours) do
+        local is = {}
+        for i, o in ipairs(e.cities) do is[i] = o.index end
+        shared[k] = { cities = is, dist = e.dist }
+      end
+      neighbourCache[key] = shared
+    end
   end
   local e = g.aiNeighbours[c.index]
   return e and e.cities or {}, e and e.dist or {}

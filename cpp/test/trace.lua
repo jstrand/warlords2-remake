@@ -3,12 +3,6 @@
 --
 --     luajit cpp/test/trace.lua ERYTHEA 1 10 [hidden] [save]
 --
--- web/test/trace.lua with one change, for "save": the Lua keeps its city
--- neighbour table across games keyed by the map, holding the first game's
--- city objects, so after a load it reads the old game's cities. The C++ keeps
--- city indices instead; here the table is pointed at the loaded game's
--- cities, which is what the C++ does.
---
 -- Run from the repository root.
 package.path = "love2d/?.lua;" .. package.path
 local game = require("warlords.game")
@@ -43,17 +37,7 @@ while side and g.turn <= turns do
   trace(side)
   side = game.endTurn(g)
   if flags.save and side then
-    local oldN = g.aiNeighbours
     g = save.decode(save.encode(g), "original")
     side = g.side
-    if oldN then
-      local t = {}
-      for k, e in pairs(oldN) do
-        local cs = {}
-        for i, c in ipairs(e.cities) do cs[i] = g.map.cities[c.index + 1] end
-        t[k] = { cities = cs, dist = e.dist }
-      end
-      g.aiNeighbours = t
-    end
   end
 end

@@ -218,7 +218,8 @@ export function clearCflag(d, c, bit) { d.flags[c.index] = clear(d.flags[c.index
 
 // The shared neighbour table (623c:0398): each city's six nearest cities by
 // land path, with the path length to each. It depends on the map alone, so
-// it is kept per scenario.
+// it is kept per scenario -- as city indices, since another game of the map
+// (or a loaded save) has city objects of its own.
 const neighbourCache = new Map();
 
 /** [cities, dists] of a city's neighbours. */
@@ -227,8 +228,21 @@ export function neighbours(g, c) {
     const parts = [g.map.name || ""];
     for (const o of g.map.cities) parts.push(o.x + "," + o.y);
     const k = parts.join(";");
-    g.aiNeighbours = neighbourCache.get(k) || buildNeighbours(g);
-    neighbourCache.set(k, g.aiNeighbours);
+    const shared = neighbourCache.get(k);
+    if (shared) {
+      const t = {};
+      for (const [i, e] of Object.entries(shared)) {
+        t[i] = { cities: e.cities.map((index) => g.map.cities[index]), dist: e.dist };
+      }
+      g.aiNeighbours = t;
+    } else {
+      g.aiNeighbours = buildNeighbours(g);
+      const t = {};
+      for (const [i, e] of Object.entries(g.aiNeighbours)) {
+        t[i] = { cities: e.cities.map((o) => o.index), dist: e.dist };
+      }
+      neighbourCache.set(k, t);
+    }
   }
   const e = g.aiNeighbours[c.index];
   return [e ? e.cities : [], e ? e.dist : []];

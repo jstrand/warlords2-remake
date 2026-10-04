@@ -2263,6 +2263,27 @@ end
 
 -------------------------------------------------------------- saving a game
 
+-- The computer's neighbour table is shared by every game of a map, but each
+-- game must read it as its own cities, not the first game's.
+local function testNeighbourCache()
+  print("neighbour table across games")
+  local core = require("warlords.ai.core")
+  local g1 = game.new(DATA, "ERYTHEA", { seed = 5 })
+  local first = core.neighbours(g1, g1.map.cities[1])
+  ok(#first > 0, "a city has neighbours")
+  local g2 = game.new(DATA, "ERYTHEA", { seed = 6 })
+  local mine = {}
+  for _, c in ipairs(g2.map.cities) do mine[c] = true end
+  local again, dist = core.neighbours(g2, g2.map.cities[1])
+  eq(#again, #first, "the second game gets as many neighbours")
+  local all = true
+  for i, c in ipairs(again) do
+    if not mine[c] or c.index ~= first[i].index then all = false end
+  end
+  ok(all, "and they are the second game's own cities, the same ones by index")
+  eq(dist[1], select(2, core.neighbours(g1, g1.map.cities[1]))[1], "at the same distances")
+end
+
 local function testSave()
   print("save and load")
   local saveMod = require("warlords.save")
@@ -2908,6 +2929,7 @@ testQuests()
 testEndGame()
 testHiddenMap()
 testSave()
+testNeighbourCache()
 testSites("ERYTHEA")
 testSites("DRAGON")
 testSlots()

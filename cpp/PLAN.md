@@ -69,12 +69,11 @@ cpp/
   C++ and compares them after every side's turn: gold, armies, the dice's
   state, a hash of every army and every city's owner. Every scenario, the
   hidden map and a save round trip come out identical.
-- Not the Lua's: the AI's city neighbour table is kept per map, as in the
-  Lua, but holds city indices rather than the first game's city objects. In
-  the Lua (and the JS port) a second game of the same map, or a loaded save,
-  reads the neighbours' owners from the first game's cities. The comparison's
-  Lua trace (`cpp/test/trace.lua`) points the table at the loaded game's
-  cities, so the save round trip can be compared at all.
+- The AI's city neighbour table is kept per map, holding city indices, and
+  each game resolves them to its own cities. The Lua and the JS port first
+  kept the first game's city objects, so a second game of the map, or a
+  loaded save, read the neighbours' owners from the old game. That is fixed
+  in both, and the save round trip compares with the Lua as it is.
 - The save keeps no per-turn marks (done, offered), as the Lua's does not.
 - `warlords2 --script FILE` drives the game for checking: keys, clicks,
   frame waits, screenshots (.bmp) and a line of state. With
