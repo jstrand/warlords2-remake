@@ -17,7 +17,7 @@ Run from the repository root. Writes, under the output directory:
   manifest.json     { files: [...], images: {path: [w, h]}, songs: {name: s} }
 
 Paths in the manifest keep the original's spelling, so `TERRAIN0/A0.PCK` is
-still asked for by that name; the JS swaps the extension.
+still asked for by that name; the JS fetches it with .png added.
 """
 import json
 import os

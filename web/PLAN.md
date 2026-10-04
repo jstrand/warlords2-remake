@@ -59,7 +59,7 @@ The browser cannot read the 1993 formats directly, so:
 - [x] 8. Dialogs: `ui/kit` then every `ui/*.lua`
 - [x] 9. Start screens (`ui/start`), saves and prefs in localStorage
 - [x] 10. Sound: effects, advisor, music, Settings switches
-- [ ] 11. Browser check (headless Chrome screenshots), README, polish
+- [x] 11. Browser check (headless Chrome screenshots), README, polish
 
 ## Notes along the way
 
