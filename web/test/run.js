@@ -210,10 +210,24 @@ function testTurnLoop(scenario) {
     eq(built.upkeep, Math.floor(city.slots[0].cost / 2), "upkeep is half the slot cost");
     eq(built.x, city.x, "the new army stands in its city");
   }
+  // a side with no cities stays in play until the round ends (8065:18ab),
+  // then goes, with its armies, its gold and its diplomacy
   const victim = g.sides[g.sides.length - 1];
-  victim.capital.ownerIndex = undefined;
-  for (let i = 0; i < g.sides.length * 2; i++) game.endTurn(g);
-  ok(!victim.alive, "a side with no cities is eliminated");
+  for (const c of game.sideCities(g, victim)) c.ownerIndex = undefined;
+  victim.gold = 500;
+  g.diplomacy.state[victim.index * 8] = diplomacy.WAR;
+  ok(game.sideArmies(g, victim).length > 0, "the beaten side still has armies");
+  const roundOf = g.turn;
+  while (g.turn === roundOf) {
+    ok(victim.alive, "a side with no cities is in play until the round ends");
+    game.endTurn(g);
+  }
+  ok(!victim.alive, "a side with no cities is eliminated as the round ends");
+  eq(game.sideArmies(g, victim).length, 0, "the eliminated side's armies are gone");
+  eq(victim.gold, 0, "the eliminated side's gold is gone");
+  eq(diplomacy.state(g, victim.index, 0), diplomacy.INTERMEDIATE, "the eliminated side's diplomacy is reset to uneasy");
+  const fallen = g.ending && g.ending.fallen;
+  ok(fallen && fallen[0] && fallen[0].side === victim, "the elimination is announced");
   const g2 = newGame(scenario, { seed: 6 });
   game.begin(g2);
   eq(g2.turn, 1, "the game starts on turn 1");

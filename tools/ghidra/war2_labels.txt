@@ -404,7 +404,7 @@
 7cc6:0000  func  start_of_turn        | void start_of_turn(int side)
 7cc6:05fb  func  reset_movement
 7cc6:0827  func  apply_income
-7cc6:0952  func  draw_turn_strip      # Turn %d and a shield per side in play; not an elimination
+7cc6:0952  func  draw_turn_strip      # "Turn %d" and the shields of the sides in play (docs/re/ui.md)
 728e:0000  func  refresh_map_owners
 728e:02bf  func  compute_upkeep
 728e:0372  func  compute_income
@@ -440,11 +440,11 @@
 # Game setup (Ghidra 7bab = flat 6bab)
 6bab:0bab  func  difficulty_rating
 6bab:0cfe  func  start_game_from_setup
-7065:1aed  func  end_game_check       # at the round's end, after player_eliminated
 7065:0000  func  game_screen_start    # a new game (2nd arg 1) or a loaded one; group 14 when no human plays
 7065:1732  func  turn_order           # 0x163[8], shuffled with Random Turns
-7065:17f6  func  next_player          # the round's end when the order wraps: eliminate, end check, history
-7065:18ab  func  player_eliminated    # every side in play with no city: armies gone, gold 0, uneasy with all
+7065:17f6  func  next_side            # the round's end when the order wraps, then the next side in play
+7065:18ab  func  eliminate_sides      # every side in play with no city is put out
+7065:1aed  func  end_game_check       # at the round's end, after eliminate_sides
 7065:2074  func  end_turn             # Turn > End Turn; does nothing once game_won is set
 7065:2123  func  turn_loop            # computer turns until a human's turn begins
 54d2:0508  func  toggle_side_enhanced

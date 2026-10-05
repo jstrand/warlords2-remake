@@ -105,11 +105,12 @@ Active).
 
 1. Reports and diplomacy messages; the side's proposals are applied
    (`diplomacy_apply`).
-2. **A computer side with no cities does nothing more**: no hero, income,
-   production or AI turn. It is not out of the game yet — that happens at
-   the round's end (see End of the game). A human side's turn
-   (`8cc6:0259`) has no such test: a human with no city still plays, with
-   whatever armies it has left, until the round's end.
+2. **A side with no cities sits the turn out:** the turn strip is redrawn and
+   nothing below runs — no hero, income, production or AI turn. It stays in
+   play until the round ends (see [Elimination](#elimination)). This is the
+   computer's turn start; a human's (`8cc6:0259`) has no such check, so a
+   human with no cities still plays the turn, with whatever armies it has
+   left.
 3. **Hero offer** (see Heroes), then **hero promotions**.
 4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
    `8cc6:0827`).
@@ -966,23 +967,31 @@ proposals" and "has only de-escalation offers" (`484e:0cc7`).
 ## End of the game
 
 Everything here happens at **the round's end**: when the turn order wraps,
-`next_player` (Ghidra `8065:17f6`) counts the turn on, deals a new order
+`next_side` (Ghidra `8065:17f6`) counts the turn on, deals a new order
 (*Random Turns*), puts the fallen out of the game, runs the end check, and
 writes the turn to `CURRENT.HST`. Nothing is checked as a single turn ends.
 
-**The fallen** (`player_eliminated`, `8065:18ab`). Every side in play that
-owns no city is put out, in side order: its heroes drop what they carry, all
-its armies are removed, it gets a *vanquished* deed, its gold is set to 0,
-and every pair with it — both ways — is set to state **intermediate** with
-an intermediate proposal. Its fall is told with a random line of group 11
-(*%s, thy empire has fallen!* and four others): in a **box** if any human was
-still in play or the side was a human's, otherwise in the **status bar** for
-100 ticks.
+### Elimination
 
-**The check** (`end_game_check`, `8065:1aed`) then counts the sides in play
-by controller, and the cities that still exist (razed ones excluded). A
-human side found **out of play is turned into a computer**, so its fall is
-noticed only once.
+`eliminate_sides` (`8065:18ab`) puts out every side in play that owns no
+city, before `end_game_check` runs. For each such side, in side order:
+
+- **All its armies are removed**, wherever they are. A hero first drops its
+  items where it stood.
+- It gets a *vanquished* deed (history deed 4).
+- A line of `STRING.DAT` group 11 at random (*%s, thou art vanquished!* and
+  so on) is shown: in a popup if the side is human or any human is in play,
+  otherwise in the status bar for 100 ticks.
+- It leaves play (`.SCN` `0x137` = 0) and its gold goes to 0.
+- Diplomacy between it and every side, both ways, is set to uneasy (1), for
+  the state and the proposal alike.
+
+### Victory and surrender
+
+`end_game_check` (`8065:1aed`) counts sides in play by controller, and
+counts the cities that still exist (razed ones excluded). A human side
+found **out of play is turned into a computer**, so its fall is noticed
+only once.
 
 - **No side left in play** → "Alas! No more players are left!" (group 12)
   and the game ends.

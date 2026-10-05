@@ -275,10 +275,24 @@ static void testTurnLoop(const std::string& scenario) {
     eq(built->upkeep, city->slots[0].cost / 2, "upkeep is half the slot cost");
     eq(built->x, city->x, "the new army stands in its city");
   }
+  // a side with no cities stays in play until the round ends (8065:18ab),
+  // then goes, with its armies, its gold and its diplomacy
   Side* victim = g.sides.back();
-  victim->capital->ownerIndex = NONE;
-  for (size_t i = 0; i < g.sides.size() * 2; i++) game::endTurn(g);
-  ok(!victim->alive, "a side with no cities is eliminated");
+  for (City* c : game::sideCities(g, *victim)) c->ownerIndex = NONE;
+  victim->gold = 500;
+  g.diplomacy.state[victim->index * 8] = diplomacy::WAR;
+  ok(!game::sideArmies(g, *victim).empty(), "the beaten side still has armies");
+  int roundOf = g.turn;
+  while (g.turn == roundOf) {
+    ok(victim->alive, "a side with no cities is in play until the round ends");
+    game::endTurn(g);
+  }
+  ok(!victim->alive, "a side with no cities is eliminated as the round ends");
+  eq((int)game::sideArmies(g, *victim).size(), 0, "the eliminated side's armies are gone");
+  eq(victim->gold, 0, "the eliminated side's gold is gone");
+  eq(diplomacy::state(g, victim->index, 0), diplomacy::INTERMEDIATE,
+     "the eliminated side's diplomacy is reset to uneasy");
+  ok(!g.ending.fallen.empty() && g.ending.fallen[0].side == victim, "the elimination is announced");
   auto g2 = newGame(scenario, seed(6));
   game::begin(*g2);
   eq(g2->turn, 1, "the game starts on turn 1");

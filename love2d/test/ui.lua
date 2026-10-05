@@ -1056,10 +1056,15 @@ end
 if G and G.g then
   local game = require("warlords.game")
   local kit  = require("ui.kit")
-  -- the menus may have ended the turn: its banner, and a hero's offer, first
+  -- the menus may have ended the turn: its banner first
   dismissBanner()
-  dismissOffer()
   local mine = game.sideCities(G.g, G.player)[1]
+  -- a hero offered this turn and not yet shown would take the first click:
+  -- turn it down, as refusing it does (G.offer and heroOffer both cleared)
+  if G.player.heroOffer and not G.player.heroOffer.first then
+    G.player.heroOffer = nil
+  end
+  dismissOffer()
 
   local function control(view, id)
     for _, k in ipairs(view.dialog.controls) do if k.id == id then return k end end
