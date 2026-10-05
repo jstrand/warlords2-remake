@@ -103,8 +103,13 @@ Active).
 
 `start_of_turn` (Ghidra `8cc6:0000`) runs these steps in this order:
 
-1. Reports and diplomacy messages.
-2. **A side with no cities is eliminated** (`8cc6:0952`); nothing below runs.
+1. Reports and diplomacy messages; the side's proposals are applied
+   (`diplomacy_apply`).
+2. **A computer side with no cities does nothing more**: no hero, income,
+   production or AI turn. It is not out of the game yet — that happens at
+   the round's end (see End of the game). A human side's turn
+   (`8cc6:0259`) has no such test: a human with no city still plays, with
+   whatever armies it has left, until the round's end.
 3. **Hero offer** (see Heroes), then **hero promotions**.
 4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
    `8cc6:0827`).
@@ -387,7 +392,11 @@ Walking the path, step by step:
 - **A city not owned by the mover** stops the walk and starts an attack on it
   (`attack_tile`). If the city is taken, the walk continues into it.
 - **A tile occupied by another side** stops the walk and attacks, but only if
-  the two sides are **not at peace** (diplomacy state ≠ 0).
+  the two sides are **not at peace** (diplomacy state ≠ 0). A side at
+  peace's stack does not stop the walk at all: its tile is **passed over**
+  like a full one below — the stack may not stop there, and walks on beyond
+  it. (The pathfinder never avoids other sides' stacks, so a route through
+  one is common.)
 - **The 8-army limit:** the stack may only *stop* on a tile where
   `armies already there + stack size ≤ 8`. Steps that would breach it are
   passed over — the walk keeps going and lands on the first later step that
@@ -567,6 +576,12 @@ diagonals included — never by walking in. The walk stops the moment its next
 step would be the city and `attack_tile` fights from where it stands; the
 survivors move in afterwards. What the assault looks like on screen is in
 [`re/ui.md`](re/ui.md) › The assault.
+
+Only a **standing city** is fought for as one: `combat_setup` (`6a89:008b`)
+and `after_battle` (`67cc:0a6b`) test the battle tile's terrain for 10. A
+razed city's tiles are ruins (terrain 11), so a fight there is an ordinary
+one for that tile alone — defenders on the other three tiles of the old
+footprint stay out of it — and winning it takes nothing.
 
 ### Loot (automatic, `67cc:0a6b`)
 
@@ -950,25 +965,54 @@ proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
 ## End of the game
 
-`end_game_check` (Ghidra `8065:1aed`) counts sides in play by controller, and
-counts the cities that still exist (razed ones excluded):
+Everything here happens at **the round's end**: when the turn order wraps,
+`next_player` (Ghidra `8065:17f6`) counts the turn on, deals a new order
+(*Random Turns*), puts the fallen out of the game, runs the end check, and
+writes the turn to `CURRENT.HST`. Nothing is checked as a single turn ends.
+
+**The fallen** (`player_eliminated`, `8065:18ab`). Every side in play that
+owns no city is put out, in side order: its heroes drop what they carry, all
+its armies are removed, it gets a *vanquished* deed, its gold is set to 0,
+and every pair with it — both ways — is set to state **intermediate** with
+an intermediate proposal. Its fall is told with a random line of group 11
+(*%s, thy empire has fallen!* and four others): in a **box** if any human was
+still in play or the side was a human's, otherwise in the **status bar** for
+100 ticks.
+
+**The check** (`end_game_check`, `8065:1aed`) then counts the sides in play
+by controller, and the cities that still exist (razed ones excluded). A
+human side found **out of play is turned into a computer**, so its fall is
+noticed only once.
 
 - **No side left in play** → "Alas! No more players are left!" (group 12)
   and the game ends.
-- **All human sides gone** (and there were some) → "No further human resistance
-  is possible! But the battle will continue!" (group 13). The computers play on.
+- **The last human has just fallen** (no human in play, one out of play) →
+  "No further human resistance is possible! But the battle will continue!"
+  and "Hold down 'Shift' or 'Alt' to stop the war" (group 13). The computers
+  play on. A game that **never had a human** says neither: it says "No humans
+  are playing! / Hold down 'Shift' or 'Alt' to stop the war" (group 14) once,
+  as it begins (`8065:0000`, from `start_game_from_setup`; not on a load).
+  Either way, Shift or Alt during a computer's turn opens Settings, where a
+  side can be handed back to a human.
 - **One human side, no computer sides**, and it owns **more than half** of the
   existing cities → **victory**. The *game won* flag (`.SCN` `0x15b`) is set.
 - **No human sides, one computer side left** → that side has triumphed
-  (group 15). It's switched to human control so the game can be inspected,
-  and the *game won* flag is set.
+  (group 15, its first line, in a box). It's switched to human control and
+  its turn opens as a human's, so the game can be inspected, and the *game
+  won* flag is set.
 - **One human side with computer sides still playing**: if it owns more than
   half of all cities *and* more than the largest computer side + cities/8,
-  the *surrender offered* flag (`.SCN` `0x15d`) is set. That leads to the
-  "Surrender!" message (group 17).
+  the *surrender offered* flag (`.SCN` `0x15d`) is set — once; it is never
+  offered again. That leads to the "Surrender!" message (group 17).
+
+There is **no turn limit**. A game of computers ends only when one side holds
+every city there is (or every side is gone).
 
 Once *game won* is set, quests that need an enemy (types 3–5) aren't handed
-out.
+out, and **End Turn does nothing** (`end_turn`, `8065:2074`, tests the flag
+first): the winner can look the world over and move what it has left, but
+the game goes no further. The remakes let the turns go on instead, with the
+one side left playing them.
 
 ## Still unknown
 

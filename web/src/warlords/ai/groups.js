@@ -506,6 +506,8 @@ function* gather(g, side, gi) {
       if (list.length === 0) break;
       const sel = core.select(g, list);
       const flood = core.floodFrom(g, side.index, a.x, a.y, 15, sel);
+      const was = list.map((b) => [b.x, b.y, b.moves]);
+      const armies = g.armies.length;
       const r = yield* stagedStep(g, side, gi, list, grp.target, flood, sel);
       if (r === 0) {
         const last = list[list.length - 1];
@@ -513,7 +515,12 @@ function* gather(g, side, gi) {
           yield* march(g, side, gi, list, city(g, last.aiDest));
         }
       } else if (r === 2) {
-        again = true;
+        // The original goes round again for as long as a stack is found to
+        // strike. One that cannot take a step would be found every time --
+        // until the odds' dice fall short, which for a strong stack is
+        // never -- so a pass that changed nothing ends it here.
+        again = g.armies.length !== armies ||
+          list.some((b, i) => b.x !== was[i][0] || b.y !== was[i][1] || b.moves !== was[i][2]);
       }
     }
   }

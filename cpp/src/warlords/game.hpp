@@ -66,7 +66,9 @@ void tidyTowers(Game& g);
 /** Is one of the side's heroes carrying a double-movement item on this tile? */
 bool heroWithDoubleMoveAt(const Game& g, const Side& side, int x, int y);
 
-/** Run the start of `side`'s turn; false if it was eliminated (8cc6:0000). */
+/** Run the start of `side`'s turn; false if it has no turn to play: a
+ *  computer side left with no city (8cc6:0000) does nothing more until the
+ *  round's end puts it out. A human's turn (8cc6:0259) goes on regardless. */
 bool startTurn(Game& g, Side& side);
 /** Hand the turn to the next living side, starting a new game turn when the
  *  list wraps. Returns the side now to play, or null if the game is over. */
@@ -123,7 +125,17 @@ void revealStart(Game& g, const Side& side);
 
 /** The surrender offer taken (8065:1e4e). */
 void acceptSurrender(Game& g, Side& side);
-/** Is the game over, or nearly? (end_game_check, 8065:1aed). */
+/** STRING.DAT group 11 holds five ways of saying a side is gone. */
+constexpr int FALLEN_LINES = 5;
+/** Every side in the game left without a city is put out of it, in side
+ *  order (8065:18ab); told in a box while a human plays or when the side was
+ *  a human's, otherwise in the status bar. */
+std::vector<Fallen> eliminateFallen(Game& g);
+/** The round's end (8065:17f6): the fallen are put out, then the end is
+ *  looked for. Leaves the finding in g.ending. */
+Ending endRound(Game& g);
+/** Is the game over, or nearly? Run at the round's end, once the fallen are
+ *  out (end_game_check, 8065:1aed). */
 Ending checkEnd(Game& g);
 
 /** Search whatever the stack is standing on, if anything. */

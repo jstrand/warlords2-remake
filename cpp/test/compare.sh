@@ -2,7 +2,7 @@
 # Play the same all-computer games in the Lua remake and in the C++ port and
 # compare them turn by turn. Run from the repository root, after building
 # into cpp/build:
-#     sh cpp/test/compare.sh [scenario seed turns [hidden|save]]
+#     sh cpp/test/compare.sh [scenario seed turns [hidden|diplo|save]]
 set -u
 tmp=${TMPDIR:-/tmp}/w2compare.$$
 mkdir -p "$tmp"
@@ -30,6 +30,9 @@ else
   run ERYTHEA 9 50 hidden
   run ISLADIA 4 50 hidden
   run ERYTHEA 3 40 save
+  run ISLADIA 3 40 diplo
+  run ERYTHEA 4 60 diplo
+  run DRAGON 6 40 diplo hidden
 fi
 rm -rf "$tmp"
 exit $fail

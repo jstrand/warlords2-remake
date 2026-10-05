@@ -86,7 +86,10 @@ end
 function combat.lines(g, stack, x, y)
   local gameMod = require("warlords.game")
   local attacker = stack[1] and stack[1].owner
+  -- only a standing city is fought for as one (its terrain is 10, which
+  -- combat_setup and after_battle test); ruins are open ground
   local city = g.map.cityTile[y * g.map.width + x]
+  if city and city.razed then city = nil end
 
   local tiles = { { x, y } }
   if city then

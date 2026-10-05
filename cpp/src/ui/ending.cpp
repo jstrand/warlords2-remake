@@ -6,6 +6,12 @@
 //   21 RESIGNNO.PCK "Peace is not an option!" -- dialog 31: Done (484)
 //   22 RESIGNYE.PCK "Congratulations!" -- dialog 32: Done (483)
 // Each comes with its own music.
+//
+// The round's end puts out the sides left without a city first, each told
+// with a line of group 11 -- in a box, or in the status bar when no human
+// plays (8065:18ab) -- and says once when the last human has fallen (group
+// 13). When the last computer side has triumphed (group 15) it is handed to
+// the player, its turn opening as a human's, to look the world over.
 #include "platform/sound.hpp"
 #include "ui/dialogs.hpp"
 #include "util/util.hpp"
@@ -68,8 +74,48 @@ void victory(kit::Done after) {
 }
 }  // namespace
 
+std::string fallenText(const w2::Fallen& f) { return w2::format(t(0xb, f.line), f.side->name); }
+
+namespace {
+// What the round's end put out and whether the last human fell, in boxes,
+// unless the computer's turns have told it already; then `after`.
+void tell(w2::Ending& e, kit::Done after) {
+  auto done = [after]() { if (after) after(); };
+  if (e.told) return done();
+  e.told = true;
+  std::vector<std::string> lines;
+  for (auto& f : e.fallen) lines.push_back(fallenText(f));
+  bool noHumans = e.noHumans;
+  auto next = std::make_shared<std::function<void(size_t)>>();
+  std::weak_ptr<std::function<void(size_t)>> self = next;
+  *next = [lines, noHumans, done, self](size_t i) {
+    if (i < lines.size()) {
+      auto again = self.lock();
+      search::say(lines[i], [again, i]() { (*again)(i + 1); });
+      return;
+    }
+    if (noHumans) {
+      search::message(t(0xd, 0), t(0xd, 1), [done]() { search::message(t(0xd, 2), t(0xd, 3), done); });
+      return;
+    }
+    done();
+  };
+  (*next)(0);
+}
+}  // namespace
+
 void show(w2::Ending& e, kit::Done after) {
   auto done = [after]() { if (after) after(); };
+  if (!e.told) {
+    tell(e, [&e, after]() { show(e, after); });
+    return;
+  }
+  // the last computer side has triumphed, and is the player's now
+  if (e.triumph && e.winner == G.player && !e.shown) {
+    e.shown = true;
+    search::say(w2::format(t(0xf, 0), G.player->name), done);
+    return;
+  }
   if (e.surrender && !e.shown) {
     e.shown = true;
     sound::music(w2::cues::SURRENDER);                  // 8065:1f68
@@ -91,7 +137,11 @@ void show(w2::Ending& e, kit::Done after) {
   done();
 }
 
-void over(const w2::Ending& e) {
+void over(w2::Ending& e) {
+  if (!e.told && !e.fallen.empty()) {
+    tell(e, [&e]() { over(e); });
+    return;
+  }
   if (e.winner) {
     search::say(w2::format(t(0xf, 0), e.winner->name));
     return;

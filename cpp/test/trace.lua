@@ -1,7 +1,7 @@
 -- An all-computer game, one line per side's turn: the Lua half of the
 -- Lua-vs-C++ comparison (cpp/test/trace.cpp prints the same lines).
 --
---     luajit cpp/test/trace.lua ERYTHEA 1 10 [hidden] [save]
+--     luajit cpp/test/trace.lua ERYTHEA 1 10 [hidden] [diplo] [save]
 --
 -- Run from the repository root.
 package.path = "love2d/?.lua;" .. package.path
@@ -12,7 +12,10 @@ local scen, seed, turns = arg[1] or "ERYTHEA", tonumber(arg[2] or "1"), tonumber
 local opts = { seed = seed }
 local flags = {}
 for i = 4, #arg do flags[arg[i]] = true end
-if flags.hidden then opts.options = { hiddenMap = 1 } end
+opts.options = {}
+if flags.hidden then opts.options.hiddenMap = 1 end
+-- "diplo": with Diplomacy on, so that sides make peace
+if flags.diplo then opts.options.diplomacy = 1 end
 local g = game.new("original", scen, opts)
 local save = require("warlords.save")
 for _, s in ipairs(g.sides) do s.computer = true end

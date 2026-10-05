@@ -282,11 +282,20 @@ struct HistoryRecord {
   std::vector<int> owners;
   std::vector<Deed> events;
 };
+/** A side put out at the round's end (8065:18ab), and how it is told: a
+ *  line of STRING.DAT group 11, in a box or in the status bar. */
+struct Fallen {
+  Side* side = nullptr;
+  int line = 0;
+  bool boxed = false;
+};
 struct Ending {
-  bool over = false, won = false, surrender = false, noHumans = false;
+  bool over = false, won = false, triumph = false, surrender = false, noHumans = false;
   bool shown = false;   // the front end has told it
+  bool told = false;    // ... and the fallen and the last human's fall
   Side* winner = nullptr;
   std::string message;
+  std::vector<Fallen> fallen;
 };
 
 struct Grids;     // move.cpp's cached cost grids

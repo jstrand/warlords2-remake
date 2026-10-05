@@ -122,9 +122,11 @@ void open(w2::City* c, int mode = w2::NONE);
 namespace buyprod { void open(w2::City* c, kit::Done after = nullptr); }
 namespace fightorder { void open(); }
 namespace ending {
+/** A side put out at the round's end: a line of group 11 (8065:18ab). */
+std::string fallenText(const w2::Fallen& f);
 /** The game's end, or nearly: told, then `after`. */
 void show(w2::Ending& e, kit::Done after);
-void over(const w2::Ending& e);
+void over(w2::Ending& e);
 }
 namespace diplomacyui {
 void open();

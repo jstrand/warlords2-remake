@@ -7,14 +7,18 @@
 --   21 RESIGNNO.PCK "Peace is not an option!" -- dialog 31: Done (484)
 --   22 RESIGNYE.PCK "Congratulations!" -- dialog 32: Done (483)
 --
--- The ways a game ends, as the check at the round's end finds them:
+-- The ways a game ends, as the check at the round's end finds them, once
+-- the sides left without a city are out -- each told with a line of group
+-- 11, in a box, or in the status bar when no human plays (8065:18ab):
 --
 --   nobody left: "Alas! / No more players are left!", "So I bid thee a fond
 --     'FAREWELL' / Hit any key to return to DOS." (group 12), then out
---   no human left: "No further human resistance is possible! / But the
---     battle will continue!" and the rest of group 13
+--   the last human fallen: "No further human resistance is possible! / But
+--     the battle will continue!" and the rest of group 13, once; a game
+--     with no human from the start says group 14 as it begins instead
 --   one computer side left: "%s, thou hast triumphed!" (group 15), the side
---     handed to the player to look the world over
+--     handed to the player, its turn opening as a human's, to look the world
+--     over
 --   a lone human with more than half the cities: group 15's two lines, the
 --     Congratulations picture (8065:1fbd), then the hidden map lifted
 --     (8065:2004) and "At thy leisure / thou mayst inspect thy kingdom"
@@ -78,12 +82,45 @@ local function victory(after)
   end)
 end
 
+--- A side put out at the round's end: a line of group 11 (8065:18ab).
+function M.fallenText(f)
+  return t(0xb, f.line):format(f.side.name or "")
+end
+
+--- What the round's end put out and whether the last human fell, in boxes,
+--- unless the computer's turns have told it already; then `after`.
+local function tell(ending, after)
+  if ending.told then return after() end
+  ending.told = true
+  local i = 0
+  local function nextOne()
+    i = i + 1
+    local f = (ending.fallen or {})[i]
+    if f then return searchUi.say(M.fallenText(f), nextOne) end
+    if ending.noHumans then
+      return searchUi.message(t(0xd, 0), t(0xd, 1), function()
+        searchUi.message(t(0xd, 2), t(0xd, 3), after)
+      end)
+    end
+    after()
+  end
+  nextOne()
+end
+
 --- What the round's end found (g.ending), shown before the turn goes on.
 --- `after` runs once it has all been seen.
 function M.show(ending, after)
   local G = kit.G
   after = after or function() end
   if not ending then return after() end
+  if not ending.told then
+    return tell(ending, function() M.show(ending, after) end)
+  end
+  -- the last computer side has triumphed, and is the player's now
+  if ending.triumph and ending.winner == G.player and not ending.shown then
+    ending.shown = true
+    return searchUi.say(t(0xf, 0):format(G.player.name or ""), after)
+  end
   if ending.surrender and not ending.shown then
     ending.shown = true
     sound.music(cues.SURRENDER)                  -- 8065:1f68
@@ -108,6 +145,9 @@ end
 function M.over(ending)
   local G = kit.G
   ending = ending or {}
+  if not ending.told and ending.fallen then
+    return tell(ending, function() M.over(ending) end)
+  end
   if ending.winner then
     return searchUi.say(t(0xf, 0):format(ending.winner.name or ""))
   end

@@ -94,7 +94,10 @@ int subtract(const Game& g, const std::vector<Army*>& line) {
 
 Lines lines(const Game& g, const std::vector<Army*>& stack, int x, int y) {
   int attacker = stack.empty() ? NONE : stack[0]->owner;
+  // only a standing city is fought for as one (its terrain is 10, which
+  // combat_setup and after_battle test); ruins are open ground
   City* city = g.map->cityTile[y * g.map->width + x];
+  if (city && city->razed) city = nullptr;
   std::vector<std::pair<int, int>> tiles = {{x, y}};
   if (city) {
     tiles.clear();

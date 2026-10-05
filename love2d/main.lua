@@ -275,7 +275,16 @@ function openStart()
                                         greatest = extra and extra.greatest })
       G.selection, G.over, G.stratImage = nil, nil, nil
       beginGame()
-      if G.player.computer and G.playComputer then G.playComputer() end
+      if G.player.computer and G.playComputer then
+        -- a game with no human in it says so as it begins (8065:00f1)
+        local human = false
+        for _, s in ipairs(G.g.sides) do if not s.computer then human = true end end
+        if human then G.playComputer()
+        else
+          local t = function(i) return uidata.text(G.screen.ui, 0xe, i) end
+          searchUi.message(t(0), t(1), G.playComputer)
+        end
+      end
     end)
   end, function(g)
     G.starting = false
@@ -1245,6 +1254,8 @@ function resumeComputer()
     searchUi.message(t(0), t(1), function()
       searchUi.message(t(2), t(3), function() G.aiWait = true end)
     end)
+  elseif what == "fallen" then
+    searchUi.say(a, function() G.aiWait = true end)          -- 8065:10fb
   else
     G.aiWait = true                 -- a turn done: go on at the next frame
   end
@@ -1266,9 +1277,26 @@ function stepComputer()
   resumeComputer()
 end
 
+--- What the round's end found, as the original tells it inside the
+--- computer's turns: each side put out in a box, or -- with no human
+--- playing -- in the status bar for 100 ticks (8065:18ab), then the last
+--- human's fall in two boxes (8065:1c6f). The rest waits for the turn that
+--- follows (ui/ending.lua).
+local function announce()
+  local e = G.g.ending
+  if not e or e.told then return end
+  e.told = true
+  for _, f in ipairs(e.fallen or {}) do
+    local text = require("ui.ending").fallenText(f)
+    if f.boxed then coroutine.yield("fallen", text) else status(text, 100) end
+  end
+  if e.noHumans then coroutine.yield("nohumans") end
+end
+
 --- Play computer sides from `side` on, until a human's turn or the end.
 function playComputers(side)
   G.aiRun = coroutine.create(function()
+    announce()                      -- a human's turn may have ended the round
     while side and side.computer do
       G.aiSide = side
       -- 8065:2123: each computer turn opens with a song that plays once
@@ -1289,7 +1317,7 @@ function playComputers(side)
       G.aiStatus.progress = 100
       coroutine.yield("progress")
       side = game.endTurn(G.g)
-      if G.g.ending and G.g.ending.noHumans then coroutine.yield("nohumans") end
+      announce()
       coroutine.yield("turn")
     end
     return side

@@ -249,10 +249,38 @@ std::unique_ptr<Game> newGame(const std::string& dataDir, const std::string& sce
   return gp;
 }
 
-static void eliminate(Game& g, Side& side) {
-  side.alive = false;
+// Put a side with no city left out of the game (8065:18ab): its heroes drop
+// what they carry, its armies are gone, it is vanquished, and its gold is 0.
+// Every side then stands uneasy with it, both ways, state and proposal.
+static Fallen eliminate(Game& g, Side& side, bool boxed) {
+  std::vector<Army*> mine;
+  for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
+    if (g.armies[i]->owner == side.index) mine.push_back(g.armies[i]);
+  }
+  disband(g, side, mine);
   history::deed(g, &side, history::VANQUISHED, side.index, 0, "");     // 8065:19f1
+  int line = g.rng.dice(1, FALLEN_LINES, -1);
   g.log.push_back(side.name + " has been eliminated.");
+  side.alive = false;
+  side.gold = 0;
+  for (int o = 0; o < 8; o++) {
+    if (o == side.index) continue;
+    for (int k : {side.index * 8 + o, o * 8 + side.index}) {
+      g.diplomacy.state[k] = diplomacy::INTERMEDIATE;
+      g.diplomacy.proposal[k] = diplomacy::INTERMEDIATE;
+    }
+  }
+  return Fallen{&side, line, boxed};
+}
+
+std::vector<Fallen> eliminateFallen(Game& g) {
+  bool human = false;
+  for (Side* s : g.sides) if (s->alive && !s->computer) human = true;
+  std::vector<Fallen> fallen;
+  for (Side* s : g.sides) {
+    if (s->alive && sideCities(g, *s).empty()) fallen.push_back(eliminate(g, *s, human || !s->computer));
+  }
+  return fallen;
 }
 
 static void applyIncome(Game& g, Side& side) {
@@ -392,13 +420,10 @@ bool heroWithDoubleMoveAt(const Game& g, const Side& side, int x, int y) {
 }
 
 bool startTurn(Game& g, Side& side) {
-  if (sideCities(g, side).empty()) {
-    eliminate(g, side);
-    return false;
-  }
   tidyExplored(g, side.index);
   side.diploNews = diplomacy::apply(g, side);
   for (auto& m : side.diploNews) g.log.push_back(m);
+  if (side.computer && sideCities(g, side).empty()) return false;
   side.heroOffer = hero::offer(g, side);
   hero::checkPromotions(g, side);
   auto questResult = quest::event(g, side, "turn");
@@ -414,18 +439,20 @@ bool startTurn(Game& g, Side& side) {
 Side* endTurn(Game& g) {
   Side* leaving = g.side;
   if (leaving && leaving->alive && (leaving->computer || !g.won)) diplomacy::scoreUpdate(g, *leaving);
-  Ending ending = checkEnd(g);
-  if (!ending.message.empty()) g.log.push_back(ending.message);
-  g.ending = ending;
-  if (ending.over) {
-    g.side = nullptr;
-    return nullptr;
-  }
-  for (size_t n = 0; n < g.sides.size(); n++) {
+  // what the last round's end found is for the turn that followed it only
+  g.ending = Ending{};
+  for (size_t n = 0; n < 2 * g.sides.size() + 1; n++) {
     g.current++;
     if (g.current >= (int)g.sides.size()) {
       g.current = 0;
       g.turn++;
+      // the round's end (8065:17f6): the fallen are put out of the game and
+      // the end looked for, and then the turn is written to the history
+      endRound(g);
+      if (g.ending.over) {
+        g.side = nullptr;
+        return nullptr;
+      }
       history::record(g);     // 8065:17f6 -> 6d51:0d60
     }
     Side* side = g.sides[g.current];
@@ -772,40 +799,47 @@ void acceptSurrender(Game& g, Side& side) {
   history::deed(g, &side, history::VICTORIOUS, side.index, 0, "");
 }
 
+Ending endRound(Game& g) {
+  auto fallen = eliminateFallen(g);
+  Ending ending = checkEnd(g);
+  ending.fallen = fallen;
+  if (!ending.message.empty()) g.log.push_back(ending.message);
+  g.ending = ending;
+  return ending;
+}
+
 Ending checkEnd(Game& g) {
-  std::vector<Side*> humans, computers, alive;
+  // a human side out of the game is the computer's from now on, so that its
+  // fall is told only once
+  std::vector<Side*> humans, computers;
+  bool fallenHuman = false;
   for (Side* s : g.sides) {
-    if (s->alive && !sideCities(g, *s).empty()) {
-      alive.push_back(s);
+    if (s->alive) {
       (s->computer ? computers : humans).push_back(s);
+    } else if (!s->computer) {
+      s->computer = true;
+      fallenHuman = true;
     }
   }
   int standing = 0;
   for (auto& c : g.map->cities) if (!c.razed) standing++;
 
   Ending e;
-  if (alive.empty()) {
+  if (humans.empty() && computers.empty()) {
     g.over = true;
     e.over = true;
     e.message = "Alas! No more players are left!";
     return e;
   }
-  if (humans.empty() && computers.size() > 1 && !g.noHumansSaid) {
+  // the last human has fallen and the computers fight on (8065:1c6f); a game
+  // that never had a human said so as it began (group 14) instead
+  if (!g.won && humans.empty() && fallenHuman && !g.noHumansSaid) {
     g.noHumansSaid = true;
     e.noHumans = true;
-    return e;
   }
-  if (humans.empty() && computers.size() == 1) {
-    g.won = true;
-    g.over = true;
-    computers[0]->computer = false;          // so the finished game can be looked at
-    history::deed(g, computers[0], history::VICTORIOUS, computers[0]->index, 0, "");
-    e.over = true;
-    e.winner = computers[0];
-    e.message = computers[0]->name + " has triumphed!";
-    return e;
-  }
-  if (humans.size() == 1 && computers.empty() && !g.won) {
+  // a lone human with more than half the cities has won -- once; the game
+  // goes on, for the kingdom to be looked over
+  if (!g.won && humans.size() == 1 && computers.empty()) {
     int mine = (int)sideCities(g, *humans[0]).size();
     if (mine * 2 > standing) {
       g.won = true;
@@ -813,10 +847,21 @@ Ending checkEnd(Game& g) {
       e.won = true;
       e.winner = humans[0];
       e.message = humans[0]->name + " rules the world!";
-      return e;
     }
   }
-  if (humans.size() == 1 && !computers.empty()) {
+  // the last computer side has triumphed: it is handed to the player, its
+  // turn opens as a human's, and the world can be looked over
+  if (!g.won && humans.empty() && computers.size() == 1) {
+    Side* winner = computers[0];
+    g.won = true;
+    winner->computer = false;
+    history::deed(g, winner, history::VICTORIOUS, winner->index, 0, "");
+    e.triumph = true;
+    e.winner = winner;
+    e.message = winner->name + " has triumphed!";
+  }
+  // offered once, while computers still play
+  if (!g.won && humans.size() == 1 && !computers.empty() && !g.surrenderOffered) {
     int mine = (int)sideCities(g, *humans[0]).size();
     int biggest = 0;
     for (Side* s : computers) biggest = std::max(biggest, (int)sideCities(g, *s).size());
@@ -824,7 +869,6 @@ Ending checkEnd(Game& g) {
       g.surrenderOffered = true;
       e.surrender = true;
       e.message = "Your enemies offer their surrender!";
-      return e;
     }
   }
   return e;

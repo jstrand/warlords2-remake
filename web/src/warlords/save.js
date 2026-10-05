@@ -176,6 +176,8 @@ export function decode(text, dataDir) {
     c.claim = saved.claim ?? c.claim;
     c.razedBy = saved.razedBy ?? undefined;
     c.name = saved.name || c.name;
+    // ruins belong to nobody; older saves can have them won in a fight
+    if (c.razed) c.ownerIndex = undefined;
   }
   scn.refreshCityTiles(g.map);
 

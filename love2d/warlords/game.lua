@@ -274,11 +274,55 @@ end
 
 --------------------------------------------------------------- turn sequence
 
-local function eliminate(g, side)
-  side.alive = false
+-- STRING.DAT group 11 holds five ways of saying a side is gone
+game.FALLEN_LINES = 5
+
+--- Put a side with no city left out of the game (8065:18ab): its heroes drop
+--- what they carry, its armies are gone, it is vanquished, and its gold is
+--- 0. Every side then stands uneasy with it, both ways, state and proposal.
+--- Returns how it is announced: a line of group 11, picked at random, in a
+--- box when `boxed`, otherwise in the status bar.
+local function eliminate(g, side, boxed)
+  local mine = {}
+  for i = #g.armies, 1, -1 do
+    if g.armies[i].owner == side.index then mine[#mine + 1] = g.armies[i] end
+  end
+  game.disband(g, side, mine)
   local history = require("warlords.history")
   history.deed(g, side, history.VANQUISHED, side.index, 0, "")     -- 8065:19f1
+  local line = g.rng:dice(1, game.FALLEN_LINES, -1)
   g.log[#g.log + 1] = ("%s has been eliminated."):format(side.name)
+  side.alive = false
+  side.gold = 0
+  local diplomacy = require("warlords.diplomacy")
+  if g.diplomacy then
+    for o = 0, 7 do
+      if o ~= side.index then
+        for _, k in ipairs({ side.index * 8 + o, o * 8 + side.index }) do
+          g.diplomacy.state[k] = diplomacy.INTERMEDIATE
+          g.diplomacy.proposal[k] = diplomacy.INTERMEDIATE
+        end
+      end
+    end
+  end
+  return { side = side, line = line, boxed = boxed }
+end
+
+--- Every side in the game left without a city is put out of it, in side
+--- order (8065:18ab). Its fall is told in a box while a human plays or when
+--- the side was a human's; otherwise in the status bar.
+function game.eliminateFallen(g)
+  local human = false
+  for _, s in ipairs(g.sides) do
+    if s.alive and not s.computer then human = true end
+  end
+  local fallen = {}
+  for _, s in ipairs(g.sides) do
+    if s.alive and #game.sideCities(g, s) == 0 then
+      fallen[#fallen + 1] = eliminate(g, s, human or not s.computer)
+    end
+  end
+  return fallen
 end
 
 --- Step 4: gold += income - upkeep, never below 0.
@@ -464,13 +508,12 @@ function game.heroWithDoubleMoveAt(g, side, x, y)
   return false
 end
 
---- Run the start of `side`'s turn. Returns false if the side was eliminated.
--- The order is the original's (start_of_turn, Ghidra 8cc6:0000).
+--- Run the start of `side`'s turn. Returns false if the side has no turn to
+--- play: a computer side left with no city (start_of_turn, Ghidra 8cc6:0000,
+--- whose order this is) does nothing more until the round's end puts it
+--- out. A human's turn (8cc6:0259) goes on regardless, with whatever armies
+--- it still has.
 function game.startTurn(g, side)
-  if #game.sideCities(g, side) == 0 then
-    eliminate(g, side)
-    return false
-  end
   game.tidyExplored(g, side)
   local heroMod = require("warlords.hero")
   -- what changed is said in the status bar, for a watched computer
@@ -478,6 +521,7 @@ function game.startTurn(g, side)
   for _, m in ipairs(side.diploNews) do
     g.log[#g.log + 1] = m
   end
+  if side.computer and #game.sideCities(g, side) == 0 then return false end
   side.heroOffer = heroMod.offer(g, side)
   heroMod.checkPromotions(g, side)
   local questResult = require("warlords.quest").event(g, side, "turn")
@@ -502,18 +546,20 @@ function game.endTurn(g)
   if leaving and leaving.alive and (leaving.computer or not g.won) then
     require("warlords.diplomacy").scoreUpdate(g, leaving)
   end
-  local ending = game.checkEnd(g)
-  if ending.message then g.log[#g.log + 1] = ending.message end
-  g.ending = ending
-  if ending.over then
-    g.side = nil
-    return nil
-  end
-  for _ = 1, #g.sides do
+  -- what the last round's end found is for the turn that followed it only
+  g.ending = nil
+  for _ = 1, 2 * #g.sides + 1 do
     g.current = g.current + 1
     if g.current > #g.sides then
       g.current = 1
       g.turn = g.turn + 1
+      -- the round's end (8065:17f6): the fallen are put out of the game and
+      -- the end looked for, and then the turn is written to the history
+      game.endRound(g)
+      if g.ending.over then
+        g.side = nil
+        return nil
+      end
       require("warlords.history").record(g)     -- 8065:17f6 -> 6d51:0d60
     end
     local side = g.sides[g.current]
@@ -943,16 +989,33 @@ function game.acceptSurrender(g, side)
   history.deed(g, side, history.VICTORIOUS, side.index, 0, "")
 end
 
---- Is the game over, or nearly? Returns a table describing the position:
---   { over = bool, winner = side or nil, message = "..." }
+--- The round's end (8065:17f6): the sides left without a city are put out
+--- of the game, then the end is looked for. Leaves the finding in g.ending,
+--- with `fallen` (game.eliminateFallen) for the interface to tell first.
+function game.endRound(g)
+  local fallen = game.eliminateFallen(g)
+  local ending = game.checkEnd(g)
+  ending.fallen = fallen
+  if ending.message then g.log[#g.log + 1] = ending.message end
+  g.ending = ending
+  return ending
+end
+
+--- Is the game over, or nearly? Run at the round's end, once the fallen are
+--- out. Returns a table describing the position:
+--   { over, winner, message, noHumans, won, triumph, surrender }
 -- end_game_check, Ghidra 8065:1aed. Sets g.won and g.surrenderOffered, the
 -- two flags the original keeps at .SCN 0x15b and 0x15d.
 function game.checkEnd(g)
-  local humans, computers, alive = {}, {}, {}
+  -- A human side out of the game is the computer's from now on, so that its
+  -- fall is told only once.
+  local humans, computers, fallenHuman = {}, {}, false
   for _, s in ipairs(g.sides) do
-    if s.alive and #game.sideCities(g, s) > 0 then
-      alive[#alive + 1] = s
+    if s.alive then
       if s.computer then computers[#computers + 1] = s else humans[#humans + 1] = s end
+    elseif not s.computer then
+      s.computer = true
+      fallenHuman = true
     end
   end
 
@@ -961,40 +1024,45 @@ function game.checkEnd(g)
     if not c.razed then standing = standing + 1 end
   end
 
-  if #alive == 0 then
+  if #humans + #computers == 0 then
     g.over = true
     return { over = true, message = "Alas! No more players are left!" }
   end
 
-  -- the last human gone and the computers fighting on (8065:1c6f): said once
-  if #humans == 0 and #computers > 1 and not g.noHumansSaid then
+  local ending = { over = false }
+  local history = require("warlords.history")
+  -- the last human has fallen and the computers fight on (8065:1c6f); a game
+  -- that never had a human said so as it began (group 14) instead
+  if not g.won and #humans == 0 and fallenHuman and not g.noHumansSaid then
     g.noHumansSaid = true
-    return { over = false, noHumans = true }
-  end
-
-  if #humans == 0 and #computers == 1 then
-    g.won, g.over = true, true
-    computers[1].computer = false          -- so the finished game can be looked at
-    local history = require("warlords.history")
-    history.deed(g, computers[1], history.VICTORIOUS, computers[1].index, 0, "")
-    return { over = true, winner = computers[1],
-             message = ("%s has triumphed!"):format(computers[1].name) }
+    ending.noHumans = true
   end
 
   -- A lone human with more than half the cities has won -- once. The game
   -- goes on, for the kingdom to be looked over (group 16), so it is not over.
-  if #humans == 1 and #computers == 0 and not g.won then
+  if not g.won and #humans == 1 and #computers == 0 then
     local mine = #game.sideCities(g, humans[1])
     if mine * 2 > standing then
       g.won = true
-      local history = require("warlords.history")
       history.deed(g, humans[1], history.VICTORIOUS, humans[1].index, 0, "")
-      return { over = false, won = true, winner = humans[1],
-               message = ("%s rules the world!"):format(humans[1].name) }
+      ending.won, ending.winner = true, humans[1]
+      ending.message = ("%s rules the world!"):format(humans[1].name)
     end
   end
 
-  if #humans == 1 and #computers > 0 then
+  -- The last computer side has triumphed: it is handed to the player, its
+  -- turn opens as a human's, and the world can be looked over.
+  if not g.won and #humans == 0 and #computers == 1 then
+    local winner = computers[1]
+    g.won = true
+    winner.computer = false
+    history.deed(g, winner, history.VICTORIOUS, winner.index, 0, "")
+    ending.triumph, ending.winner = true, winner
+    ending.message = ("%s has triumphed!"):format(winner.name)
+  end
+
+  -- offered once, while computers still play
+  if not g.won and #humans == 1 and #computers > 0 and not g.surrenderOffered then
     local mine = #game.sideCities(g, humans[1])
     local biggest = 0
     for _, s in ipairs(computers) do
@@ -1002,12 +1070,12 @@ function game.checkEnd(g)
     end
     if mine * 2 > standing and mine > biggest + math.floor(standing / 8) then
       g.surrenderOffered = true
-      return { over = false, surrender = true,
-               message = "Your enemies offer their surrender!" }
+      ending.surrender = true
+      ending.message = "Your enemies offer their surrender!"
     end
   end
 
-  return { over = false }
+  return ending
 end
 
 --------------------------------------------------------------------- sites

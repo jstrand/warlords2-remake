@@ -1859,15 +1859,23 @@ hills, (248, 30) woods, (152, 30) hills.
 
 ## The end of the game
 
-`8065:1aed` runs as the round ends. What it finds, and what the player sees:
+`8065:1aed` runs as the round ends, just after `8065:18ab` has put out every
+side with no city left. Each of those is told with a random line of group 11
+(*%s, for thee the war is over!*, *… thy empire has fallen!*, *… thou art
+vanquished!*, *… thou art no more!*, *… thy cities are as dust!*): in a one-line
+box (`8065:10fb`) while a human is in play or when the side was a human's,
+otherwise in the status bar (`8065:11d1`) for 100 ticks. What the check then
+finds, and what the player sees:
 
 - **nobody in play**: *Alas!* / *No more players are left!*, then *So I bid
   thee a fond 'FAREWELL'* / *Hit any key to return to DOS.* (group 12), and
   the game exits (`1a4c:02b5`).
 - **the last human gone**, computers still in play: group 13's two message
-  boxes, and the computers fight on.
-- **one computer side left**: *%s, thou hast triumphed!* (group 15); the side
-  is turned human so the world can be looked over.
+  boxes, once, and the computers fight on. A game with no human from the
+  start shows group 14 as it begins instead, and never group 13.
+- **one computer side left**: *%s, thou hast triumphed!* (group 15's first
+  line, one box); the side is turned human and its turn opens with the
+  banner, so the world can be looked over.
 - **a lone human with more than half the standing cities**: the game is won
   (`2c04:015b`), with a *victorious* deed. The remake shows group 15's two
   lines, then the Congratulations picture, and lets play go on.

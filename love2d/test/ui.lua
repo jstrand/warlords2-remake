@@ -153,13 +153,19 @@ end
 
 local function dismissBanner(what)
   finishComputer()
+  -- what the round's end found comes first: a side put out, the last human
+  -- fallen, a triumph -- each in a box ahead of the banner
+  local kit = require("ui.kit")
+  for _ = 1, 20 do
+    if G.banner or G.over or not kit.top() then break end
+    try("put a round's message away", love.keypressed, "return")
+  end
   if G.banner and G.offer then
     fail("banner", "a hero was offered before the banner was dismissed")
   end
   if G.banner then try(what or "dismiss the banner", love.keypressed, "return") end
   if G.banner then fail("banner", "a key did not dismiss it") end
   -- in the tutorial its pages come next, once each: put them away
-  local kit = require("ui.kit")
   for _ = 1, 5 do
     if not kit.top() then break end
     try("put a tutorial page away", love.keypressed, "space")
@@ -1050,6 +1056,9 @@ end
 if G and G.g then
   local game = require("warlords.game")
   local kit  = require("ui.kit")
+  -- the menus may have ended the turn: its banner, and a hero's offer, first
+  dismissBanner()
+  dismissOffer()
   local mine = game.sideCities(G.g, G.player)[1]
 
   local function control(view, id)

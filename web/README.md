@@ -82,7 +82,7 @@ From the repository root:
 ```sh
 node web/test/run.js                       # the rules suite, love2d/test/run.lua ported
 sh web/test/compare.sh                     # Lua vs JS over a set of games
-sh web/test/compare.sh ERYTHEA 3 40 save   # one game: scenario, seed, turns [hidden|save]
+sh web/test/compare.sh ERYTHEA 3 40 save   # one game: scenario, seed, turns [hidden|diplo|save]
 ```
 
 `compare.sh` plays the same all-computer game in LuaJIT and in node. After

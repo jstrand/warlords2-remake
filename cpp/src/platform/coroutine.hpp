@@ -18,8 +18,9 @@ struct SDL_cond;
 
 /** What a computer's turn yields to the front end. */
 struct Yield {
-  std::string what;          // "walk", "pause", "assault", "progress", "turn", "nohumans"
+  std::string what;          // "walk", "pause", "assault", "progress", "turn", "nohumans", "fallen"
   int ticks = 0;             // "pause": BIOS ticks to wait
+  std::string text;          // "fallen": the line to say
   std::vector<w2::Army*> armies;   // "walk": the stack
   std::vector<std::pair<int, int>> tiles;   // "walk": the tiles it covered
 };

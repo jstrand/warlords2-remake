@@ -405,6 +405,8 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
     if (!saved["claim"].isNull()) c->claim = (int)saved["claim"].integer();
     c->razedBy = readOpt(saved["razedBy"]);
     if (!saved["name"].str().empty()) c->name = saved["name"].str();
+    // ruins belong to nobody; older saves can have them won in a fight
+    if (c->razed) c->ownerIndex = NONE;
   }
   scn::refreshCityTiles(*g.map);
 

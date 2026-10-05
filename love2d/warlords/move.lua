@@ -625,12 +625,8 @@ local function walkPath(g, stack, path)
       result.attack = { x = step.x, y = step.y, city = city }
       break
     end
-    if here[1] and here[1].owner ~= side then
-      -- a tile held by a side we are at peace with simply blocks
-      if not diplomacy.mayAttack(g, side, here[1].owner) then
-        result.stopped = "at peace"
-        break
-      end
+    local theirs = here[1] and here[1].owner ~= side
+    if theirs and diplomacy.mayAttack(g, side, here[1].owner) then
       result.stopped = "attack"
       result.attack = { x = step.x, y = step.y }
       break
@@ -638,8 +634,10 @@ local function walkPath(g, stack, path)
 
     left = left - step.cost
     cumulative = cumulative + step.cost
-    -- the stack may only *stop* where it fits; other steps are passed over
-    if #here + #stack <= rules.MAX_STACK then
+    -- the stack may only *stop* on a tile of its own where it fits; other
+    -- steps -- a side at peace's stack among them -- are passed over
+    -- (1a8b:07f9)
+    if not theirs and #here + #stack <= rules.MAX_STACK then
       lastOk, costTo[i] = i, cumulative
     end
   end

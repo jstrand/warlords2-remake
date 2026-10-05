@@ -77,7 +77,10 @@ function protectHeroCarrier(g, line, x, y) {
  *  [attackers, defenders, defOwner, city]. */
 export function lines(g, stack, x, y) {
   const attacker = stack[0] ? stack[0].owner : undefined;
-  const city = g.map.cityTile[y * g.map.width + x];
+  // only a standing city is fought for as one (its terrain is 10, which
+  // combat_setup and after_battle test); ruins are open ground
+  let city = g.map.cityTile[y * g.map.width + x];
+  if (city && city.razed) city = undefined;
   let tiles = [[x, y]];
   if (city) {
     tiles = [];

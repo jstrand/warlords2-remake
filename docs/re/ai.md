@@ -385,6 +385,28 @@ where the decompile had lost arguments.
   odds` within this turn's move, `100 − d + 5 × odds` with a fair chance).
   A group's stack with no path to its target is **disbanded** (`563e:0f1b`),
   as is an idle army out of town with nowhere to go (`5ad0:0c5b`).
+- **Gathering goes round on a strike.** `563e:0996` runs each staged stack
+  again for as long as `563e:0b49` returns 2 — "an enemy stack was found and
+  gone for" (`563e:0c32`), whatever the move came to. It only ends because
+  the move spends the stack's movement or changes the board. A stack that
+  could not take a single step would be found again every time, until the
+  odds' dice fell to 75% or less, which for a strong stack is never. The
+  remakes once hit this for real: their walk stopped dead before a stack of a
+  side at peace instead of passing over it (`1a8b:07f9`), so a computer turn
+  could go round for ever, armies "walking" and nothing changing. With the
+  walk put right it takes a rare map to get there, but the remakes also end
+  the round of a staged stack when a pass has changed nothing.
+- **A broke conqueror can stall.** Production needs gold above 0 and stops
+  while the side is under 40 gold and losing money; assault groups are fed
+  only by what their member cities build (vectoring), never by marching
+  garrisons in; and a strike needs better than 75% or a full stack of 8. A
+  side whose upkeep has outgrown its income therefore keeps its rally cities
+  at a handful of armies, and a well-held last enemy city can outlast it
+  indefinitely — seen in an all-computer Erythea (*Diplomacy*, *Hidden Map*,
+  *Quests*, seed 12): 72 cities and 377 armies, 48 gold a turn short, against
+  one city of five. That is the original's own logic, not a remake bug; the
+  original has no turn limit either, and its way out is Shift or Alt during a
+  computer's turn, to hand a side to a human in Settings.
 - **Clean city** (`5ca7:023f`) moves the armies between the city's four
   tiles: the "keepers" (by `DS:0824`, chosen by `5ca7:0b5c`) on (x+1, y),
   then eight to a tile on (x, y), (x, y+1), (x+1, y+1). For a rally city

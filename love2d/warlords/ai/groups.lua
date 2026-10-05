@@ -573,6 +573,8 @@ local function gather(g, side, gi)
       if #list == 0 then break end
       local sel = core.select(g, list)
       local flood = core.flood(g, side.index, a.x, a.y, 15, sel)
+      local was, armies = {}, #g.armies
+      for i, b in ipairs(list) do was[i] = { b.x, b.y, b.moves } end
       local r = stagedStep(g, side, gi, list, grp.target, flood, sel)
       if r == 0 then
         local last = list[#list]
@@ -580,7 +582,14 @@ local function gather(g, side, gi)
           groups.march(g, side, gi, list, city(g, last.aiDest))
         end
       elseif r == 2 then
-        again = true
+        -- The original goes round again for as long as a stack is found to
+        -- strike. One that cannot take a step would be found every time --
+        -- until the odds' dice fall short, which for a strong stack is
+        -- never -- so a pass that changed nothing ends it here.
+        again = #g.armies ~= armies
+        for i, b in ipairs(list) do
+          if b.x ~= was[i][1] or b.y ~= was[i][2] or b.moves ~= was[i][3] then again = true end
+        end
       end
     end
   end

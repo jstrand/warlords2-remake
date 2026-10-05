@@ -1,7 +1,7 @@
 // An all-computer game, one line per side's turn: the C++ half of the
 // Lua-vs-C++ comparison (web/test/trace.lua prints the same lines).
 //
-//     cpp/build/w2trace ERYTHEA 1 10 [hidden] [save]
+//     cpp/build/w2trace ERYTHEA 1 10 [hidden] [diplo] [save]
 //
 // Run from the repository root, so that original/ is found.
 #include <cstdio>
@@ -31,16 +31,19 @@ int main(int argc, char** argv) {
   std::string scen = argc > 1 ? argv[1] : "ERYTHEA";
   double seed = argc > 2 ? atof(argv[2]) : 1;
   int turns = argc > 3 ? atoi(argv[3]) : 10;
-  bool hidden = false, roundTrip = false;
+  bool hidden = false, roundTrip = false, diplo = false;
   for (int i = 4; i < argc; i++) {
     if (!strcmp(argv[i], "hidden")) hidden = true;
     // "save": write the game out and read it back after every turn, which
     // must change nothing
     if (!strcmp(argv[i], "save")) roundTrip = true;
+    // "diplo": with Diplomacy on, so that sides make peace
+    if (!strcmp(argv[i], "diplo")) diplo = true;
   }
   game::NewGameOptions opts;
   opts.seed = seed;
   if (hidden) opts.options.emplace_back("hiddenMap", 1);
+  if (diplo) opts.options.emplace_back("diplomacy", 1);
   auto g = game::newGame("original", scen, opts);
   for (Side* s : g->sides) s->computer = true;
   Side* side = game::begin(*g);

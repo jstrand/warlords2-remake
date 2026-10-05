@@ -504,18 +504,18 @@ WalkResult walkPath(Game& g, const Stack& stack, const Path& path) {
       result.attack = Attack{step.x, step.y, city};
       break;
     }
-    if (!here.empty() && here[0]->owner != side) {
-      if (!diplomacy::mayAttack(g, side, here[0]->owner)) {
-        result.stopped = "at peace";
-        break;
-      }
+    bool theirs = !here.empty() && here[0]->owner != side;
+    if (theirs && diplomacy::mayAttack(g, side, here[0]->owner)) {
       result.stopped = "attack";
       result.attack = Attack{step.x, step.y, nullptr};
       break;
     }
     left -= step.cost;
     cumulative += step.cost;
-    if ((int)(here.size() + stack.size()) <= rules::MAX_STACK) {
+    // the stack may only stop on a tile of its own where it fits; other
+    // steps -- a side at peace's stack among them -- are passed over
+    // (1a8b:07f9)
+    if (!theirs && (int)(here.size() + stack.size()) <= rules::MAX_STACK) {
       lastOk = i;
       costTo[i] = cumulative;
     }

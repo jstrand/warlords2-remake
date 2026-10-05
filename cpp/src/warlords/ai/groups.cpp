@@ -1,6 +1,7 @@
 #include "warlords/ai/groups.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <set>
 
@@ -520,6 +521,9 @@ static void gather(Game& g, Side& side, int gi) {
       if (list.empty()) break;
       Sel sel = select(g, list);
       Flood flood = floodFrom(g, side.index, a->x, a->y, 15, &sel);
+      std::vector<std::array<int, 3>> was;
+      for (Army* b : list) was.push_back({b->x, b->y, b->moves});
+      size_t armies = g.armies.size();
       int r = stagedStep(g, side, gi, list, grp->target, flood, sel);
       if (r == 0) {
         Army* last = list.empty() ? nullptr : list.back();
@@ -527,7 +531,15 @@ static void gather(Game& g, Side& side, int gi) {
           march(g, side, gi, list, city(g, last->aiDest));
         }
       } else if (r == 2) {
-        again = true;
+        // The original goes round again for as long as a stack is found to
+        // strike. One that cannot take a step would be found every time --
+        // until the odds' dice fall short, which for a strong stack is
+        // never -- so a pass that changed nothing ends it here.
+        again = g.armies.size() != armies;
+        for (size_t i = 0; i < list.size() && i < was.size(); i++) {
+          Army* b = list[i];
+          if (b->x != was[i][0] || b->y != was[i][1] || b->moves != was[i][2]) again = true;
+        }
       }
     }
   }

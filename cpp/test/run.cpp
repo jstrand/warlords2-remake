@@ -1669,6 +1669,55 @@ static void testDiplomacy() {
     eq(r2.stopped, "at peace", "a stack at peace cannot walk into their city");
     eq(army->x, city->x, "and has not moved into it");
   }
+
+  // but a stack of a side at peace in the open is passed over: the walk may
+  // not stop on it, and goes on beyond it (1a8b:07f9)
+  Side* other = victim;
+  int W = g4.map->width;
+  auto open = [&](int x, int y) {
+    int t = scn::terrainAt(*g4.map, x, y);
+    return t != movement::WATER && t != movement::SHORE && t != movement::CITY && t != movement::BRIDGE &&
+           !g4.map->cityTile[y * W + x] && game::armiesAt(g4, x, y).empty();
+  };
+  int sx = NONE, sy = NONE;
+  for (int y = 10; y <= g4.map->height - 10; y++)
+    for (int x = 10; x <= W - 10; x++)
+      if (sx == NONE && open(x, y) && open(x + 1, y) && open(x + 2, y)) { sx = x; sy = y; }
+  Army* walker = addArmy(g4, sx, sy, side->index, 11, 3, 20, 20);
+  Army* blocker = addArmy(g4, sx + 1, sy, other->index, 11, 3, 20, 20);
+  walker->upkeep = blocker->upkeep = 1;
+  movement::Path steps = {{sx + 1, sy, 2}, {sx + 2, sy, 2}};
+  auto r3 = movement::walk(g4, {walker}, steps);
+  eq(walker->x, sx + 2, "a stack at peace in the open is passed over");
+  eq(walker->moves, 16, "paying for the step past it");
+  eq(r3.stopped, "arrived", "and the walk arrives");
+  walker->x = sx;
+  walker->moves = 20;
+  g4.diplomacy.state[side->index * 8 + other->index] = d::WAR;
+  auto r4 = movement::walk(g4, {walker}, steps);
+  eq(r4.stopped, "attack", "a stack at war is attacked");
+  eq(walker->x, sx, "from where the walker stands");
+
+  // ruins are open ground: a fight there is for no city, and takes none
+  City* ruin = nullptr;
+  for (auto& c : g4.map->cities)
+    if (!ruin && c.ownerIndex != NONE && c.ownerIndex != side->index) ruin = &c;
+  game::raze(g4, g4.map->sides[ruin->ownerIndex], *ruin, {}, true);
+  std::vector<Army*> onRuin;
+  for (Army* a : g4.armies)
+    if (a->x != NONE && a->x >= ruin->x && a->x <= ruin->x + 1 && a->y >= ruin->y && a->y <= ruin->y + 1)
+      onRuin.push_back(a);
+  for (Army* a : onRuin) g4.remove(a);
+  g4.diplomacy.state[side->index * 8 + other->index] = d::WAR;
+  addArmy(g4, ruin->x, ruin->y, other->index, 11, 1, 20, 20);
+  addArmy(g4, ruin->x + 1, ruin->y + 1, other->index, 11, 1, 20, 20);
+  std::vector<Army*> strike;
+  for (int i = 0; i < 8; i++) strike.push_back(addArmy(g4, ruin->x - 1, ruin->y, side->index, 11, 9, 20, 20));
+  auto fight = game::resolveAttack(g4, strike, ruin->x, ruin->y);
+  eq(fight.lines.city, (City*)nullptr, "a fight on ruins is not for a city");
+  eq((int)fight.lines.defenders.size(), 1, "and only the tile fought for defends");
+  eq(fight.captured, (City*)nullptr, "nothing is captured");
+  eq(ruin->ownerIndex, NONE, "the ruins belong to nobody");
 }
 
 static std::shared_ptr<Quest> cityQuest(int type, Army* h, City* target) {
@@ -1851,16 +1900,63 @@ static void testEndGame() {
   for (auto& c : g.map->cities) c.ownerIndex = c.ownerIndex != NONE ? winner->index : NONE;
   for (size_t i = 1; i < g.sides.size(); i++) g.sides[i]->alive = false;
   auto r = game::checkEnd(g);
-  ok(r.over, "the game is over");
+  ok(r.triumph, "the last side standing has triumphed");
+  ok(!r.over, "and the game goes on, to be looked over");
   eq(r.winner, winner, "the last side standing wins");
   ok(!winner->computer, "and is switched to human control");
   ok(g.won, "the game-won flag is set");
+  ok(!r.noHumans, "a game that never had a human does not say the last one fell");
   auto g2 = newGame("ERYTHEA", seed(82));
   for (auto& c : g2->map->cities) c.ownerIndex = NONE;
-  auto r2 = game::checkEnd(*g2);
-  ok(r2.over, "with no cities owned the game is over");
+  ok(!game::checkEnd(*g2).over, "sides still in the game are players, cities or not");
+  auto r2 = game::endRound(*g2);
+  ok(r2.over, "with no cities owned the game is over at the round's end");
   eq(r2.winner, (Side*)nullptr, "and nobody won");
   ok(contains(r2.message, "No more players"), "with the right message");
+  eq(r2.fallen.size(), g2->sides.size(), "every side fell");
+
+  // the round's end puts a side with no city out (8065:18ab)
+  auto g6p = newGame("ERYTHEA", seedWith(86, {{"diplomacy", 1}}));
+  Game& g6 = *g6p;
+  for (size_t i = 0; i < g6.sides.size(); i++) g6.sides[i]->computer = i > 0;
+  game::begin(g6);
+  Side* doomed = g6.sides[1];
+  Side* other = g6.sides[2];
+  for (City* c : game::sideCities(g6, *doomed)) c->ownerIndex = other->index;
+  g6.diplomacy.state[doomed->index * 8 + other->index] = diplomacy::WAR;
+  g6.diplomacy.state[other->index * 8 + doomed->index] = diplomacy::WAR;
+  ok(!game::sideArmies(g6, *doomed).empty(), "the doomed side still has armies");
+  game::endTurn(g6);
+  eq(g6.side, other, "a computer side with no city has no turn");
+  ok(doomed->alive, "but it is not out before the round's end");
+  while (g6.turn == 1) game::endTurn(g6);
+  ok(!doomed->alive, "the round's end puts it out");
+  eq((int)game::sideArmies(g6, *doomed).size(), 0, "with all its armies");
+  eq(doomed->gold, 0, "and no gold");
+  eq(diplomacy::state(g6, other->index, doomed->index), diplomacy::INTERMEDIATE, "others stand uneasy with it");
+  eq(diplomacy::proposal(g6, doomed->index, other->index), diplomacy::INTERMEDIATE, "both ways, proposals too");
+  const Fallen* f = g6.ending.fallen.empty() ? nullptr : &g6.ending.fallen[0];
+  ok(f && f->side == doomed, "its fall is told");
+  ok(f && f->line >= 0 && f->line < game::FALLEN_LINES, "in a line of group 11");
+  ok(f && f->boxed, "in a box while a human plays");
+
+  // a human left with no city still plays its turn until the round's end
+  auto g7p = newGame("ERYTHEA", seed(87));
+  Game& g7 = *g7p;
+  for (size_t i = 0; i < g7.sides.size(); i++) g7.sides[i]->computer = i + 1 < g7.sides.size();
+  game::begin(g7);
+  Side* me7 = g7.sides.back();
+  for (City* c : game::sideCities(g7, *me7)) c->ownerIndex = g7.sides[0]->index;
+  for (size_t i = 1; i < g7.sides.size(); i++) game::endTurn(g7);
+  eq(g7.side, me7, "the human's turn comes round without a city");
+  ok(me7->alive, "and it is still in the game");
+  game::endTurn(g7);
+  ok(!me7->alive, "the round's end puts it out");
+  ok(me7->computer, "a fallen human is the computer's from then on");
+  ok(g7.ending.noHumans, "the last human's fall is said");
+  ok(g7.noHumansSaid, "once");
+  for (size_t i = 0; i < g7.sides.size(); i++) game::endTurn(g7);
+  ok(!g7.ending.noHumans, "and only once");
   auto g3p = newGame("ERYTHEA", seed(83));
   Game& g3 = *g3p;
   for (Side* s : g3.sides) s->computer = false;
@@ -1893,6 +1989,7 @@ static void testEndGame() {
   ok(r4.surrender, "a dominant human is offered surrender");
   ok(!r4.over, "but the game is not over");
   ok(g4.surrenderOffered, "and the flag is set");
+  ok(!game::checkEnd(g4).surrender, "the offer is made once");
   auto g5p = newGame("ERYTHEA", seed(85));
   Game& g5 = *g5p;
   Side* side5 = g5.sides[0];

@@ -1,7 +1,7 @@
 // An all-computer game, one line per side's turn: the JS half of the
 // Lua-vs-JS comparison (test/trace.lua prints the same lines).
 //
-//     node web/test/trace.js ERYTHEA 1 10 [hidden]
+//     node web/test/trace.js ERYTHEA 1 10 [hidden] [diplo]
 import { loadData } from "./node.js";
 import * as game from "../src/warlords/game.js";
 import * as ai from "../src/warlords/ai.js";
@@ -15,7 +15,10 @@ const hidden = flags.includes("hidden") ? "hidden" : null;
 // change nothing
 const roundTrip = flags.includes("save");
 const opts = { seed: Number(seedS) };
-if (hidden === "hidden") opts.options = { hiddenMap: 1 };
+opts.options = {};
+if (hidden === "hidden") opts.options.hiddenMap = 1;
+// "diplo": with Diplomacy on, so that sides make peace
+if (flags.includes("diplo")) opts.options.diplomacy = 1;
 let g = game.newGame("", scen, opts);
 for (const s of g.sides) s.computer = true;
 

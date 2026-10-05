@@ -216,7 +216,14 @@ function openStart() {
       G.g = game.newGame(G.dataDir, dir, { seed: G.seed, options, sides, greatest: extra && extra.greatest });
       G.selection = null; G.over = null; G.stratImage = null;
       beginGame();
-      if (G.player.computer) playComputers(G.player);
+      if (G.player.computer) {
+        // a game with no human in it says so as it begins (8065:00f1)
+        if (G.g.sides.some((s) => !s.computer)) playComputers(G.player);
+        else {
+          const t = (i) => uidata.text(G.screen.ui, 0xe, i);
+          searchUi.message(t(0), t(1), () => playComputers(G.player));
+        }
+      }
     });
   }, (g) => {
     G.starting = false;
@@ -1017,6 +1024,8 @@ function resumeComputer() {
     searchUi.message(t(0), t(1), () => {
       searchUi.message(t(2), t(3), () => { G.aiWait = true; });
     });
+  } else if (what === "fallen") {
+    searchUi.say(a, () => { G.aiWait = true; });          // 8065:10fb
   } else {
     // a turn done, or a battle up: go on at the next frame free of it
     G.aiWait = true;
@@ -1049,7 +1058,25 @@ function stepComputer() {
            && !G.aiResumeAt && now() < until);
 }
 
+/** What the round's end found, as the original tells it inside the
+ *  computer's turns: each side put out in a box, or -- with no human playing
+ *  -- in the status bar for 100 ticks (8065:18ab), then the last human's fall
+ *  in two boxes (8065:1c6f). The rest waits for the turn that follows
+ *  (ui/ending.js). */
+function* announce() {
+  const e = G.g.ending;
+  if (!e || e.told) return;
+  e.told = true;
+  for (const f of e.fallen || []) {
+    const text = endingUi.fallenText(f);
+    if (f.boxed) yield ["fallen", text];
+    else yield* status(text, 100);
+  }
+  if (e.noHumans) yield ["nohumans"];
+}
+
 function* computerTurns(side) {
+  yield* announce();                // a human's turn may have ended the round
   while (side && side.computer) {
     G.aiSide = side;
     // 8065:2123: each computer turn opens with a song that plays once
@@ -1067,7 +1094,7 @@ function* computerTurns(side) {
     G.aiStatus.progress = 100;
     yield ["progress"];
     side = game.endTurn(G.g);
-    if (G.g.ending && G.g.ending.noHumans) yield ["nohumans"];
+    yield* announce();
     yield ["turn"];
   }
   return side;

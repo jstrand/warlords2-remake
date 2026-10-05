@@ -2035,6 +2035,74 @@ local function testDiplomacy()
     eq(r2.stopped, "at peace", "a stack at peace cannot walk into their city")
     eq(army.x, city.x, "and has not moved into it")
   end
+
+  -- but a stack of a side at peace in the open is passed over: the walk may
+  -- not stop on it, and goes on beyond it (1a8b:07f9)
+  local scn = require("warlords.scn")
+  local other = victim
+  local W = g4.map.width
+  local function open(x, y)
+    local t = scn.terrainAt(g4.map, x, y)
+    return t ~= movement.WATER and t ~= movement.SHORE and t ~= movement.CITY
+       and t ~= movement.BRIDGE and not g4.map.cityTile[y * W + x]
+       and #game.armiesAt(g4, x, y) == 0
+  end
+  local sx, sy
+  for y = 10, g4.map.height - 10 do
+    for x = 10, W - 10 do
+      if not sx and open(x, y) and open(x + 1, y) and open(x + 2, y) then sx, sy = x, y end
+    end
+  end
+  local walker = { x = sx, y = sy, owner = side.index, type = 11, name = "Scouts",
+                   strength = 3, maxMoves = 20, moves = 20, upkeep = 1 }
+  local blocker = { x = sx + 1, y = sy, owner = other.index, type = 11, name = "Scouts",
+                    strength = 3, maxMoves = 20, moves = 20, upkeep = 1 }
+  g4.armies[#g4.armies + 1] = walker
+  g4.armies[#g4.armies + 1] = blocker
+  local steps = { { x = sx + 1, y = sy, cost = 2 }, { x = sx + 2, y = sy, cost = 2 } }
+  local r3 = movement.walk(g4, { walker }, steps)
+  eq(walker.x, sx + 2, "a stack at peace in the open is passed over")
+  eq(walker.moves, 16, "paying for the step past it")
+  eq(r3.stopped, "arrived", "and the walk arrives")
+  -- at war it is fought instead
+  walker.x, walker.moves = sx, 20
+  g4.diplomacy.state[side.index * 8 + other.index] = d.WAR
+  local r4 = movement.walk(g4, { walker }, steps)
+  eq(r4.stopped, "attack", "a stack at war is attacked")
+  eq(walker.x, sx, "from where the walker stands")
+
+  -- ruins are open ground: a fight there is for no city, and takes none
+  local ruin
+  for _, c in ipairs(g4.map.cities) do
+    if not ruin and c.ownerIndex ~= nil and c.ownerIndex ~= side.index then ruin = c end
+  end
+  local razer = g4.map.sides[ruin.ownerIndex + 1]
+  game.raze(g4, razer, ruin, {}, true)
+  for i = #g4.armies, 1, -1 do
+    local a = g4.armies[i]
+    if a.x and a.x >= ruin.x and a.x <= ruin.x + 1 and a.y >= ruin.y and a.y <= ruin.y + 1 then
+      table.remove(g4.armies, i)
+    end
+  end
+  g4.diplomacy.state[side.index * 8 + other.index] = d.WAR
+  local squatter = { x = ruin.x, y = ruin.y, owner = other.index, type = 11, name = "Scouts",
+                     strength = 1, maxMoves = 20, moves = 20, upkeep = 1 }
+  local beside = { x = ruin.x + 1, y = ruin.y + 1, owner = other.index, type = 11,
+                   name = "Scouts", strength = 1, maxMoves = 20, moves = 20, upkeep = 1 }
+  g4.armies[#g4.armies + 1] = squatter
+  g4.armies[#g4.armies + 1] = beside
+  local strike = {}
+  for _ = 1, 8 do
+    local a = { x = ruin.x - 1, y = ruin.y, owner = side.index, type = 11, name = "Scouts",
+                strength = 9, maxMoves = 20, moves = 20, upkeep = 1 }
+    g4.armies[#g4.armies + 1] = a
+    strike[#strike + 1] = a
+  end
+  local fight = game.resolveAttack(g4, strike, ruin.x, ruin.y)
+  eq(fight.lines.city, nil, "a fight on ruins is not for a city")
+  eq(#fight.lines.defenders, 1, "and only the tile fought for defends")
+  eq(fight.captured, nil, "nothing is captured")
+  eq(ruin.ownerIndex, nil, "the ruins belong to nobody")
 end
 
 -------------------------------------------------------------------- quests
@@ -2195,18 +2263,64 @@ local function testEndGame()
   end
   for i = 2, #g.sides do g.sides[i].alive = false end
   local r = game.checkEnd(g)
-  ok(r.over, "the game is over")
+  ok(r.triumph, "the last side standing has triumphed")
+  ok(not r.over, "and the game goes on, to be looked over")
   eq(r.winner, winner, "the last side standing wins")
   ok(not winner.computer, "and is switched to human control")
   ok(g.won, "the game-won flag is set")
+  ok(not r.noHumans, "a game that never had a human does not say the last one fell")
 
-  -- nobody left at all
+  -- nobody left at all: the round's end puts every side out
   local g2 = game.new(DATA, "ERYTHEA", { seed = 82 })
   for _, c in ipairs(g2.map.cities) do c.ownerIndex = nil end
-  local r2 = game.checkEnd(g2)
-  ok(r2.over, "with no cities owned the game is over")
+  ok(not game.checkEnd(g2).over, "sides still in the game are players, cities or not")
+  local r2 = game.endRound(g2)
+  ok(r2.over, "with no cities owned the game is over at the round's end")
   eq(r2.winner, nil, "and nobody won")
   ok(r2.message:find("No more players"), "with the right message")
+  eq(#r2.fallen, #g2.sides, "every side fell")
+
+  -- the round's end puts a side with no city out (8065:18ab): its armies go,
+  -- its gold is 0, and every side stands uneasy with it
+  local g6 = game.new(DATA, "ERYTHEA", { seed = 86, options = { diplomacy = 1 } })
+  for i, s in ipairs(g6.sides) do s.computer = i > 1 end
+  game.begin(g6)
+  local doomed, other = g6.sides[2], g6.sides[3]
+  for _, c in ipairs(game.sideCities(g6, doomed)) do c.ownerIndex = other.index end
+  local d6 = require("warlords.diplomacy")
+  g6.diplomacy.state[doomed.index * 8 + other.index] = d6.WAR
+  g6.diplomacy.state[other.index * 8 + doomed.index] = d6.WAR
+  ok(#game.sideArmies(g6, doomed) > 0, "the doomed side still has armies")
+  game.endTurn(g6)
+  eq(g6.side, other, "a computer side with no city has no turn")
+  ok(doomed.alive, "but it is not out before the round's end")
+  while g6.turn == 1 do game.endTurn(g6) end
+  ok(not doomed.alive, "the round's end puts it out")
+  eq(#game.sideArmies(g6, doomed), 0, "with all its armies")
+  eq(doomed.gold, 0, "and no gold")
+  eq(d6.state(g6, other.index, doomed.index), d6.INTERMEDIATE, "others stand uneasy with it")
+  eq(d6.proposal(g6, doomed.index, other.index), d6.INTERMEDIATE, "both ways, proposals too")
+  local f = g6.ending and g6.ending.fallen and g6.ending.fallen[1]
+  ok(f and f.side == doomed, "its fall is told")
+  ok(f and f.line >= 0 and f.line < game.FALLEN_LINES, "in a line of group 11")
+  ok(f and f.boxed, "in a box while a human plays")
+
+  -- a human left with no city still plays its turn until the round's end
+  local g7 = game.new(DATA, "ERYTHEA", { seed = 87 })
+  for i, s in ipairs(g7.sides) do s.computer = i < #g7.sides end
+  game.begin(g7)
+  local me7 = g7.sides[#g7.sides]
+  for _, c in ipairs(game.sideCities(g7, me7)) do c.ownerIndex = g7.sides[1].index end
+  for _ = 2, #g7.sides do game.endTurn(g7) end
+  eq(g7.side, me7, "the human's turn comes round without a city")
+  ok(me7.alive, "and it is still in the game")
+  game.endTurn(g7)
+  ok(not me7.alive, "the round's end puts it out")
+  ok(me7.computer, "a fallen human is the computer's from then on")
+  ok(g7.ending.noHumans, "the last human's fall is said")
+  ok(g7.noHumansSaid, "once")
+  for _ = 1, #g7.sides do game.endTurn(g7) end
+  ok(not (g7.ending and g7.ending.noHumans), "and only once")
 
   -- a lone human needs more than half the standing cities
   local g3 = game.new(DATA, "ERYTHEA", { seed = 83 })
@@ -2244,6 +2358,7 @@ local function testEndGame()
   ok(r4.surrender, "a dominant human is offered surrender")
   ok(not r4.over, "but the game is not over")
   ok(g4.surrenderOffered, "and the flag is set")
+  ok(not game.checkEnd(g4).surrender, "the offer is made once")
 
   -- razed cities do not count towards the total
   local g5 = game.new(DATA, "ERYTHEA", { seed = 85 })

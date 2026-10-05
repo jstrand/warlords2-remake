@@ -907,6 +907,31 @@ static void computerTurns(Coroutine& co, Side* side) {
     y.what = what;
     co.yield(y);
   };
+  // What the round's end found, as the original tells it inside the
+  // computer's turns: each side put out in a box, or -- with no human
+  // playing -- in the status bar for 100 ticks (8065:18ab), then the last
+  // human's fall in two boxes (8065:1c6f). The rest waits for the turn that
+  // follows (ui/ending.cpp).
+  auto announce = [&co, &yieldWhat]() {
+    w2::Ending& e = G.g->ending;
+    if (e.told) return;
+    e.told = true;
+    auto fallen = e.fallen;
+    bool noHumans = e.noHumans;
+    for (auto& f : fallen) {
+      std::string text = ending::fallenText(f);
+      if (f.boxed) {
+        Yield y;
+        y.what = "fallen";
+        y.text = text;
+        co.yield(y);
+      } else {
+        status(text, 100);
+      }
+    }
+    if (noHumans) yieldWhat("nohumans");
+  };
+  announce();                       // a human's turn may have ended the round
   while (side && side->computer) {
     G.aiSide = side;
     // 8065:2123: each computer turn opens with a song that plays once
@@ -925,7 +950,7 @@ static void computerTurns(Coroutine& co, Side* side) {
     G.aiStatus->progress = 100;
     yieldWhat("progress");
     side = game::endTurn(*G.g);
-    if (G.g->ending.noHumans) yieldWhat("nohumans");
+    announce();
     yieldWhat("turn");
   }
   aiResult = side;
@@ -956,6 +981,8 @@ static void resumeComputer() {
     // 8065:1c6f: the last human is gone, and the war goes on
     auto t = [](int i) { return kit::text(0xd, i); };
     search::message(t(0), t(1), [t]() { search::message(t(2), t(3), []() { G.aiWait = true; }); });
+  } else if (y.what == "fallen") {
+    search::say(y.text, []() { G.aiWait = true; });          // 8065:10fb
   } else {
     // a turn done, or a battle up: go on at the next frame free of it
     G.aiWait = true;
@@ -2822,7 +2849,13 @@ void front::openStart() {
           front::stratDirty();
           syncLayout();
           beginGame();
-          if (G.player && G.player->computer) playComputers(G.player);
+          if (G.player && G.player->computer) {
+            // a game with no human in it says so as it begins (8065:00f1)
+            bool human = false;
+            for (Side* s : G.g->sides) if (!s->computer) human = true;
+            if (human) playComputers(G.player);
+            else search::message(kit::text(0xe, 0), kit::text(0xe, 1), []() { playComputers(G.player); });
+          }
         });
       },
       [](std::unique_ptr<w2::Game> g) {

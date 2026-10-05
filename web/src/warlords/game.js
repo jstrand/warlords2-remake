@@ -237,10 +237,47 @@ export function newGame(dataDir, scenario, opts = {}) {
   return g;
 }
 
-function eliminate(g, side) {
-  side.alive = false;
+/** STRING.DAT group 11 holds five ways of saying a side is gone. */
+export const FALLEN_LINES = 5;
+
+/** Put a side with no city left out of the game (8065:18ab): its heroes drop
+ *  what they carry, its armies are gone, it is vanquished, and its gold is 0.
+ *  Every side then stands uneasy with it, both ways, state and proposal.
+ *  Returns how it is announced: a line of group 11, picked at random, in a
+ *  box when `boxed`, otherwise in the status bar. */
+function eliminate(g, side, boxed) {
+  const mine = [];
+  for (let i = g.armies.length - 1; i >= 0; i--) {
+    if (g.armies[i].owner === side.index) mine.push(g.armies[i]);
+  }
+  disband(g, side, mine);
   history.deed(g, side, history.VANQUISHED, side.index, 0, "");     // 8065:19f1
+  const line = g.rng.dice(1, FALLEN_LINES, -1);
   g.log.push(`${side.name} has been eliminated.`);
+  side.alive = false;
+  side.gold = 0;
+  if (g.diplomacy) {
+    for (let o = 0; o < 8; o++) {
+      if (o === side.index) continue;
+      for (const k of [side.index * 8 + o, o * 8 + side.index]) {
+        g.diplomacy.state[k] = diplomacy.INTERMEDIATE;
+        g.diplomacy.proposal[k] = diplomacy.INTERMEDIATE;
+      }
+    }
+  }
+  return { side, line, boxed };
+}
+
+/** Every side in the game left without a city is put out of it, in side
+ *  order (8065:18ab). Its fall is told in a box while a human plays or when
+ *  the side was a human's; otherwise in the status bar. */
+export function eliminateFallen(g) {
+  const human = g.sides.some((s) => s.alive && !s.computer);
+  const fallen = [];
+  for (const s of g.sides) {
+    if (s.alive && sideCities(g, s).length === 0) fallen.push(eliminate(g, s, human || !s.computer));
+  }
+  return fallen;
 }
 
 function applyIncome(g, side) {
@@ -385,15 +422,15 @@ export function heroWithDoubleMoveAt(g, side, x, y) {
   return false;
 }
 
-/** Run the start of `side`'s turn; false if it was eliminated (8cc6:0000). */
+/** Run the start of `side`'s turn; false if the side has no turn to play: a
+ *  computer side left with no city (start_of_turn, 8cc6:0000) does nothing
+ *  more until the round's end puts it out. A human's turn (8cc6:0259) goes
+ *  on regardless, with whatever armies it still has. */
 export function startTurn(g, side) {
-  if (sideCities(g, side).length === 0) {
-    eliminate(g, side);
-    return false;
-  }
   tidyExplored(g, side);
   side.diploNews = diplomacy.apply(g, side);
   for (const m of side.diploNews) g.log.push(m);
+  if (side.computer && sideCities(g, side).length === 0) return false;
   side.heroOffer = heroMod.offer(g, side);
   heroMod.checkPromotions(g, side);
   const questResult = quest.event(g, side, "turn");
@@ -411,18 +448,20 @@ export function startTurn(g, side) {
 export function endTurn(g) {
   const leaving = g.side;
   if (leaving && leaving.alive && (leaving.computer || !g.won)) diplomacy.scoreUpdate(g, leaving);
-  const ending = checkEnd(g);
-  if (ending.message) g.log.push(ending.message);
-  g.ending = ending;
-  if (ending.over) {
-    g.side = null;
-    return null;
-  }
-  for (let n = 0; n < g.sides.length; n++) {
+  // what the last round's end found is for the turn that followed it only
+  g.ending = null;
+  for (let n = 0; n < 2 * g.sides.length + 1; n++) {
     g.current++;
     if (g.current >= g.sides.length) {
       g.current = 0;
       g.turn++;
+      // the round's end (8065:17f6): the fallen are put out of the game and
+      // the end looked for, and then the turn is written to the history
+      endRound(g);
+      if (g.ending.over) {
+        g.side = null;
+        return null;
+      }
       history.record(g);     // 8065:17f6 -> 6d51:0d60
     }
     const side = g.sides[g.current];
@@ -777,50 +816,82 @@ export function acceptSurrender(g, side) {
   history.deed(g, side, history.VICTORIOUS, side.index, 0, "");
 }
 
-/** Is the game over, or nearly? (end_game_check, 8065:1aed). */
+/** The round's end (8065:17f6): the sides left without a city are put out
+ *  of the game, then the end is looked for. Leaves the finding in g.ending,
+ *  with `fallen` (eliminateFallen) for the interface to tell first. */
+export function endRound(g) {
+  const fallen = eliminateFallen(g);
+  const ending = checkEnd(g);
+  ending.fallen = fallen;
+  if (ending.message) g.log.push(ending.message);
+  g.ending = ending;
+  return ending;
+}
+
+/** Is the game over, or nearly? Run at the round's end, once the fallen are
+ *  out (end_game_check, 8065:1aed). Sets g.won and g.surrenderOffered. */
 export function checkEnd(g) {
-  const humans = [], computers = [], alive = [];
+  // a human side out of the game is the computer's from now on, so that its
+  // fall is told only once
+  const humans = [], computers = [];
+  let fallenHuman = false;
   for (const s of g.sides) {
-    if (s.alive && sideCities(g, s).length > 0) {
-      alive.push(s);
+    if (s.alive) {
       if (s.computer) computers.push(s); else humans.push(s);
+    } else if (!s.computer) {
+      s.computer = true;
+      fallenHuman = true;
     }
   }
   let standing = 0;
   for (const c of g.map.cities) if (!c.razed) standing++;
 
-  if (alive.length === 0) {
+  if (humans.length + computers.length === 0) {
     g.over = true;
     return { over: true, message: "Alas! No more players are left!" };
   }
-  if (humans.length === 0 && computers.length > 1 && !g.noHumansSaid) {
+  const ending = { over: false };
+  // the last human has fallen and the computers fight on (8065:1c6f); a game
+  // that never had a human said so as it began (group 14) instead
+  if (!g.won && humans.length === 0 && fallenHuman && !g.noHumansSaid) {
     g.noHumansSaid = true;
-    return { over: false, noHumans: true };
+    ending.noHumans = true;
   }
-  if (humans.length === 0 && computers.length === 1) {
-    g.won = true; g.over = true;
-    computers[0].computer = false;          // so the finished game can be looked at
-    history.deed(g, computers[0], history.VICTORIOUS, computers[0].index, 0, "");
-    return { over: true, winner: computers[0], message: `${computers[0].name} has triumphed!` };
-  }
-  if (humans.length === 1 && computers.length === 0 && !g.won) {
+  // a lone human with more than half the cities has won -- once; the game
+  // goes on, for the kingdom to be looked over
+  if (!g.won && humans.length === 1 && computers.length === 0) {
     const mine = sideCities(g, humans[0]).length;
     if (mine * 2 > standing) {
       g.won = true;
       history.deed(g, humans[0], history.VICTORIOUS, humans[0].index, 0, "");
-      return { over: false, won: true, winner: humans[0], message: `${humans[0].name} rules the world!` };
+      ending.won = true;
+      ending.winner = humans[0];
+      ending.message = `${humans[0].name} rules the world!`;
     }
   }
-  if (humans.length === 1 && computers.length > 0) {
+  // the last computer side has triumphed: it is handed to the player, its
+  // turn opens as a human's, and the world can be looked over
+  if (!g.won && humans.length === 0 && computers.length === 1) {
+    const winner = computers[0];
+    g.won = true;
+    winner.computer = false;
+    history.deed(g, winner, history.VICTORIOUS, winner.index, 0, "");
+    ending.triumph = true;
+    ending.winner = winner;
+    ending.message = `${winner.name} has triumphed!`;
+  }
+  // offered once, while computers still play
+  if (!g.won && humans.length === 1 && computers.length > 0 && !g.surrenderOffered) {
     const mine = sideCities(g, humans[0]).length;
     let biggest = 0;
     for (const s of computers) biggest = Math.max(biggest, sideCities(g, s).length);
     if (mine * 2 > standing && mine > biggest + Math.floor(standing / 8)) {
       g.surrenderOffered = true;
-      return { over: false, surrender: true, message: "Your enemies offer their surrender!" };
+      ending.surrender = true;
+      ending.message = "Your enemies offer their surrender!";
     }
   }
-  return { over: false };
+  return ending;
 }
 
 /** Search whatever the stack is standing on, if anything. */

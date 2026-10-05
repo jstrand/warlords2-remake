@@ -58,10 +58,39 @@ function victory(after) {
 }
 
 /** What the round's end found (g.ending), shown before the turn goes on. */
+/** A side put out at the round's end: a line of group 11 (8065:18ab). */
+export function fallenText(f) {
+  return fmt(t(0xb, f.line), f.side.name || "");
+}
+
+/** What the round's end put out and whether the last human fell, in boxes,
+ *  unless the computer's turns have told it already; then `after`. */
+function tell(ending, after) {
+  if (ending.told) return after();
+  ending.told = true;
+  const fallen = ending.fallen || [];
+  let i = 0;
+  const nextOne = () => {
+    const f = fallen[i++];
+    if (f) return searchUi.say(fallenText(f), nextOne);
+    if (ending.noHumans) {
+      return searchUi.message(t(0xd, 0), t(0xd, 1), () => searchUi.message(t(0xd, 2), t(0xd, 3), after));
+    }
+    after();
+  };
+  nextOne();
+}
+
 export function show(ending, after) {
   const G = kit.G;
   after = after || (() => {});
   if (!ending) return after();
+  if (!ending.told) return tell(ending, () => show(ending, after));
+  // the last computer side has triumphed, and is the player's now
+  if (ending.triumph && ending.winner === G.player && !ending.shown) {
+    ending.shown = true;
+    return searchUi.say(fmt(t(0xf, 0), G.player.name || ""), after);
+  }
   if (ending.surrender && !ending.shown) {
     ending.shown = true;
     sound.music(cues.SURRENDER);                  // 8065:1f68
@@ -85,6 +114,7 @@ export function show(ending, after) {
 export function over(ending) {
   const G = kit.G;
   ending = ending || {};
+  if (!ending.told && ending.fallen) return tell(ending, () => over(ending));
   if (ending.winner) return searchUi.say(fmt(t(0xf, 0), ending.winner.name || ""));
   let humans = false;
   for (const s of G.g.sides) {

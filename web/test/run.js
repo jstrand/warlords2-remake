@@ -1449,6 +1449,57 @@ function testDiplomacy() {
     eq(r2.stopped, "at peace", "a stack at peace cannot walk into their city");
     eq(army.x, city.x, "and has not moved into it");
   }
+
+  // but a stack of a side at peace in the open is passed over: the walk may
+  // not stop on it, and goes on beyond it (1a8b:07f9)
+  const other = victim;
+  const W = g4.map.width;
+  const open = (x, y) => {
+    const t = scn.terrainAt(g4.map, x, y);
+    return t !== movement.WATER && t !== movement.SHORE && t !== movement.CITY &&
+      t !== movement.BRIDGE && !g4.map.cityTile[y * W + x] && game.armiesAt(g4, x, y).length === 0;
+  };
+  let sx = null, sy = null;
+  for (let y = 10; y <= g4.map.height - 10; y++) {
+    for (let x = 10; x <= W - 10; x++) {
+      if (sx === null && open(x, y) && open(x + 1, y) && open(x + 2, y)) { sx = x; sy = y; }
+    }
+  }
+  const walker = { x: sx, y: sy, owner: side.index, type: 11, name: "Scouts", strength: 3, maxMoves: 20, moves: 20, upkeep: 1 };
+  const blocker = { x: sx + 1, y: sy, owner: other.index, type: 11, name: "Scouts", strength: 3, maxMoves: 20, moves: 20, upkeep: 1 };
+  g4.armies.push(walker, blocker);
+  const steps = [{ x: sx + 1, y: sy, cost: 2 }, { x: sx + 2, y: sy, cost: 2 }];
+  const r3 = movement.walk(g4, [walker], steps);
+  eq(walker.x, sx + 2, "a stack at peace in the open is passed over");
+  eq(walker.moves, 16, "paying for the step past it");
+  eq(r3.stopped, "arrived", "and the walk arrives");
+  walker.x = sx; walker.moves = 20;
+  g4.diplomacy.state[side.index * 8 + other.index] = d.WAR;
+  const r4 = movement.walk(g4, [walker], steps);
+  eq(r4.stopped, "attack", "a stack at war is attacked");
+  eq(walker.x, sx, "from where the walker stands");
+
+  // ruins are open ground: a fight there is for no city, and takes none
+  const ruin = g4.map.cities.find((c) => c.ownerIndex != null && c.ownerIndex !== side.index);
+  game.raze(g4, g4.map.sides[ruin.ownerIndex], ruin, [], true);
+  for (let i = g4.armies.length - 1; i >= 0; i--) {
+    const a = g4.armies[i];
+    if (a.x != null && a.x >= ruin.x && a.x <= ruin.x + 1 && a.y >= ruin.y && a.y <= ruin.y + 1) g4.armies.splice(i, 1);
+  }
+  g4.diplomacy.state[side.index * 8 + other.index] = d.WAR;
+  g4.armies.push({ x: ruin.x, y: ruin.y, owner: other.index, type: 11, name: "Scouts", strength: 1, maxMoves: 20, moves: 20, upkeep: 1 });
+  g4.armies.push({ x: ruin.x + 1, y: ruin.y + 1, owner: other.index, type: 11, name: "Scouts", strength: 1, maxMoves: 20, moves: 20, upkeep: 1 });
+  const strike = [];
+  for (let i = 0; i < 8; i++) {
+    const a = { x: ruin.x - 1, y: ruin.y, owner: side.index, type: 11, name: "Scouts", strength: 9, maxMoves: 20, moves: 20, upkeep: 1 };
+    g4.armies.push(a);
+    strike.push(a);
+  }
+  const fight = game.resolveAttack(g4, strike, ruin.x, ruin.y);
+  eq(fight.lines.city ?? null, null, "a fight on ruins is not for a city");
+  eq(fight.lines.defenders.length, 1, "and only the tile fought for defends");
+  eq(fight.captured ?? null, null, "nothing is captured");
+  eq(ruin.ownerIndex ?? null, null, "the ruins belong to nobody");
 }
 
 function testQuests() {
@@ -1561,16 +1612,60 @@ function testEndGame() {
   for (const c of g.map.cities) c.ownerIndex = c.ownerIndex != null ? winner.index : undefined;
   for (let i = 1; i < g.sides.length; i++) g.sides[i].alive = false;
   const r = game.checkEnd(g);
-  ok(r.over, "the game is over");
+  ok(r.triumph, "the last side standing has triumphed");
+  ok(!r.over, "and the game goes on, to be looked over");
   eq(r.winner, winner, "the last side standing wins");
   ok(!winner.computer, "and is switched to human control");
   ok(g.won, "the game-won flag is set");
+  ok(!r.noHumans, "a game that never had a human does not say the last one fell");
   const g2 = newGame("ERYTHEA", { seed: 82 });
   for (const c of g2.map.cities) c.ownerIndex = undefined;
-  const r2 = game.checkEnd(g2);
-  ok(r2.over, "with no cities owned the game is over");
-  eq(r2.winner, null, "and nobody won");
+  ok(!game.checkEnd(g2).over, "sides still in the game are players, cities or not");
+  const r2 = game.endRound(g2);
+  ok(r2.over, "with no cities owned the game is over at the round's end");
+  eq(r2.winner ?? null, null, "and nobody won");
   ok(r2.message.includes("No more players"), "with the right message");
+  eq(r2.fallen.length, g2.sides.length, "every side fell");
+
+  // the round's end puts a side with no city out (8065:18ab)
+  const g6 = newGame("ERYTHEA", { seed: 86, options: { diplomacy: 1 } });
+  g6.sides.forEach((s, i) => { s.computer = i > 0; });
+  game.begin(g6);
+  const doomed = g6.sides[1], other = g6.sides[2];
+  for (const c of game.sideCities(g6, doomed)) c.ownerIndex = other.index;
+  g6.diplomacy.state[doomed.index * 8 + other.index] = diplomacy.WAR;
+  g6.diplomacy.state[other.index * 8 + doomed.index] = diplomacy.WAR;
+  ok(game.sideArmies(g6, doomed).length > 0, "the doomed side still has armies");
+  game.endTurn(g6);
+  eq(g6.side, other, "a computer side with no city has no turn");
+  ok(doomed.alive, "but it is not out before the round's end");
+  while (g6.turn === 1) game.endTurn(g6);
+  ok(!doomed.alive, "the round's end puts it out");
+  eq(game.sideArmies(g6, doomed).length, 0, "with all its armies");
+  eq(doomed.gold, 0, "and no gold");
+  eq(diplomacy.state(g6, other.index, doomed.index), diplomacy.INTERMEDIATE, "others stand uneasy with it");
+  eq(diplomacy.proposal(g6, doomed.index, other.index), diplomacy.INTERMEDIATE, "both ways, proposals too");
+  const f = g6.ending && g6.ending.fallen && g6.ending.fallen[0];
+  ok(f && f.side === doomed, "its fall is told");
+  ok(f && f.line >= 0 && f.line < game.FALLEN_LINES, "in a line of group 11");
+  ok(f && f.boxed, "in a box while a human plays");
+
+  // a human left with no city still plays its turn until the round's end
+  const g7 = newGame("ERYTHEA", { seed: 87 });
+  g7.sides.forEach((s, i) => { s.computer = i < g7.sides.length - 1; });
+  game.begin(g7);
+  const me7 = g7.sides[g7.sides.length - 1];
+  for (const c of game.sideCities(g7, me7)) c.ownerIndex = g7.sides[0].index;
+  for (let i = 1; i < g7.sides.length; i++) game.endTurn(g7);
+  eq(g7.side, me7, "the human's turn comes round without a city");
+  ok(me7.alive, "and it is still in the game");
+  game.endTurn(g7);
+  ok(!me7.alive, "the round's end puts it out");
+  ok(me7.computer, "a fallen human is the computer's from then on");
+  ok(g7.ending.noHumans, "the last human's fall is said");
+  ok(g7.noHumansSaid, "once");
+  for (let i = 0; i < g7.sides.length; i++) game.endTurn(g7);
+  ok(!(g7.ending && g7.ending.noHumans), "and only once");
   const g3 = newGame("ERYTHEA", { seed: 83 });
   for (const s of g3.sides) s.computer = false;
   const me = g3.sides[0];
@@ -1601,6 +1696,7 @@ function testEndGame() {
   ok(r4.surrender, "a dominant human is offered surrender");
   ok(!r4.over, "but the game is not over");
   ok(g4.surrenderOffered, "and the flag is set");
+  ok(!game.checkEnd(g4).surrender, "the offer is made once");
   const g5 = newGame("ERYTHEA", { seed: 85 });
   const side5 = g5.sides[0];
   for (let i = 1; i < g5.sides.length; i++) g5.sides[i].alive = false;

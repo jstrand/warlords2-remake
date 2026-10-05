@@ -501,18 +501,18 @@ function walkPath(g, stack, path) {
       result.attack = { x: step.x, y: step.y, city };
       break;
     }
-    if (here[0] && here[0].owner != side) {
-      if (!diplomacy.mayAttack(g, side, here[0].owner)) {
-        result.stopped = "at peace";
-        break;
-      }
+    const theirs = here[0] && here[0].owner != side;
+    if (theirs && diplomacy.mayAttack(g, side, here[0].owner)) {
       result.stopped = "attack";
       result.attack = { x: step.x, y: step.y };
       break;
     }
     left -= step.cost;
     cumulative += step.cost;
-    if (here.length + stack.length <= rules.MAX_STACK) {
+    // the stack may only stop on a tile of its own where it fits; other
+    // steps -- a side at peace's stack among them -- are passed over
+    // (1a8b:07f9)
+    if (!theirs && here.length + stack.length <= rules.MAX_STACK) {
       lastOk = i;
       costTo[i] = cumulative;
     }
