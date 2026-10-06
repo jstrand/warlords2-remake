@@ -1,0 +1,26 @@
+# Caching, for Netlify and Cloudflare Pages: they read this file from the
+# site's root. Other hosts ignore it.
+#
+# No file name carries a version, so the browser asks on every visit whether
+# the page, its modules and the game's files have changed. An unchanged file
+# costs a "304 Not Modified", and a returning player never runs old modules
+# with new ones. The songs are large and change only when re-rendered, so they
+# are kept a week.
+
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/src/*
+  Cache-Control: no-cache
+
+/assets/manifest.json
+  Cache-Control: no-cache
+
+/assets/data/*
+  Cache-Control: no-cache
+
+/assets/music/*
+  Cache-Control: public, max-age=604800

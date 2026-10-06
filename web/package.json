@@ -5,6 +5,7 @@
   "description": "Warlords II in the browser: a JavaScript port of the Lua remake",
   "scripts": {
     "test": "node test/run.js",
-    "trace": "node test/trace.js"
+    "trace": "node test/trace.js",
+    "dist": "node dist.js"
   }
 }
