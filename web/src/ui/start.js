@@ -386,7 +386,7 @@ function drawWorld(G) {
 function makeWorld(G, after) {
   const R = { x: 160, y: 55, w: 336, h: 347 };   // popup 23
   if (!G.bscroll) G.bscroll = pck.toImage(G.dataDir + "/PICS/BSCROLL.PCK", G.palette, 10)[0];
-  const bar = image(G, G.dataDir + "/PICS/RMAPBAR.PCK");
+  const bar = image(G, G.dataDir + "/PICS/RMAPBAR.PCK", 10);
   const sliders = world.sliders.map((v, i) => (world.set[i] ? v : randommap.RANDOM_SLIDER));
   const it = randommap.generate({
     dataDir: G.dataDir, rng: new Rng(Date.now() % 1000000007), sliders,
@@ -406,8 +406,9 @@ function makeWorld(G, after) {
     gfx.draw(G.bscroll, gfx.newQuad(0, 0, R.w, R.h), R.x, R.y);
     const f = kit.font(2).colours(0, 7);
     [2, 3].forEach((k, i) => kit.centred(f, kit.text(0x88, k), 328, 181 + 20 * i));
+    // 4bed:01b5: a black frame (216d:01fd), the scroll showing through it
     kit.setPal(0);
-    gfx.rectangle("fill", 232, 255, 192, 25);
+    gfx.rectangle("line", 232.5, 255.5, 191, 24);
     gfx.setColor(1, 1, 1);
     const w = Math.floor((d.pct + 10) / 10) * 16 + 16;
     if (bar) gfx.draw(bar, gfx.newQuad(0, 0, w, 21), 232, 257);

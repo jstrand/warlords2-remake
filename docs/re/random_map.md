@@ -43,7 +43,9 @@ Begin (`7f77:060f`) has the advisor say *One moment...* (`6dda:026f(0)`,
 `VMOMENT`), pushes popup 23 (the `BSCROLL.PCK` scroll) with group 136's
 *Creating a new random map* / *Please wait...* (`8065:1471`), and calls
 `random_map_setup`. The progress (`4bed:01ff`) is `RMAPBAR.PCK` (0, 0) cut
-to `(p + 10) / 10 x 16 + 16` wide, 21 high, at (232, 257) on black, with
+to `(p + 10) / 10 x 16 + 16` wide, 21 high, drawn through its mask
+(`1997:027e`) at (232, 257) inside a black frame round (232, 255) 192 x 25
+(`4bed:01b5`, an outline by `216d:01fd`, the scroll showing within), with
 "p%" centred on (328, 237). A preview of the map as it is drawn, two pixels a
 tile from (400, 30) (`4bed:03aa`), is switched off (`DS:26c2` = 0).
 
