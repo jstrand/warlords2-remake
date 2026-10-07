@@ -9,7 +9,7 @@ What's here, and where to look first.
 | [`dice_callers.md`](dice_callers.md) | every caller of `dice()`, the index to the game's random rules |
 | [`runtime.md`](runtime.md) | segment 0: Borland runtime, SSG's assembly helpers, sound drivers |
 | [`ai.md`](ai.md) | computer players: turn pipeline, AI data, decoded decisions |
-| [`random_map.md`](random_map.md) | random map generator: pipeline and `RANDOM.DAT` parameters |
+| [`random_map.md`](random_map.md) | random map generator, in full: the start menu's settings, `RANDOM.DAT`, every phase from coastline to signposts |
 | [`ui.md`](ui.md) | the interface: 640×480 planar VGA, screen layout, the widget toolkit, event loop, fonts |
 | [`sound.md`](sound.md) | music, effects and the advisor: what plays when |
 

@@ -4,8 +4,15 @@
 // The start menu (7f77:0000, dialog 1): STARTUP0-3.PCK with New Scenario
 // (100), Load Game (101), Random Map (102) and Begin (103), and the
 // scenario's own PICS\SCENARIO.PCK under a bar with its name. The scenario
-// starts as Erythea (4125:2a6e). There is no random map generator, and Random
-// Map is greyed.
+// starts as Erythea (4125:2a6e).
+//
+// Random Map (7f77:05f5) puts "A Random World" on the bar and, in place of
+// the picture (7f77:0332), its settings on colour 3: four sliders --
+// Water, Hills, Cities, Forest, 106-109, STARTBU.PCK at (384, 216) 30 apart
+// -- each with a "?" (110-113) that leaves it to chance, the terrain set
+// (104) and "Cities can produce allies" (105). Begin then has the advisor say
+// "One moment..." and makes the world (random_map_setup, 7bab:10e8) on
+// BSCROLL.PCK with a bar (4bed:01ff). New Scenario's choice ends it.
 //
 // New Scenario (7f77:058d, 0725): popup 19, NEWSCEN.PCK, dialog 29 -- the
 // scenarios of SCENARIO.DAT in a black box, seven rows, and on the crystal
@@ -28,8 +35,17 @@ import * as screen from "../warlords/screen.js";
 import * as uidata from "../warlords/uidata.js";
 import * as vfs from "../vfs.js";
 import * as savegame from "./savegame.js";
+import * as advisorUi from "./advisor.js";
+import * as cues from "../warlords/cues.js";
+import * as randommap from "../warlords/randommap.js";
+import { Rng } from "../warlords/rng.js";
 import { u16, cstr } from "../warlords/bytes.js";
 import { fmt } from "../util.js";
+
+// The random world's settings, kept for the session as the original keeps
+// them (4125:28c8-28d8): on, the terrain set, allies, and each slider's
+// place and whether it is set (else "?", left to chance).
+const world = { on: false, terrainSet: 0, allies: false, sliders: [3, 3, 2, 3], set: [1, 1, 1, 1] };
 
 // the ten options, in the order of group 4 and the table at 4125:23b4
 const OPTION_KEYS = ["neutralCities", "diplomacy", "quests", "hiddenMap", "viewEnemies",
@@ -340,6 +356,68 @@ function openChooser(G, list, current, after) {
   return kit.push(d);
 }
 
+const SLIDER_X = 384, SLIDER_W = 120;            // 4125:29ac
+
+/** 7f77:0332: the random world's settings, in place of the picture. */
+function drawWorld(G) {
+  kit.setPal(3);
+  gfx.rectangle("fill", 328, 200, 264, 225);     // 4125:2930
+  const f = kit.font(2);
+  const art = G.screen.art_for(1);               // STARTBU.PCK
+  for (let i = 0; i < 4; i++) {
+    const y = 215 + 30 * i;
+    gfx.setColor(1, 1, 1);
+    kit.right(f, kit.text(2, i), 376, y);
+    // the slider at its place (4125:29cc), or bare for "?" (4125:2a04)
+    const sy = world.set[i] ? 80 + 20 * world.sliders[i] : 220;
+    if (art) gfx.draw(art.image, gfx.newQuad(496, sy, SLIDER_W, 20), SLIDER_X, y + 1);
+    const shows = world.set[i]
+      ? fmt(randommap.SLIDER_FORMATS[i], randommap.SLIDER_SHOWS[i][world.sliders[i]]) : "(?)";
+    f.draw(shows, 504, y);
+  }
+  f.draw(randommap.terrainSetName(G.dataDir, world.terrainSet), 336, 340);
+  f.draw(kit.text(3, world.allies ? 1 : 0), 336, 365);
+}
+
+/** random_map_setup (7bab:10e8): make the world, showing its progress as
+ *  4bed:01ff does on popup 23 -- the scroll with group 136's lines, the bar
+ *  RMAPBAR.PCK at (232, 257) growing a tenth at a time, the percentage over
+ *  it -- then hand it on. A "?" slider is rolled, 1d7-1. */
+function makeWorld(G, after) {
+  const R = { x: 160, y: 55, w: 336, h: 347 };   // popup 23
+  if (!G.bscroll) G.bscroll = pck.toImage(G.dataDir + "/PICS/BSCROLL.PCK", G.palette, 10)[0];
+  const bar = image(G, G.dataDir + "/PICS/RMAPBAR.PCK");
+  const sliders = world.sliders.map((v, i) => (world.set[i] ? v : randommap.RANDOM_SLIDER));
+  const it = randommap.generate({
+    dataDir: G.dataDir, rng: new Rng(Date.now() % 1000000007), sliders,
+    allies: world.allies, terrainSet: world.terrainSet,
+  });
+  const d = { pct: 0 };
+  d.update = () => {
+    // a step of the generator a frame, so the bar moves as it works
+    const r = it.next();
+    if (!r.done) { d.pct = r.value; return; }
+    randommap.install(G.dataDir, r.value);
+    kit.pop(d);
+    after();
+  };
+  d.draw = () => {
+    gfx.setColor(1, 1, 1);
+    gfx.draw(G.bscroll, gfx.newQuad(0, 0, R.w, R.h), R.x, R.y);
+    const f = kit.font(2).colours(0, 7);
+    [2, 3].forEach((k, i) => kit.centred(f, kit.text(0x88, k), 328, 181 + 20 * i));
+    kit.setPal(0);
+    gfx.rectangle("fill", 232, 255, 192, 25);
+    gfx.setColor(1, 1, 1);
+    const w = Math.floor((d.pct + 10) / 10) * 16 + 16;
+    if (bar) gfx.draw(bar, gfx.newQuad(0, 0, w, 21), 232, 257);
+    kit.centred(f, fmt("%d%%", d.pct), 328, 237);
+  };
+  d.mousepressed = () => {};
+  d.keypressed = () => {};
+  return kit.push(d);
+}
+
 /** Open the start menu. `start(scenarioDir, options, sides, extra)` begins a
  *  game; `loaded(g)` takes a saved one. */
 export function open(start, loaded) {
@@ -348,13 +426,24 @@ export function open(start, loaded) {
   const d = { view: kit.view(1), cur: 0, menuBar: true };
   d.view.screen = true;      // a screen, not a dialog: Begin has no ring
   list.forEach((e, i) => { if (e.dir === "Erythea") d.cur = i; });   // 4125:2a6e
+  // back from a random world, the menu is still on one (7f77:0000)
+  if (G.scenario === randommap.DIR) world.on = true;
 
+  // 7f77:011e
   const refresh = () => {
     const s = d.view.state;
     s[100] = uidata.NORMAL; s[101] = uidata.NORMAL; s[103] = uidata.NORMAL;
-    s[102] = uidata.DISABLED;
+    s[102] = world.on ? uidata.DISABLED : uidata.NORMAL;
     d.hidden = {};
-    for (let id = 104; id <= 113; id++) d.hidden[id] = true;
+    if (!world.on) {
+      for (let id = 104; id <= 113; id++) d.hidden[id] = true;
+      return;
+    }
+    s[104] = uidata.NORMAL; s[105] = uidata.NORMAL;
+    for (let i = 0; i < 4; i++) {
+      s[106 + i] = uidata.NORMAL;
+      s[110 + i] = world.set[i] ? uidata.NORMAL : uidata.ACTIVE;   // lit while "?"
+    }
   };
 
   d.draw = () => {
@@ -364,46 +453,79 @@ export function open(start, loaded) {
       if (img) gfx.draw(img, (q % 2) * 320, Math.floor(q / 2) * 240);
     }
     const sc = list[d.cur];
-    if (sc) {
+    if (world.on) drawWorld(G);
+    else if (sc) {
       const pic = image(G, G.dataDir + "/" + sc.dir.toUpperCase() + "/PICS/SCENARIO.PCK");
       if (pic) {
         gfx.setColor(1, 1, 1);
         gfx.draw(pic, gfx.newQuad(0, 0, 264, 225), 328, 200);
       }
+    }
+    if (world.on || sc) {
+      // 7f77:02bf: the scenario's name, or "A Random World"
       kit.setPal(3);
       gfx.rectangle("fill", 336, 166, 248, 28);
       gfx.setColor(1, 1, 1);
-      kit.centred(kit.font(2), sc.name, 460, 172);
+      kit.centred(kit.font(2), world.on ? kit.text(0, 0) : sc.name, 460, 172);
     }
     kit.drawControls(d.view, d.hidden);
   };
 
   const reopen = () => { refresh(); kit.push(d); };
 
+  const setUp = (sc) => {
+    const st = newSetup(G, sc);
+    openSetup(G, st, (s) => {
+      const options = {}, sides = {};
+      for (let i = 0; i <= 9; i++) options[OPTION_KEYS[i]] = s.options[i];
+      for (let i = 0; i < 8; i++) {
+        const e = s.sides[i];
+        if (e) sides[i] = { computer: e.computer, level: e.level, card: e.card, off: e.computer && e.level === 3 };
+      }
+      start(s.sc.dir.toUpperCase(), options, sides, { greatest: s.greatest });
+    }, reopen);
+  };
+
   d.mousepressed = (x, y) => {
     const c = kit.controlAt(d.view, x, y, d.hidden);
     if (!c || d.view.state[c.id] === uidata.DISABLED) return;
     const id = c.id;
     if (id === 100) {
-      openChooser(G, list, d.cur, (i) => { if (i != null) d.cur = i; });
+      // 7f77:067c: a scenario chosen ends the random world
+      openChooser(G, list, d.cur, (i) => {
+        if (i != null) { d.cur = i; world.on = false; }
+        refresh();
+      });
     } else if (id === 101) {
       savegame.load((g) => {
         kit.pop(d);
         loaded(g);
       });
+    } else if (id === 102) {
+      world.on = true;                                    // 7f77:05f5
+    } else if (id === 104) {
+      world.terrainSet = (world.terrainSet + 1) % randommap.terrainSets(G.dataDir);   // 7f77:063a
+    } else if (id === 105) {
+      world.allies = !world.allies;                       // 7f77:0661
+    } else if (id >= 106 && id <= 109) {
+      // 7f77:0512: a "?" slider is set again where it was; a set one moves
+      // to where it was clicked
+      const i = id - 106;
+      if (!world.set[i]) world.set[i] = 1;
+      else world.sliders[i] = Math.min(6, Math.trunc((x - SLIDER_X) * 7 / SLIDER_W));
+    } else if (id >= 110 && id <= 113) {
+      world.set[id - 110] = 0;                            // 7f77:0571
+    } else if (id === 103 && world.on) {
+      // 7f77:060f: "One moment...", the world, then the sides as for any scenario
+      advisorUi.say(cues.MOMENT, () => makeWorld(G, () => {
+        kit.pop(d);
+        setUp({ name: kit.text(0, 0), dir: randommap.DIR });
+      }));
     } else if (id === 103 && list[d.cur]) {
       kit.pop(d);
-      const st = newSetup(G, list[d.cur]);
-      openSetup(G, st, (s) => {
-        const options = {}, sides = {};
-        for (let i = 0; i <= 9; i++) options[OPTION_KEYS[i]] = s.options[i];
-        for (let i = 0; i < 8; i++) {
-          const e = s.sides[i];
-          if (e) sides[i] = { computer: e.computer, level: e.level, card: e.card, off: e.computer && e.level === 3 };
-        }
-        start(s.sc.dir.toUpperCase(), options, sides, { greatest: s.greatest });
-      }, reopen);
+      setUp(list[d.cur]);
     }
+    refresh();
   };
   d.keypressed = () => {};
   refresh();

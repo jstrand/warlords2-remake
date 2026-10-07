@@ -35,6 +35,8 @@ import * as menuMod from "./warlords/menu.js";
 import * as slotsMod from "./warlords/slots.js";
 import * as cues from "./warlords/cues.js";
 import * as siteMod from "./warlords/site.js";
+import * as randommap from "./warlords/randommap.js";
+import { Rng } from "./warlords/rng.js";
 import * as kit from "./ui/kit.js";
 import * as cityUi from "./ui/city.js";
 import * as reportsUi from "./ui/reports.js";
@@ -196,8 +198,13 @@ function load(params) {
     advisorUi.say(cues.GREET);
     return;
   }
+  const seed = Number(params.get("seed")) || Date.now() % 1000000007;
+  if (G.scenario === randommap.DIR) {
+    // ?scenario=RANDOM: a random world with the start menu's first settings
+    randommap.install(DATA, randommap.generateNow({ dataDir: DATA, rng: new Rng(seed) }));
+  }
   if (!vfs.exists(`${DATA}/${G.scenario}/${G.scenario}.SCN`)) throw new Error("no scenario " + G.scenario);
-  newGame(Number(params.get("seed")) || Date.now() % 1000000007);
+  newGame(seed);
   beginGame();
   say("Click a stack, then click where to go.");
 }

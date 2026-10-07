@@ -301,7 +301,8 @@ function wavefront(q, pass) {
           const nd = -v;
           dist[k] = nd;
           const curWater = has(cur, WATER_F), curCross = has(cur, CROSS_F);
-          let cls = 0;
+          // the road builder spreads straight only (4125:00e2, class 9)
+          let cls = q.roads ? 9 : 0;
           if (y === 0) cls = x === 0 ? 1 : (x === W - 1 ? 3 : 2);
           else if (y === H - 1) cls = x === 0 ? 6 : (x === W - 1 ? 8 : 7);
           else if (x === 0) cls = 4;
@@ -371,12 +372,17 @@ function trace(q) {
     for (const turn of TRACE_ORDER) {
       const dir = (toward + turn) % 8;
       const nx = x + DIRS[dir][0], ny = y + DIRS[dir][1];
+      // the road builder steps diagonally only over water that is no bridge
+      if (q.roads && dir % 2 === 1
+          && !(has(grid[ny * W + nx], WATER_F) && !q.isBridge(nx, ny))) continue;
       if (nx >= 0 && ny >= 0 && nx < W && ny < H) {
         const v = dist[ny * W + nx];
         if (v !== UNREACHED && v !== SHUT) {
           const nb = grid[ny * W + nx];
           const blocked = land && !curCross && !has(nb, CROSS_F) && has(nb, WATER_F) !== curWater;
-          if (!blocked && absval(v) < d) {
+          // ... and takes a first neighbour no nearer than here
+          const tie = q.roads && bx === null && absval(v) === d;
+          if (!blocked && (absval(v) < d || tie)) {
             bx = nx; by = ny; bdir = dir; d = absval(v);
           }
         }
@@ -473,6 +479,43 @@ export function findPath(g, stack, sx, sy, dx, dy) {
   for (const [k, byte] of restore) grd[k] = byte;
   if (path && path.length === 0) path = null;
   return path;
+}
+
+/** The route the random map generator lays a road along (5311:0c1c): the
+ *  pathfinder run as pseudo-player 14 (path_build_cost_grid with player 14,
+ *  4125:00e0 set). Its terrain costs are its own (`costs`, DS:01e0) and leave
+ *  no ground impassable but a city; it moves by land rules, crossing water
+ *  only at bridges and crossings; one pass of the wavefront, spreading only
+ *  straight; and a trace that steps diagonally only over water.
+ *  `m` gives terrain(x, y), road(x, y) and crossing(x, y) over a W x H map.
+ *  Returns the steps as [{ x, y }], or null. */
+export function roadRoute(m, costs, W, H, sx, sy, dx, dy) {
+  if (dx < 0 || dy < 0 || dx >= W || dy >= H) return null;
+  const grd = new Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = m.terrain(x, y);
+      let byte = m.road(x, y) ? 1 : costs[t];
+      if (t === BRIDGE) byte |= CROSS_F | WATER_F;
+      else if (t === WATER || t === SHORE) byte |= WATER_F;
+      else if (t === FOREST) byte |= FOREST_F;
+      else if (t === HILLS) byte |= HILLS_F;
+      else if (t === CITY) byte = CITY_F;          // nobody's city is player 14's
+      if (m.crossing(x, y)) byte |= CROSS_F;
+      grd[y * W + x] = byte;
+    }
+  }
+  const to = m.terrain(dx, dy);
+  const dist = new Array(W * H);
+  for (let k = 0; k < W * H; k++) dist[k] = grd[k] % 8 === 0 ? SHUT : UNREACHED;
+  const q = { W, H, sx, sy, dx, dy, grid: grd, mode: LAND, woods: false, hills: false,
+              penalty: to === WATER || to === SHORE ? WATER_PENALTY_TO : WATER_PENALTY,
+              dist, roads: true, isBridge: (x, y) => m.terrain(x, y) === BRIDGE };
+  const goal = dy * W + dx;
+  if (dist[goal] === SHUT && !has(grd[goal], CITY_F)) return null;
+  dist[goal] = -1;
+  if (wavefront(q, 0) !== 1) return null;
+  return trace(q).map((s) => ({ x: s.x, y: s.y }));
 }
 
 /** Walk `stack` along `path`, stopping where the rules say to stop.

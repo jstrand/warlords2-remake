@@ -1970,8 +1970,11 @@ With no scenario named the remake opens as the game does, on `7f77:0000`
 Load Game (101), Random Map (102) and Begin (103). On the right the chosen
 scenario's own `PICS\SCENARIO.PCK` — (0, 0) 264 × 225 at (328, 200) — under
 a colour-3 bar (336, 166) 248 × 28 with its name centred on (460, 172)
-(`7f77:02bf`, `0332`); Erythea to begin with (`4125:2a6e`). Random Map needs
-the map generator, which the remake does not have, and is greyed.
+(`7f77:02bf`, `0332`); Erythea to begin with (`4125:2a6e`). Random Map
+(`7f77:05f5`) swaps the picture for the random world's settings — four
+sliders, a "?" for each, the terrain set and the allies option — and Begin
+then makes the world first: see [`random_map.md`](random_map.md) › The start
+menu. The web port has it; the Lua remake greys the button.
 
 The menu bar stays up over the start screens, and live: `7f77:0200` greys
 every menu (`2372:0eab(0, 0)` — a menu's enabled items are a bit mask at

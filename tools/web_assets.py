@@ -98,7 +98,11 @@ def main():
             ext = os.path.splitext(n)[1].upper()
             if ext in SKIP_EXT or n.upper() in SKIP_FILES or n.startswith('.'):
                 continue
-            if rel.upper().startswith(('SAVE/', 'START/', 'RANDOM/')):
+            # RANDOM/ keeps only what ships: RANDOM.DAT, the map generator's
+            # parameters, and RANDOM.ITM; the rest of it is the game's output
+            if rel.upper().startswith(('SAVE/', 'START/')) or (
+                    rel.upper().startswith('RANDOM/')
+                    and n.upper() not in ('RANDOM.DAT', 'RANDOM.ITM')):
                 continue
             os.makedirs(os.path.join(data, os.path.dirname(rel)), exist_ok=True)
             if ext in ('.PCK', '.FNT'):

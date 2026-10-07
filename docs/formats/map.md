@@ -65,9 +65,11 @@ unanimous (e.g. id 1 → mask `EW` in 152 of 157 cases):
 | cell | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
 | shape | EW | NS | ✚ | ESW | NSW | NEW | NES | SW | NW | NE | ES | W | S | E | N | EW | NS |
 
-Ids 16 and 17 carry the same connectivity as 1 and 2 but different art: they
-are the **bridges** (the "Bridge" terrain in `STRING.DAT` group 128). Erythea
-has 16 and 13 of them.
+Ids 16 and 17 carry the same connectivity as 1 and 2 but different art: the
+straight road with **standing stones** beside it. Erythea has 16 and 13 of
+them; the random map generator turns `1d10 + 10` of each kind of straight
+piece into them (`docs/re/random_map.md`). The bridges are terrain tiles
+(0x84-0x86, 0x94), not road pieces.
 
 `ROAD.PCK` cells beyond 16 hold site graphics — ruins, towers, temples,
 signposts — which `.RD` does not appear to reference.

@@ -15,6 +15,7 @@ cd web && python3 -m http.server 8765
 # http://localhost:8765/                          the start screens
 # http://localhost:8765/?scenario=ISLADIA         straight into a scenario
 # http://localhost:8765/?scenario=ERYTHEA&seed=7  ... with a fixed seed
+# http://localhost:8765/?scenario=RANDOM&seed=7   a random world, made from that seed
 ```
 
 It does not work from a `file://` URL, because the browser will not fetch the
@@ -22,6 +23,11 @@ assets from disk. Every asset is fetched once at start-up, about 3 MB of game
 data. The music is fetched as it plays.
 
 The controls are the Lua remake's (`love2d/README.md`). The differences:
+
+- Random Map works: the start menu's settings, then Begin makes a new world
+  as the original does (`src/warlords/randommap.js`,
+  `docs/re/random_map.md`). The Lua remake does not have it. A random game's
+  save carries its map, about 100 KB more than another save.
 
 - Saves, the quick save, preferences, the button shortcuts and the sound
   settings live in the browser's `localStorage` (keys `w2:*`), so they stay with

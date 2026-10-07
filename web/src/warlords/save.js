@@ -4,10 +4,15 @@
 // is written: everything derived from the data files -- the map, the army
 // types, the terrain -- is reloaded from them. Armies are written with an id
 // so the references between them (a quest's hero, a staged stack) survive.
+// A random world has no files to reload, so its save carries them, as the
+// original's saves carry the map.
 
 import * as game from "./game.js";
 import * as scn from "./scn.js";
 import * as move from "./move.js";
+import * as vfs from "../vfs.js";
+import * as randommap from "./randommap.js";
+import { latin1, bytesOf } from "../util.js";
 
 export const VERSION = 1;
 
@@ -132,7 +137,24 @@ export function encode(g) {
     history: g.history, deeds: g.deeds, triumphs: g.triumphs,
     tutorialSeen: g.tutorialSeen,
     log: g.log,
+    randomWorld: g.map.name === randommap.DIR ? packWorld(g.dataDir) : undefined,
   });
+}
+
+// the random world's files, base64 by extension
+function packWorld(dataDir) {
+  const out = {};
+  for (const ext of randommap.FILES) {
+    const b = vfs.read(`${dataDir}/${randommap.DIR}/${randommap.DIR}.${ext}`);
+    if (b) out[ext] = btoa(latin1(b));
+  }
+  return out;
+}
+
+function unpackWorld(packed) {
+  const files = {};
+  for (const ext in packed) files[ext] = bytesOf(atob(packed[ext]));
+  return files;
 }
 
 const bool = (v) => !!v;
@@ -141,6 +163,7 @@ const bool = (v) => !!v;
 export function decode(text, dataDir) {
   const state = JSON.parse(text);
   if (state.version !== VERSION) throw new Error("unsupported save version");
+  if (state.randomWorld) randommap.install(dataDir, unpackWorld(state.randomWorld));
 
   const g = game.newGame(dataDir, state.scenario, { seed: 0, options: state.options });
   g.armies = [];

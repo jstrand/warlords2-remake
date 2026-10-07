@@ -32,6 +32,7 @@ import * as aicore from "../src/warlords/ai/core.js";
 import * as aigroups from "../src/warlords/ai/groups.js";
 import * as aidiplomacy from "../src/warlords/ai/diplomacy.js";
 import * as vfs from "../src/vfs.js";
+import * as randommap from "../src/warlords/randommap.js";
 import { fmt } from "../src/util.js";
 
 loadData();
@@ -1742,6 +1743,68 @@ function testNeighbourCache() {
   eq(dist[0], firstDist[0], "at the same distances");
 }
 
+function testRandomMap() {
+  console.log("random map");
+  const make = (seed, sliders, allies) =>
+    randommap.generateNow({ dataDir: DATA, rng: new Rng(seed), sliders, allies });
+  const a = make(7, [3, 3, 2, 3], false), b = make(7, [3, 3, 2, 3], false);
+  for (const ext of randommap.FILES) {
+    ok(a[ext] && a[ext].length > 0, "the generator writes RANDOM." + ext);
+    eq(Buffer.compare(Buffer.from(a[ext]), Buffer.from(b[ext])), 0, "the same dice make the same RANDOM." + ext);
+  }
+  eq(a.SCN.length, 12001, "RANDOM.SCN is Erythea's .SCN rewritten (4fef:1001)");
+  eq(a.MAP.length, 2 * 112 * 156, "RANDOM.MAP is a word a tile");
+  randommap.install(DATA, a);
+  const map = scn.load(DATA + "/RANDOM", "RANDOM");
+  eq(map.cities.length, 80, "Cities at its third place gives RANDOM.DAT's 80 (4bed:0000)");
+  eq(map.sites.length, 40, "forty sites (513d:003a)");
+  ok(map.signs.length >= 41 && map.signs.length <= 70, "1d30+40 signposts (4fef:113d)");
+  const capitals = new Set();
+  for (const s of map.sides) {
+    ok(s.capital && s.capital.owner === s, s.name + " holds its capital (513d:0689)");
+    capitals.add(s.capital);
+  }
+  eq(capitals.size, 8, "eight capitals, one a side");
+  for (const c of map.cities) {
+    eq(map.terrainType[scn.tileAt(map, c.x, c.y)], 10, c.name + " stands on a castle tile");
+    ok(c.produces.length >= 1, c.name + " makes something (513d:161d)");
+    const capital = c.owner != null;
+    ok(c.income >= (capital ? 33 : 15) && c.income <= (capital ? 40 : 28),
+       c.name + "'s income is value x 2 + 1d8 + 14 (513d:1171)");
+    ok(map.cityText[c.index] && map.cityText[c.index][0].startsWith(c.name + " is a"), c.name + " has its description");
+  }
+  const types = armytype.load(DATA + "/TERRAIN0/ARMYTYPE.DAT");
+  const magical = (t) => types.byId[t].bonus[48] !== 0;
+  ok(map.cities.every((c) => c.produces.every((t) => !magical(t))),
+     "without allies no city makes a magical army (513d:161d, 1c1d)");
+  let allies = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    randommap.install(DATA, make(seed, [3, 3, 2, 3], true));
+    for (const c of scn.load(DATA + "/RANDOM", "RANDOM").cities) allies += c.produces.filter(magical).length;
+  }
+  ok(allies > 0, "with allies on, 2d3 cities may make them (513d:1b3f)");
+  randommap.install(DATA, make(3, [0, 0, 6, 0], false));
+  eq(scn.load(DATA + "/RANDOM", "RANDOM").cities.length, 100, "Cities at its last place: 80 + 20");
+  randommap.install(DATA, make(3, [6, 6, 0, 6], false));
+  eq(scn.load(DATA + "/RANDOM", "RANDOM").cities.length, 70, "Cities at its first place: 80 - 10");
+  const rolled = randommap.settle([7, 7, 7, 7], new Rng(5));
+  ok(rolled.every((v) => v >= 0 && v <= 6), "a slider left to chance is rolled 1d7-1 (7bab:10e8)");
+
+  // a game on it, and a save that carries the world with it
+  randommap.install(DATA, a);
+  const g = newGame("RANDOM", { seed: 4 });
+  for (const s of g.sides) s.computer = true;
+  let side = game.begin(g);
+  while (side && g.turn <= 6) { ai.runSync(ai.playTurn(g, side)); side = game.endTurn(g); }
+  eq(g.turn, 7, "the computer players play a random world");
+  const text = saveMod.encode(g);
+  randommap.install(DATA, make(8, [3, 3, 2, 3], false));
+  const g2 = saveMod.decode(text, DATA);
+  eq(g2.map.tiles.join(","), g.map.tiles.join(","), "a saved random world comes back with its own map");
+  eq(g2.map.cities.map((c) => c.name).join(), g.map.cities.map((c) => c.name).join(), "... and its own cities");
+  eq(g2.map.signs.length, g.map.signs.length, "... and its own signposts");
+}
+
 function testSave() {
   console.log("save and load");
   const q = quest;
@@ -2166,6 +2229,7 @@ testQuests();
 testEndGame();
 testHiddenMap();
 testSave();
+testRandomMap();
 testNeighbourCache();
 testSites("ERYTHEA");
 testSites("DRAGON");
