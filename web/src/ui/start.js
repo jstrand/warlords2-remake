@@ -22,7 +22,8 @@
 // dialog 3: a box a side with its face and its button -- Human, Knight,
 // Lord, Warlord or Off (7bab:0634); Begin (141), Main Menu (142), I am the
 // Greatest (143) / No! I really am Normal (144), the presets (145-147) and
-// Edit Options (148); the difficulty rating (7bab:0bab).
+// Edit Options (148); the difficulty rating (7bab:0bab); the SSG logo
+// (7bab:10c7); and under it all a quote on war from QUOTES.DAT (7bab:0f88).
 //
 // Edit Options (7bab:12a2): popup 4, dialog 4 -- the ten options of group 4
 // two to a row; 159-168 change one, 169-171 are the presets, OK (172).
@@ -69,6 +70,29 @@ export function scenarios(dataDir) {
     });
   }
   return out;
+}
+
+// where the quote's lines go, centred (4125:253c)
+const QUOTE_Y = [366, 384, 402, 420, 440];
+
+/** A quote from QUOTES.DAT, as 7bab:0f88 picks it: a two-digit count, then
+ *  records of a three-digit length and that many bytes less one, lines split
+ *  by "|" and each closed by one. dice(1, count) says which. */
+export function quote(dataDir, roll) {
+  const s = vfs.read(dataDir + "/DATA/QUOTES.DAT");
+  if (!s) return [];
+  const str = (o, n) => String.fromCharCode(...s.subarray(o, o + n));
+  const count = parseInt(str(0, 2), 10) || 0;
+  if (count < 1) return [];
+  const pick = roll(count);
+  let o = 4, text = "";
+  for (let i = 0; i < pick && o + 3 <= s.length; i++) {
+    const n = parseInt(str(o, 3), 10) || 0;
+    text = str(o + 3, n - 1);
+    o += 3 + n + 1;
+  }
+  // only text closed by a "|" is drawn
+  return text.split("|").slice(0, -1).slice(0, QUOTE_Y.length);
 }
 
 function image(G, path, key) {
@@ -180,6 +204,9 @@ function openSetup(G, st, begin, back) {
   const d = { view: kit.view(3), menuBar: true };
   d.view.screen = true;      // a screen, not a dialog: Begin has no ring
   const art = G.screen.art_for(31);              // SETUPBU.PCK
+  const logo = G.screen.art_for(52);             // SSG.PCK
+  // picked once as the screen is drawn whole; Edit Options draws over it
+  const lines = quote(G.dataDir, (n) => 1 + Math.floor(Math.random() * n));
 
   const refresh = () => {
     const s = d.view.state;
@@ -239,10 +266,13 @@ function openSetup(G, st, begin, back) {
         blit(LEVEL_BUTTON[btn], 0, 80, 25, R.x + 72, R.y + 12);
       }
     }
+    // 7bab:10c7: the logo's (0, 0, 144, 64) to (440, 277) (4125:2550)
     gfx.setColor(1, 1, 1);
+    if (logo) gfx.draw(logo.image, gfx.newQuad(0, 0, 144, 64), 440, 277);
     kit.centred(f, kit.text(7, 0), 512, 48);
     kit.centred(f, kit.text(7, 1), 512, 206);
     kit.centred(f, fmt(kit.text(6, 0), rating(st)), 196, 426);
+    lines.forEach((line, i) => kit.centred(f, line, 512, QUOTE_Y[i]));
     kit.drawControls(d.view, d.hidden);
   };
 
