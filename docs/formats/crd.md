@@ -17,7 +17,10 @@ The card number is `.SCN` `0x00e0 + 2·side`. It is reset to 0 whenever the
 side's level button is pressed (`7bab:0a4e`) and by *I am the Greatest* for a
 side that wasn't already a Warlord (`7bab:0ee8`). *Random Characters*
 (`7bab:2051`) gives each computer side `1d(n − 1)` with `n` the number of cards
-of its level on disk: any card **but** the Standard one.
+of its level on disk: any card **but** the Standard one. The side's Setup
+Side dialog (`7bab:16ea`) picks one from a list. `n` counts the `.DSC` files,
+000 up to the first missing one, at most 30 (`796c:03d9`). See
+[`../re/ui.md`](../re/ui.md) › The start screens.
 
 ## Loading (`59bf:0d7b`, from `ai_init_side` `59bf:084d` at game start)
 

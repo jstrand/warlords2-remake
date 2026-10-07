@@ -2024,9 +2024,68 @@ and y = 270, their values in colour 7 128 to the right — Neutral Cities
 *Average*/*Strong*/*Active* (group 5), the rest *On*/*Off*. 159–168 change
 one, 169–171 the presets, Done (172).
 
-Left out: the Character boxes and Random Characters, which choose the
-computer players' personalities (dialog 27, `7bab:16ea`, `2051`), and Recall
-Options (`7bab:2229`).
+The options are not the scenario's. They are a table of ten u16s
+(`4125:23b4`), the Beginner preset to begin with, and coming from the start
+menu `7bab:0000` reads `DATA\OPTIONS.DAT` (FILE.DAT `0x43`, `7bab:223b`) over
+it; Begin writes the table back to the file (`7bab:2289`, from `0cfe`) and
+then into the game's options. So the setup screen opens on the options the
+last game began with. The tutorial skips the screen and plays with the
+Beginner preset (`7bab:00ac`). Coming back from Edit Options or Setup Side
+does not read the file again.
+
+Each box also has a **Character** box: `SETUPBU.PCK`'s 24 × 20 at (440, 0)
+ticked or (440, 20) empty, at (x + 64, y + 39) (`4125:24ec`, `24fc`) —
+ticked when the side's card (`.SCN 0x00e0`, see
+[`crd.md`](../formats/crd.md)) is not 0 — and *Character* in font 2 in the
+side's colours at (x + 88, y + 41) (`4125:251c`, `258b`). A computer with a
+card other than the Standard one shows another face: `4125:2408` entries
+7–9, (424, 100 / 140 / 180), for Knight, Lord and Warlord. The table's face
+order is Knight, Lord, Warlord, Off, the two humans, then (440, 40) for a
+side not in the scenario.
+
+At the foot, **Recall Options** (157, (24, 416)) reads `OPTIONS.DAT` again
+(`7bab:2229`), putting back the options the last game began with, and
+**Random Characters** (158, (288, 416), greyed with no computer in play,
+`7bab:0416`) gives every computer side that isn't Off `1d(n − 1)` of its
+level's n cards (`7bab:2051`): any but the Standard one.
+
+**Setup Side** (`7bab:16ea`), from the Character box (133–140, 80 × 20 at
+(x + 64, y + 39)) or the face (149–156): popup 4, dialog 27, nothing for a
+side not in the scenario. It keeps the side's name and card for Cancel.
+The deck is listed by `list_carried_items` mode 7 (`796c:03d9`): cards from
+000 up to the first missing `CARDS\%c%03d.DSC`, at most 30, each named by its
+file's first line. A human has an empty list. `7bab:180b` draws:
+
+- *Setup Side* in font 1 centred on (320, 55).
+- Two boxes, (138, 107) 368 × 67 and (138, 194) 368 × 165, each outlined
+  in the side's edge colour, then twice in its colour one and two pixels up
+  and left. *Side Name* on the first at (160, 96) and *Leader* on the
+  second at (160, 181), each in font 2 in the side's colours on a colour-3
+  tab as wide as the word and 17 high.
+- The side's shield (`8611:0bf7` size 0) at (144, 122), (456, 122) and
+  (144, 202).
+- *Retype the name of this side* centred on (320, 116), the name in the
+  field (229, 138) 188 × 22.
+- *Name* at (196, 203) and *Description* at (384, 203), white, over colour-0
+  rules at y = 218: 72 long from x = 196 and 96 long from x = 384.
+- The list (`7bab:1be6`): a (4, 2) bevel at (188, 248) 188 × 102 filled
+  with colour 3, five rows at (196, 252 + 19 i). The side's card is in
+  colour 15, the rest in its level's colour: Knight 5, Lord 7, Warlord 9.
+- The description (`7bab:1d0f`) in that level colour: the card's name at
+  (192, 224), and lines 1–6 of its `.DSC` at (384, 224 + 20 k)
+  (`7bab:20dc`). For a human, *N/A* at (196, 224) and (384, 224) in white.
+
+The controls: OK (457, `7bab:2024`), Cancel (458, `1fd7`: the name and card
+put back), the name field (459, `1f8a`: an edit from an empty line, 15
+characters and 128 pixels, see the text-entry dialog below), a row up and
+down (460 and 461, `1ed1`), five rows up and down (462 and 463, `1f23`: at
+most to the first or last card), and the rows (464–468, `1e8a`: that card
+becomes the side's). The list opens with cards 0–4, or with the side's card
+on the last row when it is past 4. The arrows up are live while the first
+row is past card 0, and the arrows down while the last row is short of the
+last card (`7bab:1ae4`). Only the setup screen and the computer's AI
+(`59bf:0d7b`) read the card. The name is the side's own (`.SCN` side ×
+20), so it is the one the game plays under.
 
 ## Report › Quest
 

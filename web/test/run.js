@@ -1952,6 +1952,22 @@ function testComputerPlayers() {
   eq(k.cautious, 1, "the Standard Knight is cautious");
   eq(k.groups, 1, "and runs one group");
   eq(aicard.describe(DATA, 2, 1)[0], "Attila the Hun", "a card's name is the first line of its .DSC");
+  const lords = aicard.deck(DATA, 1);
+  eq(lords.length, 9, "the setup screen lists a Lord's nine characters");
+  eq(lords[0], "Standard Lord", "the Standard one first");
+  eq(lords[2], "Roland the Rabid", "each by its .DSC's first line");
+
+  // a character chosen on the setup screen is the card the side plays
+  const roland = newGame("ERYTHEA", { seed: 70, sides: {
+    0: { computer: false }, 1: { computer: true, level: 1, card: 2, name: "Rabids" } } });
+  const rs = roland.map.sides[1];
+  eq(rs.card, 2, "the side keeps its character");
+  eq(rs.name, "Rabids", "and the name it was given");
+  eq(rs.ai.maxGroups, 2, "Roland the Rabid runs two assault groups");
+  eq(rs.ai.raze, 14, "razes 14 in 1000");
+  eq(rs.ai.sack, 100, "sacks 100");
+  eq(rs.ai.early, 1, "and takes early vengeance on a human");
+  eq(roland.map.sides[2].ai.maxGroups, 4, "a side left alone plays its Standard card");
   eq(new Rng(5).dice(1, 0, 3), 3, "dice(1, 0, 3) is 3");
   eq(aicore.dist(0, 0, 3, 4), 5, "distance is Euclidean");
   eq(aicore.dist(0, 0, 1, 1), 1, "and truncated");

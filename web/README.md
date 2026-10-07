@@ -28,10 +28,18 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
   as the original does (`src/warlords/randommap.js`,
   `docs/re/random_map.md`). The Lua remake does not have it. A random game's
   save carries its map, about 100 KB more than another save.
+- The setup screen has the original's character choice. Click a side's
+  Character box or face to rename the side or, for a computer, to pick its
+  character from its level's deck. Random Characters deals every computer
+  a character other than the Standard one. Recall Options puts back the
+  options the last game began with. The screen opens on those options, not
+  the scenario's, as the original's does (`docs/re/ui.md` › The start
+  screens). The Lua remake does not have any of these.
 
 - Saves, the quick save, preferences, the button shortcuts and the sound
   settings live in the browser's `localStorage` (keys `w2:*`), so they stay with
-  that browser.
+  that browser. So do the files the game writes, `OPTIONS.DAT` and
+  `OPTIONS.SND` (keys `w2file:*`).
 - View › Full screen uses the browser's Fullscreen API. The browser decides
   when to leave it (`Esc`).
 - Sound starts after the first key press or click, as browsers require.

@@ -185,6 +185,7 @@ export function newGame(dataDir, scenario, opts = {}) {
     for (const s of g.map.sides) {
       const o = opts.sides[s.index];
       if (o && s.inUse) {
+        if (o.name) s.name = o.name;          // retyped on the setup screen
         if (o.off) {
           if (s.capital) s.capital.owner = undefined;
           s.inUse = false;

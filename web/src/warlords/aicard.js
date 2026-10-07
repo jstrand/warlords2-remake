@@ -64,6 +64,21 @@ export function describe(dataDir, level, number) {
   return [name, lines];
 }
 
+/** A level's deck as the setup screen lists it (list_carried_items mode 7,
+ *  796c:03d9): the name of each card from 000 up to the first missing .DSC,
+ *  at most 30 -- the first 40 bytes of the file, cut at a carriage return. */
+export function deck(dataDir, level) {
+  const out = [];
+  for (let n = 0; n < 30; n++) {
+    const s = vfs.read(path(dataDir, level, n, "DSC"));
+    if (!s) break;
+    let name = "";
+    for (let i = 0; i < Math.min(40, s.length) && s[i] !== 13; i++) name += String.fromCharCode(s[i]);
+    out.push(name);
+  }
+  return out;
+}
+
 /** How many cards a level has on disk, 000 up to the first missing one. */
 export function count(dataDir, level) {
   let n = 0;

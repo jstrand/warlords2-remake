@@ -19,14 +19,22 @@
 // ball the chosen one's name, description, cities, ruins and players.
 //
 // Begin (7bab:0000) sets the sides up on the main screen's own frame,
-// dialog 3: a box a side with its face and its button -- Human, Knight,
-// Lord, Warlord or Off (7bab:0634); Begin (141), Main Menu (142), I am the
-// Greatest (143) / No! I really am Normal (144), the presets (145-147) and
-// Edit Options (148); the difficulty rating (7bab:0bab); the SSG logo
-// (7bab:10c7); and under it all a quote on war from QUOTES.DAT (7bab:0f88).
+// dialog 3: a box a side with its face, its button -- Human, Knight, Lord,
+// Warlord or Off -- and its Character box (7bab:0634); Begin (141), Main
+// Menu (142), I am the Greatest (143) / No! I really am Normal (144), the
+// presets (145-147) and Edit Options (148); Recall Options (157) and Random
+// Characters (158) at the foot; the difficulty rating (7bab:0bab); the SSG
+// logo (7bab:10c7); and under it all a quote on war from QUOTES.DAT
+// (7bab:0f88). The options are DATA\OPTIONS.DAT's, the ones the last game
+// began with, not the scenario's own (7bab:223b).
 //
 // Edit Options (7bab:12a2): popup 4, dialog 4 -- the ten options of group 4
 // two to a row; 159-168 change one, 169-171 are the presets, OK (172).
+//
+// Setup Side (7bab:16ea), from a side's Character box (133-140) or its face
+// (149-156): popup 4, dialog 27 -- the side's name to retype, and for a
+// computer the characters of its level's deck to choose from, with the
+// chosen one's description (7bab:180b). OK (457), Cancel (458).
 
 import * as gfx from "../gfx.js";
 import * as kit from "./kit.js";
@@ -39,6 +47,8 @@ import * as savegame from "./savegame.js";
 import * as advisorUi from "./advisor.js";
 import * as cues from "../warlords/cues.js";
 import * as randommap from "../warlords/randommap.js";
+import * as aicard from "../warlords/aicard.js";
+import * as input from "./input.js";
 import { Rng } from "../warlords/rng.js";
 import { u16, cstr } from "../warlords/bytes.js";
 import { fmt } from "../util.js";
@@ -52,10 +62,30 @@ const world = { on: false, terrainSet: 0, allies: false, sliders: [3, 3, 2, 3], 
 const OPTION_KEYS = ["neutralCities", "diplomacy", "quests", "hiddenMap", "viewEnemies",
   "viewProduction", "intenseCombat", "quickStart", "militaryAdvisor", "randomTurns"];
 const PRESETS = [                                  // 4125:2378
-  [0, 0, 0, 0, 1, 0],
-  [1, 1, 1, 0, 0, 0],
-  [2, 1, 1, 1, 0, 1],
+  [0, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+  [1, 1, 1, 0, 0, 0, 0, 0, 1, 0],
+  [2, 1, 1, 1, 0, 1, 0, 0, 1, 0],
 ];
+
+// The options being set up (4125:23b4): one table for the session, the
+// Beginner preset to begin with.
+const OPTIONS = PRESETS[0].slice();
+
+/** 7bab:223b: put back the options the last game began with, ten u16s in
+ *  DATA\OPTIONS.DAT -- the setup screen as it opens, and Recall Options.
+ *  With no file the table is left as it is. */
+function recallOptions(dataDir) {
+  const s = vfs.read(dataDir + "/DATA/OPTIONS.DAT");
+  if (!s) return;
+  for (let i = 0; i <= 9 && 2 * i + 2 <= s.length; i++) OPTIONS[i] = u16(s, 2 * i);
+}
+
+/** 7bab:2289: keep them for next time, as Begin starts the game. */
+function keepOptions(dataDir) {
+  const b = new Uint8Array(20);
+  for (let i = 0; i <= 9; i++) { b[2 * i] = OPTIONS[i] & 255; b[2 * i + 1] = (OPTIONS[i] >> 8) & 255; }
+  vfs.write(dataDir + "/DATA/OPTIONS.DAT", b);
+}
 
 /** SCENARIO.DAT's records. */
 export function scenarios(dataDir) {
@@ -109,8 +139,11 @@ function image(G, path, key) {
 
 function newSetup(G, sc) {
   const map = scn.load(G.dataDir + "/" + sc.dir.toUpperCase(), sc.dir.toUpperCase());
-  const st = { sc, map, options: [], sides: [], greatest: false };
-  for (let i = 0; i <= 9; i++) st.options[i] = map.options[OPTION_KEYS[i]] || 0;
+  // 7bab:0000: the tutorial plays with the Beginner options, any other
+  // scenario with the last game's
+  if (map.options.tutorial) for (let i = 0; i <= 9; i++) OPTIONS[i] = PRESETS[0][i];
+  else recallOptions(G.dataDir);
+  const st = { sc, map, options: OPTIONS, sides: [], greatest: false };
   for (const s of map.sides) {
     st.sides[s.index] = { inUse: s.inUse, name: s.name, colour: s.colour, edge: s.edge,
                           computer: s.computer, level: s.computer ? (s.level || 0) : 0,
@@ -194,10 +227,187 @@ function openOptions(G, st, after) {
   return kit.push(d);
 }
 
+// Setup Side's controls (dialog 27)
+const SIDE_OK = 457, SIDE_CANCEL = 458, SIDE_NAME = 459;
+const SIDE_UP = 460, SIDE_DOWN = 461, SIDE_PAGE_UP = 462, SIDE_PAGE_DOWN = 463, SIDE_ROW = 464;
+const NAME_BOX = { x: 229, y: 138, w: 188, h: 22 };
+// a Knight's characters are listed in colour 5, a Lord's 7, a Warlord's 9
+const LEVEL_INK = [5, 7, 9];
+
+/** Setup Side (7bab:16ea, drawn by 7bab:180b): popup 4, dialog 27. Side `i`'s
+ *  name, retyped in the field (15 characters, 128 pixels, 7bab:1f8a); for a
+ *  computer its level's characters, five rows at a time, and the chosen
+ *  one's description from its .DSC. A human has no character: "N/A". OK
+ *  keeps what was done, Cancel puts the name and character back. */
+function openSide(G, st, i, after) {
+  const R = { x: 120, y: 50, w: 400, h: 360 };   // popup 4
+  const s = st.sides[i];
+  const d = { view: kit.view(27), editing: null };
+  const saved = { name: s.name, card: s.card };
+  // Off has no deck: its letter is past the end of "KLW"
+  const deck = s.computer && s.level < 3 ? aicard.deck(G.dataDir, s.level) : [];
+  // the five rows' cards, -1 for none; the chosen one on the last row
+  // when it is past the first five
+  const rows = [];
+  for (let r = 0; r < 5; r++) rows[r] = r < deck.length ? r : -1;
+  if (s.card > 4) for (let r = 0; r < 5; r++) rows[r] += s.card - 4;
+  let desc = null, descCard = -1;
+
+  // 7bab:1ae4
+  const refresh = () => {
+    const v = d.view.state;
+    for (let r = 0; r < 5; r++) v[SIDE_ROW + r] = rows[r] < 0 ? uidata.DISABLED : uidata.NORMAL;
+    v[SIDE_OK] = uidata.NORMAL; v[SIDE_CANCEL] = uidata.NORMAL; v[SIDE_NAME] = uidata.NORMAL;
+    const up = s.computer && rows[0] >= 1;
+    const down = s.computer && rows[4] > 0 && rows[4] < deck.length - 1;
+    v[SIDE_UP] = v[SIDE_PAGE_UP] = up ? uidata.NORMAL : uidata.DISABLED;
+    v[SIDE_DOWN] = v[SIDE_PAGE_DOWN] = down ? uidata.NORMAL : uidata.DISABLED;
+  };
+
+  // an empty name is not taken: the setup screen knows a side by its name
+  const keepName = () => {
+    if (d.editing.text !== "") s.name = d.editing.text;
+    d.editing = null;
+  };
+
+  const close = (ok) => {
+    if (!ok) { s.name = saved.name; s.card = saved.card; }   // 7bab:1fd7
+    kit.pop(d);
+    after();
+  };
+
+  d.draw = () => {
+    kit.popup(R);
+    gfx.setColor(1, 1, 1);
+    kit.centred(kit.font(1), "Setup Side", 320, 55);
+    const c = s.colour ?? 15, e = s.edge ?? 0;
+    const f = kit.font(2);
+    // two boxes, each outlined in the side's edge colour and twice more in
+    // its colour, a pixel further up and left each time
+    for (const [y, h] of [[107, 67], [194, 165]]) {
+      kit.setPal(e);
+      kit.outline(138, y, 368, h);
+      kit.setPal(c);
+      kit.outline(137, y - 1, 368, h);
+      kit.outline(136, y - 2, 368, h);
+    }
+    for (const [label, y] of [["Side Name", 96], ["Leader", 181]]) {
+      kit.setPal(3);
+      gfx.rectangle("fill", 160, y, f.width(label), 17);
+      gfx.setColor(1, 1, 1);
+      f.colours(c, e).draw(label, 160, y);
+    }
+    kit.shield(i, 144, 122);
+    kit.shield(i, 456, 122);
+    kit.shield(i, 144, 202);
+    gfx.setColor(1, 1, 1);
+    kit.centred(f, "Retype the name of this side", 320, 116);
+    kit.field(NAME_BOX.x, NAME_BOX.y, NAME_BOX.w, NAME_BOX.h, d.editing ? d.editing.text : s.name, f);
+    if (d.editing) d.editing.drawCursor(NAME_BOX.x, NAME_BOX.y);
+    kit.setPal(0);
+    gfx.rectangle("fill", 196, 218, 72, 1);
+    gfx.rectangle("fill", 384, 218, 96, 1);
+    gfx.setColor(1, 1, 1);
+    f.draw("Name", 196, 203);
+    f.draw("Description", 384, 203);
+    // the list (7bab:1be6): a sunk box, the chosen character in white
+    kit.setPal(3);
+    gfx.rectangle("fill", 189, 249, 186, 100);
+    kit.bevel(188, 248, 188, 102, 4, 2);
+    gfx.setColor(1, 1, 1);
+    if (!s.computer) {
+      f.draw("N/A", 196, 224);                    // 7bab:1d0f
+      f.draw("N/A", 384, 224);
+    } else {
+      const ink = f.colours(LEVEL_INK[s.level] ?? 15, 0);
+      for (let r = 0; r < 5 && rows[r] >= 0; r++) {
+        (rows[r] === s.card ? f : ink).draw(deck[rows[r]] || "", 196, 252 + 19 * r);
+      }
+      // the name, and the .DSC's next six lines (7bab:20dc)
+      ink.draw(deck[s.card] || "", 192, 224);
+      if (descCard !== s.card) {
+        descCard = s.card;
+        desc = s.level < 3 ? aicard.describe(G.dataDir, s.level, s.card) : null;
+      }
+      const lines = desc ? desc[1] : [];
+      for (let k = 0; k < 6; k++) if (lines[k]) ink.draw(lines[k], 384, 224 + 20 * k);
+    }
+    kit.drawControls(d.view);
+  };
+
+  d.mousepressed = (x, y) => {
+    if (d.editing) keepName();
+    const c = kit.controlAt(d.view, x, y);
+    if (!c) return;
+    const id = c.id;
+    if (id === SIDE_OK) return close(true);                   // 7bab:2024
+    if (id === SIDE_CANCEL) return close(false);
+    if (id === SIDE_NAME) {
+      d.editing = input.editor(15, 128);
+    } else if (id === SIDE_UP || id === SIDE_DOWN) {
+      // 7bab:1ed1: a row up or down, a row run off the deck left empty
+      const step = id === SIDE_UP ? -1 : 1;
+      for (let r = 0; r < 5; r++) {
+        rows[r] += step;
+        if (rows[r] < 0 || rows[r] >= deck.length) rows[r] = -1;
+      }
+    } else if (id === SIDE_PAGE_UP || id === SIDE_PAGE_DOWN) {
+      // 7bab:1f23: five rows, or as many as there are
+      const step = id === SIDE_PAGE_UP ? -Math.min(rows[0], 5)
+        : Math.min(deck.length - rows[4] - 1, 5);
+      rows[0] += step;
+      for (let r = 1; r < 5; r++) rows[r] = rows[r - 1] + 1;
+    } else if (id >= SIDE_ROW && id < SIDE_ROW + 5) {
+      const card = rows[id - SIDE_ROW];                       // 7bab:1e8a
+      if (card >= 0) s.card = card;
+    }
+    refresh();
+  };
+
+  d.keypressed = (key) => {
+    if (d.editing) {
+      const r = d.editing.key(key);
+      if (r === "keep") keepName(); else if (r === "undo") d.editing = null;
+      return;
+    }
+    if (key === "return" || key === "kpenter") close(true);
+    else if (key === "escape") close(false);
+  };
+
+  d.textinput = (t) => { if (d.editing) d.editing.input(t); };
+  refresh();
+  return kit.push(d);
+}
+
 const RECTS = [];                                 // 4125:23c8
 for (let i = 0; i < 8; i++) RECTS[i] = { x: i < 4 ? 24 : 208, y: 40 + 90 * (i % 4), w: 160, h: 70 };
-const FACES = [[0, 0], [0, 40], [0, 80], [0, 120], [0, 160], [0, 200], [440, 40]];
+// SETUPBU.PCK's faces (4125:2408): Knight, Lord, Warlord, Off, the two
+// humans, a side not in the scenario, then a Knight, Lord and Warlord
+// playing a character other than the Standard one
+const FACES = [[0, 0], [0, 40], [0, 80], [0, 120], [0, 160], [0, 200], [440, 40],
+  [424, 100], [424, 140], [424, 180]];
 const LEVEL_BUTTON = [120, 200, 280, 360, 40];   // 4125:24b8: Knight .. Off, Human
+// the Character box (4125:24ec): ticked with a character chosen, else empty,
+// 24 x 20 at (x + 64, y + 39), its label at (x + 88, y + 41) (4125:24fc, 251c)
+const CHECK = [[440, 0], [440, 20]];
+
+/** A side's face (7bab:0634), an index into FACES. */
+function faceOf(s, i) {
+  if (!s.inUse) return 6;
+  if (!s.computer) return i % 2 === 1 ? 5 : 4;
+  if (s.card && s.level < 3) return s.level + 7;
+  return s.level;
+}
+
+/** How many computers are in play: Random Characters needs one (7bab:0416). */
+function computers(st) {
+  let n = 0;
+  for (let i = 0; i < 8; i++) {
+    const s = st.sides[i];
+    if (s && s.inUse && s.computer && s.level !== 3) n++;
+  }
+  return n;
+}
 
 function openSetup(G, st, begin, back) {
   // the menu bar stays live over it, as over the start menu (7bab:0034)
@@ -214,8 +424,9 @@ function openSetup(G, st, begin, back) {
     for (let p = 0; p <= 2; p++) s[145 + p] = presetMatches(st, p) ? uidata.ACTIVE : uidata.NORMAL;
     s[141] = uidata.NORMAL; s[142] = uidata.NORMAL; s[148] = uidata.NORMAL;
     s[143] = uidata.NORMAL; s[144] = uidata.NORMAL;
-    d.hidden = { [st.greatest ? 143 : 144]: true, 157: true, 158: true };
-    for (let i = 0; i < 8; i++) { d.hidden[133 + i] = true; d.hidden[149 + i] = true; }
+    s[157] = uidata.NORMAL;
+    s[158] = computers(st) > 0 ? uidata.NORMAL : uidata.DISABLED;
+    d.hidden = { [st.greatest ? 143 : 144]: true };
   };
 
   const blit = (sx, sy, w, h, x, y) => {
@@ -255,15 +466,18 @@ function openSetup(G, st, begin, back) {
         gfx.setColor(1, 1, 1);
         f.colours(c, e).draw(s.name, nx, ny);
         // the face (7bab:0634): Off, a human (two faces, turn about), or the
-        // computer's level; the button the same, Off and Human mapped in
-        let face;
-        if (!s.inUse) face = 6;
-        else if (!s.computer) face = i % 2 === 1 ? 5 : 4;
-        else face = s.level;
+        // computer's level, another face for a character; the button the
+        // same, Off and Human mapped in
+        const face = faceOf(s, i);
         const fr = FACES[face];
         blit(fr[0], fr[1], 40, 40, R.x + 16, R.y + 16);
-        const btn = (face === 6 || face === 3) ? 3 : (face >= 4 ? 4 : face);
+        const lv = face >= 7 ? face - 7 : face;
+        const btn = (lv === 6 || lv === 3) ? 3 : (lv >= 4 ? 4 : lv);
         blit(LEVEL_BUTTON[btn], 0, 80, 25, R.x + 72, R.y + 12);
+        const ck = CHECK[s.card ? 0 : 1];
+        blit(ck[0], ck[1], 24, 20, R.x + 64, R.y + 39);
+        gfx.setColor(1, 1, 1);
+        f.colours(c, e).draw("Character", R.x + 88, R.y + 41);   // 4125:258b
       }
     }
     // 7bab:10c7: the logo's (0, 0, 144, 64) to (440, 277) (4125:2550)
@@ -296,6 +510,7 @@ function openSetup(G, st, begin, back) {
         if (s && s.inUse && !(s.computer && s.level === 3)) playing++;
       }
       if (playing < 1) return;
+      keepOptions(G.dataDir);                             // 7bab:0cfe
       kit.pop(d);
       return begin(st);
     } else if (id === 142) {
@@ -316,6 +531,24 @@ function openSetup(G, st, begin, back) {
       for (let k = 0; k <= 5; k++) st.options[k] = PRESETS[id - 145][k];
     } else if (id === 148) {
       return openOptions(G, st, refresh);
+    } else if ((id >= 133 && id <= 140) || (id >= 149 && id <= 156)) {
+      // 7bab:16ea: the Character box or the face; a side not in the
+      // scenario has neither
+      const i = id >= 149 ? id - 149 : id - 133;
+      const s = st.sides[i];
+      if (s && s.inUse) return openSide(G, st, i, refresh);
+    } else if (id === 157) {
+      recallOptions(G.dataDir);                           // 7bab:2229
+    } else if (id === 158) {
+      // 7bab:2051: each computer in play gets 1d(n - 1) of its level's n
+      // characters -- any but the Standard one
+      for (let i = 0; i < 8; i++) {
+        const s = st.sides[i];
+        if (s && s.inUse && s.computer && s.level !== 3) {
+          const n = aicard.deck(G.dataDir, s.level).length;
+          s.card = n > 1 ? 1 + Math.floor(Math.random() * (n - 1)) : 0;
+        }
+      }
     }
     refresh();
   };
@@ -511,7 +744,10 @@ export function open(start, loaded) {
       for (let i = 0; i <= 9; i++) options[OPTION_KEYS[i]] = s.options[i];
       for (let i = 0; i < 8; i++) {
         const e = s.sides[i];
-        if (e) sides[i] = { computer: e.computer, level: e.level, card: e.card, off: e.computer && e.level === 3 };
+        if (e) {
+          sides[i] = { computer: e.computer, level: e.level, card: e.card, name: e.name,
+                       off: e.computer && e.level === 3 };
+        }
       }
       start(s.sc.dir.toUpperCase(), options, sides, { greatest: s.greatest });
     }, reopen);
