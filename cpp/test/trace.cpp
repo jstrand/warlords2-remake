@@ -11,6 +11,7 @@
 
 #include "warlords/ai.hpp"
 #include "warlords/game.hpp"
+#include "warlords/randommap.hpp"
 #include "warlords/save.hpp"
 
 using namespace w2;
@@ -44,6 +45,14 @@ int main(int argc, char** argv) {
   opts.seed = seed;
   if (hidden) opts.options.emplace_back("hiddenMap", 1);
   if (diplo) opts.options.emplace_back("diplomacy", 1);
+  // RANDOM: a world made from the seed first, as cpp/test/trace.lua makes it
+  if (scen == randommap::DIR) {
+    Rng r(seed);
+    randommap::Options ro;
+    ro.dataDir = "original";
+    ro.rng = &r;
+    randommap::install("original", randommap::generateNow(ro));
+  }
   auto g = game::newGame("original", scen, opts);
   for (Side* s : g->sides) s->computer = true;
   Side* side = game::begin(*g);

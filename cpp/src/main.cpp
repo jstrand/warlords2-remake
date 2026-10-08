@@ -50,6 +50,7 @@
 #include "warlords/move.hpp"
 #include "warlords/pal.hpp"
 #include "warlords/rules.hpp"
+#include "warlords/randommap.hpp"
 #include "warlords/save.hpp"
 #include "warlords/scn.hpp"
 #include "warlords/site.hpp"
@@ -3042,6 +3043,15 @@ int main(int argc, char** argv) {
       G.scenario = scenario;
       game::NewGameOptions o;
       o.seed = seed != 0 ? seed : (double)(time(nullptr) % 1000000007);
+      if (scenario == w2::randommap::DIR) {
+        // RANDOM: a random world with the start menu's first settings, made
+        // from the seed, in place of the last one the original left on disk
+        w2::Rng r(o.seed);
+        w2::randommap::Options ro;
+        ro.dataDir = G.dataDir;
+        ro.rng = &r;
+        w2::randommap::install(G.dataDir, w2::randommap::generateNow(ro));
+      }
       G.g = game::newGame(G.dataDir, scenario, o);
       for (size_t i = 0; i < G.g->sides.size(); i++) G.g->sides[i]->computer = i > 0;
       syncLayout();

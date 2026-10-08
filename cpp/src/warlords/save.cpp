@@ -8,11 +8,27 @@
 #include "warlords/armytype.hpp"
 #include "warlords/game.hpp"
 #include "warlords/move.hpp"
+#include "warlords/randommap.hpp"
 #include "warlords/scn.hpp"
 
 namespace w2::save {
 
 namespace {
+// A random world has no files to reload, so its save carries them, as the
+// original's saves carry the map: in hex, as the Lua's does.
+std::string hex(const std::string& b) {
+  static const char* digits = "0123456789abcdef";
+  std::string out;
+  out.reserve(b.size() * 2);
+  for (unsigned char c : b) { out += digits[c >> 4]; out += digits[c & 15]; }
+  return out;
+}
+std::string unhex(const std::string& h) {
+  std::string out;
+  for (size_t i = 0; i + 1 < h.size(); i += 2) out += (char)std::stoi(h.substr(i, 2), nullptr, 16);
+  return out;
+}
+
 Json intMap(const std::map<int, int>& m) {
   Json o = Json::object();
   for (auto& [k, v] : m) o.set(std::to_string(k), v);
@@ -352,12 +368,23 @@ std::string encode(const Game& g) {
   out.set("history", history); out.set("deeds", deeds); out.set("triumphs", triumphs);
   out.set("tutorialSeen", seen);
   out.set("log", log);
+  if (g.map->name == randommap::DIR) {
+    Json world = Json::object();
+    for (auto& [ext, b] : randommap::installed(g.dataDir)) world.set(ext, hex(b));
+    out.set("randomWorld", world);
+  }
   return out.dump();
 }
 
 std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir) {
   Json state = Json::parse(text);
   if (state["version"].integer() != VERSION) throw std::runtime_error("unsupported save version");
+
+  if (state.has("randomWorld")) {
+    randommap::Files files;
+    for (auto& [ext, h] : state["randomWorld"].entries()) files[ext] = unhex(h.str());
+    randommap::install(dataDir, files);
+  }
 
   game::NewGameOptions opts;
   for (auto& [k, v] : state["options"].entries()) opts.options.emplace_back(k, (int)v.integer());

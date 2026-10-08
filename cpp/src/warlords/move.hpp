@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -96,6 +97,20 @@ int distance(int x1, int y1, int x2, int y2);
 /** path_prepare_grid (1555:08bf): nothing reached, and what the stack can
  *  never enter shut. */
 std::vector<int> prepare(Game& g, const std::vector<int>& grid, int sideIndex, int mode, int dx, int dy);
+
+/** What the road builder reads off the map it is making. */
+struct RoadGround {
+  std::function<int(int, int)> terrain;
+  std::function<bool(int, int)> road, crossing;
+};
+/** The route the random map generator lays a road along (5311:0c1c): the
+ *  pathfinder run as pseudo-player 14 (path_build_cost_grid with player 14,
+ *  4125:00e0 set). Its terrain costs are its own (`costs`, DS:01e0) and leave
+ *  no ground impassable but a city; it moves by land rules, crossing water
+ *  only at bridges and crossings; one pass of the wavefront, spreading only
+ *  straight; and a trace that steps diagonally only over water. */
+std::optional<std::vector<std::pair<int, int>>> roadRoute(const RoadGround& m, const int costs[12], int W, int H,
+                                                          int sx, int sy, int dx, int dy);
 
 /** The path from (sx,sy) to (dx,dy) for a stack, or none if there is no
  *  route: 1555:000a, step for step. An empty path means "already there". */

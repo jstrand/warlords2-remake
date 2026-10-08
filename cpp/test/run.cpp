@@ -35,6 +35,7 @@
 #include "warlords/move.hpp"
 #include "warlords/pck.hpp"
 #include "warlords/quest.hpp"
+#include "warlords/randommap.hpp"
 #include "warlords/report.hpp"
 #include "warlords/rules.hpp"
 #include "warlords/save.hpp"
@@ -2188,6 +2189,97 @@ static void testBugFlags() {
 
 // ------------------------------------------------------------ the computer AI
 
+// The random map generator (warlords/randommap.cpp, docs/re/random_map.md):
+// what it makes, and a game played on it and saved.
+static void testRandomMap() {
+  printf("random map\n");
+  auto make = [](int seed, std::array<int, 4> sliders, bool allies) {
+    Rng r(seed);
+    randommap::Options o;
+    o.dataDir = DATA;
+    o.rng = &r;
+    o.sliders = sliders;
+    o.allies = allies;
+    return randommap::generateNow(o);
+  };
+  auto a = make(7, {{3, 3, 2, 3}}, false), b = make(7, {{3, 3, 2, 3}}, false);
+  for (const char* ext : randommap::FILES) {
+    ok(a.count(ext) && !a[ext].empty(), std::string("the generator writes RANDOM.") + ext);
+    ok(a[ext] == b[ext], std::string("the same dice make the same RANDOM.") + ext);
+  }
+  eq((int)a["SCN"].size(), 12001, "RANDOM.SCN is Erythea's .SCN rewritten (4fef:1001)");
+  eq((int)a["MAP"].size(), 2 * 112 * 156, "RANDOM.MAP is a word a tile");
+  randommap::install(DATA, a);
+  auto map = scn::load(DATA + "/RANDOM", "RANDOM");
+  eq((int)map->cities.size(), 80, "Cities at its third place gives RANDOM.DAT's 80 (4bed:0000)");
+  eq((int)map->sites.size(), 40, "forty sites (513d:003a)");
+  ok(map->signs.size() >= 41 && map->signs.size() <= 70, "1d30+40 signposts (4fef:113d)");
+  std::set<City*> capitals;
+  for (auto& sd : map->sides) {
+    ok(sd.capital && sd.capital->owner == &sd, sd.name + " holds its capital (513d:0689)");
+    capitals.insert(sd.capital);
+  }
+  eq((int)capitals.size(), 8, "eight capitals, one a side");
+  for (auto& c : map->cities) {
+    eq(map->terrainType[scn::tileAt(*map, c.x, c.y) % 256], 10, c.name + " stands on a castle tile");
+    ok(!c.produces.empty(), c.name + " makes something (513d:161d)");
+    bool capital = c.owner != nullptr;
+    ok(c.income >= (capital ? 33 : 15) && c.income <= (capital ? 40 : 28),
+       c.name + "'s income is value x 2 + 1d8 + 14 (513d:1171)");
+    auto t = map->cityText.find(c.index);
+    ok(t != map->cityText.end() && startsWith(t->second[0], c.name + " is a"), c.name + " has its description");
+  }
+  Types types;
+  armytype::load(DATA + "/TERRAIN0/ARMYTYPE.DAT", types);
+  auto magical = [&](int t) { return types.byId(t) && types.byId(t)->bonus[48] != 0; };
+  bool none = true;
+  for (auto& c : map->cities) for (int t : c.produces) if (magical(t)) none = false;
+  ok(none, "without allies no city makes a magical army (513d:161d, 1c1d)");
+  int allies = 0;
+  for (int seed = 1; seed <= 10; seed++) {
+    randommap::install(DATA, make(seed, {{3, 3, 2, 3}}, true));
+    auto m = scn::load(DATA + "/RANDOM", "RANDOM");
+    for (auto& c : m->cities)
+      for (int t : c.produces) if (magical(t)) allies++;
+  }
+  ok(allies > 0, "with allies on, 2d3 cities may make them (513d:1b3f)");
+  randommap::install(DATA, make(3, {{0, 0, 6, 0}}, false));
+  eq((int)scn::load(DATA + "/RANDOM", "RANDOM")->cities.size(), 100, "Cities at its last place: 80 + 20");
+  randommap::install(DATA, make(3, {{6, 6, 0, 6}}, false));
+  eq((int)scn::load(DATA + "/RANDOM", "RANDOM")->cities.size(), 70, "Cities at its first place: 80 - 10");
+  Rng r5(5);
+  auto rolled = randommap::settle({{7, 7, 7, 7}}, r5);
+  bool inRange = true;
+  for (int v : rolled) if (v < 0 || v > 6) inRange = false;
+  ok(inRange, "a slider left to chance is rolled 1d7-1 (7bab:10e8)");
+  // the shipped RANDOM folder is the original's last world, left alone
+  std::ifstream disk(DATA + "/RANDOM/RANDOM.SCN", std::ios::binary);
+  if (disk) {
+    std::string onDisk((std::istreambuf_iterator<char>(disk)), std::istreambuf_iterator<char>());
+    ok(onDisk != a["SCN"], "the made world is kept in memory, not written over RANDOM.SCN");
+  }
+
+  // a game on it, and a save that carries the world with it
+  randommap::install(DATA, a);
+  game::NewGameOptions o;
+  o.seed = 4;
+  auto gp = game::newGame(DATA, "RANDOM", o);
+  Game& g = *gp;
+  for (Side* sd : g.sides) sd->computer = true;
+  Side* side = game::begin(g);
+  while (side && g.turn <= 6) { ai::playTurn(g, *side); side = game::endTurn(g); }
+  eq(g.turn, 7, "the computer players play a random world");
+  std::string text = save::encode(g);
+  randommap::install(DATA, make(8, {{3, 3, 2, 3}}, false));
+  auto g2 = save::decode(text, DATA);
+  ok(g2->map->tiles == g.map->tiles, "a saved random world comes back with its own map");
+  bool names = g2->map->cities.size() == g.map->cities.size();
+  for (size_t i = 0; names && i < g.map->cities.size(); i++) names = g2->map->cities[i].name == g.map->cities[i].name;
+  ok(names, "... and its own cities");
+  eq(g2->map->signs.size(), g.map->signs.size(), "... and its own signposts");
+}
+
+
 static void testComputerPlayers() {
   printf("computer players\n");
   namespace core = ai::core;
@@ -2542,6 +2634,7 @@ int main() {
   testScreenLayout();
   testCityCastles();
   testComputerPlayers();
+  testRandomMap();
   testAIGame("TUTORIA", 30);
   testAIGame("ERYTHEA", 25);
   if (fileExists(DATA + "/TUTORIA/TUTORIA.SCN")) testTutorialHero();

@@ -3,7 +3,9 @@
 How "A Random World" is made in `WARLORD2.EXE`, decoded in full: the start
 menu's settings, every phase of the generator, and the files it writes. The
 web port follows it phase for phase (`web/src/warlords/randommap.js`, which
-cites the addresses below). Addresses are Ghidra addresses.
+cites the addresses below), and the Lua and C++ remakes port that line for
+line (`love2d/warlords/randommap.lua`, `cpp/src/warlords/randommap.cpp`): the
+same seed makes byte-identical worlds in all three. Addresses are Ghidra addresses.
 
 Where Ghidra's decompiler is wrong here it is wrong quietly: it drops
 arguments passed as one 32-bit push (`PUSH 0x10010` is two words, 0x10 and
@@ -37,7 +39,7 @@ one set, *Terrain type: Grassland*, so 104 does nothing visible.
 
 **The "?" does nothing.** `random_map_setup` rolls a slider only when its
 value is 7 (`1d7 - 1`), and no click can make one 7; the "?" flag is only
-drawn. The web port passes 7 for a "?" slider.
+drawn. The remakes pass 7 for a "?" slider.
 
 Begin (`7f77:060f`) has the advisor say *One moment...* (`6dda:026f(0)`,
 `VMOMENT`), pushes popup 23 (the `BSCROLL.PCK` scroll) with group 136's

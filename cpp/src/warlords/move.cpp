@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <functional>
 #include <map>
 
 #include "warlords/armytype.hpp"
@@ -239,6 +240,9 @@ struct Query {
   int penalty;
   std::vector<int> dist;
   int ring = 0;
+  // the road builder (roadRoute): straight spreading, its own trace
+  bool roads = false;
+  std::function<bool(int, int)> isBridge;
 };
 
 // path_wavefront (1555:0373): sweeps squares ever wider round the
@@ -274,7 +278,8 @@ int wavefront(Query& q, int pass) {
           int nd = -v;
           dist[k] = nd;
           bool curWater = has(cur, WATER_F), curCross = has(cur, CROSS_F);
-          int cls = 0;
+          // the road builder spreads straight only (4125:00e2, class 9)
+          int cls = q.roads ? 9 : 0;
           if (y == 0) cls = x == 0 ? 1 : (x == W - 1 ? 3 : 2);
           else if (y == H - 1) cls = x == 0 ? 6 : (x == W - 1 ? 8 : 7);
           else if (x == 0) cls = 4;
@@ -346,12 +351,17 @@ Path trace(Query& q) {
     for (int turn : TRACE_ORDER) {
       int dir = (toward + turn) % 8;
       int nx = x + DIRS[dir][0], ny = y + DIRS[dir][1];
-      if (nx >= 0 && ny >= 0 && nx < W && ny < H) {
+      bool inside = nx >= 0 && ny >= 0 && nx < W && ny < H;
+      // the road builder steps diagonally only over water that is no bridge
+      if (q.roads && dir % 2 == 1 && !(inside && has(grid[ny * W + nx], WATER_F) && !q.isBridge(nx, ny))) continue;
+      if (inside) {
         int v = dist[ny * W + nx];
         if (v != UNREACHED && v != SHUT) {
           int nb = grid[ny * W + nx];
           bool blocked = land && !curCross && !has(nb, CROSS_F) && has(nb, WATER_F) != curWater;
-          if (!blocked && std::abs(v) < d) {
+          // ... and takes a first neighbour no nearer than here
+          bool tie = q.roads && !got && std::abs(v) == d;
+          if (!blocked && (std::abs(v) < d || tie)) {
             bx = nx; by = ny; got = true;
             d = std::abs(v);
           }
@@ -367,6 +377,47 @@ Path trace(Query& q) {
   }
   return steps;
 }
+
+}  // namespace
+
+std::optional<std::vector<std::pair<int, int>>> roadRoute(const RoadGround& m, const int costs[12], int W, int H,
+                                                          int sx, int sy, int dx, int dy) {
+  if (dx < 0 || dy < 0 || dx >= W || dy >= H) return std::nullopt;
+  std::vector<int> grd(W * H);
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      int t = m.terrain(x, y);
+      int byte = m.road(x, y) ? 1 : costs[t];
+      if (t == BRIDGE) byte |= CROSS_F | WATER_F;
+      else if (t == WATER || t == SHORE) byte |= WATER_F;
+      else if (t == FOREST) byte |= FOREST_F;
+      else if (t == HILLS) byte |= HILLS_F;
+      else if (t == CITY) byte = CITY_F;          // nobody's city is player 14's
+      if (m.crossing(x, y)) byte |= CROSS_F;
+      grd[y * W + x] = byte;
+    }
+  }
+  int to = m.terrain(dx, dy);
+  Query q;
+  q.W = W; q.H = H; q.sx = sx; q.sy = sy; q.dx = dx; q.dy = dy;
+  q.grid = &grd;
+  q.mode = LAND;
+  q.woods = q.hills = false;
+  q.penalty = to == WATER || to == SHORE ? WATER_PENALTY_TO : WATER_PENALTY;
+  q.dist.resize(W * H);
+  for (int k = 0; k < W * H; k++) q.dist[k] = grd[k] % 8 == 0 ? SHUT : UNREACHED;
+  q.roads = true;
+  q.isBridge = [&m](int x, int y) { return m.terrain(x, y) == BRIDGE; };
+  int goal = dy * W + dx;
+  if (q.dist[goal] == SHUT && !has(grd[goal], CITY_F)) return std::nullopt;
+  q.dist[goal] = -1;
+  if (wavefront(q, 0) != 1) return std::nullopt;
+  std::vector<std::pair<int, int>> out;
+  for (const Step& st : trace(q)) out.emplace_back(st.x, st.y);
+  return out;
+}
+
+namespace {
 
 // path_single_step (1555:020e): a destination one tile away is simply stepped
 // to, unless a land or boat stack would cross between land and water, or the
@@ -422,7 +473,7 @@ std::optional<Path> findPath(Game& g, const Stack& stack, int sx, int sy, int dx
       penalty = (t == WATER || t == SHORE) ? WATER_PENALTY_TO : WATER_PENALTY;
     }
     Query q{W, H, sx, sy, dx, dy, &grd, m.mode, m.woods, m.hills, penalty,
-            prepare(g, grd, side, m.mode, dx, dy)};
+            prepare(g, grd, side, m.mode, dx, dy), 0, false, nullptr};
     int found = 0;
     if (q.dist[goal] != SHUT || has(grd[goal], CITY_F)) {
       q.dist[goal] = -1;

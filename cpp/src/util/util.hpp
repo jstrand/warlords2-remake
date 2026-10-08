@@ -102,6 +102,10 @@ std::optional<std::string> readFile(const std::string& path);
 std::string mustRead(const std::string& path);
 bool fileExists(const std::string& path);
 bool writeFile(const std::string& path, const std::string& bytes);
+/** Put a file in memory, where readFile and fileExists find it before the
+ *  disk: a random world's scenario, which would otherwise overwrite the last
+ *  one the original made. Matched ignoring case, as on disk. */
+void installFile(const std::string& path, const std::string& bytes);
 bool removeFile(const std::string& path);
 
 // Strings: bytes, one character a byte, as Lua strings are.

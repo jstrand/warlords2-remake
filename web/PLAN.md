@@ -75,8 +75,9 @@ The browser cannot read the 1993 formats directly, so:
   Settings as the computer's turn starts; a sample whose end Web Audio never
   reports (no output device) counts as over once its length has passed; the
   hidden map is kept in a save.
-- The random map generator is the web port's own, not the Lua's: it was
-  ported straight from the executable (`docs/re/random_map.md`). It differs
+- The random map generator was the web port's own, ported straight from the
+  executable (`docs/re/random_map.md`); the Lua and C++ remakes have since
+  ported it line for line, and make byte-identical worlds from a seed. It differs
   from the original where the original cannot be followed: its dice are the
   engine's, so a seed does not make the original's map; a slider left to
   chance ("?") is rolled, where the original only draws the "?"; the sites'

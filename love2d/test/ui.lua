@@ -1444,7 +1444,7 @@ do
     step("Main Menu", 510, 263)
     step("Random Map", 155, 327)
     step("the Water slider", 470, 225)
-    step("Hills to chance", 590, 255)
+    step("Hills to chance", 563, 255)
     step("the terrain set", 400, 345)
     step("allies on", 400, 370)
     step("Begin a random world", 155, 397)

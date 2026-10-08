@@ -32,8 +32,15 @@ are found:
 cpp/build/warlords2                          # the start screens
 cpp/build/warlords2 --scenario ISLADIA       # straight into a scenario
 cpp/build/warlords2 --scenario ERYTHEA --seed 7 --window
+cpp/build/warlords2 --scenario RANDOM --seed 7   # a random world, made from that seed
 cpp/build/warlords2 --data /path/to/WARLORD2 # the game's files elsewhere
 ```
+
+Random Map works as the original's does: the start menu's settings, then
+Begin makes a new world (`src/warlords/randommap.cpp`,
+`docs/re/random_map.md`). The world is kept in memory, not written over
+`RANDOM/`, which holds the last world the original made; a random game's
+save carries its map.
 
 The controls are the Lua remake's (`love2d/README.md`). The differences:
 

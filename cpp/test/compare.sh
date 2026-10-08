@@ -33,6 +33,9 @@ else
   run ISLADIA 3 40 diplo
   run ERYTHEA 4 60 diplo
   run DRAGON 6 40 diplo hidden
+  run RANDOM 3 40
+  run RANDOM 8 30 diplo
+  run RANDOM 5 25 save
 fi
 rm -rf "$tmp"
 exit $fail

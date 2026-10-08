@@ -26,7 +26,7 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
 
 - Random Map works: the start menu's settings, then Begin makes a new world
   as the original does (`src/warlords/randommap.js`,
-  `docs/re/random_map.md`). The Lua remake does not have it. A random game's
+  `docs/re/random_map.md`). The Lua and C++ remakes have it too. A random game's
   save carries its map, about 100 KB more than another save.
 - The setup screen has the original's character choice. Click a side's
   Character box or face to rename the side or, for a computer, to pick its

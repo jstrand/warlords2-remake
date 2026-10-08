@@ -1974,7 +1974,7 @@ a colour-3 bar (336, 166) 248 × 28 with its name centred on (460, 172)
 (`7f77:05f5`) swaps the picture for the random world's settings — four
 sliders, a "?" for each, the terrain set and the allies option — and Begin
 then makes the world first: see [`random_map.md`](random_map.md) › The start
-menu. The web port has it; the Lua remake greys the button.
+menu. The web port, the Lua remake and the C++ port all have it.
 
 The menu bar stays up over the start screens, and live: `7f77:0200` greys
 every menu (`2372:0eab(0, 0)` — a menu's enabled items are a bit mask at

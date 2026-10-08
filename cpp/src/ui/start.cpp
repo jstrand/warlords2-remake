@@ -4,8 +4,15 @@
 // The start menu (7f77:0000, dialog 1): STARTUP0-3.PCK with New Scenario
 // (100), Load Game (101), Random Map (102) and Begin (103), and the
 // scenario's own PICS\SCENARIO.PCK under a bar with its name. The scenario
-// starts as Erythea (4125:2a6e). There is no random map generator, and Random
-// Map is greyed.
+// starts as Erythea (4125:2a6e).
+//
+// Random Map (7f77:05f5) puts "A Random World" on the bar and, in place of
+// the picture (7f77:0332), its settings on colour 3: four sliders -- Water,
+// Hills, Cities, Forest, 106-109, STARTBU.PCK at (384, 216) 30 apart -- each
+// with a "?" (110-113) that leaves it to chance, the terrain set (104) and
+// "Cities can produce allies" (105). Begin then has the advisor say "One
+// moment..." and makes the world (random_map_setup, 7bab:10e8) on
+// BSCROLL.PCK with a bar (4bed:01ff). New Scenario's choice ends it.
 //
 // New Scenario (7f77:058d, 0725): popup 19, NEWSCEN.PCK, dialog 29 -- the
 // scenarios of SCENARIO.DAT in a black box, seven rows, and on the crystal
@@ -27,6 +34,7 @@
 // (149-156): popup 4, dialog 27 -- the side's name to retype, and for a
 // computer the characters of its level's deck to choose from, with the
 // chosen one's description (7bab:180b). OK (457), Cancel (458).
+#include <ctime>
 #include <map>
 #include <random>
 
@@ -35,6 +43,8 @@
 #include "util/util.hpp"
 #include "warlords/aicard.hpp"
 #include "warlords/bytes.hpp"
+#include "warlords/cues.hpp"
+#include "warlords/randommap.hpp"
 #include "warlords/scn.hpp"
 
 namespace start {
@@ -50,6 +60,18 @@ const int PRESETS[3][10] = {                                  // 4125:2378
     {1, 1, 1, 0, 0, 0, 0, 0, 1, 0},
     {2, 1, 1, 1, 0, 1, 0, 0, 1, 0},
 };
+
+// The random world's settings, kept for the session as the original keeps
+// them (4125:28c8-28d8): on, the terrain set, allies, and each slider's
+// place and whether it is set (else "?", left to chance).
+struct World {
+  bool on = false;
+  int terrainSet = 0;
+  bool allies = false;
+  std::array<int, 4> sliders{{3, 3, 2, 3}};
+  std::array<bool, 4> set{{true, true, true, true}};
+};
+World world;
 
 // The options being set up (4125:23b4): one table for the session, the
 // Beginner preset to begin with.
@@ -678,18 +700,102 @@ void openChooser(const std::vector<Scenario>& list, int current, std::function<v
   kit::push(d);
 }
 
+const int SLIDER_X = 384, SLIDER_W = 120;                // 4125:29ac
+
+// 7f77:0332: the random world's settings, in place of the picture.
+void drawWorld() {
+  kit::setPal(3);
+  gfx::rectangle(gfx::FILL, 328, 200, 264, 225);            // 4125:2930
+  const Font& f = kit::font(2);
+  auto art = G.screen->artFor(1);                          // STARTBU.PCK
+  for (int i = 0; i < 4; i++) {
+    int y = 215 + 30 * i;
+    gfx::setColor(1, 1, 1);
+    kit::right(f, kit::text(2, i), 376, y);
+    // the slider at its place (4125:29cc), or bare for "?" (4125:2a04)
+    int sy = world.set[i] ? 80 + 20 * world.sliders[i] : 220;
+    if (art) gfx::draw(art->image, gfx::newQuad(496, sy, SLIDER_W, 20), SLIDER_X, y + 1);
+    std::string shows = world.set[i]
+                            ? format(w2::randommap::SLIDER_FORMATS[i], w2::randommap::SLIDER_SHOWS[i][world.sliders[i]])
+                            : "(?)";
+    f.draw(shows, 504, y);
+  }
+  f.draw(w2::randommap::terrainSetName(G.dataDir, world.terrainSet), 336, 340);
+  f.draw(kit::text(3, world.allies ? 1 : 0), 336, 365);
+}
+
+// random_map_setup (7bab:10e8): make the world, showing its progress as
+// 4bed:01ff does on popup 23 -- the scroll with group 136's lines, the bar
+// RMAPBAR.PCK at (232, 257) growing a tenth at a time, the percentage over
+// it -- then hand it on. A "?" slider is rolled, 1d7-1.
+struct MakeWorld : kit::Modal {
+  w2::Rng rng;
+  std::unique_ptr<w2::randommap::Run> run;
+  kit::Done after;
+  gfx::ImageP scroll, bar;
+  void update() override {
+    // a phase of the generator a frame, so the bar moves as it works
+    if (run->step()) return;
+    w2::randommap::install(G.dataDir, run->files());
+    auto a = after;
+    kit::pop(this);
+    if (a) a();
+  }
+  void draw() override {
+    const kit::Rect R{160, 55, 336, 347};                  // popup 23
+    gfx::setColor(1, 1, 1);
+    if (scroll) gfx::draw(scroll, gfx::newQuad(0, 0, R.w, R.h), R.x, R.y);
+    const Font& f = kit::font(2).colours(0, 7);
+    const int lines[2] = {2, 3};
+    for (int i = 0; i < 2; i++) kit::centred(f, kit::text(0x88, lines[i]), 328, 181 + 20 * i);
+    // 4bed:01b5: a black frame (216d:01fd), the scroll showing through it
+    kit::setPal(0);
+    gfx::rectangle(gfx::LINE, 232.5, 255.5, 191, 24);
+    gfx::setColor(1, 1, 1);
+    int pct = run->progress();
+    int w = (pct + 10) / 10 * 16 + 16;
+    if (bar) gfx::draw(bar, gfx::newQuad(0, 0, w, 21), 232, 257);
+    kit::centred(f, w2::fmt("%d%%", pct), 328, 237);
+  }
+};
+
+void makeWorld(kit::Done after) {
+  auto d = std::make_shared<MakeWorld>();
+  d->rng = w2::Rng((double)(time(nullptr) % 1000000007));
+  w2::randommap::Options o;
+  o.dataDir = G.dataDir;
+  o.rng = &d->rng;
+  for (int i = 0; i < 4; i++) o.sliders[i] = world.set[i] ? world.sliders[i] : w2::randommap::RANDOM_SLIDER;
+  o.allies = world.allies;
+  o.terrainSet = world.terrainSet;
+  d->run = std::make_unique<w2::randommap::Run>(o);
+  d->after = after;
+  d->scroll = image(G.dataDir + "/PICS/BSCROLL.PCK", 10);
+  d->bar = image(G.dataDir + "/PICS/RMAPBAR.PCK", 10);
+  kit::push(d);
+}
+
 struct Menu : kit::Modal {
   std::vector<Scenario> list;
   screen::View v;
   int cur = 0;
   std::function<void(const std::string&, const w2::game::NewGameOptions&)> beginGame;
   std::function<void(std::unique_ptr<w2::Game>)> loaded;
+  // 7f77:011e
   void refresh() {
     auto& s = v.state;
     s[100] = s[101] = s[103] = w2::uidata::NORMAL;
-    s[102] = w2::uidata::DISABLED;
+    s[102] = world.on ? w2::uidata::DISABLED : w2::uidata::NORMAL;
     hidden.clear();
-    for (int id = 104; id <= 113; id++) hidden.insert(id);
+    if (!world.on) {
+      for (int id = 104; id <= 113; id++) hidden.insert(id);
+      return;
+    }
+    s[104] = s[105] = w2::uidata::NORMAL;
+    for (int i = 0; i < 4; i++) {
+      s[106 + i] = w2::uidata::NORMAL;
+      s[110 + i] = world.set[i] ? w2::uidata::NORMAL : w2::uidata::ACTIVE;   // lit while "?"
+    }
   }
   void draw() override {
     gfx::setColor(1, 1, 1);
@@ -697,19 +803,51 @@ struct Menu : kit::Modal {
       auto img = image(G.dataDir + "/PICS/STARTUP" + std::to_string(q) + ".PCK");
       if (img) gfx::draw(img, (q % 2) * 320, (q / 2) * 240);
     }
-    if (cur < (int)list.size()) {
-      const Scenario& sc = list[cur];
-      std::string dir = w2::upper(sc.dir);
+    bool have = cur < (int)list.size();
+    if (world.on) {
+      drawWorld();
+    } else if (have) {
+      std::string dir = w2::upper(list[cur].dir);
       if (auto pic = image(G.dataDir + "/" + dir + "/PICS/SCENARIO.PCK")) {
         gfx::setColor(1, 1, 1);
         gfx::draw(pic, gfx::newQuad(0, 0, 264, 225), 328, 200);
       }
+    }
+    if (world.on || have) {
+      // 7f77:02bf: the scenario's name, or "A Random World"
       kit::setPal(3);
       gfx::rectangle(gfx::FILL, 336, 166, 248, 28);
       gfx::setColor(1, 1, 1);
-      kit::centred(kit::font(2), sc.name, 460, 172);
+      kit::centred(kit::font(2), world.on ? kit::text(0, 0) : list[cur].name, 460, 172);
     }
     kit::drawControls(v, hidden);
+  }
+  void setUp(const Scenario& sc) {
+    auto keep = shared_from_this();
+    auto st = newSetup(sc);
+    auto bg = beginGame;
+    openSetup(st,
+              [bg](std::shared_ptr<Setup> s) {
+                w2::game::NewGameOptions o;
+                for (int i = 0; i <= 9; i++) o.options.emplace_back(OPTION_KEYS[i], s->options[i]);
+                for (int i = 0; i < 8; i++) {
+                  const SideSetup& e = s->sides[i];
+                  w2::game::SideSetup ss;
+                  ss.computer = e.computer;
+                  ss.level = e.level;
+                  ss.card = e.card;
+                  ss.name = e.name;
+                  ss.off = e.computer && e.level == 3;
+                  o.sides[i] = ss;
+                }
+                o.greatest = s->greatest;
+                bg(w2::upper(s->sc.dir), o);
+              },
+              [keep]() {
+                auto m = std::static_pointer_cast<Menu>(keep);
+                m->refresh();
+                kit::push(keep);
+              });
   }
   void mousepressed(int x, int y, int) override {
     auto c = kit::controlAt(v, x, y, hidden);
@@ -718,8 +856,11 @@ struct Menu : kit::Modal {
     std::weak_ptr<Modal> self = weak_from_this();
     Menu* me = this;
     if (id == 100) {
+      // 7f77:067c: a scenario chosen ends the random world
       openChooser(list, cur, [self, me](int i) {
-        if (!self.expired() && i != w2::NONE) me->cur = i;
+        if (self.expired()) return;
+        if (i != w2::NONE) { me->cur = i; world.on = false; }
+        me->refresh();
       });
     } else if (id == 101) {
       auto l = loaded;
@@ -727,34 +868,40 @@ struct Menu : kit::Modal {
         if (auto s = self.lock()) kit::pop(s.get());
         l(std::move(g));
       });
+    } else if (id == 102) {
+      world.on = true;                                    // 7f77:05f5
+    } else if (id == 104) {
+      world.terrainSet = (world.terrainSet + 1) % w2::randommap::terrainSets(G.dataDir);   // 7f77:063a
+    } else if (id == 105) {
+      world.allies = !world.allies;                       // 7f77:0661
+    } else if (id >= 106 && id <= 109) {
+      // 7f77:0512: a "?" slider is set again where it was; a set one moves
+      // to where it was clicked
+      int i = id - 106;
+      if (!world.set[i]) world.set[i] = true;
+      else world.sliders[i] = std::clamp((x - SLIDER_X) * 7 / SLIDER_W, 0, 6);
+    } else if (id >= 110 && id <= 113) {
+      world.set[id - 110] = false;                        // 7f77:0571
+    } else if (id == 103 && world.on) {
+      // 7f77:060f: "One moment...", the world, then the sides as for any scenario
+      advisor::say(w2::cues::MOMENT, [self, me]() {
+        makeWorld([self, me]() {
+          auto keep = self.lock();
+          if (!keep) return;
+          kit::pop(me);
+          Scenario sc;
+          sc.name = kit::text(0, 0);
+          sc.dir = w2::randommap::DIR;
+          me->setUp(sc);
+        });
+      });
     } else if (id == 103 && cur < (int)list.size()) {
       auto keep = shared_from_this();
       kit::pop(this);
-      auto st = newSetup(list[cur]);
-      auto bg = beginGame;
-      openSetup(st,
-                [bg](std::shared_ptr<Setup> s) {
-                  w2::game::NewGameOptions o;
-                  for (int i = 0; i <= 9; i++) o.options.emplace_back(OPTION_KEYS[i], s->options[i]);
-                  for (int i = 0; i < 8; i++) {
-                    const SideSetup& e = s->sides[i];
-                    w2::game::SideSetup ss;
-                    ss.computer = e.computer;
-                    ss.level = e.level;
-                    ss.card = e.card;
-                    ss.name = e.name;
-                    ss.off = e.computer && e.level == 3;
-                    o.sides[i] = ss;
-                  }
-                  o.greatest = s->greatest;
-                  bg(w2::upper(s->sc.dir), o);
-                },
-                [keep]() {
-                  auto m = std::static_pointer_cast<Menu>(keep);
-                  m->refresh();
-                  kit::push(keep);
-                });
+      setUp(list[cur]);
+      return;
     }
+    refresh();
   }
 };
 }  // namespace
@@ -766,6 +913,8 @@ void open(std::function<void(const std::string& dir, const w2::game::NewGameOpti
   for (size_t i = 0; i < d->list.size(); i++) if (d->list[i].dir == "Erythea") d->cur = (int)i;   // 4125:2a6e
   d->beginGame = begin;
   d->loaded = loaded;
+  // back from a random world, the menu is still on one (7f77:0000)
+  if (G.scenario == w2::randommap::DIR) world.on = true;
   d->v = kit::view(1);
   d->v.screen = true;     // a screen, not a dialog: Begin has no ring
   d->view = &d->v;

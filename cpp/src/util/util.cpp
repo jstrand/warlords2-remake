@@ -142,7 +142,27 @@ std::string resolvePath(const std::string& path) {
   return cur;
 }
 
+namespace {
+std::map<std::string, std::string>& madeFiles() {
+  static std::map<std::string, std::string> made;
+  return made;
+}
+std::string madeKey(const std::string& path) {
+  std::string k;
+  for (char c : path) {
+    char d = c == '\\' ? '/' : (char)std::toupper((unsigned char)c);
+    if (d == '/' && !k.empty() && k.back() == '/') continue;
+    k += d;
+  }
+  return k;
+}
+}  // namespace
+
+void installFile(const std::string& path, const std::string& bytes) { madeFiles()[madeKey(path)] = bytes; }
+
 std::optional<std::string> readFile(const std::string& path) {
+  auto made = madeFiles().find(madeKey(path));
+  if (made != madeFiles().end()) return made->second;
   std::string real = resolvePath(path);
   if (real.empty()) return std::nullopt;
   std::ifstream f(real, std::ios::binary);
@@ -158,7 +178,9 @@ std::string mustRead(const std::string& path) {
   return *s;
 }
 
-bool fileExists(const std::string& path) { return !resolvePath(path).empty(); }
+bool fileExists(const std::string& path) {
+  return madeFiles().count(madeKey(path)) > 0 || !resolvePath(path).empty();
+}
 
 bool writeFile(const std::string& path, const std::string& bytes) {
   std::string real = resolvePath(path);
