@@ -701,11 +701,14 @@ static int pointerKind(int x, int y) {
   return look();
 }
 
+// Not the original's: over the black round the frame the pointer is the
+// arrow, drawn where the mouse really is rather than held to the frame's edge.
 static void drawPointer() {
   if (display::pointerAway()) return;
-  int k = pointerKind(G.mouseX, G.mouseY);
+  int k = display::d.off ? ARROW : pointerKind(G.mouseX, G.mouseY);
+  auto [x, y] = display::d.off ? *display::d.off : std::make_pair(G.mouseX, G.mouseY);
   gfx::setColor(1, 1, 1);
-  gfx::draw(G.pointerImg, gfx::newQuad(k * 16, 0, 16, 16), G.mouseX - PTR_HOT[k], G.mouseY - PTR_HOT[k]);
+  gfx::draw(G.pointerImg, gfx::newQuad(k * 16, 0, 16, 16), x - PTR_HOT[k], y - PTR_HOT[k]);
 }
 
 // The start-of-turn banner (8cc6:0259): popup 6, (160, 60) 320x312 --
@@ -2932,11 +2935,13 @@ static void stepScript() {
       G.mouseX = x;
       G.mouseY = y;
       display::d.mouseInside = true;
+      display::d.off.reset();
       mousepressed(x, y, b);
       mousereleased(x, y, b);
     } else if (cmd == "move") {
       in >> G.mouseX >> G.mouseY;
       display::d.mouseInside = true;
+      display::d.off.reset();
     } else if (cmd == "text") {
       std::string t;
       std::getline(in, t);
@@ -3070,6 +3075,7 @@ int main(int argc, char** argv) {
     lastX = mx;
     lastY = my;
     display::d.mouseInside = (SDL_GetWindowFlags(win) & SDL_WINDOW_MOUSE_FOCUS) != 0;
+    display::d.off = display::offFrame(mx, my);
     std::tie(G.mouseX, G.mouseY) = display::toUI(mx, my);
   }
   while (!G.quitRequested) {
@@ -3119,7 +3125,8 @@ int main(int argc, char** argv) {
             auto [x, y] = display::toUI(e.motion.x, e.motion.y);
             G.mouseX = x;
             G.mouseY = y;
-            display::d.mouseInside = display::onFrame(e.motion.x, e.motion.y);
+            display::d.mouseInside = true;
+            display::d.off = display::offFrame(e.motion.x, e.motion.y);
             double k = display::d.dpi / display::d.scale;
             mousemoved((e.motion.x - lastX) * k, (e.motion.y - lastY) * k);
             lastX = e.motion.x;

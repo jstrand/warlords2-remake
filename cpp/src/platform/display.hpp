@@ -33,7 +33,8 @@ struct State {
   std::optional<std::pair<int, int>> wanted;   // the frame to keep to: View > 4:3
   int w = 640, h = 480;      // the frame being drawn, in UI pixels
   int ox = 0, oy = 0;        // where its (0, 0) sits, in device pixels
-  bool mouseInside = true;
+  bool mouseInside = true;   // over the window at all
+  std::optional<std::pair<int, int>> off;   // over the black round the frame: where, in UI pixels
 };
 extern State d;
 
@@ -56,11 +57,12 @@ void pushUI();
 void pushMap(int x, int y, int camX, int camY, int zoom);
 /** A window position (in points) as a UI point, held to the frame. */
 std::pair<int, int> toUI(double x, double y);
-/** Is a window position on the frame? */
-bool onFrame(double x, double y);
+/** A window position off the frame as a UI point, not held to it; none
+ *  when it is on the frame. */
+std::optional<std::pair<int, int>> offFrame(double x, double y);
 /** Full screen or a window (View > Full screen, Window). */
 void setWindowed(bool on);
-/** Is the pointer off the game, so that it draws none? */
+/** Is the pointer out of the window, so that it draws none? */
 bool pointerAway();
 
 }  // namespace display

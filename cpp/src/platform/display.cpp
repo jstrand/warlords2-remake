@@ -85,9 +85,10 @@ std::pair<int, int> toUI(double x, double y) {
   return {std::clamp(ux, 0, d.w - 1), std::clamp(uy, 0, d.h - 1)};
 }
 
-bool onFrame(double x, double y) {
+std::optional<std::pair<int, int>> offFrame(double x, double y) {
   double px = x * d.dpi, py = y * d.dpi;
-  return px >= d.ox && py >= d.oy && px < d.ox + d.w * d.scale && py < d.oy + d.h * d.scale;
+  if (px >= d.ox && py >= d.oy && px < d.ox + d.w * d.scale && py < d.oy + d.h * d.scale) return std::nullopt;
+  return std::make_pair((int)std::floor((px - d.ox) / d.scale), (int)std::floor((py - d.oy) / d.scale));
 }
 
 void setWindowed(bool on) {
