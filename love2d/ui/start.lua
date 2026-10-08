@@ -39,8 +39,9 @@
 -- (145-147, lit when the options are theirs) and Edit Options (148); under
 -- the map the difficulty rating (group 6) centred on (196, 426) (7bab:0bab),
 -- with Recall Options (157) to its left and Random Characters (158) to its
--- right. The options are DATA\OPTIONS.DAT's, the ones the last game began
--- with, not the scenario's own (7bab:223b).
+-- right; the SSG logo (7bab:10c7); and under it all a quote on war from
+-- QUOTES.DAT (7bab:0f88). The options are DATA\OPTIONS.DAT's, the ones the
+-- last game began with, not the scenario's own (7bab:223b).
 --
 -- **Edit Options** (7bab:12a2): popup 4, dialog 4. "Game Options" (group 8),
 -- "Affecting Difficulty" and "Not Affecting Difficulty" (groups 9 and 10)
@@ -127,6 +128,36 @@ function M.scenarios(dataDir)
 end
 
 local drawWorld, makeWorld
+
+-- where the quote's lines go, centred (4125:253c)
+local QUOTE_Y = { 366, 384, 402, 420, 440 }
+
+--- A quote from QUOTES.DAT, as 7bab:0f88 picks it: a two-digit count, then
+--- records of a three-digit length and that many bytes less one, lines split
+--- by "|" and each closed by one. `roll(count)`, dice(1, count), says which.
+function M.quote(dataDir, roll)
+  local f = io.open(dataDir .. "/DATA/QUOTES.DAT", "rb")
+  if not f then return {} end
+  local s = f:read("*a")
+  f:close()
+  local count = tonumber(s:sub(1, 2)) or 0
+  if count < 1 then return {} end
+  local pick = roll(count)
+  local o, text = 4, ""
+  local i = 0
+  while i < pick and o + 3 <= #s do
+    local n = tonumber(s:sub(o + 1, o + 3)) or 0
+    text = s:sub(o + 4, o + 3 + n - 1)
+    o = o + 3 + n + 1
+    i = i + 1
+  end
+  -- only text closed by a "|" is drawn
+  local lines = {}
+  for line in text:gmatch("([^|]*)|") do
+    if #lines < #QUOTE_Y then lines[#lines + 1] = line end
+  end
+  return lines
+end
 
 local function image(G, path, key)
   G.startArt = G.startArt or {}
@@ -439,6 +470,10 @@ local function openSetup(G, st, begin, back)
   -- a screen, not a dialog: 7bab:0000 clears 4125:166a, so Begin has no ring
   d.view.screen = true
   local art = G.screen.art_for(31)                   -- SETUPBU.PCK
+  local logo = G.screen.art_for(52)                  -- SSG.PCK
+  -- picked once as the screen is drawn whole; Edit Options draws over it
+  local random = love.math and love.math.random or math.random
+  local lines = M.quote(G.dataDir, function(n) return random(n) end)
 
   local function refresh()
     local s = d.view.state
@@ -502,10 +537,15 @@ local function openSetup(G, st, begin, back)
         f.colours(c, e).draw("Character", R.x + 88, R.y + 41)   -- 4125:258b
       end
     end
+    -- 7bab:10c7: the logo's (0, 0, 144, 64) to (440, 277) (4125:2550)
     love.graphics.setColor(1, 1, 1)
+    if logo then
+      love.graphics.draw(logo.image, love.graphics.newQuad(0, 0, 144, 64, logo.w, logo.h), 440, 277)
+    end
     kit.centred(f, kit.text(7, 0), 512, 48)
     kit.centred(f, kit.text(7, 1), 512, 206)
     kit.centred(f, kit.text(6, 0):format(rating(st)), 196, 426)
+    for i, line in ipairs(lines) do kit.centred(f, line, 512, QUOTE_Y[i]) end
     kit.drawControls(d.view, d.hidden)
   end
 

@@ -23,9 +23,10 @@
 // Warlord or Off -- and its Character box (7bab:0634); Begin (141), Main
 // Menu (142), I am the Greatest (143) / No! I really am Normal (144), the
 // presets (145-147) and Edit Options (148); Recall Options (157) and Random
-// Characters (158) at the foot; the difficulty rating (7bab:0bab). The
-// options are DATA\OPTIONS.DAT's, the ones the last game began with, not the
-// scenario's own (7bab:223b).
+// Characters (158) at the foot; the difficulty rating (7bab:0bab); the SSG
+// logo (7bab:10c7); and under it all a quote on war from QUOTES.DAT
+// (7bab:0f88). The options are DATA\OPTIONS.DAT's, the ones the last game
+// began with, not the scenario's own (7bab:223b).
 //
 // Edit Options (7bab:12a2): popup 4, dialog 4 -- the ten options of group 4
 // two to a row; 159-168 change one, 169-171 are the presets, OK (172).
@@ -34,6 +35,7 @@
 // (149-156): popup 4, dialog 27 -- the side's name to retype, and for a
 // computer the characters of its level's deck to choose from, with the
 // chosen one's description (7bab:180b). OK (457), Cancel (458).
+#include <cstdlib>
 #include <ctime>
 #include <map>
 #include <random>
@@ -468,8 +470,37 @@ void openSide(std::shared_ptr<Setup> st, int index, kit::Done after) {
 
 kit::Rect rectFor(int i) { return kit::Rect{i < 4 ? 24 : 208, 40 + 90 * (i % 4), 160, 70}; }   // 4125:23c8
 
+// where the quote's lines go, centred (4125:253c)
+const int QUOTE_Y[5] = {366, 384, 402, 420, 440};
+
+// A quote from QUOTES.DAT, as 7bab:0f88 picks it: a two-digit count, then
+// records of a three-digit length and that many bytes less one, lines split
+// by "|" and each closed by one. `roll(count)`, dice(1, count), says which.
+std::vector<std::string> quote(const std::function<int(int)>& roll) {
+  std::vector<std::string> lines;
+  auto s = w2::readFile(G.dataDir + "/DATA/QUOTES.DAT");
+  if (!s || s->size() < 2) return lines;
+  int count = atoi(s->substr(0, 2).c_str());
+  if (count < 1) return lines;
+  int pick = roll(count);
+  size_t o = 4;
+  std::string text;
+  for (int i = 0; i < pick && o + 3 <= s->size(); i++) {
+    int n = atoi(s->substr(o, 3).c_str());
+    text = n > 0 ? s->substr(o + 3, n - 1) : std::string();
+    o += 3 + n + 1;
+  }
+  // only text closed by a "|" is drawn
+  size_t start = 0;
+  for (size_t bar; (bar = text.find('|', start)) != std::string::npos && lines.size() < 5; start = bar + 1) {
+    lines.push_back(text.substr(start, bar - start));
+  }
+  return lines;
+}
+
 struct SetupScreen : kit::Modal {
   std::shared_ptr<Setup> st;
+  std::vector<std::string> lines;   // the quote, picked as the screen opens
   screen::View v;
   std::function<void(std::shared_ptr<Setup>)> begin;
   kit::Done back;
@@ -532,10 +563,13 @@ struct SetupScreen : kit::Modal {
       gfx::setColor(1, 1, 1);
       f.colours(c, e).draw("Character", R.x + 88, R.y + 41);   // 4125:258b
     }
+    // 7bab:10c7: the logo's (0, 0, 144, 64) to (440, 277) (4125:2550)
     gfx::setColor(1, 1, 1);
+    if (auto logo = G.screen->artFor(52)) gfx::draw(logo->image, gfx::newQuad(0, 0, 144, 64), 440, 277);   // SSG.PCK
     kit::centred(f, kit::text(7, 0), 512, 48);
     kit::centred(f, kit::text(7, 1), 512, 206);
     kit::centred(f, format(kit::text(6, 0), rating(*st)), 196, 426);
+    for (size_t i = 0; i < lines.size(); i++) kit::centred(f, lines[i], 512, QUOTE_Y[i]);
     kit::drawControls(v, hidden);
   }
   void mousepressed(int x, int y, int) override {
@@ -620,6 +654,9 @@ void openSetup(std::shared_ptr<Setup> st, std::function<void(std::shared_ptr<Set
   d->v.screen = true;     // a screen, not a dialog: Begin has no ring
   d->view = &d->v;
   d->menuBar = true;      // the menu bar stays live over it (7bab:0034)
+  // picked once as the screen is drawn whole; Edit Options draws over it
+  static std::mt19937 dice{std::random_device{}()};
+  d->lines = quote([](int n) { return 1 + (int)(dice() % (unsigned)n); });
   d->refresh();
   kit::push(d);
 }
