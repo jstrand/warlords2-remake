@@ -70,6 +70,10 @@ everyone.
 Saves live in the browser under the site's address: if the site moves, its
 players' saves stay behind.
 
+GitHub Pages publishes the site on every push to `main` that touches `web/`
+(`.github/workflows/pages.yml`). It ignores `_headers` and caches every file
+for ten minutes.
+
 ## Layout
 
 ```
