@@ -1398,6 +1398,36 @@ do
     if G.openMenu then fail("start menu bar", "escape left the menu open") end
     if not kit.top() then fail("start menu bar", "escape closed the start screen") end
     print("  the start screens keep the menu bar")
+
+    -- the setup screen's characters (7bab:0634, 16ea, 2051) and Recall
+    -- Options (7bab:2229). Begin is left alone: it writes DATA/OPTIONS.DAT.
+    local function step(what, x, y)
+      try(what, dialogClick, x, y, 1)
+      try("draw: " .. what, love.draw)
+    end
+    step("Begin, to the setup screen", 155, 397)
+    local setup = kit.top()
+    step("side 1 a Knight", 136, 154)
+    step("and a Lord", 136, 154)
+    step("side 4 a Knight", 320, 64)
+    step("Random Characters", 328, 435)
+    step("side 1's Character box", 125, 178)
+    local side = kit.top()
+    if side == setup then fail("setup side", "the Character box opened nothing") end
+    step("five rows down", 168, 336)
+    step("pick a character", 250, 298)
+    step("the name field", 300, 148)
+    try("type a name", love.textinput, "Rovers")
+    try("keep it", love.keypressed, "return")
+    try("draw the new name", love.draw)
+    step("OK", 470, 390)
+    if kit.top() ~= setup then fail("setup side", "OK did not close it") end
+    step("side 0's face, a human's", 62, 78)
+    step("Cancel", 165, 390)
+    if kit.top() ~= setup then fail("setup side", "Cancel did not close it") end
+    step("Advanced", 510, 130)
+    step("Recall Options", 64, 435)
+    print("  the setup screen picks characters and recalls options")
   end
 end
 

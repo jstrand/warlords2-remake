@@ -214,6 +214,7 @@ function game.new(dataDir, scenario, opts)
     for _, s in ipairs(g.map.sides) do
       local o = opts.sides[s.index]
       if o and s.inUse then
+        if o.name then s.name = o.name end      -- retyped on the setup screen
         if o.off then
           if s.capital then s.capital.owner = nil end
           s.inUse = false

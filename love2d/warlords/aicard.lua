@@ -71,6 +71,23 @@ function aicard.describe(dataDir, level, number)
   return name, lines
 end
 
+--- A level's deck as the setup screen lists it (list_carried_items mode 7,
+--- 796c:03d9): the name of each card from 000 up to the first missing .DSC,
+--- at most 30 -- the first 40 bytes of the file, cut at a carriage return.
+--- Numbered from 0, as the cards are; the count comes second.
+function aicard.deck(dataDir, level)
+  local out, n = {}, 0
+  while n < 30 do
+    local f = io.open(aicard.path(dataDir, level, n, "DSC"), "rb")
+    if not f then break end
+    local s = f:read(40) or ""
+    f:close()
+    out[n] = s:match("^[^\r]*")
+    n = n + 1
+  end
+  return out, n
+end
+
 --- How many cards a level has on disk, 000 up to the first missing one.
 function aicard.count(dataDir, level)
   local n = 0
