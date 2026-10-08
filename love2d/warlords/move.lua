@@ -392,7 +392,8 @@ local function wavefront(q, pass)
           local nd = -v
           dist[k] = nd
           local curWater, curCross = has(cur, WATER), has(cur, CROSS)
-          local class = 0
+          -- the road builder spreads straight only (4125:00e2, class 9)
+          local class = q.roads and 9 or 0
           if y == 0 then class = x == 0 and 1 or (x == W - 1 and 3 or 2)
           elseif y == H - 1 then class = x == 0 and 6 or (x == W - 1 and 8 or 7)
           elseif x == 0 then class = 4
@@ -474,13 +475,21 @@ local function trace(q)
     for _, turn in ipairs(TRACE_ORDER) do
       local dir = (toward + turn) % 8
       local nx, ny = x + move.DIRS[dir][1], y + move.DIRS[dir][2]
-      if nx >= 0 and ny >= 0 and nx < W and ny < H then
+      local inside = nx >= 0 and ny >= 0 and nx < W and ny < H
+      -- the road builder steps diagonally only over water that is no bridge
+      if q.roads and dir % 2 == 1
+         and not (inside and has(grid[ny * W + nx], move.WATER_F) and not q.isBridge(nx, ny)) then
+        inside = false
+      end
+      if inside then
         local v = dist[ny * W + nx]
         if v ~= UNREACHED and v ~= SHUT then
           local nb = grid[ny * W + nx]
           local blocked = land and not curCross and not has(nb, move.CROSS_F)
                           and has(nb, move.WATER_F) ~= curWater
-          if not blocked and absval(v) < d then
+          -- ... and takes a first neighbour no nearer than here
+          local tie = q.roads and bx == nil and absval(v) == d
+          if not blocked and (absval(v) < d or tie) then
             bx, by, bdir, d = nx, ny, dir, absval(v)
           end
         end
@@ -587,6 +596,48 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   for k, byte in pairs(restore) do grid[k] = byte end
   if path and #path == 0 then path = nil end
   return path
+end
+
+--- The route the random map generator lays a road along (5311:0c1c): the
+--- pathfinder run as pseudo-player 14 (path_build_cost_grid with player 14,
+--- 4125:00e0 set). Its terrain costs are its own (`costs`, DS:01e0) and leave
+--- no ground impassable but a city; it moves by land rules, crossing water
+--- only at bridges and crossings; one pass of the wavefront, spreading only
+--- straight; and a trace that steps diagonally only over water.
+--- `m` gives terrain(x, y), road(x, y) and crossing(x, y) over a W x H map.
+--- Returns the steps as { {x, y}, ... }, or nil.
+function move.roadRoute(m, costs, W, H, sx, sy, dx, dy)
+  if dx < 0 or dy < 0 or dx >= W or dy >= H then return nil end
+  local grd = {}
+  for y = 0, H - 1 do
+    for x = 0, W - 1 do
+      local t = m.terrain(x, y)
+      local byte = m.road(x, y) and 1 or costs[t]
+      if t == move.BRIDGE then byte = with(with(byte, move.CROSS_F), move.WATER_F)
+      elseif t == move.WATER or t == move.SHORE then byte = with(byte, move.WATER_F)
+      elseif t == move.FOREST then byte = with(byte, move.FOREST_F)
+      elseif t == move.HILLS then byte = with(byte, move.HILLS_F)
+      elseif t == move.CITY then byte = move.CITY_F end   -- nobody's city is player 14's
+      if m.crossing(x, y) then byte = with(byte, move.CROSS_F) end
+      grd[y * W + x] = byte
+    end
+  end
+  local to = m.terrain(dx, dy)
+  local dist = {}
+  for k = 0, W * H - 1 do dist[k] = grd[k] % 8 == 0 and SHUT or UNREACHED end
+  local q = { W = W, H = H, sx = sx, sy = sy, dx = dx, dy = dy, grid = grd, mode = move.LAND,
+              woods = false, hills = false,
+              penalty = (to == move.WATER or to == move.SHORE) and move.WATER_PENALTY_TO
+                        or move.WATER_PENALTY,
+              dist = dist, roads = true,
+              isBridge = function(x, y) return m.terrain(x, y) == move.BRIDGE end }
+  local goal = dy * W + dx
+  if dist[goal] == SHUT and not has(grd[goal], move.CITY_F) then return nil end
+  dist[goal] = -1
+  if wavefront(q, 0) ~= 1 then return nil end
+  local out = {}
+  for i, s in ipairs(trace(q)) do out[i] = { x = s.x, y = s.y } end
+  return out
 end
 
 --------------------------------------------------------------- walking a path

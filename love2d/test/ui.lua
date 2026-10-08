@@ -1342,6 +1342,9 @@ do
     HELD = { lshift = true }
     for _ = 1, 200 do
       if kit.top() or not G.aiRun then break end
+      -- a pause between turns runs out, as time would: the stub's clock is
+      -- CPU time, which a stubbed frame hardly spends
+      if G.aiResumeAt then G.aiResumeAt = 0 end
       if G.walk and G.walk.computer then
         G.walk = nil
         try("cut a walk short", G.resumeComputer)
@@ -1405,7 +1408,14 @@ do
       try(what, dialogClick, x, y, 1)
       try("draw: " .. what, love.draw)
     end
+    -- the menu is still on a random world after a random game, and Begin
+    -- makes another first: either way, on until the setup screen
     step("Begin, to the setup screen", 155, 397)
+    for _ = 1, 3000 do
+      local t = kit.top()
+      if t and t.view and kit.control(t.view, 141) then break end
+      try("a frame on the way to the setup screen", love.update, 1 / 60)
+    end
     local setup = kit.top()
     step("side 1 a Knight", 136, 154)
     step("and a Lord", 136, 154)
@@ -1428,6 +1438,32 @@ do
     step("Advanced", 510, 130)
     step("Recall Options", 64, 435)
     print("  the setup screen picks characters and recalls options")
+
+    -- Random Map (7f77:05f5): the settings, then Begin makes a world and
+    -- sets its sides up (docs/re/random_map.md)
+    step("Main Menu", 510, 263)
+    step("Random Map", 155, 327)
+    step("the Water slider", 470, 225)
+    step("Hills to chance", 590, 255)
+    step("the terrain set", 400, 345)
+    step("allies on", 400, 370)
+    step("Begin a random world", 155, 397)
+    local made = false
+    for _ = 1, 3000 do
+      try("a frame of the world being made", love.update, 1 / 60)
+      try("draw it", love.draw)
+      local t = kit.top()
+      if t and t ~= setup and t.view and kit.control(t.view, 141) then made = true break end
+    end
+    -- the world is in memory, and the original's last one on disk untouched
+    local scn = require("warlords.scn")
+    local f = io.open(DATA .. "/RANDOM/RANDOM.SCN", "rb")
+    local disk = f and f:read("*a")
+    if f then f:close() end
+    if not made then fail("random map", "the world was never made")
+    elseif disk and scn.readMaybe(DATA .. "/RANDOM/RANDOM.SCN") == disk then
+      fail("random map", "the made world is not the one read")
+    else print("  Random Map makes a world and opens its setup screen") end
   end
 end
 

@@ -19,7 +19,13 @@ Needs [LÖVE 11+](https://love2d.org). Run from the repository root so that
 love love2d                        # the start screens: choose, set up, begin
 love love2d ISLADIA                # straight into a scenario
 love love2d ERYTHEA /path/to/data  # your own copy of the game files
+love love2d RANDOM original 7      # a random world, made from that seed
 ```
+
+Random Map works as the original's does: the start menu's settings, then
+Begin makes a new world (`warlords/randommap.lua`, `docs/re/random_map.md`).
+The world is kept in memory, not written over `RANDOM/`, which holds the last
+world the original made; a random game's save carries its map.
 
 The game opens full screen, in the display's own biggest mode — on a Mac set
 to a scaled resolution, the panel's real pixels rather than a bigger picture
@@ -167,6 +173,7 @@ for the cost grid's flags.
 | `quest.lua` | taking a quest, checking it off, the reward |
 | `diplomacy.lua` | the pair matrix, proposals, the diplomatic rating |
 | `save.lua` | saving and loading a game in progress |
+| `randommap.lua` | the random map generator, "A Random World", phase for phase |
 | `uidata.lua` | `JOIN.DAT`, `AREA.DAT`, `BUTTON.DAT`, `FILE.DAT`: the screen layout |
 | `font.lua` | the `.FNT`/`.FIN` proportional fonts |
 | `screen.lua` | the main screen: background, controls, hit regions |

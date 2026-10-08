@@ -48,19 +48,40 @@ local function cstr(s, off, len)
   return z and raw:sub(1, z - 1) or raw
 end
 
-local function readAll(path)
-  local f = assert(io.open(path, "rb"), "cannot open: " .. path)
+-- Files made in memory, read before the disk: a random world's scenario
+-- (warlords/randommap.lua), which would otherwise overwrite the last one
+-- the original made. Keyed by the path, as DOS would match it.
+local made = {}
+local function key(path)
+  return (path:gsub("\\", "/"):gsub("/+", "/"):upper())
+end
+
+--- Put a file where the readers below will find it.
+function scn.install(path, bytes) made[key(path)] = bytes end
+
+--- A file's bytes, or nil when there is none.
+function scn.readMaybe(path)
+  local m = made[key(path)]
+  if m then return m end
+  local f = io.open(path, "rb")
+  if not f then return nil end
   local s = f:read("*a")
   f:close()
   return s
 end
+
+local function readAll(path)
+  return scn.readMaybe(path) or error("cannot open: " .. path, 2)
+end
 scn.readAll = readAll
 
 local function fileExists(path)
+  if made[key(path)] then return true end
   local f = io.open(path, "rb")
   if f then f:close() return true end
   return false
 end
+scn.exists = fileExists
 
 --- The scenario's .ITM magic item pool (docs/formats/itm.md).
 function scn.loadItemPool(path)

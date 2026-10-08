@@ -2607,6 +2607,92 @@ local function testBugFlags()
   end
 end
 
+-- The random map generator (warlords/randommap.lua, docs/re/random_map.md):
+-- what it makes, and a game played on it and saved.
+local function testRandomMap()
+  print("random map")
+  local randommap = require("warlords.randommap")
+  local rngMod = require("warlords.rng")
+  local scnMod = require("warlords.scn")
+  local saveMod = require("warlords.save")
+  local aiMod = require("warlords.ai")
+  local function make(seed, sliders, allies)
+    return randommap.generateNow({ dataDir = DATA, rng = rngMod.new(seed), sliders = sliders, allies = allies })
+  end
+  local a, b = make(7, { 3, 3, 2, 3 }, false), make(7, { 3, 3, 2, 3 }, false)
+  for _, ext in ipairs(randommap.FILES) do
+    ok(a[ext] and #a[ext] > 0, "the generator writes RANDOM." .. ext)
+    ok(a[ext] == b[ext], "the same dice make the same RANDOM." .. ext)
+  end
+  eq(#a.SCN, 12001, "RANDOM.SCN is Erythea's .SCN rewritten (4fef:1001)")
+  eq(#a.MAP, 2 * 112 * 156, "RANDOM.MAP is a word a tile")
+  randommap.install(DATA, a)
+  local map = scnMod.load(DATA .. "/RANDOM", "RANDOM")
+  eq(#map.cities, 80, "Cities at its third place gives RANDOM.DAT's 80 (4bed:0000)")
+  eq(#map.sites, 40, "forty sites (513d:003a)")
+  ok(#map.signs >= 41 and #map.signs <= 70, "1d30+40 signposts (4fef:113d)")
+  local capitals, nCapitals = {}, 0
+  for _, sd in ipairs(map.sides) do
+    ok(sd.capital and sd.capital.owner == sd, sd.name .. " holds its capital (513d:0689)")
+    if sd.capital and not capitals[sd.capital] then capitals[sd.capital] = true nCapitals = nCapitals + 1 end
+  end
+  eq(nCapitals, 8, "eight capitals, one a side")
+  for _, c in ipairs(map.cities) do
+    eq(map.terrainType[scnMod.tileAt(map, c.x, c.y) % 256], 10, c.name .. " stands on a castle tile")
+    ok(#c.produces >= 1, c.name .. " makes something (513d:161d)")
+    local capital = c.owner ~= nil
+    ok(c.income >= (capital and 33 or 15) and c.income <= (capital and 40 or 28),
+       c.name .. "'s income is value x 2 + 1d8 + 14 (513d:1171)")
+    local text = map.cityText[c.index]
+    ok(text and text[1]:sub(1, #c.name + 5) == c.name .. " is a", c.name .. " has its description")
+  end
+  local types = armytype.load(DATA .. "/TERRAIN0/ARMYTYPE.DAT")
+  local function magical(t) return (types.byId[t].bonus[48] or 0) ~= 0 end
+  local none = true
+  for _, c in ipairs(map.cities) do for _, t in ipairs(c.produces) do if magical(t) then none = false end end end
+  ok(none, "without allies no city makes a magical army (513d:161d, 1c1d)")
+  local allies = 0
+  for seed = 1, 10 do
+    randommap.install(DATA, make(seed, { 3, 3, 2, 3 }, true))
+    for _, c in ipairs(scnMod.load(DATA .. "/RANDOM", "RANDOM").cities) do
+      for _, t in ipairs(c.produces) do if magical(t) then allies = allies + 1 end end
+    end
+  end
+  ok(allies > 0, "with allies on, 2d3 cities may make them (513d:1b3f)")
+  randommap.install(DATA, make(3, { 0, 0, 6, 0 }, false))
+  eq(#scnMod.load(DATA .. "/RANDOM", "RANDOM").cities, 100, "Cities at its last place: 80 + 20")
+  randommap.install(DATA, make(3, { 6, 6, 0, 6 }, false))
+  eq(#scnMod.load(DATA .. "/RANDOM", "RANDOM").cities, 70, "Cities at its first place: 80 - 10")
+  local rolled = randommap.settle({ 7, 7, 7, 7 }, rngMod.new(5))
+  local inRange = true
+  for _, v in ipairs(rolled) do if v < 0 or v > 6 then inRange = false end end
+  ok(inRange, "a slider left to chance is rolled 1d7-1 (7bab:10e8)")
+  -- the shipped RANDOM folder is the original's last world, left alone
+  local f = io.open(DATA .. "/RANDOM/RANDOM.SCN", "rb")
+  if f then
+    local disk = f:read("*a")
+    f:close()
+    ok(disk ~= a.SCN, "the made world is kept in memory, not written over RANDOM.SCN")
+  end
+
+  -- a game on it, and a save that carries the world with it
+  randommap.install(DATA, a)
+  local g = game.new(DATA, "RANDOM", { seed = 4 })
+  for _, sd in ipairs(g.sides) do sd.computer = true end
+  local side = game.begin(g)
+  while side and g.turn <= 6 do aiMod.playTurn(g, side) side = game.endTurn(g) end
+  eq(g.turn, 7, "the computer players play a random world")
+  local text = saveMod.encode(g)
+  randommap.install(DATA, make(8, { 3, 3, 2, 3 }, false))
+  local g2 = saveMod.decode(text, DATA)
+  eq(table.concat(g2.map.tiles, ","), table.concat(g.map.tiles, ","), "a saved random world comes back with its own map")
+  local n1, n2 = {}, {}
+  for i, c in ipairs(g.map.cities) do n1[i] = c.name end
+  for i, c in ipairs(g2.map.cities) do n2[i] = c.name end
+  eq(table.concat(n2, ","), table.concat(n1, ","), "... and its own cities")
+  eq(#g2.map.signs, #g.map.signs, "... and its own signposts")
+end
+
 ------------------------------------------------------------ the computer AI
 
 -- The computer players: their character cards, what the level and the card
@@ -3082,6 +3168,7 @@ testSlots()
 testScreenLayout()
 testCityCastles()
 testComputerPlayers()
+testRandomMap()
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end

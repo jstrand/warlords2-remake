@@ -110,7 +110,16 @@ function love.load(arg)
       .. "Run from the repository root (love love2d), or pass the path:\n"
       .. "  love love2d ERYTHEA /path/to/warlords2")
   end
-  if not exists(dataDir .. "/" .. scenario .. "/" .. scenario .. ".SCN") then
+  -- A third argument fixes the seed, so a run can be reproduced exactly.
+  -- test/ui.lua passes one; without it every game is different.
+  local seed = tonumber(arg[3]) or os.time()
+  local randommap = require("warlords.randommap")
+  if not G.starting and scenario == randommap.DIR then
+    -- RANDOM: a random world with the start menu's first settings, made
+    -- from the seed, in place of the last one the original left on disk
+    randommap.install(dataDir, randommap.generateNow({ dataDir = dataDir, rng = require("warlords.rng").new(seed) }))
+  end
+  if not require("warlords.scn").exists(dataDir .. "/" .. scenario .. "/" .. scenario .. ".SCN") then
     error(("no scenario %q in %q"):format(scenario, dataDir))
   end
 
@@ -242,9 +251,6 @@ function love.load(arg)
   G.zoom = tonumber(prefs.get("zoom")) or display.scale
   syncLayout()
 
-  -- A third argument fixes the seed, so a run can be reproduced exactly.
-  -- test/ui.lua passes one; without it every game is different.
-  local seed = tonumber(arg[3]) or os.time()
   G.scenario = scenario
   love.graphics.setBackgroundColor(0, 0, 0)
   if G.starting then

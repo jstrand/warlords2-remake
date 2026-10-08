@@ -7,6 +7,8 @@ import * as game from "../src/warlords/game.js";
 import * as ai from "../src/warlords/ai.js";
 import { fmt } from "../src/util.js";
 import * as save from "../src/warlords/save.js";
+import * as randommap from "../src/warlords/randommap.js";
+import { Rng } from "../src/warlords/rng.js";
 
 loadData({ images: false });
 const [scen = "ERYTHEA", seedS = "1", turnsS = "10", ...flags] = process.argv.slice(2);
@@ -19,6 +21,10 @@ opts.options = {};
 if (hidden === "hidden") opts.options.hiddenMap = 1;
 // "diplo": with Diplomacy on, so that sides make peace
 if (flags.includes("diplo")) opts.options.diplomacy = 1;
+// RANDOM: a world made from the seed first, as test/trace.lua makes it
+if (scen === randommap.DIR) {
+  randommap.install("", randommap.generateNow({ dataDir: "", rng: new Rng(Number(seedS)) }));
+}
 let g = game.newGame("", scen, opts);
 for (const s of g.sides) s.computer = true;
 

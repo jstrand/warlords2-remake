@@ -6,8 +6,15 @@
 -- Map (102) and Begin (103). On the right the scenario's own
 -- PICS\SCENARIO.PCK -- its (0, 0) 264x225 at (328, 200) -- under a colour-3
 -- bar at (336, 166) 248x28 with its name centred on (460, 172) (7f77:02bf,
--- 0332). The scenario starts as Erythea (4125:2a6e). The remake has no random
--- map generator, and greys Random Map.
+-- 0332). The scenario starts as Erythea (4125:2a6e).
+--
+-- **Random Map** (7f77:05f5) puts "A Random World" on the bar and, in place of
+-- the picture (7f77:0332), its settings on colour 3: four sliders -- Water,
+-- Hills, Cities, Forest, 106-109, STARTBU.PCK at (384, 216) 30 apart -- each
+-- with a "?" (110-113) that leaves it to chance, the terrain set (104) and
+-- "Cities can produce allies" (105). Begin then has the advisor say "One
+-- moment..." and makes the world (random_map_setup, 7bab:10e8) on
+-- BSCROLL.PCK with a bar (4bed:01ff). New Scenario's choice ends it.
 --
 -- **New Scenario** (7f77:058d, 0725): popup 19, NEWSCEN.PCK, dialog 29. The
 -- scenarios of SCENARIO.DAT -- 84-byte records: name at +0, directory at
@@ -52,6 +59,7 @@ local pck    = require("warlords.pck")
 local scn    = require("warlords.scn")
 local uidata = require("warlords.uidata")
 local aicard = require("warlords.aicard")
+local randommap = require("warlords.randommap")
 local input  = require("ui.input")
 
 local M = {}
@@ -71,6 +79,11 @@ local PRESETS = {                                    -- 4125:2378
 -- Beginner preset to begin with.
 local OPTIONS = {}
 for i = 0, 9 do OPTIONS[i] = PRESETS[0][i] end
+
+-- The random world's settings, kept for the session as the original keeps
+-- them (4125:28c8-28d8): on, the terrain set, allies, and each slider's
+-- place and whether it is set (else "?", left to chance).
+local world = { on = false, terrainSet = 0, allies = false, sliders = { 3, 3, 2, 3 }, set = { true, true, true, true } }
 
 local function u16(s, i) return s:byte(i + 1) + s:byte(i + 2) * 256 end
 local function cstr(s, a, n) return (s:sub(a + 1, a + n):match("^[^%z]*")) end
@@ -112,6 +125,8 @@ function M.scenarios(dataDir)
   end
   return out
 end
+
+local drawWorld, makeWorld
 
 local function image(G, path, key)
   G.startArt = G.startArt or {}
@@ -627,6 +642,75 @@ local function openChooser(G, list, current, after)
   return kit.push(d)
 end
 
+------------------------------------------------------------ the random world
+
+local SLIDER_X, SLIDER_W = 384, 120                  -- 4125:29ac
+
+--- 7f77:0332: the random world's settings, in place of the picture.
+drawWorld = function(G)
+  kit.setPal(3)
+  love.graphics.rectangle("fill", 328, 200, 264, 225)  -- 4125:2930
+  local f = kit.font(2)
+  local art = G.screen.art_for(1)                     -- STARTBU.PCK
+  for i = 0, 3 do
+    local y = 215 + 30 * i
+    love.graphics.setColor(1, 1, 1)
+    kit.right(f, kit.text(2, i), 376, y)
+    -- the slider at its place (4125:29cc), or bare for "?" (4125:2a04)
+    local set = world.set[i + 1]
+    local sy = set and 80 + 20 * world.sliders[i + 1] or 220
+    if art then
+      love.graphics.draw(art.image, love.graphics.newQuad(496, sy, SLIDER_W, 20, art.w, art.h), SLIDER_X, y + 1)
+    end
+    local shows = set and randommap.SLIDER_FORMATS[i]:format(randommap.SLIDER_SHOWS[i][world.sliders[i + 1]])
+                  or "(?)"
+    f.draw(shows, 504, y)
+  end
+  f.draw(randommap.terrainSetName(G.dataDir, world.terrainSet), 336, 340)
+  f.draw(kit.text(3, world.allies and 1 or 0), 336, 365)
+end
+
+--- random_map_setup (7bab:10e8): make the world, showing its progress as
+--- 4bed:01ff does on popup 23 -- the scroll with group 136's lines, the bar
+--- RMAPBAR.PCK at (232, 257) growing a tenth at a time, the percentage over
+--- it -- then hand it on. A "?" slider is rolled, 1d7-1.
+makeWorld = function(G, after)
+  local R = { x = 160, y = 55, w = 336, h = 347 }    -- popup 23
+  if not G.bscroll then G.bscroll = pck.toImage(G.dataDir .. "/PICS/BSCROLL.PCK", G.palette, 10) end
+  local bar = image(G, G.dataDir .. "/PICS/RMAPBAR.PCK", 10)
+  local sliders = {}
+  for i = 1, 4 do sliders[i] = world.set[i] and world.sliders[i] or randommap.RANDOM_SLIDER end
+  local co = coroutine.create(randommap.generate)
+  local opts = { dataDir = G.dataDir, rng = require("warlords.rng").new(os.time() % 1000000007),
+                 sliders = sliders, allies = world.allies, terrainSet = world.terrainSet }
+  local d = { pct = 0 }
+  function d.update()
+    -- a step of the generator a frame, so the bar moves as it works
+    local ok, v = coroutine.resume(co, opts)
+    if not ok then error(v, 0) end
+    if coroutine.status(co) ~= "dead" then d.pct = v return end
+    randommap.install(G.dataDir, v)
+    kit.pop(d)
+    after()
+  end
+  function d.draw()
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.bscroll, love.graphics.newQuad(0, 0, R.w, R.h, G.bscroll:getDimensions()), R.x, R.y)
+    local f = kit.font(2).colours(0, 7)
+    for i, k in ipairs({ 2, 3 }) do kit.centred(f, kit.text(0x88, k), 328, 181 + 20 * (i - 1)) end
+    -- 4bed:01b5: a black frame (216d:01fd), the scroll showing through it
+    kit.setPal(0)
+    love.graphics.rectangle("line", 232.5, 255.5, 191, 24)
+    love.graphics.setColor(1, 1, 1)
+    local w = math.floor((d.pct + 10) / 10) * 16 + 16
+    if bar then love.graphics.draw(bar, love.graphics.newQuad(0, 0, w, 21, bar:getDimensions()), 232, 257) end
+    kit.centred(f, ("%d%%"):format(d.pct), 328, 237)
+  end
+  function d.mousepressed() end
+  function d.keypressed() end
+  return kit.push(d)
+end
+
 ------------------------------------------------------------ the start menu
 
 --- Open the start menu. `start(scenarioDir, options, sides, extra)` begins a
@@ -640,12 +724,24 @@ function M.open(start, loaded)
   d.view.screen = true
   for i, e in ipairs(list) do if e.dir == "Erythea" then d.cur = i end end   -- 4125:2a6e
 
+  -- back from a random world, the menu is still on one (7f77:0000)
+  if G.scenario == randommap.DIR then world.on = true end
+
+  -- 7f77:011e
   local function refresh()
     local s = d.view.state
     s[100], s[101], s[103] = uidata.NORMAL, uidata.NORMAL, uidata.NORMAL
-    s[102] = uidata.DISABLED
+    s[102] = world.on and uidata.DISABLED or uidata.NORMAL
     d.hidden = {}
-    for id = 104, 113 do d.hidden[id] = true end
+    if not world.on then
+      for id = 104, 113 do d.hidden[id] = true end
+      return
+    end
+    s[104], s[105] = uidata.NORMAL, uidata.NORMAL
+    for i = 0, 3 do
+      s[106 + i] = uidata.NORMAL
+      s[110 + i] = world.set[i + 1] and uidata.NORMAL or uidata.ACTIVE   -- lit while "?"
+    end
   end
 
   function d.draw()
@@ -655,50 +751,87 @@ function M.open(start, loaded)
       if img then love.graphics.draw(img, (q % 2) * 320, math.floor(q / 2) * 240) end
     end
     local sc = list[d.cur]
-    if sc then
+    if world.on then
+      drawWorld(G)
+    elseif sc then
       local pic = image(G, G.dataDir .. "/" .. sc.dir:upper() .. "/PICS/SCENARIO.PCK")
       if pic then
         love.graphics.setColor(1, 1, 1)
         love.graphics.draw(pic, love.graphics.newQuad(0, 0, 264, 225, pic:getDimensions()), 328, 200)
       end
+    end
+    if world.on or sc then
+      -- 7f77:02bf: the scenario's name, or "A Random World"
       kit.setPal(3)
       love.graphics.rectangle("fill", 336, 166, 248, 28)
       love.graphics.setColor(1, 1, 1)
-      kit.centred(kit.font(2), sc.name, 460, 172)
+      kit.centred(kit.font(2), world.on and kit.text(0, 0) or sc.name, 460, 172)
     end
     kit.drawControls(d.view, d.hidden)
   end
 
   local function reopen() refresh() kit.push(d) end
 
+  local function setUp(sc)
+    local st = newSetup(G, sc)
+    openSetup(G, st, function(s)
+      local options, sides = {}, {}
+      for i = 0, 9 do options[OPTION_KEYS[i]] = s.options[i] end
+      for i = 0, 7 do
+        local e = s.sides[i]
+        if e then sides[i] = { computer = e.computer, level = e.level, card = e.card,
+                               name = e.name, off = e.computer and e.level == 3 } end
+      end
+      start(s.sc.dir:upper(), options, sides, { greatest = s.greatest })
+    end, reopen)
+  end
+
   function d.mousepressed(x, y)
     local c = kit.controlAt(d.view, x, y, d.hidden)
     if not c or d.view.state[c.id] == uidata.DISABLED then return end
     local id = c.id
     if id == 100 then
-      -- the chooser goes over the menu, which stays underneath
+      -- the chooser goes over the menu, which stays underneath; a scenario
+      -- chosen ends the random world (7f77:067c)
       openChooser(G, list, d.cur, function(i)
-        if i then d.cur = i end
+        if i then d.cur, world.on = i, false end
+        refresh()
       end)
     elseif id == 101 then
       require("ui.savegame").load(function(g)
         kit.pop(d)
         loaded(g)
       end)
+    elseif id == 102 then
+      world.on = true                                     -- 7f77:05f5
+    elseif id == 104 then
+      world.terrainSet = (world.terrainSet + 1) % randommap.terrainSets(G.dataDir)   -- 7f77:063a
+    elseif id == 105 then
+      world.allies = not world.allies                     -- 7f77:0661
+    elseif id >= 106 and id <= 109 then
+      -- 7f77:0512: a "?" slider is set again where it was; a set one moves
+      -- to where it was clicked
+      local i = id - 106 + 1
+      if not world.set[i] then world.set[i] = true
+      else
+        local v = math.floor((x - SLIDER_X) * 7 / SLIDER_W)
+        world.sliders[i] = math.max(0, math.min(6, v))
+      end
+    elseif id >= 110 and id <= 113 then
+      world.set[id - 110 + 1] = false                    -- 7f77:0571
+    elseif id == 103 and world.on then
+      -- 7f77:060f: "One moment...", the world, then the sides as for any scenario
+      require("ui.advisor").say(require("warlords.cues").MOMENT, function()
+        makeWorld(G, function()
+          kit.pop(d)
+          setUp({ name = kit.text(0, 0), dir = randommap.DIR })
+        end)
+      end)
     elseif id == 103 and list[d.cur] then
       kit.pop(d)
-      local st = newSetup(G, list[d.cur])
-      openSetup(G, st, function(s)
-        local options, sides = {}, {}
-        for i = 0, 9 do options[OPTION_KEYS[i]] = s.options[i] end
-        for i = 0, 7 do
-          local e = s.sides[i]
-          if e then sides[i] = { computer = e.computer, level = e.level, card = e.card,
-                                 name = e.name, off = e.computer and e.level == 3 } end
-        end
-        start(s.sc.dir:upper(), options, sides, { greatest = s.greatest })
-      end, reopen)
+      setUp(list[d.cur])
     end
+    refresh()
   end
 
   function d.keypressed(key) end

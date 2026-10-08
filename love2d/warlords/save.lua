@@ -7,9 +7,12 @@
 --
 -- Only what cannot be recomputed is written. Everything derived from the data
 -- files -- the map, the army types, the terrain -- is reloaded from them, so a
--- save is small and survives changes to the engine's derived state.
+-- save is small and survives changes to the engine's derived state. A random
+-- world has no files to reload, so its save carries them, as the original's
+-- saves carry the map: in hex, since %q is not safe for raw bytes on every Lua.
 
 local game = require("warlords.game")
+local randommap = require("warlords.randommap")
 
 local save = {}
 
@@ -19,6 +22,21 @@ save.VERSION = 1
 
 local function quote(s)
   return ("%q"):format(s)
+end
+
+local function hex(s)
+  return (s:gsub(".", function(c) return ("%02x"):format(c:byte()) end))
+end
+
+local function unhex(s)
+  return (s:gsub("%x%x", function(h) return string.char(tonumber(h, 16)) end))
+end
+
+-- the random world's files, by extension
+local function packWorld(dataDir)
+  local out = {}
+  for ext, b in pairs(randommap.files(dataDir)) do out[ext] = hex(b) end
+  return out
 end
 
 -- A table may have holes -- the diplomacy matrix is keyed 0..63 and mostly
@@ -199,6 +217,7 @@ function save.encode(g)
     history = g.history, deeds = g.deeds, triumphs = g.triumphs,
     tutorialSeen = g.tutorialSeen,
     log = g.log,
+    randomWorld = g.map.name == randommap.DIR and packWorld(g.dataDir) or nil,
   }
 
   local out = { "return " }
@@ -219,6 +238,11 @@ function save.decode(text, dataDir)
   local chunk = assert(load(text, "save", "t"))
   local state = chunk()
   assert(state.version == save.VERSION, "unsupported save version")
+  if state.randomWorld then
+    local files = {}
+    for ext, h in pairs(state.randomWorld) do files[ext] = unhex(h) end
+    randommap.install(dataDir, files)
+  end
 
   local g = game.new(dataDir, state.scenario, { seed = 0, options = state.options })
   g.armies = {}

@@ -16,6 +16,11 @@ opts.options = {}
 if flags.hidden then opts.options.hiddenMap = 1 end
 -- "diplo": with Diplomacy on, so that sides make peace
 if flags.diplo then opts.options.diplomacy = 1 end
+-- RANDOM: a world made from the seed first, as test/trace.js makes it
+if scen == "RANDOM" then
+  local randommap = require("warlords.randommap")
+  randommap.install("original", randommap.generateNow({ dataDir = "original", rng = require("warlords.rng").new(seed) }))
+end
 local g = game.new("original", scen, opts)
 local save = require("warlords.save")
 for _, s in ipairs(g.sides) do s.computer = true end
