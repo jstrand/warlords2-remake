@@ -198,6 +198,7 @@ std::unique_ptr<Game> newGame(const std::string& dataDir, const std::string& sce
     auto it = opts.sides.find(s.index);
     if (it != opts.sides.end() && s.inUse) {
       const SideSetup& o = it->second;
+      if (!o.name.empty()) s.name = o.name;   // retyped on the setup screen
       if (o.off) {
         if (s.capital) s.capital->owner = nullptr;
         s.inUse = false;

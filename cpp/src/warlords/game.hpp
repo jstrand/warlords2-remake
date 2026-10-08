@@ -29,6 +29,7 @@ struct SideSetup {
   bool off = false, computer = false;
   int level = NONE;
   int card = 0;
+  std::string name;   // retyped on the setup screen; empty keeps the scenario's
 };
 struct NewGameOptions {
   double seed = 0;

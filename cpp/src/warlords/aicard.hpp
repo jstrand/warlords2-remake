@@ -30,6 +30,10 @@ std::string path(const std::string& dataDir, int level, int number, const std::s
 std::optional<Card> load(const std::string& dataDir, int level, int number);
 /** A card's name and description lines, from its .DSC, or none. */
 std::optional<std::pair<std::string, std::vector<std::string>>> describe(const std::string& dataDir, int level, int number);
+/** A level's deck as the setup screen lists it (list_carried_items mode 7,
+ *  796c:03d9): the name of each card from 000 up to the first missing .DSC,
+ *  at most 30 -- the first 40 bytes of the file, cut at a carriage return. */
+std::vector<std::string> deck(const std::string& dataDir, int level);
 /** How many cards a level has on disk, 000 up to the first missing one. */
 int count(const std::string& dataDir, int level);
 

@@ -34,7 +34,7 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
   a character other than the Standard one. Recall Options puts back the
   options the last game began with. The screen opens on those options, not
   the scenario's, as the original's does (`docs/re/ui.md` › The start
-  screens). The Lua remake does not have any of these.
+  screens). The Lua and C++ remakes have them too.
 
 - Saves, the quick save, preferences, the button shortcuts and the sound
   settings live in the browser's `localStorage` (keys `w2:*`), so they stay with

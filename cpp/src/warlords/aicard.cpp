@@ -63,6 +63,17 @@ std::optional<std::pair<std::string, std::vector<std::string>>> describe(const s
   return std::make_pair(name, lines);
 }
 
+std::vector<std::string> deck(const std::string& dataDir, int level) {
+  std::vector<std::string> out;
+  for (int n = 0; n < 30; n++) {
+    auto s = readFile(path(dataDir, level, n, "DSC"));
+    if (!s) break;
+    std::string name = s->substr(0, 40);
+    out.push_back(name.substr(0, name.find('\r')));
+  }
+  return out;
+}
+
 int count(const std::string& dataDir, int level) {
   int n = 0;
   while (n < 100 && fileExists(path(dataDir, level, n, "CRD"))) n++;

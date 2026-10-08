@@ -2202,6 +2202,28 @@ static void testComputerPlayers() {
   eq(k.cautious, 1, "the Standard Knight is cautious");
   eq(k.groups, 1, "and runs one group");
   eq(aicard::describe(DATA, 2, 1)->first, "Attila the Hun", "a card's name is the first line of its .DSC");
+  auto lords = aicard::deck(DATA, 1);
+  eq((int)lords.size(), 9, "the setup screen lists a Lord's nine characters");
+  eq(lords[0], "Standard Lord", "the Standard one first");
+  eq(lords[2], "Roland the Rabid", "each by its .DSC's first line");
+  {
+    // a character chosen on the setup screen is the card the side plays
+    GameOpts ro = seed(70);
+    ro.sides[0] = sideSetup(false, 0);
+    game::SideSetup rabid = sideSetup(true, 1);
+    rabid.card = 2;
+    rabid.name = "Rabids";
+    ro.sides[1] = rabid;
+    auto rp = newGame("ERYTHEA", ro);
+    Side& rs = rp->map->sides[1];
+    eq(rs.card, 2, "the side keeps its character");
+    eq(rs.name, "Rabids", "and the name it was given");
+    eq(rs.ai->maxGroups, 2, "Roland the Rabid runs two assault groups");
+    eq(rs.ai->raze, 14, "razes 14 in 1000");
+    eq(rs.ai->sack, 100, "sacks 100");
+    eq(rs.ai->early, 1, "and takes early vengeance on a human");
+    eq(rp->map->sides[2].ai->maxGroups, 4, "a side left alone plays its Standard card");
+  }
   eq(Rng(5).dice(1, 0, 3), 3, "dice(1, 0, 3) is 3");
   eq(core::dist(0, 0, 3, 4), 5, "distance is Euclidean");
   eq(core::dist(0, 0, 1, 1), 1, "and truncated");
