@@ -82,7 +82,8 @@ function sound.init(dataDir, files, recordings)
   S.on.music = opts:sub(1, 1) == "1"
   S.on.effects = opts:sub(2, 2) == "1"
   S.on.speech = opts:sub(3, 3) ~= "0"
-  local synth = prefs.get("music")
+  -- the MT-32 unless another was picked; AdLib when its recordings are missing
+  local synth = prefs.get("music") or "mt32"
   if PREFIX[synth] and sound.synthAvailable(synth) then S.synth = synth end
   if not S.ok then return end
   local adv, ad = read(dataDir .. "/ADLIB.ADV"), read(dataDir .. "/MIDPAK.AD")

@@ -109,7 +109,9 @@ music, MT-32 music and SC-55 music pick one in play (not the
 original's). The two Roland sets
 are not synthesised here but played from recordings in `pre-rendered-sound/`,
 made by `tools/prerender_music.sh` through Munt and 88emu with your own ROMs;
-an item is greyed while its recordings are missing.
+an item is greyed while its recordings are missing. The music is the MT-32's
+until another is picked, or the AdLib's while the MT-32's recordings are
+missing.
 
 ## The rules core
 

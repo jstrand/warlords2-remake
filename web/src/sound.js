@@ -57,7 +57,8 @@ export async function init(dataDir, files) {
   S.on.music = opts[0] === "1";
   S.on.effects = opts[1] === "1";
   S.on.speech = opts[2] !== "0";
-  const synth = prefs.get("music");
+  // the MT-32 unless another was picked; AdLib when its recordings are missing
+  const synth = prefs.get("music") || "mt32";
   if (PREFIX[synth] && synthAvailable(synth)) S.synth = synth;
   try {
     S.ctx = new (window.AudioContext || window.webkitAudioContext)();

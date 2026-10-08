@@ -400,7 +400,9 @@ void init(const std::string& dataDir, const w2::uidata::Strings& files) {
   S.on.music = opts[0] == '1';
   S.on.effects = opts[1] == '1';
   S.on.speech = opts[2] != '0';
+  // the MT-32 unless another was picked; AdLib when its recordings are missing
   std::string synth = prefs::get("music");
+  if (synth.empty()) synth = "mt32";
   if (PREFIX.count(synth) && synthAvailable(synth)) S.synth = synth;
   S.adv = w2::readFile(dataDir + "/ADLIB.ADV").value_or("");
   S.ad = w2::readFile(dataDir + "/MIDPAK.AD").value_or("");
