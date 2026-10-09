@@ -405,8 +405,28 @@ Walking the path, step by step:
 - **Cost:** when the walk ends, the cumulative cost of the steps taken is
   subtracted from **every army in the stack**, floored at 0. A multi-army
   stack spends from its shared pool (the minimum of its armies' moves).
-- **Stopping:** the walk ends when fewer than **2** movement points remain,
-  or when the next step costs more than what's left.
+- **Stopping:** the walk takes every step whose cumulative cost fits in the
+  moves left (`path_step_costs`, `1555:18be`). There is no floor, so a stack
+  with **1** move left still takes a road, bridge or city step. The `< 2`
+  test at the end of `walk_path` only decides whether the walk reports itself
+  out of moves (status 2), after which the player's stack is put down
+  (`1b62:08b3`).
+
+### Attacking
+
+A click with the attack (or peace) pointer calls `attack_tile` (`67cc:0000`)
+directly; there is no walk, so the step's cost does not matter:
+
+1. With *Diplomacy* on, a tile of a side at **peace**, or a **city** of a side
+   only at state 1, raises "War!" (`STRING.DAT` group 140, below). The city
+   test is on the city's index `> 0`, so city 0 slips through.
+2. The stack needs **at least 1** move left; with 0 it is put down
+   (`1b62:08b3`).
+3. `67cc:0522` charges every army in the stack the tile's movement cost,
+   **2 at least** (so a city or road costs 2), floored at 0. A land stack not
+   at sea attacking onto water or shore first puts every army that cannot fly
+   (and carries no flight item) to sea with 0 moves. The computer's attacks
+   (`67cc:124a`) go through `67cc:0522` too.
 
 `armies_at_tile` (`1b62:007d`) lists up to 8 armies on a tile and returns the
 one highest in its owner's **fight order**, which is the army the map shows
@@ -908,9 +928,13 @@ For every ordered pair of sides there's a byte at `.SCN`
 At game start (`diplomacy_init`, Ghidra `484e:11bd`) every pair is at **war**
 if the *Diplomacy* option is off, and at **peace** if it's on.
 
-**Attacking** a side you're at peace with (state 0) is refused with
-`STRING.DAT` group 140 ("Milord! Thou art attacking without first having
-declared war"); state 1 is refused in some cases too (`attack_tile`).
+**Attacking** a side you're at peace with (state 0), or a city of a side at
+state 1, asks first (`attack_tile`, `67cc:00b2`): `STRING.DAT` group 140, "War!
+Milord! Thou art attacking without first having declared war! This shall
+make thee most unpopular! Shall we attack anyway?" **Yes** (`67cc:20a8`) adds
+**1d100+100** to the attacker's diplomatic score from peace, **1d15+10** from
+state 1, sets both sides' state and proposal to **war** at once, records a
+Treachery deed (history type 8), and then attacks. No does nothing.
 
 **Proposals are applied at the start of the proposing side's turn**
 (`diplomacy_apply`, `484e:0db3`):

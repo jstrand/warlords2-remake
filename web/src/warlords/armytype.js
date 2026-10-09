@@ -29,7 +29,8 @@ export function load(path) {
   for (let i = 0; i < COUNT; i++) {
     const o = i * STRIDE;
     const bonus = {};
-    for (let b = 0; b < N_BONUS; b++) bonus[32 + b * 2] = u16(s, o + 32 + b * 2);
+    // signed: the Elephants' -1 to the enemy stack (+50) is 0xffff
+    for (let b = 0; b < N_BONUS; b++) bonus[32 + b * 2] = i16(s, o + 32 + b * 2);
     const a = {
       id: u16(s, o),               // also the sprite index
       name: cstr(s, o + 2, 16),

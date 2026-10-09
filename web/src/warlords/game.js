@@ -602,6 +602,11 @@ export function applyAttack(g, result) {
       loser.gold = Math.max(0, loser.gold - 2 * l);
     }
     city.producing = undefined; city.countdown = 0; city.vectorTo = undefined;
+    // every city that was sending its armies here stops: no vector, and
+    // nothing in production either (67cc:0a6b)
+    for (const c of g.map.cities) {
+      if (c.vectorTo === city.index) { c.vectorTo = undefined; c.producing = undefined; c.countdown = 0; }
+    }
     city.ownerIndex = winner.index;
     scn.setCityTiles(g.map, city);
     move.invalidate(g);

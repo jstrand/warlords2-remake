@@ -99,6 +99,8 @@ function testArmyTypes() {
   eq(hcav.cost, 8, "Heavy Cav. cost");
   eq(hcav.move, 16, "Heavy Cav. base move");
   ok(t.list.some((a) => a.flies), "some types fly");
+  const eleph = t.list.find((a) => a.name === "Elephants");
+  eq(eleph.bonus[50], -1, "Elephants take 1 off the enemy stack: the field is signed");
 }
 
 function testProduction() {
@@ -806,6 +808,10 @@ function testCapture(scenario) {
     removeArmy(g, far);
   }
   const before = game.sideCities(g, side).length;
+  // a city of the loser's vectoring here stops building (67cc:0a6b); the
+  // target is neutral, so stand one in for the purpose
+  const sender = g.map.cities.find((c) => c !== target && c.slots.length > 0);
+  sender.producing = 0; sender.countdown = 2; sender.vectorTo = target.index;
   let r;
   {
     const i = target.y * scn.MAP_W + target.x;
@@ -825,6 +831,8 @@ function testCapture(scenario) {
     eq(target.ownerIndex, owner, "");
   }
   ok(r.won, "the overwhelming stack took the city");
+  eq(sender.vectorTo, null, "a city that sent its armies to the captured one stops sending");
+  eq(sender.producing, null, "and stops building");
   ok(r.lines != null, "the attack reports the lines that fought");
   eq(r.lines.attackers.length, stack.length, "every attacker is in the line");
   eq(r.lines.city, target, "and the line knows it was a city");

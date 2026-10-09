@@ -2509,8 +2509,13 @@ G.moveAllStep = () => {
     const sel = G.selection;
     if (sel) {
       for (const a of sel.stack) m.seen.add(a);
-      moveSelection(lead.target.x, lead.target.y);
-      m.moved++;
+      // selecting a stack already where it was sent lifts the order
+      // (refreshRoute), so there may be nothing left to walk to
+      const t = lead.target;
+      if (t) {
+        moveSelection(t.x, t.y);
+        m.moved++;
+      }
     }
     if (G.moveAll !== m) return;
   }
