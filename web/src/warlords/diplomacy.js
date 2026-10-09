@@ -109,6 +109,32 @@ export function apply(g, side) {
   return messages;
 }
 
+/** Must `a` be asked before it attacks `b`'s tile -- "Thou art attacking
+ *  without first having declared war!" (attack_tile, 67cc:00b2)? Yes at
+ *  peace, and when uneasy if the tile is a city. The original tests the
+ *  city's index with > 0, so city 0 is attacked uneasy without asking. */
+export function mustDeclare(g, a, b, city) {
+  if (g.map.options.diplomacy === 0 || a == null || b == null) return false;
+  const st = state(g, a, b);
+  return st === PEACE || (st === INTERMEDIATE && city != null && city.index > 0);
+}
+
+/** "Shall we attack anyway?" -- yes (67cc:20a8): war at once, both ways,
+ *  proposals too, and it costs the attacker 1d100+100 diplomatic score from
+ *  peace, 1d15+10 from uneasy. History notes the treachery. */
+export function attackAnyway(g, a, b) {
+  if (a == null || b == null) return;
+  const side = g.map.sides[a];
+  const st = state(g, a, b);
+  if (st === PEACE) game.addDiploScore(g, side, g.rng.dice(1, 100, 100));
+  else if (st === INTERMEDIATE) game.addDiploScore(g, side, g.rng.dice(1, 15, 10));
+  for (const k of [key(a, b), key(b, a)]) {
+    g.diplomacy.state[k] = WAR;
+    g.diplomacy.proposal[k] = WAR;
+  }
+  history.deed(g, side, history.TREACHERY, a, b, "");
+}
+
 /** At the end of a side's turn, its peace overtures count (484e:1063). */
 export function scoreUpdate(g, side) {
   if (!g.diplomacy) return;

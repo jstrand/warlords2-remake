@@ -305,6 +305,33 @@ function deliver(g, army, city) {
 /** Step 5: run every producing city the side owns, logged in side.produced. */
 function runProduction(g, side) {
   const arrived = [], built = [];
+  // The armies on the road move on first, then the cities build
+  // (6f8c:0000), so one sent this turn is not counted down until the next:
+  // it arrives two turns later.
+  for (const a of g.armies) {
+    if (a.transit && a.owner === side.index) {
+      a.transit.turns--;
+      if (a.transit.turns <= 0) {
+        if (a.transit.dest === STANDARD_DEST) {
+          const [sx, sy] = standardAt(g, side);
+          a.transit = undefined;
+          if (sx != null && armiesAt(g, sx, sy).length < rules.MAX_STACK) {
+            a.x = sx; a.y = sy; a.moves = 0; a.returning = undefined;
+            arrived.push({ kind: "arrived", type: a.type, standard: true });
+          } else {
+            a.returning = true;
+            a.transit = { turns: TRANSIT_TURNS, dest: a.homeCity };
+          }
+        } else {
+          const dest = g.map.cities[a.transit.dest];
+          a.transit = undefined;
+          if (!deliver(g, a, dest)) a.disbanded = true;
+          else if (!a.transit) arrived.push({ kind: "arrived", type: a.type, city: dest.index });
+        }
+      }
+    }
+  }
+
   for (const c of sideCities(g, side)) {
     if (c.producing != null) {
       c.countdown--;
@@ -327,30 +354,6 @@ function runProduction(g, side) {
           placeArmy(g, a);
           built.push({ kind: vectored ? "sent" : "built", type: a.type, city: c.index });
           c.countdown = slot.time;       // the city starts the next one
-        }
-      }
-    }
-  }
-
-  for (const a of g.armies) {
-    if (a.transit && a.owner === side.index) {
-      a.transit.turns--;
-      if (a.transit.turns <= 0) {
-        if (a.transit.dest === STANDARD_DEST) {
-          const [sx, sy] = standardAt(g, side);
-          a.transit = undefined;
-          if (sx != null && armiesAt(g, sx, sy).length < rules.MAX_STACK) {
-            a.x = sx; a.y = sy; a.moves = 0; a.returning = undefined;
-            arrived.push({ kind: "arrived", type: a.type, standard: true });
-          } else {
-            a.returning = true;
-            a.transit = { turns: TRANSIT_TURNS, dest: a.homeCity };
-          }
-        } else {
-          const dest = g.map.cities[a.transit.dest];
-          a.transit = undefined;
-          if (!deliver(g, a, dest)) a.disbanded = true;
-          else if (!a.transit) arrived.push({ kind: "arrived", type: a.type, city: dest.index });
         }
       }
     }
@@ -526,6 +529,26 @@ export function decideAttack(g, stack, x, y) {
   if (result.won && city && loser) result.loot = loot(g, loser);
   result.fought = { stack, x, y, defOwner };
   return result;
+}
+
+/** What an attack costs, paid before it is fought (attack_tile, 67cc:005a,
+ *  then 67cc:0522): every army in the stack loses the tile's movement cost,
+ *  2 at least, down to 0. A land stack attacking onto water or shore puts
+ *  to sea first -- each army that cannot fly loses all its moves. The
+ *  original does that to a boat too; here it is left to land stacks, as a
+ *  navy at sea would move by land rules. */
+export function chargeAttack(g, stack, x, y) {
+  const city = cityAt(g, x, y);
+  const t = city && !city.razed ? move.CITY : scn.terrainAt(g.map, x, y);
+  const cost = Math.max(2, move.COST[t] || 0);
+  const [mode, , , atSea] = move.stackMode(g, stack);
+  if (mode === move.LAND && !atSea && (t === move.WATER || t === move.SHORE)) {
+    for (const a of stack) {
+      const flight = a.type === armytype.HERO && (a.items || []).some((it) => it.type === rules.ITEM_FLIGHT);
+      if (!g.types.byId[a.type].flies && !flight) { a.atSea = true; a.moves = 0; }
+    }
+  }
+  for (const a of stack) a.moves = Math.max(0, (a.moves || 0) - cost);
 }
 
 /** Fight for a tile and apply the outcome at once. */

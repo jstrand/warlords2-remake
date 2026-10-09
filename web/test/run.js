@@ -252,6 +252,24 @@ function testVectoring(scenario) {
   const atDest = game.armiesAt(g, dest.x, dest.y).length;
   for (let i = 0; i < (time + 2) * g.sides.length; i++) game.endTurn(g);
   ok(game.armiesAt(g, dest.x, dest.y).length > atDest, "a vectored army arrives two turns after it is built");
+  {
+    // to the turn: the road moves before the cities build (6f8c:0000), so
+    // the one sent this turn shows under "Turn after" and lands two turns on
+    const round = () => { for (let i = 0; i < g.sides.length; i++) game.endTurn(g); };
+    const onRoad = () => g.armies.filter((a) => a.transit && a.owner === side.index && a.transit.dest === dest.index);
+    let sent = null;
+    for (let i = 0; i < 10 && !sent; i++) {
+      round();
+      if ((side.produced || []).some((e) => e.kind === "sent")) sent = onRoad().find((a) => a.transit.turns === 2);
+    }
+    ok(sent != null, "a city sends an army that is two turns out");
+    if (sent) {
+      round();
+      ok(sent.transit && sent.transit.turns === 1, "a turn later it is still on the road, due next turn");
+      round();
+      ok(!sent.transit && sent.x != null, "and the turn after that it has arrived");
+    }
+  }
   game.setProduction(g, from, null);
   ok(from.vectorTo == null, "vectoring only sticks while the city is building");
   const senders = [];
@@ -1398,9 +1416,67 @@ function testSites(scenario) {
   ok(died > 0, "a weak hero sometimes dies to a strong one");
 }
 
+// A step is taken while the walk's cost so far fits in the moves left
+// (1555:18be), with no floor; an attack is fought from beside the tile and
+// needs one move, then costs the tile's movement, 2 at least (67cc:0000).
+function testLastMove() {
+  console.log("the last move point");
+  const g = newGame("ERYTHEA", { seed: 11 });
+  const side = game.begin(g);
+  const army = game.sideArmies(g, side)[0];
+  let road = null;
+  for (let y = 1; y < g.map.height - 1 && !road; y++) {
+    for (let x = 1; x < g.map.width - 1 && !road; x++) {
+      if (scn.roadAt(g.map, x, y) % 0x20 === 0 || scn.roadAt(g.map, x + 1, y) % 0x20 === 0) continue;
+      if (game.cityAt(g, x, y) || game.cityAt(g, x + 1, y)) continue;
+      if (game.armiesAt(g, x, y).length || game.armiesAt(g, x + 1, y).length) continue;
+      road = { x, y };
+    }
+  }
+  ok(road != null, "found two road tiles side by side");
+  if (road) {
+    army.x = road.x; army.y = road.y; army.atSea = false; army.moves = 1;
+    movement.invalidate(g);
+    const r = movement.moveTo(g, [army], road.x + 1, road.y);
+    eq(r.steps, 1, "one move left still buys a step along a road");
+    eq(army.x, road.x + 1, "and the army is there");
+    eq(army.moves, 0, "with nothing left");
+  }
+  const enemy = g.map.cities.find((c) => c.ownerIndex !== side.index);
+  const a = { x: enemy.x, y: enemy.y - 1, owner: side.index, type: 11, maxMoves: 20, moves: 1 };
+  game.chargeAttack(g, [a], enemy.x, enemy.y);
+  eq(a.moves, 0, "an attack takes the last move");
+  a.moves = 10;
+  game.chargeAttack(g, [a], enemy.x, enemy.y);
+  eq(a.moves, 8, "a city costs 1 to enter but 2 to attack");
+}
+
 function testDiplomacy() {
   console.log("diplomacy");
   const d = diplomacy;
+  {
+    // attack_tile asks first (67cc:00b2), and "attack anyway" goes to war
+    // (67cc:20a8)
+    const gw = newGame("ERYTHEA", { seed: 65, options: { diplomacy: 1 } });
+    const city = gw.map.cities.find((c) => c.index > 0);
+    ok(d.mustDeclare(gw, 0, 1, null), "attacking armies at peace asks first");
+    ok(!d.mustDeclare(gw, 0, null, city), "attacking a neutral never asks");
+    gw.diplomacy.state[0 * 8 + 1] = d.INTERMEDIATE;
+    ok(!d.mustDeclare(gw, 0, 1, null), "armies of a side merely uneasy are fair game");
+    ok(d.mustDeclare(gw, 0, 1, city), "but its cities need war");
+    ok(!d.mustDeclare(gw, 0, 1, gw.map.cities[0]), "except city 0, which the original's > 0 test misses");
+    gw.diplomacy.state[0 * 8 + 1] = d.PEACE;
+    const before = gw.sides[0].diploScore || 0;
+    d.attackAnyway(gw, 0, 1);
+    const cost = (gw.sides[0].diploScore || 0) - before;
+    ok(cost >= 101 && cost <= 200, "attacking at peace costs 1d100+100 score: " + cost);
+    eq(d.state(gw, 0, 1), d.WAR, "and it is war");
+    eq(d.state(gw, 1, 0), d.WAR, "both ways");
+    eq(d.proposal(gw, 1, 0), d.WAR, "the proposals too");
+    ok(!d.mustDeclare(gw, 0, 1, city), "so the attack goes ahead");
+    const offOpts = newGame("ERYTHEA", { seed: 65 });
+    ok(!d.mustDeclare(offOpts, 0, 1, city), "with Diplomacy off nothing asks");
+  }
   const off = newGame("ERYTHEA", { seed: 61 });
   eq(off.map.options.diplomacy, 0, "the shipped scenarios have diplomacy off");
   eq(d.state(off, 0, 1), d.WAR, "with the option off every pair starts at war");
@@ -2232,6 +2308,7 @@ testHistory("ERYTHEA");
 testDisband("ERYTHEA");
 testMovement("ERYTHEA");
 testMovement("ISLADIA");
+testLastMove();
 testStackLimit("ERYTHEA");
 testSea();
 testEncampment();

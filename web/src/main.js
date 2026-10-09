@@ -702,21 +702,50 @@ function afterBattle(result) {
   }
 }
 
-/** Walk the selection towards (x, y). Only `attack` turns running into an
- *  enemy into an assault (740d:0179, 1c8c:041f); a walk just stops. */
-function moveSelection(x, y, attack) {
+// "War!" -- asked before attacking a side not at war (STRING.DAT group 140)
+const WAR_GROUP = 0x8c;
+
+/** A click with the sword or the dove (740d:0179): attack_tile (67cc:0000)
+ *  fights for the tile beside the stack. There is no walk, so the step's
+ *  cost does not matter: one move left will do. A side at peace -- or, for
+ *  a city, one not at war -- must be declared on first. */
+function attackTile(x, y) {
+  const sel = G.selection;
+  if (!sel || sel.stack.length === 0) return;
+  const g = G.g, me = G.player.index;
+  const here = game.armiesAt(g, x, y);
+  let city = game.cityAt(g, x, y);
+  if (city && city.razed) city = null;
+  const owner = here.length > 0 ? here[0].owner : (city ? city.ownerIndex : null);
+  if (diplomacy.mustDeclare(g, me, owner, city)) {
+    const t = (i) => uidata.text(G.screen.ui, WAR_GROUP, i);
+    inputUi.open({
+      title: t(0), lines: [t(1), t(2), t(3), t(4)], confirm: true,
+      ok: () => { diplomacy.attackAnyway(g, me, owner); attackTile(x, y); },   // 67cc:20a8
+    });
+    return;
+  }
+  if (move.stackMoves(sel.stack) < 1) { deselect(); return; }   // 1b62:08b3
+  if (owner === me || (!city && here.length === 0)) return;
+  orderTo(sel.stack, null);
+  G.route = null;
+  game.chargeAttack(g, sel.stack, x, y);
+  // decided first, shown, and only then taken effect (67cc:0a6b)
+  const result = game.decideAttack(g, sel.stack, x, y);
+  startAssault(x, y, result);
+  G.assault.after = () => afterBattle(result);
+}
+
+/** Walk the selection towards (x, y). Running into an enemy just stops the
+ *  walk; attacking is the sword's (attackTile). */
+function moveSelection(x, y) {
   const sel = G.selection;
   if (!sel) return;
   orderTo(sel.stack, x, y);
   G.route = move.preview(G.g, sel.stack, x, y);
   const r = move.moveTo(G.g, sel.stack, x, y);
-  if (r.stopped === "attack" && !(attack && r.steps === 0)) r.stopped = "blocked";
-  if (r.stopped === "attack") {
-    // decided first, shown, and only then taken effect (67cc:0a6b)
-    const result = game.decideAttack(G.g, sel.stack, r.attack.x, r.attack.y);
-    startAssault(r.attack.x, r.attack.y, result);
-    G.assault.after = () => afterBattle(result);
-  } else if (r.stopped === "no route") {
+  if (r.stopped === "attack") r.stopped = "blocked";
+  if (r.stopped === "no route") {
     say("There is no way there.");
     sound.effect("chord");                     // 1a8b:0c4f, 1c8c:0007
   } else if (r.steps === 0) {
@@ -873,13 +902,15 @@ const HERO = {
   NAME_MAX: 19,
 };
 
-/** The four lines over the picture, as 6563:0d5c assembles them. */
+/** The four lines over the picture, as 6563:0d5c assembles them: strings
+ *  0-3 for the free hero of turn 1, 4-7 for one that asks a price, and the
+ *  same again from 8 for a heroine. */
 function heroLines(offer, female) {
   const ui = G.screen.ui, side = G.player;
   const first = female ? 8 : 0;
   const s = (i) => uidata.text(ui, HERO.LINE_GROUP, first + i);
   if (offer.first) return [s(0), s(1), s(2), fmt(s(3), offer.city.name)];
-  return [fmt(s(0), offer.city.name), fmt(s(1), offer.price), fmt(s(2), side.gold), s(3)];
+  return [fmt(s(4), offer.city.name), fmt(s(5), offer.price), fmt(s(6), side.gold), s(7)];
 }
 
 function presentOffer(side) {
@@ -2383,7 +2414,7 @@ function mousepressed(x, y, button) {
     // the left button does what the pointer shows (740d:00ce)
     const k = pointerKind(x, y);
     if (k === PTR.WALK || k === PTR.BOAT) moveSelection(tx, ty);
-    else if (k === PTR.ATTACK || k === PTR.PEACE) moveSelection(tx, ty, true);
+    else if (k === PTR.ATTACK || k === PTR.PEACE) attackTile(tx, ty);
     else if (k === PTR.CITY || k === PTR.SITE) {
       const city = game.cityAt(G.g, tx, ty);
       if (city) openCity(city);

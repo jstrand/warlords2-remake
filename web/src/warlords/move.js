@@ -35,7 +35,6 @@ function withF(byte, flag) { return byte | flag; }
 export const WATER_PENALTY = 10;       // a land stack's route leaving open water
 export const WATER_PENALTY_TO = 20;    // ... when the whole move is aimed at water
 export const PAST_SHORE = 0x80;        // a step after going to sea or ashore
-export const MIN_MOVE_LEFT = 2;        // the walk stops below this
 export const MAX_PATH = 200;           // a path is at most 200 compass steps
 
 // compass directions, 0 = north, clockwise (the order the game stores paths in)
@@ -206,7 +205,7 @@ export function preview(g, stack, x, y) {
   let left = stackMoves(stack), reach = 0;
   for (let i = 0; i < path.length; i++) {
     const step = path[i];
-    if (left < MIN_MOVE_LEFT || step.cost > left) break;
+    if (step.cost > left) break;
     left -= step.cost;
     reach = i + 1;
   }
@@ -529,7 +528,9 @@ function walkPath(g, stack, path) {
 
   for (let i = 1; i <= path.length; i++) {
     const step = path[i - 1];
-    if (left < MIN_MOVE_LEFT || step.cost > left) {
+    // a step is taken while what the walk has cost so far fits in the moves
+    // left (1555:18be): there is no floor, so one move still buys a road
+    if (step.cost > left) {
       result.stopped = "out of moves";
       break;
     }
