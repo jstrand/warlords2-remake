@@ -1427,6 +1427,54 @@ function testSites(scenario) {
 // A step is taken while the walk's cost so far fits in the moves left
 // (1555:18be), with no floor; an attack is fought from beside the tile and
 // needs one move, then costs the tile's movement, 2 at least (67cc:0000).
+// A stack that takes a city from the sea is still at sea until its side's
+// next turn begins, then ashore at no cost in movement (8cc6:089d); armies
+// left on water without a boat drown (1b62:0ea0).
+function testShips() {
+  console.log("ships");
+  const g = newGame("ERYTHEA", { seed: 3 });
+  const side = game.begin(g);
+  const mk = (x, y, type, extra) => {
+    const a = Object.assign({ x, y, owner: side.index, type, name: "t", strength: 3, maxMoves: 14, moves: 14, upkeep: 1 }, extra);
+    g.armies.push(a);
+    return a;
+  };
+  const city = game.sideCities(g, side)[0];
+  const sailor = mk(city.x, city.y, 2, { atSea: true, moves: 0 });
+  for (let i = 0; i < g.sides.length; i++) game.endTurn(g);
+  ok(!sailor.atSea, "an army at sea in a city is ashore when its turn begins");
+  eq(sailor.moves, sailor.maxMoves, "with its own movement, not the 20 at sea");
+
+  let wx = null, wy = null;
+  for (let y = 0; y < g.map.height && wx == null; y++) {
+    for (let x = 0; x < g.map.width && wx == null; x++) {
+      if (scn.terrainAt(g.map, x, y) === movement.WATER && !scn.isCrossing(g.map, x, y)
+          && game.armiesAt(g, x, y).length === 0) { wx = x; wy = y; }
+    }
+  }
+  const at = (a) => g.armies.includes(a);
+  const walker = mk(wx, wy, 2);
+  const boat = mk(wx, wy, 2, { atSea: true });
+  const hero = mk(wx, wy, armytype.HERO);
+  eq(game.sinkStranded(g, side, wx, wy), 1, "on the water the army without a boat sinks");
+  ok(!at(walker), "it is gone");
+  ok(at(boat) && at(hero), "one at sea, and a hero, do not sink");
+  const flyer = g.types.list.find((t) => t.flies);
+  const bird = mk(wx, wy, flyer.id);
+  const walker2 = mk(wx, wy, 2);
+  eq(game.sinkStranded(g, side), 1, "as the turn opens every tile is looked at");
+  ok(at(bird) && !at(walker2), "and only the army that can neither fly nor sail goes");
+  hero.items = [{ type: rules.ITEM_FLIGHT }];
+  const carried = mk(wx, wy, 2);
+  eq(game.sinkStranded(g, side, wx, wy), 0, "a hero's flight item carries the whole stack");
+  hero.items = [];
+  eq(game.sinkStranded(g, side, wx, wy), 1, "without it the walker drowns");
+  ok(!at(carried), "");
+  const ashore = mk(city.x, city.y, 2);
+  eq(game.sinkStranded(g, side, city.x, city.y), 0, "nothing sinks on land");
+  ok(at(ashore), "");
+}
+
 function testLastMove() {
   console.log("the last move point");
   const g = newGame("ERYTHEA", { seed: 11 });
@@ -2317,6 +2365,7 @@ testDisband("ERYTHEA");
 testMovement("ERYTHEA");
 testMovement("ISLADIA");
 testLastMove();
+testShips();
 testStackLimit("ERYTHEA");
 testSea();
 testEncampment();

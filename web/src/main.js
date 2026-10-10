@@ -580,7 +580,32 @@ function reslot(armies) {
 }
 
 /** Pick up what is on a tile; `pick` names the army to take. */
+// "Alas! %d armies have been sunk" / "due to lack of a boat!" (STRING.DAT 168)
+const SUNK_GROUP = 0xa8;
+
+/** Drown the player's armies stranded on water without a boat
+ *  (auto_ui_armies_sunk, 1b62:0ea0): on one tile, or with no tile on all of
+ *  them. If any sank: a splash, the selection put down, the view on the tile,
+ *  and the message (8065:1160), `after` running once it is read. Returns
+ *  whether any did; if not, `after` runs at once. */
+function drownStranded(x, y, after) {
+  const n = game.sinkStranded(G.g, G.player, x, y);
+  if (n === 0) {
+    if (after) after();
+    return false;
+  }
+  sound.effect("splash");
+  G.selection = null; G.route = null;
+  stratDirty();
+  if (x != null) centreOn(x, y);
+  const t = (i) => uidata.text(G.screen.ui, SUNK_GROUP, i);
+  searchUi.message(n === 1 ? t(2) : fmt(t(0), n), t(1), after);
+  return true;
+}
+
 function select(x, y, pick) {
+  // picking a stack up on the water drowns whoever has no boat (8c07:06eb)
+  if (drownStranded(x, y)) return;
   const stack = selectableAt(x, y);
   if (stack.length === 0) {
     G.selection = null;
@@ -889,6 +914,12 @@ function dismissBanner() {
   G.banner = null;
   if (G.centreAfterBanner && G.player.capital) centreOn(G.player.capital.x, G.player.capital.y);
   G.centreAfterBanner = null;
+  // whoever is left on the water without a boat drowns (8cc6:0259), and only
+  // then does the advisor have his say
+  drownStranded(null, null, afterBanner);
+}
+
+function afterBanner() {
   // the advisor has his say (6dda:026f(5)), then 8cc6:04bd puts on the
   // hero's music or the turn's
   const says = sound.speechOn() ? cues.advisor(G.g, G.player, (n) => Math.floor(Math.random() * n) + 1) : null;

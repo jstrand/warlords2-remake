@@ -380,6 +380,24 @@ walk (`place_stack_at_step`, `1a8b:04c8`):
   own port city counts as coming ashore.
 - A stack at sea carries only the sea bonus flag (`0x08`), so no woods or
   hills bonus.
+- **Taking a city from the sea** is not a walk: `after_battle` moves the
+  survivors in and leaves them at sea. At the start of **every** side's turn,
+  before anything else, `8cc6:089d` (from `8065:2123`) brings ashore each of
+  its armies standing on a city tile, of any city, ruins included. This costs
+  no movement, because the turn's movement reset comes after and sees them
+  ashore. A stack at sea on a **bridge** stays at sea.
+- **Armies left on water without a boat drown** (`auto_ui_armies_sunk`,
+  `1b62:0ea0`). On a water tile, or a crossing (map word bit 15), every army
+  that is not at sea, not a hero and cannot fly is removed, unless the armies
+  on the tile could fly off together (`1c8c:07fa`: a hero's flight item, or
+  every army flying and none at sea, or every non-hero flying and one flier
+  not at sea). It is asked for a human player only: for all the side's tiles
+  as the turn opens (`8cc6:0259`), and for the tile of every stack picked up
+  (`8c07:06eb`). A splash, the selection is dropped, and "Alas! %d armies have
+  been sunk / due to lack of a boat!" (group 168, "1 army" for one). Such
+  armies come from a stack carried by a hero's flight item that the hero
+  leaves, or from land armies grouped with a stack still at sea in a city it
+  has just taken.
 
 ## Moving a stack
 

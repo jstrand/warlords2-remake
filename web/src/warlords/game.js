@@ -426,11 +426,68 @@ export function heroWithDoubleMoveAt(g, side, x, y) {
   return false;
 }
 
+/** At the start of every side's turn, before anything else, its armies
+ *  standing in a city -- any city, ruins too -- are no longer at sea
+ *  (8cc6:089d, from 8065:2123). It costs no movement: the reset that follows
+ *  sees them ashore. A stack that took a city from the sea stays at sea until
+ *  then. */
+function comeAshore(g, side) {
+  for (const a of g.armies) {
+    if (a.owner === side.index && a.atSea && !a.transit && a.x != null && cityAt(g, a.x, a.y)) a.atSea = false;
+  }
+}
+
+/** Could these armies fly off together (1c8c:07fa)? A hero's flight item
+ *  carries them all; else every army flies and none is at sea, or every
+ *  army but the heroes flies and one of the fliers is not at sea. */
+function canFlyOff(g, armies) {
+  let heroFlight = false, allFly = true, nonHeroesFly = true, freeFlier = false;
+  for (const a of armies) {
+    const flies = g.types.byId[a.type].flies;
+    if (a.type === armytype.HERO && (a.items || []).some((it) => it.type === rules.ITEM_FLIGHT)) heroFlight = true;
+    if (!flies || a.atSea) allFly = false;
+    if (a.type !== armytype.HERO && !flies) nonHeroesFly = false;
+    if (flies && !a.atSea) freeFlier = true;
+  }
+  return heroFlight || allFly || (nonHeroesFly && freeFlier);
+}
+
+/** Armies left on water without a boat drown (auto_ui_armies_sunk,
+ *  1b62:0ea0). On a water tile, or a crossing (map word bit 15), every army of
+ *  the side's that is not at sea, not a hero and cannot fly is lost -- unless
+ *  the armies there could fly off together. With x, y only that tile is
+ *  looked at, otherwise every tile the side stands on. Returns how many sank.
+ *  The original asks it for a human player only: as the turn opens and as a
+ *  stack is picked up. */
+export function sinkStranded(g, side, x, y) {
+  const wet = (tx, ty) => scn.terrainAt(g.map, tx, ty) === move.WATER || scn.isCrossing(g.map, tx, ty);
+  const tiles = new Map();
+  for (const a of g.armies) {
+    if (a.owner !== side.index || a.transit || a.x == null || a.x < 0 || a.y < 0) continue;
+    if (x != null && (a.x !== x || a.y !== y)) continue;
+    if (wet(a.x, a.y)) {
+      const k = a.y * g.map.width + a.x;
+      if (!tiles.has(k)) tiles.set(k, []);
+      tiles.get(k).push(a);
+    }
+  }
+  const dead = [];
+  for (const here of tiles.values()) {
+    if (canFlyOff(g, here)) continue;
+    for (const a of here) {
+      if (!a.atSea && a.type !== armytype.HERO && !g.types.byId[a.type].flies) dead.push(a);
+    }
+  }
+  removeArmies(g, dead);
+  return dead.length;
+}
+
 /** Run the start of `side`'s turn; false if the side has no turn to play: a
  *  computer side left with no city (start_of_turn, 8cc6:0000) does nothing
  *  more until the round's end puts it out. A human's turn (8cc6:0259) goes
  *  on regardless, with whatever armies it still has. */
 export function startTurn(g, side) {
+  comeAshore(g, side);
   tidyExplored(g, side);
   side.diploNews = diplomacy.apply(g, side);
   for (const m of side.diploNews) g.log.push(m);
