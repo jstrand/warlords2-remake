@@ -90,7 +90,7 @@ static void showBanner(Side* side);
 static void finishRound(Side* side);
 static void playComputers(Side* side);
 static void refreshControls();
-static void moveSelection(int x, int y, bool attack = false);
+static void moveSelection(int x, int y);
 static void startAssault(int x, int y, const w2::Battle& result);
 static void presentVictory(City* city, const std::string& victor);
 static void keypressed(const std::string& k);
@@ -593,21 +593,55 @@ static void afterBattle(const w2::Battle& result) {
   }
 }
 
-// Walk the selection towards (x, y). Only `attack` turns running into an
-// enemy into an assault (740d:0179, 1c8c:041f); a walk just stops.
-static void moveSelection(int x, int y, bool attack) {
+// "War!" -- asked before attacking a side not at war (STRING.DAT group 140)
+static const int WAR_GROUP = 0x8c;
+
+// A click with the sword or the dove (740d:0179): attack_tile (67cc:0000)
+// fights for the tile beside the stack. There is no walk, so the step's
+// cost does not matter: one move left will do. A side at peace -- or, for
+// a city, one not at war -- must be declared on first.
+static void attackTile(int x, int y) {
+  if (!G.selection || G.selection->stack.empty()) return;
+  auto& sel = *G.selection;
+  w2::Game& g = *G.g;
+  int me = G.player->index;
+  auto here = game::armiesAt(g, x, y);
+  City* city = game::cityAt(g, x, y);
+  if (city && city->razed) city = nullptr;
+  int owner = !here.empty() ? here[0]->owner : (city ? city->ownerIndex : NONE);
+  if (w2::diplomacy::mustDeclare(g, me, owner, city)) {
+    input::Options o;
+    o.title = kit::text(WAR_GROUP, 0);
+    for (int i = 1; i <= 4; i++) o.lines.push_back(kit::text(WAR_GROUP, i));
+    o.confirm = true;
+    o.ok = [x, y, me, owner](const std::string&) {             // 67cc:20a8
+      w2::diplomacy::attackAnyway(*G.g, me, owner);
+      attackTile(x, y);
+    };
+    input::open(o);
+    return;
+  }
+  if (move::stackMoves(sel.stack) < 1) { deselect(); return; }   // 1b62:08b3
+  if (owner == me || (!city && here.empty())) return;
+  orderTo(sel.stack, NONE, NONE);
+  G.route.reset();
+  game::chargeAttack(g, sel.stack, x, y);
+  // decided first, shown, and only then taken effect (67cc:0a6b)
+  w2::Battle result = game::decideAttack(g, sel.stack, x, y);
+  startAssault(x, y, result);
+  G.assault->after = [result]() { afterBattle(result); };
+}
+
+// Walk the selection towards (x, y). Running into an enemy just stops the
+// walk; attacking is the sword's (attackTile).
+static void moveSelection(int x, int y) {
   if (!G.selection) return;
   auto& sel = *G.selection;
   orderTo(sel.stack, x, y);
   G.route = move::preview(*G.g, sel.stack, x, y);
   auto r = move::moveTo(*G.g, sel.stack, x, y);
-  if (r.stopped == "attack" && !(attack && r.steps == 0)) r.stopped = "blocked";
-  if (r.stopped == "attack") {
-    // decided first, shown, and only then taken effect (67cc:0a6b)
-    w2::Battle result = game::decideAttack(*G.g, sel.stack, r.attack->x, r.attack->y);
-    startAssault(r.attack->x, r.attack->y, result);
-    G.assault->after = [result]() { afterBattle(result); };
-  } else if (r.stopped == "no route") {
+  if (r.stopped == "attack") r.stopped = "blocked";
+  if (r.stopped == "no route") {
     say("There is no way there.");
     sound::effect("chord");                     // 1a8b:0c4f, 1c8c:0007
   } else if (r.steps == 0) {
@@ -758,12 +792,14 @@ static void dismissBanner() {
   });
 }
 
-// The four lines over the picture, as 6563:0d5c assembles them.
+// The four lines over the picture, as 6563:0d5c assembles them: strings 0-3
+// for the free hero of turn 1, 4-7 for one that asks a price, and the same
+// again from 8 for a heroine.
 static std::vector<std::string> heroLines(const w2::HeroOffer& offer, bool female) {
   int first = female ? 8 : 0;
   auto s = [first](int i) { return kit::text(HERO_LINE_GROUP, first + i); };
   if (offer.first) return {s(0), s(1), s(2), format(s(3), offer.city->name)};
-  return {format(s(0), offer.city->name), format(s(1), offer.price), format(s(2), G.player->gold), s(3)};
+  return {format(s(4), offer.city->name), format(s(5), offer.price), format(s(6), G.player->gold), s(7)};
 }
 
 static bool presentOffer(Side* side) {
@@ -2258,7 +2294,7 @@ static void mousepressed(int x, int y, int button) {
     // the left button does what the pointer shows (740d:00ce)
     int k = pointerKind(x, y);
     if (k == WALK || k == BOAT) moveSelection(tx, ty);
-    else if (k == ATTACK || k == PEACE) moveSelection(tx, ty, true);
+    else if (k == ATTACK || k == PEACE) attackTile(tx, ty);
     else if (k == CITY_P || k == SITE_P) {
       if (City* city = game::cityAt(*G.g, tx, ty)) front::openCity(city);
     } else if (k == ADVISE) {
@@ -2303,12 +2339,16 @@ static void moveAllStep() {
       return;
     }
     G.moveAll->seen.insert(lead);
-    auto target = *lead->target;
     select(lead->x, lead->y, lead);
     if (G.selection) {
       for (Army* a : G.selection->stack) G.moveAll->seen.insert(a);
-      moveSelection(target.first, target.second);
-      if (G.moveAll) G.moveAll->moved++;
+      // selecting a stack already where it was sent lifts the order
+      // (refreshRoute), so there may be nothing left to walk to
+      if (lead->target) {
+        auto target = *lead->target;
+        moveSelection(target.first, target.second);
+        if (G.moveAll) G.moveAll->moved++;
+      }
     }
   }
 }
@@ -2965,7 +3005,7 @@ static void stepScript() {
     } else if (cmd == "attack") {
       int x, y;
       in >> x >> y;
-      moveSelection(x, y, true);
+      attackTile(x, y);
     } else if (cmd == "near" && G.g && G.selection) {
       std::vector<std::pair<int, City*>> found;
       for (auto& c : G.g->map->cities) {

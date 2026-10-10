@@ -51,7 +51,6 @@ move.has = has
 move.WATER_PENALTY = 10       -- a land stack's route leaving open water
 move.WATER_PENALTY_TO = 20    -- ... when the whole move is aimed at water
 move.PAST_SHORE = 0x80        -- a step after going to sea or ashore (1555:19e4)
-move.MIN_MOVE_LEFT = 2        -- the walk stops below this
 move.MAX_PATH = 200           -- a path is at most 200 compass steps
 
 -- compass directions, 0 = north, clockwise (the order the game stores paths in)
@@ -274,7 +273,7 @@ function move.preview(g, stack, x, y)
   if not path or #path == 0 then return nil end
   local left, reach = move.stackMoves(stack), 0
   for i, step in ipairs(path) do
-    if left < move.MIN_MOVE_LEFT or step.cost > left then break end
+    if step.cost > left then break end
     left = left - step.cost
     reach = i
   end
@@ -659,7 +658,9 @@ local function walkPath(g, stack, path)
   local lastOk, cumulative, costTo = 0, 0, {}
 
   for i, step in ipairs(path) do
-    if left < move.MIN_MOVE_LEFT or step.cost > left then
+    -- a step is taken while what the walk has cost so far fits in the moves
+    -- left (1555:18be): there is no floor, so one move still buys a road
+    if step.cost > left then
       result.stopped = "out of moves"
       break
     end

@@ -45,7 +45,8 @@ function armytype.load(path)
   for i = 0, COUNT - 1 do
     local o = i * STRIDE
     local bonus = {}
-    for b = 0, N_BONUS - 1 do bonus[32 + b * 2] = u16(s, o + 32 + b * 2) end
+    -- signed: the Elephants' -1 to the enemy stack (+50) is 0xffff
+    for b = 0, N_BONUS - 1 do bonus[32 + b * 2] = i16(s, o + 32 + b * 2) end
     local a = {
       id = u16(s, o),               -- also the sprite index
       name = cstr(s, o + 2, 16),

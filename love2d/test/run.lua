@@ -106,6 +106,9 @@ local function testArmyTypes()
   local fliers = 0
   for _, a in ipairs(t.list) do if a.flies then fliers = fliers + 1 end end
   ok(fliers > 0, "some types fly")
+  local eleph
+  for _, a in ipairs(t.list) do if a.name == "Elephants" then eleph = a end end
+  eq(eleph.bonus[50], -1, "Elephants take 1 off the enemy stack: the field is signed")
 end
 
 ------------------------------------------------------------------ production
@@ -324,6 +327,31 @@ local function testVectoring(scenario)
   for _ = 1, (time + 2) * #g.sides do game.endTurn(g) end
   ok(#game.armiesAt(g, dest.x, dest.y) > atDest,
      "a vectored army arrives two turns after it is built")
+  do
+    -- to the turn: the road moves before the cities build (6f8c:0000), so
+    -- the one sent this turn shows under "Turn after" and lands two turns on
+    local function round() for _ = 1, #g.sides do game.endTurn(g) end end
+    local sent
+    for _ = 1, 10 do
+      round()
+      local any = false
+      for _, e in ipairs(side.produced or {}) do if e.kind == "sent" then any = true end end
+      if any then
+        for _, a in ipairs(g.armies) do
+          if a.transit and a.owner == side.index and a.transit.dest == dest.index
+             and a.transit.turns == 2 then sent = a end
+        end
+      end
+      if sent then break end
+    end
+    ok(sent ~= nil, "a city sends an army that is two turns out")
+    if sent then
+      round()
+      ok(sent.transit ~= nil and sent.transit.turns == 1, "a turn later it is still on the road, due next turn")
+      round()
+      ok(sent.transit == nil and sent.x ~= nil, "and the turn after that it has arrived")
+    end
+  end
 
   -- stopping production clears the vector
   game.setProduction(g, from, nil)
@@ -1077,6 +1105,13 @@ local function testCapture(scenario)
   end
 
   local before = #game.sideCities(g, side)
+  -- a city of the loser's vectoring here stops building (67cc:0a6b); the
+  -- target is neutral, so stand one in for the purpose
+  local sender
+  for _, c in ipairs(g.map.cities) do
+    if c ~= target and #c.slots > 0 then sender = c break end
+  end
+  sender.producing, sender.countdown, sender.vectorTo = 1, 2, target.index
   -- the fight is decided first and takes effect only after it has been shown
   -- (combat_resolve, then after_battle 67cc:0a6b)
   local r
@@ -1099,6 +1134,8 @@ local function testCapture(scenario)
     eq(target.ownerIndex, owner, "")
   end
   ok(r.won, "the overwhelming stack took the city")
+  eq(sender.vectorTo, nil, "a city that sent its armies to the captured one stops sending")
+  eq(sender.producing, nil, "and stops building")
   -- the battle window is drawn from the lines as they were drawn up, and
   -- replays result.log over them
   ok(r.lines ~= nil, "the attack reports the lines that fought")
@@ -1968,9 +2005,70 @@ end
 
 ----------------------------------------------------------------- diplomacy
 
+-- A step is taken while the walk's cost so far fits in the moves left
+-- (1555:18be), with no floor; an attack is fought from beside the tile and
+-- needs one move, then costs the tile's movement, 2 at least (67cc:0000).
+local function testLastMove()
+  print("the last move point")
+  local scn = require("warlords.scn")
+  local g = game.new(DATA, "ERYTHEA", { seed = 11 })
+  local side = game.begin(g)
+  local army = game.sideArmies(g, side)[1]
+  local road
+  for y = 1, g.map.height - 2 do
+    for x = 1, g.map.width - 2 do
+      if not road and scn.roadAt(g.map, x, y) % 0x20 ~= 0 and scn.roadAt(g.map, x + 1, y) % 0x20 ~= 0
+         and not game.cityAt(g, x, y) and not game.cityAt(g, x + 1, y)
+         and #game.armiesAt(g, x, y) == 0 and #game.armiesAt(g, x + 1, y) == 0 then
+        road = { x = x, y = y }
+      end
+    end
+  end
+  ok(road ~= nil, "found two road tiles side by side")
+  if road then
+    army.x, army.y, army.atSea, army.moves = road.x, road.y, false, 1
+    movement.invalidate(g)
+    local r = movement.moveTo(g, { army }, road.x + 1, road.y)
+    eq(r.steps, 1, "one move left still buys a step along a road")
+    eq(army.x, road.x + 1, "and the army is there")
+    eq(army.moves, 0, "with nothing left")
+  end
+  local enemy
+  for _, c in ipairs(g.map.cities) do if c.ownerIndex ~= side.index then enemy = c break end end
+  local a = { x = enemy.x, y = enemy.y - 1, owner = side.index, type = 11, maxMoves = 20, moves = 1 }
+  game.chargeAttack(g, { a }, enemy.x, enemy.y)
+  eq(a.moves, 0, "an attack takes the last move")
+  a.moves = 10
+  game.chargeAttack(g, { a }, enemy.x, enemy.y)
+  eq(a.moves, 8, "a city costs 1 to enter but 2 to attack")
+end
+
 local function testDiplomacy()
   print("diplomacy")
   local d = require("warlords.diplomacy")
+  do
+    -- attack_tile asks first (67cc:00b2), and "attack anyway" goes to war
+    -- (67cc:20a8)
+    local gw = game.new(DATA, "ERYTHEA", { seed = 65, options = { diplomacy = 1 } })
+    local city = gw.map.cities[2]
+    ok(d.mustDeclare(gw, 0, 1, nil), "attacking armies at peace asks first")
+    ok(not d.mustDeclare(gw, 0, nil, city), "attacking a neutral never asks")
+    gw.diplomacy.state[0 * 8 + 1] = d.INTERMEDIATE
+    ok(not d.mustDeclare(gw, 0, 1, nil), "armies of a side merely uneasy are fair game")
+    ok(d.mustDeclare(gw, 0, 1, city), "but its cities need war")
+    ok(not d.mustDeclare(gw, 0, 1, gw.map.cities[1]), "except city 0, which the original's > 0 test misses")
+    gw.diplomacy.state[0 * 8 + 1] = d.PEACE
+    local before = gw.sides[1].diploScore or 0
+    d.attackAnyway(gw, 0, 1)
+    local cost = (gw.sides[1].diploScore or 0) - before
+    ok(cost >= 101 and cost <= 200, "attacking at peace costs 1d100+100 score: " .. cost)
+    eq(d.state(gw, 0, 1), d.WAR, "and it is war")
+    eq(d.state(gw, 1, 0), d.WAR, "both ways")
+    eq(d.proposal(gw, 1, 0), d.WAR, "the proposals too")
+    ok(not d.mustDeclare(gw, 0, 1, city), "so the attack goes ahead")
+    local offOpts = game.new(DATA, "ERYTHEA", { seed = 65 })
+    ok(not d.mustDeclare(offOpts, 0, 1, city), "with Diplomacy off nothing asks")
+  end
 
   -- the option decides where everyone starts
   local off = game.new(DATA, "ERYTHEA", { seed = 61 })
@@ -3148,6 +3246,7 @@ testHistory("ERYTHEA")
 testDisband("ERYTHEA")
 testMovement("ERYTHEA")
 testMovement("ISLADIA")
+testLastMove()
 testStackLimit("ERYTHEA")
 testSea()
 testEncampment()

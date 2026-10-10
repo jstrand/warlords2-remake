@@ -35,6 +35,15 @@ void propose(Game& g, int a, int b, int st);
 int proposal(const Game& g, int a, int b);
 /** Apply one side's proposals. Returns a list of messages. */
 std::vector<std::string> apply(Game& g, Side& side);
+/** Must `a` be asked before it attacks `b`'s tile -- "Thou art attacking
+ *  without first having declared war!" (attack_tile, 67cc:00b2)? Yes at
+ *  peace, and when uneasy if the tile is a city. The original tests the
+ *  city's index with > 0, so city 0 is attacked uneasy without asking. */
+bool mustDeclare(const Game& g, int a, int b, const City* city);
+/** "Shall we attack anyway?" -- yes (67cc:20a8): war at once, both ways,
+ *  proposals too, and it costs the attacker 1d100+100 diplomatic score from
+ *  peace, 1d15+10 from uneasy. History notes the treachery. */
+void attackAnyway(Game& g, int a, int b);
 /** At the end of a side's turn, its peace overtures count (484e:1063). */
 void scoreUpdate(Game& g, Side& side);
 /** What a peaceful move adds to the diplomatic score (484e:1063); NONE for nothing. */

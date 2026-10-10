@@ -854,28 +854,58 @@ local function afterBattle(result)
   end
 end
 
---- Walk the selection towards (x, y). Only `attack` -- a click with the
---- sword up (740d:0179), or a step by hand (1c8c:041f) -- turns running into
---- an enemy into an assault: a walk (1c8c:01fd) just stops beside it.
-local function moveSelection(x, y, attack)
+-- "War!" -- asked before attacking a side not at war (STRING.DAT group 140)
+local WAR_GROUP = 0x8c
+
+--- A click with the sword or the dove (740d:0179): attack_tile (67cc:0000)
+--- fights for the tile beside the stack. There is no walk, so the step's
+--- cost does not matter: one move left will do. A side at peace -- or, for
+--- a city, one not at war -- must be declared on first.
+local function attackTile(x, y)
+  local sel = G.selection
+  if not sel or #sel.stack == 0 then return end
+  local g, me = G.g, G.player.index
+  local here = game.armiesAt(g, x, y)
+  local city = game.cityAt(g, x, y)
+  if city and city.razed then city = nil end
+  local owner
+  if #here > 0 then owner = here[1].owner elseif city then owner = city.ownerIndex end
+  if diplomacy.mustDeclare(g, me, owner, city) then
+    local function t(i) return uidata.text(G.screen.ui, WAR_GROUP, i) end
+    require("ui.input").open({
+      title = t(0), lines = { t(1), t(2), t(3), t(4) }, confirm = true,
+      ok = function()                                         -- 67cc:20a8
+        diplomacy.attackAnyway(g, me, owner)
+        attackTile(x, y)
+      end,
+    })
+    return
+  end
+  if move.stackMoves(sel.stack) < 1 then deselect() return end   -- 1b62:08b3
+  if owner == me or (not city and #here == 0) then return end
+  orderTo(sel.stack, nil)
+  G.route = nil
+  game.chargeAttack(g, sel.stack, x, y)
+  -- The fight is resolved first and then shown. It takes effect only once
+  -- the window has closed (after_battle, 67cc:0a6b), so the map cannot give
+  -- the outcome away.
+  local result = game.decideAttack(g, sel.stack, x, y)
+  startAssault(x, y, result)
+  G.assault.after = function() afterBattle(result) end
+end
+
+--- Walk the selection towards (x, y) (1c8c:01fd). Running into an enemy just
+--- stops the walk beside it; attacking is the sword's (attackTile).
+local function moveSelection(x, y)
   local sel = G.selection
   if not sel then return end
-  local from = { x = sel.stack[1].x, y = sel.stack[1].y }
   -- the destination is remembered, so a walk that runs out of movement can be
   -- taken up again -- by Move All, or by hand next turn
   orderTo(sel.stack, x, y)
   G.route = move.preview(G.g, sel.stack, x, y)
   local r = move.moveTo(G.g, sel.stack, x, y)
-  if r.stopped == "attack" and not (attack and r.steps == 0) then r.stopped = "blocked" end
-  if r.stopped == "attack" then
-    -- The stack has walked as far as the tile beside the target; the assault
-    -- is fought from there. The fight is resolved first and then shown.
-    -- It takes effect only once the window has closed (after_battle,
-    -- 67cc:0a6b), so the map cannot give the outcome away.
-    local result = game.decideAttack(G.g, sel.stack, r.attack.x, r.attack.y)
-    startAssault(r.attack.x, r.attack.y, result)
-    G.assault.after = function() afterBattle(result) end
-  elseif r.stopped == "no route" then
+  if r.stopped == "attack" then r.stopped = "blocked" end
+  if r.stopped == "no route" then
     say("There is no way there.")
     G.audio.effect("chord")                     -- 1a8b:0c4f, 1c8c:0007
   elseif r.steps == 0 then
@@ -1077,8 +1107,9 @@ local HERO = {
   NAME_MAX = 19,
 }
 
---- The four lines over the picture, as 6563:0d5c assembles them. The first
---- two are empty on turn 1, which is why the free hero's caption sits low.
+--- The four lines over the picture, as 6563:0d5c assembles them: strings 0-3
+--- for the free hero of turn 1 (the first two empty, which is why its caption
+--- sits low), 4-7 for one that asks a price.
 local function heroLines(offer, female)
   local ui, side = G.screen.ui, G.player
   local first = female and 8 or 0             -- the female wording is +8
@@ -1086,8 +1117,8 @@ local function heroLines(offer, female)
   if offer.first then
     return { s(0), s(1), s(2), s(3):format(offer.city.name) }
   end
-  return { s(0):format(offer.city.name), s(1):format(offer.price),
-           s(2):format(side.gold), s(3) }
+  return { s(4):format(offer.city.name), s(5):format(offer.price),
+           s(6):format(side.gold), s(7) }
 end
 
 function presentOffer(side)
@@ -2967,7 +2998,7 @@ function love.mousepressed(x, y, button)
     if k == PTR.WALK or k == PTR.BOAT then
       moveSelection(tx, ty)                    -- 1c8c:01fd
     elseif k == PTR.ATTACK or k == PTR.PEACE then
-      moveSelection(tx, ty, true)              -- attack_tile, 67cc:0000
+      attackTile(tx, ty)                       -- attack_tile, 67cc:0000
     elseif k == PTR.CITY or k == PTR.SITE then
       local city = game.cityAt(G.g, tx, ty)    -- 7204:0000
       if city then openCity(city) end
@@ -3116,8 +3147,13 @@ function G.moveAllStep()
     -- the selected army's own +0x12/+0x14)
     if sel then
       for _, a in ipairs(sel.stack) do m.seen[a] = true end
-      moveSelection(lead.target.x, lead.target.y)
-      m.moved = m.moved + 1
+      -- selecting a stack already where it was sent lifts the order
+      -- (refreshRoute), so there may be nothing left to walk to
+      local t = lead.target
+      if t then
+        moveSelection(t.x, t.y)
+        m.moved = m.moved + 1
+      end
     end
   end
 end

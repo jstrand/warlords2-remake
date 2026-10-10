@@ -85,6 +85,26 @@ std::vector<std::string> apply(Game& g, Side& side) {
   return messages;
 }
 
+bool mustDeclare(const Game& g, int a, int b, const City* city) {
+  if (g.map->options.diplomacy == 0 || a == NONE || b == NONE) return false;
+  int st = state(g, a, b);
+  return st == PEACE || (st == INTERMEDIATE && city && city->index > 0);
+}
+
+void attackAnyway(Game& g, int a, int b) {
+  if (a == NONE || b == NONE) return;
+  Side* side = g.map->side(a);
+  if (!side) return;
+  int st = state(g, a, b);
+  if (st == PEACE) game::addDiploScore(g, *side, g.rng.dice(1, 100, 100));
+  else if (st == INTERMEDIATE) game::addDiploScore(g, *side, g.rng.dice(1, 15, 10));
+  for (int k : {key(a, b), key(b, a)}) {
+    g.diplomacy.state[k] = WAR;
+    g.diplomacy.proposal[k] = WAR;
+  }
+  history::deed(g, side, history::TREACHERY, a, b, "");
+}
+
 void scoreUpdate(Game& g, Side& side) {
   int a = side.index;
   for (int b = 0; b < 8; b++) {

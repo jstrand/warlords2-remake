@@ -359,35 +359,9 @@ end
 --- (6f8c:0000) keeps, in its order.
 local function runProduction(g, side)
   local arrived, built = {}, {}
-  for _, c in ipairs(game.sideCities(g, side)) do
-    if c.producing then
-      c.countdown = c.countdown - 1
-      if c.countdown <= 0 then
-        local vectored = c.vectorTo and c.vectorTo ~= c.index
-        local x, y = game.freeTileIn(g, c, true)
-        if side.gold <= 0 then
-          c.countdown = 0               -- no gold: it waits, built but unpaid
-        elseif not (x or vectored) then
-          c.countdown = 0               -- nowhere to stand: it waits too
-        else
-          local slot = c.slots[c.producing]
-          local a = rules.armyFromSlot(slot, side.enhanced)
-          a.owner, a.homeCity, a.moves = side.index, c.index, 0
-          a.x, a.y = x, y
-          if vectored then
-            a.transit = { turns = TRANSIT_TURNS, dest = c.vectorTo }
-            a.x, a.y = nil, nil
-          end
-          placeArmy(g, a)
-          built[#built + 1] = { kind = vectored and "sent" or "built", type = a.type,
-                                city = c.index }
-          c.countdown = slot.time       -- the city starts the next one
-        end
-      end
-    end
-  end
-
-  -- armies already on the road
+  -- The armies on the road move on first, then the cities build
+  -- (6f8c:0000), so one sent this turn is not counted down until the next:
+  -- it arrives two turns later.
   for _, a in ipairs(g.armies) do
     if a.transit and a.owner == side.index then
       a.transit.turns = a.transit.turns - 1
@@ -413,6 +387,34 @@ local function runProduction(g, side)
           elseif not a.transit then
             arrived[#arrived + 1] = { kind = "arrived", type = a.type, city = dest.index }
           end
+        end
+      end
+    end
+  end
+
+  for _, c in ipairs(game.sideCities(g, side)) do
+    if c.producing then
+      c.countdown = c.countdown - 1
+      if c.countdown <= 0 then
+        local vectored = c.vectorTo and c.vectorTo ~= c.index
+        local x, y = game.freeTileIn(g, c, true)
+        if side.gold <= 0 then
+          c.countdown = 0               -- no gold: it waits, built but unpaid
+        elseif not (x or vectored) then
+          c.countdown = 0               -- nowhere to stand: it waits too
+        else
+          local slot = c.slots[c.producing]
+          local a = rules.armyFromSlot(slot, side.enhanced)
+          a.owner, a.homeCity, a.moves = side.index, c.index, 0
+          a.x, a.y = x, y
+          if vectored then
+            a.transit = { turns = TRANSIT_TURNS, dest = c.vectorTo }
+            a.x, a.y = nil, nil
+          end
+          placeArmy(g, a)
+          built[#built + 1] = { kind = vectored and "sent" or "built", type = a.type,
+                                city = c.index }
+          c.countdown = slot.time       -- the city starts the next one
         end
       end
     end
@@ -638,6 +640,31 @@ function game.decideAttack(g, stack, x, y)
   return result
 end
 
+--- What an attack costs, paid before it is fought (attack_tile, 67cc:005a,
+--- then 67cc:0522): every army in the stack loses the tile's movement cost,
+--- 2 at least, down to 0. A land stack attacking onto water or shore puts
+--- to sea first -- each army that cannot fly loses all its moves. The
+--- original does that to a boat too; here it is left to land stacks, as a
+--- navy at sea would move by land rules.
+function game.chargeAttack(g, stack, x, y)
+  local city = game.cityAt(g, x, y)
+  local t = (city and not city.razed) and move.CITY or scn.terrainAt(g.map, x, y)
+  local cost = math.max(2, move.COST[t] or 0)
+  local mode, _, _, atSea = move.stackMode(g, stack)
+  if mode == move.LAND and not atSea and (t == move.WATER or t == move.SHORE) then
+    for _, a in ipairs(stack) do
+      local flight = false
+      if a.type == armytype.HERO then
+        for _, it in ipairs(a.items or {}) do
+          if it.type == rules.ITEM_FLIGHT then flight = true end
+        end
+      end
+      if not g.types.byId[a.type].flies and not flight then a.atSea, a.moves = true, 0 end
+    end
+  end
+  for _, a in ipairs(stack) do a.moves = math.max(0, (a.moves or 0) - cost) end
+end
+
 --- Fight for a tile and apply the outcome at once. Returns the combat
 --- result with `captured` set to the city, if any.
 function game.resolveAttack(g, stack, x, y)
@@ -702,6 +729,11 @@ function game.applyAttack(g, result)
       loser.gold = math.max(0, loser.gold - 2 * loot)
     end
     city.producing, city.countdown, city.vectorTo = nil, 0, nil
+    -- every city that was sending its armies here stops: no vector, and
+    -- nothing in production either (67cc:0a6b)
+    for _, c in ipairs(g.map.cities) do
+      if c.vectorTo == city.index then c.vectorTo, c.producing, c.countdown = nil, nil, 0 end
+    end
     city.ownerIndex = winner.index
     scn.setCityTiles(g.map, city)
     move.invalidate(g)

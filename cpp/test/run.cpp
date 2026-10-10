@@ -158,6 +158,10 @@ static void testArmyTypes() {
   bool anyFly = false;
   for (auto& a : t.all) if (a.flies) anyFly = true;
   ok(anyFly, "some types fly");
+  const ArmyType* eleph = nullptr;
+  for (auto& a : t.all) if (a.name == "Elephants") eleph = &a;
+  ok(eleph != nullptr, "Elephants are in the table");
+  if (eleph) eq(eleph->bonus[50], -1, "Elephants take 1 off the enemy stack: the field is signed");
 }
 
 static void testProduction() {
@@ -319,6 +323,28 @@ static void testVectoring(const std::string& scenario) {
   size_t atDest = game::armiesAt(g, dest->x, dest->y).size();
   for (size_t i = 0; i < (time + 2) * g.sides.size(); i++) game::endTurn(g);
   ok(game::armiesAt(g, dest->x, dest->y).size() > atDest, "a vectored army arrives two turns after it is built");
+  {
+    // to the turn: the road moves before the cities build (6f8c:0000), so
+    // the one sent this turn shows under "Turn after" and lands two turns on
+    auto round = [&]() { for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g); };
+    Army* sent = nullptr;
+    for (int i = 0; i < 10 && !sent; i++) {
+      round();
+      bool any = false;
+      for (auto& e : side->produced) if (e.kind == "sent") any = true;
+      if (!any) continue;
+      for (Army* a : g.armies) {
+        if (a->transit && a->owner == side->index && a->transit->dest == dest->index && a->transit->turns == 2) sent = a;
+      }
+    }
+    ok(sent != nullptr, "a city sends an army that is two turns out");
+    if (sent) {
+      round();
+      ok(sent->transit && sent->transit->turns == 1, "a turn later it is still on the road, due next turn");
+      round();
+      ok(!sent->transit && sent->x != NONE, "and the turn after that it has arrived");
+    }
+  }
   game::setProduction(g, *from, NONE);
   ok(from->vectorTo == NONE, "vectoring only sticks while the city is building");
   std::vector<City*> senders;
@@ -922,6 +948,11 @@ static void testCapture(const std::string& scenario) {
     g.remove(far);
   }
   int before = (int)game::sideCities(g, *side).size();
+  // a city of the loser's vectoring here stops building (67cc:0a6b); the
+  // target is neutral, so stand one in for the purpose
+  City* sender = nullptr;
+  for (auto& c : g.map->cities) if (!sender && &c != target && !c.slots.empty()) sender = &c;
+  sender->producing = 0; sender->countdown = 2; sender->vectorTo = target->index;
   Battle r;
   {
     int i = target->y * MAP_W + target->x;
@@ -944,6 +975,8 @@ static void testCapture(const std::string& scenario) {
     eq(target->ownerIndex, owner, "and the owner stays");
   }
   ok(r.won, "the overwhelming stack took the city");
+  eq(sender->vectorTo, NONE, "a city that sent its armies to the captured one stops sending");
+  eq(sender->producing, NONE, "and stops building");
   eq(r.lines.attackers.size(), stack.size(), "every attacker is in the line");
   eq(r.lines.city, target, "and the line knows it was a city");
   size_t down = 0;
@@ -1613,9 +1646,69 @@ static void testSites(const std::string& scenario) {
   ok(died > 0, "a weak hero sometimes dies to a strong one");
 }
 
+// A step is taken while the walk's cost so far fits in the moves left
+// (1555:18be), with no floor; an attack is fought from beside the tile and
+// needs one move, then costs the tile's movement, 2 at least (67cc:0000).
+static void testLastMove() {
+  printf("the last move point\n");
+  auto gp = newGame("ERYTHEA", seed(11));
+  Game& g = *gp;
+  Side* side = game::begin(g);
+  Army* army = game::sideArmies(g, *side)[0];
+  int rx = NONE, ry = NONE;
+  for (int y = 1; y < g.map->height - 1 && rx == NONE; y++) {
+    for (int x = 1; x < g.map->width - 1 && rx == NONE; x++) {
+      if (scn::roadAt(*g.map, x, y) % 0x20 == 0 || scn::roadAt(*g.map, x + 1, y) % 0x20 == 0) continue;
+      if (game::cityAt(g, x, y) || game::cityAt(g, x + 1, y)) continue;
+      if (!game::armiesAt(g, x, y).empty() || !game::armiesAt(g, x + 1, y).empty()) continue;
+      rx = x; ry = y;
+    }
+  }
+  ok(rx != NONE, "found two road tiles side by side");
+  if (rx != NONE) {
+    army->x = rx; army->y = ry; army->atSea = false; army->moves = 1;
+    movement::invalidate(g);
+    auto r = movement::moveTo(g, {army}, rx + 1, ry);
+    eq(r.steps, 1, "one move left still buys a step along a road");
+    eq(army->x, rx + 1, "and the army is there");
+    eq(army->moves, 0, "with nothing left");
+  }
+  City* enemy = nullptr;
+  for (auto& c : g.map->cities) if (!enemy && c.ownerIndex != side->index) enemy = &c;
+  Army* a = addArmy(g, enemy->x, enemy->y - 1, side->index, 11, 3, 1, 20);
+  game::chargeAttack(g, {a}, enemy->x, enemy->y);
+  eq(a->moves, 0, "an attack takes the last move");
+  a->moves = 10;
+  game::chargeAttack(g, {a}, enemy->x, enemy->y);
+  eq(a->moves, 8, "a city costs 1 to enter but 2 to attack");
+}
+
 static void testDiplomacy() {
   printf("diplomacy\n");
   namespace d = diplomacy;
+  {
+    // attack_tile asks first (67cc:00b2), and "attack anyway" goes to war
+    // (67cc:20a8)
+    auto gw = newGame("ERYTHEA", seedWith(65, {{"diplomacy", 1}}));
+    City* city = &gw->map->cities[1];
+    ok(d::mustDeclare(*gw, 0, 1, nullptr), "attacking armies at peace asks first");
+    ok(!d::mustDeclare(*gw, 0, NONE, city), "attacking a neutral never asks");
+    gw->diplomacy.state[0 * 8 + 1] = d::INTERMEDIATE;
+    ok(!d::mustDeclare(*gw, 0, 1, nullptr), "armies of a side merely uneasy are fair game");
+    ok(d::mustDeclare(*gw, 0, 1, city), "but its cities need war");
+    ok(!d::mustDeclare(*gw, 0, 1, &gw->map->cities[0]), "except city 0, which the original's > 0 test misses");
+    gw->diplomacy.state[0 * 8 + 1] = d::PEACE;
+    int before = gw->sides[0]->diploScore;
+    d::attackAnyway(*gw, 0, 1);
+    int cost = gw->sides[0]->diploScore - before;
+    ok(cost >= 101 && cost <= 200, fmt("attacking at peace costs 1d100+100 score: %d", cost));
+    eq(d::state(*gw, 0, 1), d::WAR, "and it is war");
+    eq(d::state(*gw, 1, 0), d::WAR, "both ways");
+    eq(d::proposal(*gw, 1, 0), d::WAR, "the proposals too");
+    ok(!d::mustDeclare(*gw, 0, 1, city), "so the attack goes ahead");
+    auto offOpts = newGame("ERYTHEA", seed(65));
+    ok(!d::mustDeclare(*offOpts, 0, 1, city), "with Diplomacy off nothing asks");
+  }
   auto off = newGame("ERYTHEA", seed(61));
   eq(off->map->options.diplomacy, 0, "the shipped scenarios have diplomacy off");
   eq(d::state(*off, 0, 1), d::WAR, "with the option off every pair starts at war");
@@ -2615,6 +2708,7 @@ int main() {
   testDisband("ERYTHEA");
   testMovement("ERYTHEA");
   testMovement("ISLADIA");
+  testLastMove();
   testStackLimit("ERYTHEA");
   testSea();
   testEncampment();

@@ -85,6 +85,13 @@ void disband(Game& g, Side& side, const std::vector<Army*>& armies);
 int loot(const Game& g, const Side* loser);
 /** Fight for a tile, deciding it and nothing more (combat_resolve, 67cc:08a6). */
 Battle decideAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
+/** What an attack costs, paid before it is fought (attack_tile, 67cc:005a,
+ *  then 67cc:0522): every army in the stack loses the tile's movement cost,
+ *  2 at least, down to 0. A land stack attacking onto water or shore puts
+ *  to sea first -- each army that cannot fly loses all its moves. The
+ *  original does that to a boat too; here it is left to land stacks, as a
+ *  navy at sea would move by land rules. */
+void chargeAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
 /** Fight for a tile and apply the outcome at once. */
 Battle resolveAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
 /** Let a decided fight take effect (after_battle, 67cc:0a6b). Once only. */

@@ -173,7 +173,7 @@ std::optional<Preview> preview(Game& g, const Stack& stack, int x, int y) {
   int left = stackMoves(stack), reach = 0;
   for (size_t i = 0; i < path->size(); i++) {
     const Step& step = (*path)[i];
-    if (left < MIN_MOVE_LEFT || step.cost > left) break;
+    if (step.cost > left) break;
     left -= step.cost;
     reach = (int)i + 1;
   }
@@ -540,7 +540,9 @@ WalkResult walkPath(Game& g, const Stack& stack, const Path& path) {
 
   for (int i = 1; i <= (int)path.size(); i++) {
     const Step& step = path[i - 1];
-    if (left < MIN_MOVE_LEFT || step.cost > left) {
+    // a step is taken while what the walk has cost so far fits in the moves
+    // left (1555:18be): there is no floor, so one move still buys a road
+    if (step.cost > left) {
       result.stopped = "out of moves";
       break;
     }

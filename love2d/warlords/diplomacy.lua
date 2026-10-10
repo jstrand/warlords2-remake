@@ -129,6 +129,38 @@ function diplomacy.apply(g, side)
   return messages
 end
 
+--- Must `a` be asked before it attacks `b`'s tile -- "Thou art attacking
+--- without first having declared war!" (attack_tile, 67cc:00b2)? Yes at
+--- peace, and when uneasy if the tile is a city. The original tests the
+--- city's index with > 0, so city 0 is attacked uneasy without asking.
+function diplomacy.mustDeclare(g, a, b, city)
+  if g.map.options.diplomacy == 0 or a == nil or b == nil then return false end
+  local st = diplomacy.state(g, a, b)
+  return st == diplomacy.PEACE
+      or (st == diplomacy.INTERMEDIATE and city ~= nil and city.index > 0)
+end
+
+--- "Shall we attack anyway?" -- yes (67cc:20a8): war at once, both ways,
+--- proposals too, and it costs the attacker 1d100+100 diplomatic score from
+--- peace, 1d15+10 from uneasy. History notes the treachery.
+function diplomacy.attackAnyway(g, a, b)
+  if a == nil or b == nil then return end
+  local game = require("warlords.game")
+  local side = g.map.sides[a + 1]
+  local st = diplomacy.state(g, a, b)
+  if st == diplomacy.PEACE then
+    game.addDiploScore(g, side, g.rng:dice(1, 100, 100))
+  elseif st == diplomacy.INTERMEDIATE then
+    game.addDiploScore(g, side, g.rng:dice(1, 15, 10))
+  end
+  for _, k in ipairs({ key(a, b), key(b, a) }) do
+    g.diplomacy.state[k] = diplomacy.WAR
+    g.diplomacy.proposal[k] = diplomacy.WAR
+  end
+  local history = require("warlords.history")
+  history.deed(g, side, history.TREACHERY, a, b, "")
+end
+
 --- At the end of a side's turn, its peace overtures count against it
 --- (diplomacy_score_update, 484e:1063, from the end of ai_turn and of a
 --- human's turn): every proposal less hostile than both the state and the

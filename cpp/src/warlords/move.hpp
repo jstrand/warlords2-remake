@@ -38,7 +38,6 @@ inline bool has(int byte, int flag) { return (byte & flag) != 0; }
 constexpr int WATER_PENALTY = 10;       // a land stack's route leaving open water
 constexpr int WATER_PENALTY_TO = 20;    // ... when the whole move is aimed at water
 constexpr int PAST_SHORE = 0x80;        // a step after going to sea or ashore
-constexpr int MIN_MOVE_LEFT = 2;        // the walk stops below this
 constexpr int MAX_PATH = 200;           // a path is at most 200 compass steps
 
 // compass directions, 0 = north, clockwise (the order the game stores paths in)

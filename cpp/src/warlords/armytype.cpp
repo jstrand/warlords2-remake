@@ -16,7 +16,8 @@ void load(const std::string& path, Types& out) {
   for (int i = 0; i < COUNT; i++) {
     int o = i * STRIDE;
     ArmyType a;
-    for (int b = 0; b < N_BONUS; b++) a.bonus[32 + b * 2] = u16(s, o + 32 + b * 2);
+    // signed: the Elephants' -1 to the enemy stack (+50) is 0xffff
+    for (int b = 0; b < N_BONUS; b++) a.bonus[32 + b * 2] = i16(s, o + 32 + b * 2);
     a.id = u16(s, o);
     a.name = cstr(s, o + 2, 16);
     a.strength = u16(s, o + 22);

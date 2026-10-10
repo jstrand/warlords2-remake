@@ -310,6 +310,33 @@ static bool deliver(Game& g, Army* army, City& city) {
 // Step 5: run every producing city the side owns, logged in side.produced.
 static void runProduction(Game& g, Side& side) {
   std::vector<Produced> arrived, built;
+  // The armies on the road move on first, then the cities build
+  // (6f8c:0000), so one sent this turn is not counted down until the next:
+  // it arrives two turns later.
+  for (Army* a : g.armies) {
+    if (a->transit && a->owner == side.index) {
+      a->transit->turns--;
+      if (a->transit->turns <= 0) {
+        if (a->transit->dest == STANDARD) {
+          auto [sx, sy] = standardAt(g, side);
+          a->transit.reset();
+          if (sx != NONE && (int)armiesAt(g, sx, sy).size() < rules::MAX_STACK) {
+            a->x = sx; a->y = sy; a->moves = 0; a->returning = false;
+            arrived.push_back(Produced{"arrived", a->type, NONE, true});
+          } else {
+            a->returning = true;
+            a->transit = Transit{TRANSIT_TURNS, a->homeCity};
+          }
+        } else {
+          City* dest = g.map->city(a->transit->dest);
+          a->transit.reset();
+          if (!dest || !deliver(g, a, *dest)) a->disbanded = true;
+          else if (!a->transit) arrived.push_back(Produced{"arrived", a->type, dest->index, false});
+        }
+      }
+    }
+  }
+
   for (City* c : sideCities(g, side)) {
     if (c->producing != NONE) {
       c->countdown--;
@@ -332,30 +359,6 @@ static void runProduction(Game& g, Side& side) {
           g.add(a);
           built.push_back(Produced{vectored ? "sent" : "built", a.type, c->index, false});
           c->countdown = slot.time;       // the city starts the next one
-        }
-      }
-    }
-  }
-
-  for (Army* a : g.armies) {
-    if (a->transit && a->owner == side.index) {
-      a->transit->turns--;
-      if (a->transit->turns <= 0) {
-        if (a->transit->dest == STANDARD) {
-          auto [sx, sy] = standardAt(g, side);
-          a->transit.reset();
-          if (sx != NONE && (int)armiesAt(g, sx, sy).size() < rules::MAX_STACK) {
-            a->x = sx; a->y = sy; a->moves = 0; a->returning = false;
-            arrived.push_back(Produced{"arrived", a->type, NONE, true});
-          } else {
-            a->returning = true;
-            a->transit = Transit{TRANSIT_TURNS, a->homeCity};
-          }
-        } else {
-          City* dest = g.map->city(a->transit->dest);
-          a->transit.reset();
-          if (!dest || !deliver(g, a, *dest)) a->disbanded = true;
-          else if (!a->transit) arrived.push_back(Produced{"arrived", a->type, dest->index, false});
         }
       }
     }
@@ -514,6 +517,23 @@ Battle decideAttack(Game& g, const std::vector<Army*>& stack, int x, int y) {
   return result;
 }
 
+void chargeAttack(Game& g, const std::vector<Army*>& stack, int x, int y) {
+  City* city = cityAt(g, x, y);
+  int t = city && !city->razed ? move::CITY : scn::terrainAt(*g.map, x, y);
+  int cost = std::max(2, t >= 0 && t < 12 ? move::COST[t] : 0);
+  move::Mode m = move::stackMode(g, stack);
+  if (m.mode == move::LAND && !m.atSea && (t == move::WATER || t == move::SHORE)) {
+    for (Army* a : stack) {
+      bool flight = false;
+      if (a->type == armytype::HERO) {
+        for (Item* it : a->items) if (it->type == rules::ITEM_FLIGHT) flight = true;
+      }
+      if (!g.types.byId(a->type)->flies && !flight) { a->atSea = true; a->moves = 0; }
+    }
+  }
+  for (Army* a : stack) a->moves = std::max(0, a->moves - cost);
+}
+
 Battle resolveAttack(Game& g, const std::vector<Army*>& stack, int x, int y) {
   Battle b = decideAttack(g, stack, x, y);
   applyAttack(g, b);
@@ -571,6 +591,11 @@ Battle& applyAttack(Game& g, Battle& result) {
       loser->gold = std::max(0, loser->gold - 2 * l);
     }
     city->producing = NONE; city->countdown = 0; city->vectorTo = NONE;
+    // every city that was sending its armies here stops: no vector, and
+    // nothing in production either (67cc:0a6b)
+    for (auto& c : g.map->cities) {
+      if (c.vectorTo == city->index) { c.vectorTo = NONE; c.producing = NONE; c.countdown = 0; }
+    }
     city->ownerIndex = winner->index;
     scn::setCityTiles(*g.map, *city);
     move::invalidate(g);
