@@ -2813,8 +2813,8 @@ static void keypressed(const std::string& k) {
   else if (k == "tab") press(186);
   else if (k == "backspace") press(187);
   else if (k == "home") press(177);
-  else if (k == "end") deselect();             // 1b62:08b3, as 178 is
-  else if (k == "delete") press(173);
+  else if (k == "end") press(173);             // walk on along the route (17be:0318)
+  else if (k == "delete") deselect();          // 1b62:08b3, as 178 is (17be:02f1)
   else if (digit == "5") {
     if (G.selection) centreOn(G.selection->x, G.selection->y);
   } else if (!digit.empty()) {
