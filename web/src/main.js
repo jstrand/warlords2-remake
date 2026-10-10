@@ -1206,7 +1206,9 @@ function playComputers(side) {
 G.playComputer = () => playComputers(G.player);
 
 function endTurn() {
-  G.selection = null;
+  // End Turn (8065:2074) puts the stack down, and its route with it: the
+  // next player sees no other side's plans
+  G.selection = null; G.route = null;
   const side = game.endTurn(G.g);
   if (side && side.computer) return playComputers(side);
   finishRound(side);
@@ -1243,7 +1245,7 @@ G.openCity = (city) => openCity(city);
 
 function takeLoaded(loaded) {
   G.g = loaded;
-  G.selection = null;
+  G.selection = null; G.route = null;
   stratDirty();
   G.player = loaded.sides[loaded.current];
   centreOn(G.player.capital.x, G.player.capital.y);
