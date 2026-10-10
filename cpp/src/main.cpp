@@ -95,6 +95,7 @@ static void startAssault(int x, int y, const w2::Battle& result);
 static void presentVictory(City* city, const std::string& victor);
 static void keypressed(const std::string& k);
 static void select(int x, int y, Army* pick = nullptr);
+static void afterBanner();
 static void refreshRoute();
 static void syncSelection();
 static bool menuEnabled(const std::string& k);
@@ -475,7 +476,33 @@ static void reslot(const std::vector<Army*>& armies) {
   syncSelection();
 }
 
+// "Alas! %d armies have been sunk" / "due to lack of a boat!" (STRING.DAT 168)
+static const int SUNK_GROUP = 0xa8;
+
+// Drown the player's armies stranded on water without a boat
+// (auto_ui_armies_sunk, 1b62:0ea0): on one tile, or with NONE on all of
+// them. If any sank: a splash, the selection put down, the view on the tile,
+// and the message (8065:1160), `after` running once it is read. Returns
+// whether any did; if not, `after` runs at once.
+static bool drownStranded(int x, int y, kit::Done after = nullptr) {
+  int n = game::sinkStranded(*G.g, *G.player, x, y);
+  if (n == 0) {
+    if (after) after();
+    return false;
+  }
+  sound::effect("splash");
+  G.selection.reset();
+  G.route.reset();
+  front::stratDirty();
+  if (x != NONE) centreOn(x, y);
+  std::string line = n == 1 ? kit::text(SUNK_GROUP, 2) : format(kit::text(SUNK_GROUP, 0), n);
+  search::message(line, kit::text(SUNK_GROUP, 1), after);
+  return true;
+}
+
 static void select(int x, int y, Army* pick) {
+  // picking a stack up on the water drowns whoever has no boat (8c07:06eb)
+  if (drownStranded(x, y)) return;
   auto stack = selectableAt(x, y);
   if (stack.empty()) {
     G.selection.reset();
@@ -799,8 +826,13 @@ static void dismissBanner() {
   G.banner.reset();
   if (G.centreAfterBanner && G.player->capital) centreOn(G.player->capital->x, G.player->capital->y);
   G.centreAfterBanner = false;
-  // the advisor has his say (6dda:026f(5)), then 8cc6:04bd puts on the
-  // hero's music or the turn's
+  // whoever is left on the water without a boat drowns (8cc6:0259), and only
+  // then does the advisor have his say (6dda:026f(5)); 8cc6:04bd then puts on
+  // the hero's music or the turn's
+  drownStranded(NONE, NONE, afterBanner);
+}
+
+static void afterBanner() {
   int says = sound::speechOn() ? w2::cues::advisor(*G.g, *G.player, front::roll) : NONE;
   advisor::say(says, []() {
     sound::music(G.player->heroOffer ? w2::cues::HERO : w2::cues::PLAY);

@@ -423,7 +423,19 @@ bool heroWithDoubleMoveAt(const Game& g, const Side& side, int x, int y) {
   return false;
 }
 
+// At the start of every side's turn, before anything else, its armies
+// standing in a city -- any city, ruins too -- are no longer at sea
+// (8cc6:089d, from 8065:2123). It costs no movement: the reset that follows
+// sees them ashore. A stack that took a city from the sea stays at sea until
+// then.
+static void comeAshore(Game& g, Side& side) {
+  for (Army* a : g.armies) {
+    if (a->owner == side.index && a->atSea && !a->transit && a->x != NONE && cityAt(g, a->x, a->y)) a->atSea = false;
+  }
+}
+
 bool startTurn(Game& g, Side& side) {
+  comeAshore(g, side);
   tidyExplored(g, side.index);
   side.diploNews = diplomacy::apply(g, side);
   for (auto& m : side.diploNews) g.log.push_back(m);
@@ -481,6 +493,42 @@ static void removeArmies(Game& g, const std::vector<Army*>& dead) {
   for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
     if (gone.count(g.armies[i])) g.armies.erase(g.armies.begin() + i);
   }
+}
+
+// Could these armies fly off together (1c8c:07fa)? A hero's flight item
+// carries them all; else every army flies and none is at sea, or every army
+// but the heroes flies and one of the fliers is not at sea.
+static bool canFlyOff(const Game& g, const std::vector<Army*>& armies) {
+  bool heroFlight = false, allFly = true, nonHeroesFly = true, freeFlier = false;
+  for (Army* a : armies) {
+    bool flies = g.types.byId(a->type)->flies;
+    if (a->type == armytype::HERO) {
+      for (Item* it : a->items) if (it->type == rules::ITEM_FLIGHT) heroFlight = true;
+    }
+    if (!flies || a->atSea) allFly = false;
+    if (a->type != armytype::HERO && !flies) nonHeroesFly = false;
+    if (flies && !a->atSea) freeFlier = true;
+  }
+  return heroFlight || allFly || (nonHeroesFly && freeFlier);
+}
+
+int sinkStranded(Game& g, Side& side, int x, int y) {
+  auto wet = [&](int tx, int ty) { return scn::terrainAt(*g.map, tx, ty) == move::WATER || scn::isCrossing(*g.map, tx, ty); };
+  std::map<int, std::vector<Army*>> tiles;
+  for (Army* a : g.armies) {
+    if (a->owner != side.index || a->transit || a->x == NONE || a->x < 0 || a->y < 0) continue;
+    if (x != NONE && (a->x != x || a->y != y)) continue;
+    if (wet(a->x, a->y)) tiles[a->y * g.map->width + a->x].push_back(a);
+  }
+  std::vector<Army*> dead;
+  for (auto& [k, here] : tiles) {
+    if (canFlyOff(g, here)) continue;
+    for (Army* a : here) {
+      if (!a->atSea && a->type != armytype::HERO && !g.types.byId(a->type)->flies) dead.push_back(a);
+    }
+  }
+  removeArmies(g, dead);
+  return (int)dead.size();
 }
 
 Sign* signAt(Game& g, int x, int y) {

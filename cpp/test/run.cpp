@@ -1646,6 +1646,56 @@ static void testSites(const std::string& scenario) {
   ok(died > 0, "a weak hero sometimes dies to a strong one");
 }
 
+// A stack that takes a city from the sea is still at sea until its side's
+// next turn begins, then ashore at no cost in movement (8cc6:089d); armies
+// left on water without a boat drown (1b62:0ea0).
+static void testShips() {
+  printf("ships\n");
+  auto gp = newGame("ERYTHEA", seed(3));
+  Game& g = *gp;
+  Side* side = game::begin(g);
+  City* city = game::sideCities(g, *side)[0];
+  Army* sailor = addArmy(g, city->x, city->y, side->index, 2, 3, 0, 14);
+  sailor->atSea = true;
+  for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g);
+  ok(!sailor->atSea, "an army at sea in a city is ashore when its turn begins");
+  eq(sailor->moves, sailor->maxMoves, "with its own movement, not the 20 at sea");
+
+  int wx = NONE, wy = NONE;
+  for (int y = 0; y < g.map->height && wx == NONE; y++) {
+    for (int x = 0; x < g.map->width && wx == NONE; x++) {
+      if (scn::terrainAt(*g.map, x, y) == movement::WATER && !scn::isCrossing(*g.map, x, y) && game::armiesAt(g, x, y).empty()) {
+        wx = x; wy = y;
+      }
+    }
+  }
+  auto at = [&](Army* a) { return std::find(g.armies.begin(), g.armies.end(), a) != g.armies.end(); };
+  Army* walker = addArmy(g, wx, wy, side->index, 2, 3, 14, 14);
+  Army* boat = addArmy(g, wx, wy, side->index, 2, 3, 14, 14);
+  boat->atSea = true;
+  Army* hero = addArmy(g, wx, wy, side->index, armytype::HERO, 5, 14, 14);
+  eq(game::sinkStranded(g, *side, wx, wy), 1, "on the water the army without a boat sinks");
+  ok(!at(walker), "it is gone");
+  ok(at(boat) && at(hero), "one at sea, and a hero, do not sink");
+  int flyer = NONE;
+  for (auto& t : g.types.all) if (flyer == NONE && t.flies) flyer = t.id;
+  Army* bird = addArmy(g, wx, wy, side->index, flyer, 3, 14, 14);
+  Army* walker2 = addArmy(g, wx, wy, side->index, 2, 3, 14, 14);
+  eq(game::sinkStranded(g, *side), 1, "as the turn opens every tile is looked at");
+  ok(at(bird) && !at(walker2), "and only the army that can neither fly nor sail goes");
+  Item wings;
+  wings.type = rules::ITEM_FLIGHT;
+  hero->items.push_back(&wings);
+  Army* carried = addArmy(g, wx, wy, side->index, 2, 3, 14, 14);
+  eq(game::sinkStranded(g, *side, wx, wy), 0, "a hero's flight item carries the whole stack");
+  hero->items.clear();
+  eq(game::sinkStranded(g, *side, wx, wy), 1, "without it the walker drowns");
+  ok(!at(carried), "");
+  Army* ashore = addArmy(g, city->x, city->y, side->index, 2, 3, 14, 14);
+  eq(game::sinkStranded(g, *side, city->x, city->y), 0, "nothing sinks on land");
+  ok(at(ashore), "");
+}
+
 // A step is taken while the walk's cost so far fits in the moves left
 // (1555:18be), with no floor; an attack is fought from beside the tile and
 // needs one move, then costs the tile's movement, 2 at least (67cc:0000).
@@ -2709,6 +2759,7 @@ int main() {
   testMovement("ERYTHEA");
   testMovement("ISLADIA");
   testLastMove();
+  testShips();
   testStackLimit("ERYTHEA");
   testSea();
   testEncampment();

@@ -92,6 +92,14 @@ Battle decideAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
  *  original does that to a boat too; here it is left to land stacks, as a
  *  navy at sea would move by land rules. */
 void chargeAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
+/** Armies left on water without a boat drown (auto_ui_armies_sunk,
+ *  1b62:0ea0). On a water tile, or a crossing (map word bit 15), every army
+ *  of the side's that is not at sea, not a hero and cannot fly is lost --
+ *  unless the armies there could fly off together. With x, y only that tile
+ *  is looked at, with NONE every tile the side stands on. Returns how many
+ *  sank. The original asks it for a human player only: as the turn opens and
+ *  as a stack is picked up. */
+int sinkStranded(Game& g, Side& side, int x = NONE, int y = NONE);
 /** Fight for a tile and apply the outcome at once. */
 Battle resolveAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
 /** Let a decided fight take effect (after_battle, 67cc:0a6b). Once only. */
