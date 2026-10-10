@@ -1419,7 +1419,9 @@ end
 end
 
 local function endTurn()
-  G.selection = nil
+  -- End Turn (8065:2074) puts the stack down, and its route with it: the
+  -- next player sees no other side's plans
+  G.selection, G.route = nil, nil
   local side = game.endTurn(G.g)
   -- the computer plays its sides; a human side, one or several, is handed
   -- to whoever sits at the keyboard
@@ -1473,7 +1475,7 @@ end
 G.openCity = function(city) openCity(city) end
 
 local function takeLoaded(loaded)
-  G.g, G.selection = loaded, nil
+  G.g, G.selection, G.route = loaded, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
   centreOn(G.player.capital.x, G.player.capital.y)
@@ -1487,7 +1489,7 @@ G.presentVictory = function(city, victor) presentVictory(city, victor) end
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
   if not ok then say("Nothing to load.") return end
-  G.g, G.selection = loaded, nil
+  G.g, G.selection, G.route = loaded, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
   centreOn(G.player.capital.x, G.player.capital.y)
