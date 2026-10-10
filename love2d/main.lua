@@ -832,6 +832,24 @@ local function deselect()
   G.selection, G.route, G.walk = nil, nil, nil
 end
 
+--- A click with the select pointer (1b62:0405): on the selected stack's own
+--- tile, soon after the last such click, it groups the whole stack as Space
+--- does (89e0:0a55); otherwise it selects what is there. (A field of G, as
+--- main.lua is at Lua's limit of 200 locals.)
+function G.selectClick(tx, ty)
+  local DOUBLE_CLICK = 40 / 18.2     -- 40 BIOS ticks (18a9:01cd)
+  local t, last = now(), G.lastSelectClick
+  G.lastSelectClick = t
+  local sel = G.selection
+  if sel and sel.x == tx and sel.y == ty and last and t - last < DOUBLE_CLICK then
+    slotsMod.all(sel.slots, G.g)
+    G.afterSlotChange()
+    refreshControls()
+    return
+  end
+  select(tx, ty)
+end
+
 --------------------------------------------------------------------- the turn
 
 local function afterBattle(result)
@@ -3007,7 +3025,7 @@ function love.mousepressed(x, y, button)
       -- (military_advisor, 67cc:1f19)
       require("ui.miladvisor").open(G.selection and G.selection.stack, tx, ty)
     elseif k == PTR.SELECT then
-      select(tx, ty)                           -- 1b62:0405
+      G.selectClick(tx, ty)                    -- 1b62:0405
     elseif k == PTR.ALT then
       planRoute(tx, ty)                        -- 1c8c:0007(1, 1)
       refreshControls()

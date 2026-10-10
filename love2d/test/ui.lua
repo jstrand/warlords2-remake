@@ -380,6 +380,41 @@ do
         print("  the map shows the group that moves, not the armies left out")
       end
     end
+    -- A second click on the selected stack soon after the first groups it,
+    -- as Space does (1b62:0405); one long after does not.
+    do
+      try("select a stack to double-click", function() G.selectAt(tile.x, tile.y) end)
+      local sel = G.selection
+      G.cx, G.cy = sel.x - 4, sel.y - 4
+      try("draw", love.draw)
+      local px, py = G.mapToUI(sel.x + 0.5, sel.y + 0.5)
+      local function mapClick()
+        try("press the stack", love.mousepressed, px, py, 1)
+        try("release the stack", love.mousereleased, px, py, 1)
+      end
+      if slotsMod.grouped(G.selection.slots) then click() end
+      G.lastSelectClick = nil
+      mapClick()
+      if slotsMod.grouped(G.selection.slots) then fail("double click", "one click grouped the stack") end
+      G.lastSelectClick = G.lastSelectClick and G.lastSelectClick - 5
+      mapClick()
+      if slotsMod.grouped(G.selection.slots) then fail("double click", "a click 5 s later grouped the stack") end
+      mapClick()
+      if not slotsMod.grouped(G.selection.slots) then
+        fail("double click", "a quick second click did not group the stack")
+      else
+        print("  a double click on the stack groups it")
+      end
+    end
+    -- End walks on along the route; Del puts the stack down (17be:0318, 02f1)
+    try("key end", love.keypressed, "end")
+    if not G.selection then fail("keys", "End put the stack down") end
+    try("key delete", love.keypressed, "delete")
+    if G.selection then
+      fail("keys", "Del did not put the stack down")
+    else
+      print("  End leaves the stack selected, Del puts it down")
+    end
     G.selection = nil
   else
     print("  (no stack of two to try Grp on)")
