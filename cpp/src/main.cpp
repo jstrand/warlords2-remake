@@ -787,6 +787,8 @@ static const int HERO_LINE_Y[4] = {190, 210, 230, 250};
 static const int MALE_LABEL[2] = {376, 315}, FEMALE_LABEL[2] = {480, 315};
 static const int HERO_OK = 287, HERO_CANCEL = 288, HERO_FIELD = 289, HERO_MALE = 290, HERO_FEMALE = 291;
 static const int HERO_TITLE_GROUP = 0x5f, HERO_LINE_GROUP = 0x61, HERO_SEX_GROUP = 0x62;
+// what a hired hero's allies are announced with (STRING.DAT group 96)
+static const int ALLY_GROUP = 0x60;
 static const size_t HERO_NAME_MAX = 19;
 
 static bool presentOffer(Side* side);
@@ -843,6 +845,13 @@ static void acceptOffer() {
   G.offer.reset();
   G.player->heroOffer.reset();
   centreOn(h->x, h->y);
+  if (!allies.empty()) {
+    // "And the hero brings 1 ally!" / "... %d allies!" (hero_brings_allies,
+    // 7563:01fc, through 8065:10fb)
+    std::string line = allies.size() == 1 ? kit::text(ALLY_GROUP, 0) : format(kit::text(ALLY_GROUP, 1), (int)allies.size());
+    search::say(line, []() { afterOffer(); });
+    return;
+  }
   afterOffer();
 }
 
