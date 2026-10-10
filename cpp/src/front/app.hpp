@@ -152,6 +152,7 @@ struct App {
     int moved = 0;
   };
   std::optional<MoveAll> moveAll;
+  double lastSelectClick = -1;   // when the select pointer was last clicked (1b62:0405)
   std::vector<std::string> keyBuffer;
   std::string status;
   bool quitRequested = false;

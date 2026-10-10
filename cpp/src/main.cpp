@@ -572,6 +572,25 @@ static void fortify() {
   selectNext();
 }
 
+// A second click within 40 BIOS ticks of the last counts as a double click
+// (18a9:01cd).
+static const double DOUBLE_CLICK = 40 / 18.2;
+
+// A click with the select pointer (1b62:0405): on the selected stack's own
+// tile, soon after the last such click, it groups the whole stack as Space
+// does (89e0:0a55); otherwise it selects what is there.
+static void selectClick(int tx, int ty) {
+  double t = w2::now(), last = G.lastSelectClick;
+  G.lastSelectClick = t;
+  if (G.selection && G.selection->x == tx && G.selection->y == ty && last >= 0 && t - last < DOUBLE_CLICK) {
+    slotsMod::all(G.selection->slots, *G.g);
+    front::afterSlotChange();
+    refreshControls();
+    return;
+  }
+  select(tx, ty);
+}
+
 // Put the selection down (control 178, 8065:0f26).
 static void deselect() {
   G.selection.reset();
@@ -2300,7 +2319,7 @@ static void mousepressed(int x, int y, int button) {
     } else if (k == ADVISE) {
       miladvisor::open(G.selection ? &G.selection->stack : nullptr, tx, ty);
     } else if (k == SELECT) {
-      select(tx, ty);
+      selectClick(tx, ty);
     } else if (k == ALT) {
       planRoute(tx, ty);
       refreshControls();
