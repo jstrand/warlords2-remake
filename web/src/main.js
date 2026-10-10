@@ -922,6 +922,9 @@ const HERO = {
   NAME_MAX: 19,
 };
 
+// what a hired hero's allies are announced with (STRING.DAT group 96)
+const ALLY_GROUP = 0x60;
+
 /** The four lines over the picture, as 6563:0d5c assembles them: strings
  *  0-3 for the free hero of turn 1, 4-7 for one that asks a price, and the
  *  same again from 8 for a heroine. */
@@ -956,9 +959,14 @@ function acceptOffer() {
   centreOn(h.x, h.y);
   if (allies.length > 0) {
     say("%s joins at %s, with %d %s.", h.name, G.g.map.cities[h.homeCity].name, allies.length, allies[0].name);
-  } else {
-    say("%s joins at %s.", h.name, G.g.map.cities[h.homeCity].name);
+    // "And the hero brings 1 ally!" / "... %d allies!" (hero_brings_allies,
+    // 7563:01fc, through 8065:10fb)
+    const line = allies.length === 1 ? uidata.text(G.screen.ui, ALLY_GROUP, 0)
+                                     : fmt(uidata.text(G.screen.ui, ALLY_GROUP, 1), allies.length);
+    searchUi.say(line, afterOffer);
+    return;
   }
+  say("%s joins at %s.", h.name, G.g.map.cities[h.homeCity].name);
   afterOffer();
 }
 
