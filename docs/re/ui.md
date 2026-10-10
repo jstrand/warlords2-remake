@@ -255,8 +255,8 @@ save/load/new — the check that confirms the reading.
 | `0x131` | Alt-N | `7721:019d` | Game › New game |
 | `0x132` | Alt-M | `7721:1214` | Game › Save map |
 | `0x147` | Home | `8065:0f02` | |
-| `0x14f` | End | *inline* | |
-| `0x153` | Del | *inline* | |
+| `0x14f` | End | *inline* `17be:0318` | walk on: `1c8c:01fd` to the stack's destination |
+| `0x153` | Del | *inline* `17be:02f1` | put the stack down: `1b62:08b3` |
 
 The "what" column is named only where a label or the segment's own contents
 Every name comes from the menu data below, which pairs each label with its
@@ -290,9 +290,10 @@ Besides the command table, `17be:0064` hands two more ranges to
 and the six keys that are on no menu are known now: **Tab** is control 186
 (`8065:0f3f`: centre on where the stack is going, or back on the stack),
 **Backspace** 187 (`8065:0fe9`: forget the destination), **Home** 177 (centre),
-**Space** 240 (group the whole stack), **End** puts the stack down
-(`1b62:08b3`, as 178 does) and **Del** walks on along the route
-(`1c8c:01fd`, as 173 does). Enter and Escape are Next Army (174) and Quit Army
+**Space** 240 (group the whole stack), **Del** puts the stack down
+(`1b62:08b3`, as 178 does) and **End** walks on along the route
+(`1c8c:01fd`, as 173 does). Scan codes 0x4f and 0x53 are End and Del; an
+earlier reading of these stubs had the two the wrong way round. Enter and Escape are Next Army (174) and Quit Army
 (175) through the default and cancel lists; **nothing on the main screen quits
 the game but Game › Quit, Ctrl-Q.**
 
@@ -536,7 +537,7 @@ use: the plain ring is the 16 × 14 cell at `(496, 31)` and the crossed one at
 **Planning without walking.** Alt and a click — the slanted arrow, pointer
 11 — is `1c8c:0007(1, 1)`: every selected army's move target becomes the
 tile clicked, the route is found and drawn, and nothing moves; the legs
-button, Del or Move All walk it later. A click on the stack's own tile clears
+button, End or Move All walk it later. A click on the stack's own tile clears
 the target instead, and a tile not yet seen is ignored. When no route is
 found the target is kept anyway and `7dda:0b5f` sounds. Alt over the
 strategic map does the same with the tile under the pointer there
