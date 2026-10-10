@@ -1124,7 +1124,10 @@ static void playComputers(Side* side) {
 void front::playComputer() { playComputers(G.player); }
 
 static void endTurn() {
+  // End Turn (8065:2074) puts the stack down, and its route with it: the
+  // next player sees no other side's plans
   G.selection.reset();
+  G.route.reset();
   Side* side = game::endTurn(*G.g);
   if (side && side->computer) return playComputers(side);
   finishRound(side);
