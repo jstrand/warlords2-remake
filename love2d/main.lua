@@ -3695,8 +3695,8 @@ function love.keypressed(key)
   elseif key == "tab" then press(186)
   elseif key == "backspace" then press(187)
   elseif key == "home" then press(177)
-  elseif key == "end" then deselect()             -- 1b62:08b3, as 178 is
-  elseif key == "delete" then press(173)          -- walk on along the route
+  elseif key == "end" then press(173)             -- walk on along the route (17be:0318)
+  elseif key == "delete" then deselect()          -- 1b62:08b3, as 178 is (17be:02f1)
   elseif digit == "5" then
     -- 5 centres on the stack, or on the cursor (8611:0565)
     if G.selection then centreOn(G.selection.x, G.selection.y) end

@@ -78,7 +78,7 @@ for pixel.
 | View › 4:3 | on or off, in either mode: only the original's 640 × 480, with black round it (not the original's) |
 | `Space` | group the whole stack |
 | `Tab` / `Backspace` | look at where the stack is going, and back / forget its destination |
-| `Home` / `End` / `Del` | centre on the stack / put it down / walk on along its route |
+| `Home` / `End` / `Del` | centre on the stack / walk on along its route / put it down |
 | `m` | Move All: every stack under orders walks on as far as it can |
 | `c` `b` `p` `v` | the city dialog on the city nearest the view's centre, in Info, City, Production or Vector |
 | the five buttons above the pad | walk on, next army, quit army, defend (out of the cycle until picked up again; on open ground it encamps as a tower at the next turn's start), deselect |
