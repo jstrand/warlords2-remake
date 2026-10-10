@@ -516,7 +516,21 @@ end
 --- whose order this is) does nothing more until the round's end puts it
 --- out. A human's turn (8cc6:0259) goes on regardless, with whatever armies
 --- it still has.
+--- At the start of every side's turn, before anything else, its armies
+--- standing in a city -- any city, ruins too -- are no longer at sea
+--- (8cc6:089d, from 8065:2123). It costs no movement: the reset that follows
+--- sees them ashore. A stack that took a city from the sea stays at sea until
+--- then.
+local function comeAshore(g, side)
+  for _, a in ipairs(g.armies) do
+    if a.owner == side.index and a.atSea and not a.transit and a.x and game.cityAt(g, a.x, a.y) then
+      a.atSea = false
+    end
+  end
+end
+
 function game.startTurn(g, side)
+  comeAshore(g, side)
   game.tidyExplored(g, side)
   local heroMod = require("warlords.hero")
   -- what changed is said in the status bar, for a watched computer
@@ -590,6 +604,60 @@ local function removeArmies(g, dead)
   for i = #g.armies, 1, -1 do
     if gone[g.armies[i]] then table.remove(g.armies, i) end
   end
+end
+
+--- Could these armies fly off together (1c8c:07fa)? A hero's flight item
+--- carries them all; else every army flies and none is at sea, or every army
+--- but the heroes flies and one of the fliers is not at sea.
+local function canFlyOff(g, armies)
+  local heroFlight, allFly, nonHeroesFly, freeFlier = false, true, true, false
+  for _, a in ipairs(armies) do
+    local flies = g.types.byId[a.type].flies
+    if a.type == armytype.HERO then
+      for _, it in ipairs(a.items or {}) do
+        if it.type == rules.ITEM_FLIGHT then heroFlight = true end
+      end
+    end
+    if not flies or a.atSea then allFly = false end
+    if a.type ~= armytype.HERO and not flies then nonHeroesFly = false end
+    if flies and not a.atSea then freeFlier = true end
+  end
+  return heroFlight or allFly or (nonHeroesFly and freeFlier)
+end
+
+--- Armies left on water without a boat drown (auto_ui_armies_sunk,
+--- 1b62:0ea0). On a water tile, or a crossing (map word bit 15), every army of
+--- the side's that is not at sea, not a hero and cannot fly is lost -- unless
+--- the armies there could fly off together. With x, y only that tile is
+--- looked at, otherwise every tile the side stands on. Returns how many sank.
+--- The original asks it for a human player only: as the turn opens and as a
+--- stack is picked up.
+function game.sinkStranded(g, side, x, y)
+  local function wet(tx, ty)
+    return scn.terrainAt(g.map, tx, ty) == move.WATER or scn.isCrossing(g.map, tx, ty)
+  end
+  local tiles, order = {}, {}
+  for _, a in ipairs(g.armies) do
+    if a.owner == side.index and not a.transit and a.x and a.x >= 0 and a.y >= 0
+       and (x == nil or (a.x == x and a.y == y)) and wet(a.x, a.y) then
+      local k = a.y * g.map.width + a.x
+      if not tiles[k] then tiles[k] = {}; order[#order + 1] = k end
+      table.insert(tiles[k], a)
+    end
+  end
+  local dead = {}
+  for _, k in ipairs(order) do
+    local here = tiles[k]
+    if not canFlyOff(g, here) then
+      for _, a in ipairs(here) do
+        if not a.atSea and a.type ~= armytype.HERO and not g.types.byId[a.type].flies then
+          dead[#dead + 1] = a
+        end
+      end
+    end
+  end
+  removeArmies(g, dead)
+  return #dead
 end
 
 --- The signpost on a tile, if there is one: { x, y, [1] = line, [2] = line }.

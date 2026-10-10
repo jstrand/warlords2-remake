@@ -695,7 +695,31 @@ end
 --- Pick up what is on a tile. `pick` names the army to take, for when the
 --- cycle hands one over rather than the player clicking; without it the tile
 --- offers up whichever army it shows.
+--- Drown the player's armies stranded on water without a boat
+--- (auto_ui_armies_sunk, 1b62:0ea0): on one tile, or with no tile on all of
+--- them. If any sank: a splash, the selection put down, the view on the tile,
+--- and "Alas! %d armies have been sunk" / "due to lack of a boat!" (STRING.DAT
+--- 168) in the message box (8065:1160), `after` running once it is read.
+--- Returns whether any did; if not, `after` runs at once. (A field of G, as
+--- main.lua is at Lua's limit of 200 locals.)
+function G.drownStranded(x, y, after)
+  local n = game.sinkStranded(G.g, G.player, x, y)
+  if n == 0 then
+    if after then after() end
+    return false
+  end
+  G.audio.effect("splash")
+  G.selection, G.route = nil, nil
+  stratDirty()
+  if x then centreOn(x, y) end
+  local function t(i) return uidata.text(G.screen.ui, 0xa8, i) end
+  searchUi.message(n == 1 and t(2) or t(0):format(n), t(1), after)
+  return true
+end
+
 local function select(x, y, pick)
+  -- picking a stack up on the water drowns whoever has no boat (8c07:06eb)
+  if G.drownStranded(x, y) then return end
   local stack = selectableAt(x, y)
   if #stack == 0 then
     G.selection = nil
@@ -1074,9 +1098,15 @@ function dismissBanner()
     centreOn(G.player.capital.x, G.player.capital.y)
   end
   G.centreAfterBanner = nil
-  -- the advisor has his say (6dda:026f(5)) -- with Speech off the original
-  -- skips him before he so much as updates his marks -- and then 8cc6:04bd
-  -- puts on the hero's music or the turn's
+  -- whoever is left on the water without a boat drowns (8cc6:0259) before
+  -- the advisor has his say
+  G.drownStranded(nil, nil, G.afterBanner)
+end
+
+--- The advisor has his say (6dda:026f(5)) -- with Speech off the original
+--- skips him before he so much as updates his marks -- and then 8cc6:04bd
+--- puts on the hero's music or the turn's.
+function G.afterBanner()
   local cues = require("warlords.cues")
   local says = G.audio.speechOn() and cues.advisor(G.g, G.player, function(n) return math.random(n) end)
   require("ui.advisor").say(says, function()

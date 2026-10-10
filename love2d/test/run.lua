@@ -2005,10 +2005,66 @@ end
 
 ----------------------------------------------------------------- diplomacy
 
+-- A stack that takes a city from the sea is still at sea until its side's
+-- next turn begins, then ashore at no cost in movement (8cc6:089d); armies
+-- left on water without a boat drown (1b62:0ea0).
+local function testShips()
+  print("ships")
+  local scn = require("warlords.scn")
+  local g = game.new(DATA, "ERYTHEA", { seed = 3 })
+  local side = game.begin(g)
+  local function mk(x, y, type, atSea)
+    local a = { x = x, y = y, owner = side.index, type = type, name = "t", strength = 3,
+                maxMoves = 14, moves = 14, upkeep = 1, atSea = atSea }
+    g.armies[#g.armies + 1] = a
+    return a
+  end
+  local function at(a)
+    for _, b in ipairs(g.armies) do if b == a then return true end end
+    return false
+  end
+  local city = game.sideCities(g, side)[1]
+  local sailor = mk(city.x, city.y, 2, true)
+  sailor.moves = 0
+  for _ = 1, #g.sides do game.endTurn(g) end
+  ok(not sailor.atSea, "an army at sea in a city is ashore when its turn begins")
+  eq(sailor.moves, sailor.maxMoves, "with its own movement, not the 20 at sea")
+
+  local wx, wy
+  for y = 0, g.map.height - 1 do
+    for x = 0, g.map.width - 1 do
+      if not wx and scn.terrainAt(g.map, x, y) == movement.WATER and not scn.isCrossing(g.map, x, y)
+         and #game.armiesAt(g, x, y) == 0 then wx, wy = x, y end
+    end
+  end
+  local walker = mk(wx, wy, 2)
+  local boat = mk(wx, wy, 2, true)
+  local hero = mk(wx, wy, armytype.HERO)
+  eq(game.sinkStranded(g, side, wx, wy), 1, "on the water the army without a boat sinks")
+  ok(not at(walker), "it is gone")
+  ok(at(boat) and at(hero), "one at sea, and a hero, do not sink")
+  local flyer
+  for _, t in ipairs(g.types.list) do if not flyer and t.flies then flyer = t end end
+  local bird = mk(wx, wy, flyer.id)
+  local walker2 = mk(wx, wy, 2)
+  eq(game.sinkStranded(g, side), 1, "as the turn opens every tile is looked at")
+  ok(at(bird) and not at(walker2), "and only the army that can neither fly nor sail goes")
+  hero.items = { { type = rules.ITEM_FLIGHT } }
+  local carried = mk(wx, wy, 2)
+  eq(game.sinkStranded(g, side, wx, wy), 0, "a hero's flight item carries the whole stack")
+  hero.items = {}
+  eq(game.sinkStranded(g, side, wx, wy), 1, "without it the walker drowns")
+  ok(not at(carried), "")
+  local ashore = mk(city.x, city.y, 2)
+  eq(game.sinkStranded(g, side, city.x, city.y), 0, "nothing sinks on land")
+  ok(at(ashore), "")
+end
+
 -- A step is taken while the walk's cost so far fits in the moves left
 -- (1555:18be), with no floor; an attack is fought from beside the tile and
 -- needs one move, then costs the tile's movement, 2 at least (67cc:0000).
 local function testLastMove()
+testShips()
   print("the last move point")
   local scn = require("warlords.scn")
   local g = game.new(DATA, "ERYTHEA", { seed = 11 })
