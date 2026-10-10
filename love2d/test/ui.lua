@@ -290,6 +290,46 @@ for i = 1, 3 do
 end
 try("frame after the turns", love.draw)
 
+-- A hired hero's allies are announced (hero_brings_allies, 7563:01fc,
+-- through 8065:10fb): "And the hero brings 1 ally!", or "%d allies!".
+if G and G.g and not G.over and G.player.capital then
+  local heroMod, searchMod, kit = require("warlords.hero"), require("ui.search"), require("ui.kit")
+  local realAllies, realSay = heroMod.allies, searchMod.say
+  local had, gold = {}, G.player.gold
+  for _, a in ipairs(G.g.armies) do had[a] = true end
+  for _, n in ipairs({ 1, 3 }) do
+    dismissBanner()
+    dismissOffer()
+    local said
+    searchMod.say = function(line, after) said = line return realSay(line, after) end
+    heroMod.allies = function(g) local t = realAllies(g) return t, n end
+    G.player.gold = 5000
+    -- offered as presentOffer (main.lua) puts it up
+    local offer = { price = 300, city = G.player.capital, name = "Tester", female = false }
+    G.player.heroOffer, G.offer = offer, offer
+    G.offerName, G.offerFemale = offer.name, false
+    try("accept a hired hero", love.keypressed, "return")
+    local want = n == 1 and "And the hero brings 1 ally!" or ("And the hero brings %d allies!"):format(n)
+    if said ~= want then
+      fail("allies", ("announced %q, want %q"):format(tostring(said), want))
+    elseif not kit.top() then
+      fail("allies", "the announcement is not on screen")
+    else
+      print("  " .. said)
+    end
+    for _ = 1, 3 do
+      if kit.top() then try("close what the hero brought", love.keypressed, "return") end
+    end
+  end
+  heroMod.allies, searchMod.say = realAllies, realSay
+  -- the heroes and allies hired here go again, so what follows sees the
+  -- game as it was
+  for i = #G.g.armies, 1, -1 do
+    if not had[G.g.armies[i]] then table.remove(G.g.armies, i) end
+  end
+  G.player.gold = gold
+end
+
 -- selection and movement, by clicking around the middle of the view
 for _, button in ipairs({ 1, 2 }) do
   for x = 40, 600, 120 do

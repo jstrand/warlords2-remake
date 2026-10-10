@@ -1121,6 +1121,7 @@ local HERO = {
   MALE = 290, FEMALE = 291,
   -- STRING.DAT groups: the title, the four caption lines, the two labels
   TITLE_GROUP = 0x5f, LINE_GROUP = 0x61, SEX_GROUP = 0x62,
+  ALLY_GROUP = 0x60,             -- what a hired hero's allies are announced with
   -- hero_recruit copies the name into a 20-byte slot (2c04:0223, stride 0x14)
   NAME_MAX = 19,
 }
@@ -1165,9 +1166,15 @@ local function acceptOffer()
   if #allies > 0 then
     say("%s joins at %s, with %d %s.", h.name,
         G.g.map.cities[h.homeCity + 1].name, #allies, allies[1].name)
-  else
-    say("%s joins at %s.", h.name, G.g.map.cities[h.homeCity + 1].name)
+    -- "And the hero brings 1 ally!" / "... %d allies!" (hero_brings_allies,
+    -- 7563:01fc, through 8065:10fb)
+    local ui = G.screen.ui
+    local line = #allies == 1 and uidata.text(ui, HERO.ALLY_GROUP, 0)
+                 or uidata.text(ui, HERO.ALLY_GROUP, 1):format(#allies)
+    searchUi.say(line, afterOffer)
+    return
   end
+  say("%s joins at %s.", h.name, G.g.map.cities[h.homeCity + 1].name)
   afterOffer()
 end
 
