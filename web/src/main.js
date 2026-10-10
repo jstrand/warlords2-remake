@@ -676,6 +676,26 @@ function fortify() {
   selectNext();
 }
 
+// A second click within 40 BIOS ticks of the last counts as a double click
+// (18a9:01cd).
+const DOUBLE_CLICK = 40 / 18.2;
+
+/** A click with the select pointer (1b62:0405): on the selected stack's own
+ *  tile, soon after the last such click, it groups the whole stack as Space
+ *  does (89e0:0a55); otherwise it selects what is there. */
+function selectClick(tx, ty) {
+  const t = now(), last = G.lastSelectClick;
+  G.lastSelectClick = t;
+  const sel = G.selection;
+  if (sel && sel.x === tx && sel.y === ty && last != null && t - last < DOUBLE_CLICK) {
+    slotsMod.all(sel.slots, G.g);
+    afterSlotChange();
+    refreshControls();
+    return;
+  }
+  select(tx, ty);
+}
+
 /** Put the selection down (control 178, 8065:0f26). */
 function deselect() {
   G.selection = null; G.route = null; G.walk = null;
@@ -2421,7 +2441,7 @@ function mousepressed(x, y, button) {
     } else if (k === PTR.ADVISE) {
       miladvisor.open(G.selection ? G.selection.stack : null, tx, ty);
     } else if (k === PTR.SELECT) {
-      select(tx, ty);
+      selectClick(tx, ty);
     } else if (k === PTR.ALT) {
       planRoute(tx, ty);
       refreshControls();
