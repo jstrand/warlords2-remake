@@ -1,5 +1,6 @@
 #include "front/font.hpp"
 
+#include <cmath>
 #include <stdexcept>
 
 #include "front/pckimage.hpp"

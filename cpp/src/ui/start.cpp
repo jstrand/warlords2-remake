@@ -35,6 +35,7 @@
 // (149-156): popup 4, dialog 27 -- the side's name to retype, and for a
 // computer the characters of its level's deck to choose from, with the
 // chosen one's description (7bab:180b). OK (457), Cancel (458).
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <map>

@@ -23,6 +23,9 @@ cmake -S cpp -B cpp/build
 cmake --build cpp/build -j
 ```
 
+A self-contained x86_64 Linux build, for any distribution and the Steam
+Deck, is made in a container by `cpp/linux/build.sh` (`cpp/linux/README.md`).
+
 ## Running
 
 Run from the repository root, so that `original/` and `pre-rendered-sound/`
