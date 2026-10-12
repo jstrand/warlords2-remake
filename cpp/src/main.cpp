@@ -747,7 +747,9 @@ static int pointerKind(int x, int y) {
     under = w2::scn::terrainAt(*g.map, (*sel)[0]->x, (*sel)[0]->y);
     atSea = (*sel)[0]->atSea;
   }
-  int cost = (sel && mode != move::FLYING) ? move::COST[t] : 1;
+  // any tile with a road on it costs 1, a mountain pass too (18a9:0896)
+  bool road = w2::scn::roadAt(*g.map, tx, ty) % 0x20 != 0;
+  int cost = (sel && mode != move::FLYING && !road) ? move::COST[t] : 1;
   if (!game::seen(g, me, tx, ty) || cost <= 0) return HAND;
   auto walk = [&]() { return (mode != move::FLYING && (t == move::WATER || t == move::SHORE)) ? BOAT : WALK; };
   auto look = [&]() {
@@ -983,6 +985,12 @@ static void installHooks() {
     bool hiddenMany = g.map->options.hiddenMap != 0 && humans.size() > 1;
     bool window = !hiddenMany && ((shownSide(G.aiSide) && defSide) || human);
     bool cloud = !hiddenMany;
+    // 8961:0227 slides the view box to the battle and centres the map on it,
+    // Observe or not -- a human attacked gets to see where
+    if (!hiddenMany) {
+      centreOn(x, y);
+      front::stratDirty();
+    }
     status(defSide ? format(t(0x94), defSide->name) : t(0x95), 5);
     if (cloud && !G.aiSkip) {
       startAssault(x, y, result);
@@ -1124,8 +1132,11 @@ static void playComputers(Side* side) {
 void front::playComputer() { playComputers(G.player); }
 
 static void endTurn() {
-  // End Turn (8065:2074) puts the stack down, and its route with it: the
-  // next player sees no other side's plans
+  // End Turn (8065:2074) does nothing once the game is won: the winner stays
+  // on the turn, to look the kingdom over
+  if (G.g->won) return;
+  // It puts the stack down, and its route with it: the next player sees no
+  // other side's plans
   G.selection.reset();
   G.route.reset();
   Side* side = game::endTurn(*G.g);
@@ -1756,10 +1767,13 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
   gfx::setScissor();
 }
 
-void front::drawHeroFigure(int x, int y, int tx, int ty) {
+// The figure is 834b:1f5f's third argument, a rect from 4125:2cae: 1, (96, 0)
+// outlined in white, everywhere but the hero dialog, which draws the other
+// heroes with 0, (96, 15), dark (6c1b:10ac).
+void front::drawHeroFigure(int x, int y, int tx, int ty, bool dark) {
   gfx::setScissor(x, y, 224, 312);
   gfx::setColor(1, 1, 1);
-  gfx::draw(G.atransShields, gfx::newQuad(96, 0, 16, 15), x + std::max(0, (tx * 2 - 2) / 8 * 8), y + std::max(0, ty * 2 - 6));
+  gfx::draw(G.atransShields, gfx::newQuad(96, dark ? 15 : 0, 16, 15), x + std::max(0, (tx * 2 - 2) / 8 * 8), y + std::max(0, ty * 2 - 6));
   gfx::setScissor();
 }
 
@@ -2905,8 +2919,8 @@ static void keypressed(const std::string& k) {
     else if (alt && k.size() == 1) accel = "alt " + w2::upper(k);
     else if (shift && k == "/") accel = "?";
     else if (k.size() == 1) accel = k;
-    auto& M = menuDoes();
-    if (!accel.empty() && M.count(accel)) M[accel]();
+    // a key is its menu item, and does nothing while the item is greyed
+    if (!accel.empty() && menuEnabled(accel)) menuDoes()[accel]();
   }
 }
 

@@ -23,9 +23,12 @@ const REPORT = 21, DONE = 368, ACTION = 369;
 const ACT = 22, OK = 370, BACK = 371;
 const OFFER = [372, 380, 388];                   // a row of 7 each
 
+// still in the game: the side's alive word (3c04:0137), which a side's fall
+// (8065:18ab) and a surrender (8065:1e4e) clear -- not merely dealt in at
+// the start. Both screens and the rating list leave the fallen out.
 const playing = (g, i) => {
   const s = g.map.sides[i];
-  return s && s.inUse;
+  return !!(s && s.inUse && s.alive);
 };
 
 function diplom(sx, sy, w, h, x, y) {
@@ -60,7 +63,7 @@ function openReport() {
   const d = { view: kit.view(REPORT) };
   d.view.state[DONE] = uidata.NORMAL; d.view.state[ACTION] = uidata.NORMAL;
   const titles = diplomacy.ratings(g);
-  const order = luaSort(g.sides.slice(), (p, q) => {
+  const order = luaSort(g.sides.filter((s) => s.alive), (p, q) => {
     const sp = p.diploScore || 0, sq = q.diploScore || 0;
     if (sp !== sq) return sp < sq;
     return p.index < q.index;

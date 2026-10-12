@@ -2,7 +2,8 @@
 //
 // 6c1b:0000 lists the side's heroes -- by army, last first -- and opens
 // dialog 8 over popup 2 on the one nearest the cursor. 6c1b:00f9 draws the
-// strategic map with every hero's figure, the hero's name, its stack along
+// strategic map with every hero's figure -- the others dark, the one shown
+// white and on top (6c1b:10ac) -- the hero's name, its stack along
 // y = 110, where it is, its battle and command bonuses, level and
 // experience; 6c1b:0724 the items it carries and those on the ground.
 // Controls: 242 Done, 243/244 next and previous hero, 245/246 the item
@@ -105,7 +106,7 @@ struct HeroInfo : kit::Modal {
     kit::popup(R);
     front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true);
     for (size_t i = 0; i < heroes.size(); i++)
-      if ((int)i != cur) front::drawHeroFigure(MAP_X, MAP_Y, heroes[i]->x, heroes[i]->y);
+      if ((int)i != cur) front::drawHeroFigure(MAP_X, MAP_Y, heroes[i]->x, heroes[i]->y, true);
     front::drawHeroFigure(MAP_X, MAP_Y, h->x, h->y);
     kit::setPal(0);
     kit::outline(308, 206, 248, 129);

@@ -669,6 +669,17 @@ Battle& applyAttack(Game& g, Battle& result) {
       a->x = x; a->y = y;
       room--;
     }
+    // and the winner sees round what it took (67cc:0a6b calls 8611:1298):
+    // the tile fought for, then each of a city's four, 2 out from a city
+    if (g.map->options.hiddenMap != 0 && mine != NONE) {
+      bool flying = move::modeOf(g, result.attackers) == move::FLYING;
+      int found = reveal(g, mine, x, y, flying);
+      if (city) {
+        for (int dx = 0; dx <= 1; dx++)
+          for (int dy = 0; dy <= 1; dy++) found += reveal(g, mine, city->x + dx, city->y + dy, false);
+      }
+      if (found > 0) move::invalidate(g);
+    }
   }
   return result;
 }

@@ -684,6 +684,18 @@ export function applyAttack(g, result) {
       if (room <= 0) break;
       a.x = x; a.y = y; room--;
     }
+    // and the winner sees round what it took (67cc:0a6b calls 8611:1298):
+    // the tile fought for, then each of a city's four, 2 out from a city
+    if (g.map.options.hiddenMap !== 0 && mine != null) {
+      const flying = move.modeOf(g, result.attackers) === move.FLYING;
+      let found = reveal(g, mine, x, y, flying);
+      if (city) {
+        for (let dx = 0; dx <= 1; dx++) {
+          for (let dy = 0; dy <= 1; dy++) found += reveal(g, mine, city.x + dx, city.y + dy, false);
+        }
+      }
+      if (found > 0) move.invalidate(g);
+    }
   }
   return result;
 }

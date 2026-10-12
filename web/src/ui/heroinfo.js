@@ -2,7 +2,8 @@
 //
 // 6c1b:0000 lists the side's heroes -- by army, last first -- and opens
 // dialog 8 over popup 2 on the one nearest the cursor. 6c1b:00f9 draws the
-// strategic map with every hero's figure, the hero's name, its stack along
+// strategic map with every hero's figure -- the others dark, the one shown
+// white and on top (6c1b:10ac) -- the hero's name, its stack along
 // y = 110, where it is, its battle and command bonuses, level and
 // experience; 6c1b:0724 the items it carries and those on the ground.
 // Controls: 242 Done, 243/244 next and previous hero, 245/246 the item
@@ -111,7 +112,7 @@ export function open() {
     const f = kit.font(2);
     kit.popup(R);
     G.drawStrategicMap(MAP.x, MAP.y, null, true);
-    heroes.forEach((o, i) => { if (i !== d.cur) G.drawHeroFigure(MAP.x, MAP.y, o.x, o.y); });
+    heroes.forEach((o, i) => { if (i !== d.cur) G.drawHeroFigure(MAP.x, MAP.y, o.x, o.y, true); });
     G.drawHeroFigure(MAP.x, MAP.y, h.x, h.y);
 
     kit.setPal(0);

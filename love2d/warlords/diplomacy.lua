@@ -205,9 +205,10 @@ end
 --- score, lowest (best behaved) first, and each rank takes a title.
 -- diplomatic_rating, Ghidra 484e:0aed.
 function diplomacy.ratings(g)
+  -- only the sides still in the game are ranked (484e:0aed)
   local order = {}
   for i, s in ipairs(g.sides) do
-    order[#order + 1] = { side = s, score = s.diploScore or 0, seq = i }
+    if s.alive then order[#order + 1] = { side = s, score = s.diploScore or 0, seq = i } end
   end
   table.sort(order, function(p, q)
     if p.score ~= q.score then return p.score < q.score end

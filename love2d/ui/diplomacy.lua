@@ -38,9 +38,12 @@ local REPORT, DONE, ACTION = 21, 368, 369
 local ACT, OK, BACK = 22, 370, 371
 local OFFER = { [0] = 372, 380, 388 }               -- a row of 7 each
 
+-- still in the game: the side's alive word (3c04:0137), which a side's fall
+-- (8065:18ab) and a surrender (8065:1e4e) clear -- not merely dealt in at
+-- the start. Both screens and the rating list leave the fallen out.
 local function playing(g, i)
   local s = g.map.sides[i + 1]
-  return s and s.inUse
+  return s and s.inUse and s.alive and true or false
 end
 
 local function diplom(sx, sy, w, h, x, y)
@@ -80,7 +83,9 @@ local function openReport()
   d.view.state[DONE], d.view.state[ACTION] = uidata.NORMAL, uidata.NORMAL
   local titles = diplomacy.ratings(g)
   local order = {}
-  for _, s in ipairs(g.sides) do order[#order + 1] = s end
+  for _, s in ipairs(g.sides) do
+    if s.alive then order[#order + 1] = s end
+  end
   table.sort(order, function(p, q)
     local sp, sq = p.diploScore or 0, q.diploScore or 0
     if sp ~= sq then return sp < sq end

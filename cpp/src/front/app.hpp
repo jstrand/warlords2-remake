@@ -174,7 +174,7 @@ void drawSiteMarkers(int x, int y, const w2::Site* highlight = nullptr);
  *  cities that could take no more vectors (NONE for no filter). */
 void drawVectorMap(int x, int y, w2::City* city, int filter, bool seeAll);
 /** A hero's figure on the strategic map (834b:1f5f). */
-void drawHeroFigure(int x, int y, int tx, int ty);
+void drawHeroFigure(int x, int y, int tx, int ty, bool dark = false);
 void drawStrategicPanel(int x, int y, const w2::City* city);
 void openCity(w2::City* city);
 void openQuest();

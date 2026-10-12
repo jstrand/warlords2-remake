@@ -25,7 +25,12 @@ const int REPORT = 21, DONE = 368, ACTION = 369;
 const int ACT = 22, OK = 370, BACK = 371;
 const int OFFER[3] = {372, 380, 388};     // a row of 7 each
 
-bool playing(const w2::Game& g, int i) { return i >= 0 && i < 8 && g.map->sides[i].inUse; }
+// still in the game: the side's alive word (3c04:0137), which a side's fall
+// (8065:18ab) and a surrender (8065:1e4e) clear -- not merely dealt in at
+// the start. Both screens and the rating list leave the fallen out.
+bool playing(const w2::Game& g, int i) {
+  return i >= 0 && i < 8 && g.map->sides[i].inUse && g.map->sides[i].alive;
+}
 
 void diplom(int sx, int sy, int w, int h, int x, int y) {
   if (auto art = G.screen->artFor(47)) {
@@ -112,7 +117,7 @@ void openReport() {
   d->view = &d->v;
   d->v.state[DONE] = d->v.state[ACTION] = w2::uidata::NORMAL;
   d->titles = dip::ratings(*G.g);
-  d->order = G.g->sides;
+  for (w2::Side* s : G.g->sides) if (s->alive) d->order.push_back(s);
   w2::luaSort(d->order, [](w2::Side* p, w2::Side* q) {
     if (p->diploScore != q->diploScore) return p->diploScore < q->diploScore;
     return p->index < q->index;

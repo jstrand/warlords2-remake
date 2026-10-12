@@ -142,7 +142,8 @@ function load(params) {
   G.heroPic = { m: img("/PICS/MHERO.PCK"), f: img("/PICS/FHERO.PCK") };
   // ATRANS2.PCK: map markers on a mask colour, 1 (1997:027e, 8cc6:0952)
   G.atransShields = img("/TERRAIN0/ATRANS2.PCK", 1);
-  G.heroMark = gfx.newQuad(96, 0, 16, 15);     // 4125:2cb6
+  G.heroMark = gfx.newQuad(96, 0, 16, 15);     // 4125:2cb6, figure 1: outlined in white
+  G.heroMarkDark = gfx.newQuad(96, 15, 16, 15); // 4125:2cae, figure 0: dark
   G.bagQuad = gfx.newQuad(64, 0, 32, 29);
   G.blastQuad = gfx.newQuad(32, 0, 32, 29);    // 6a35:0000
   // HIDDEN.PCK: the hidden map's edges, fourteen 40 x 40 cells 48 apart in
@@ -853,7 +854,9 @@ function pointerKind(x, y) {
     under = scn.terrainAt(g.map, sel[0].x, sel[0].y);
     atSea = !!sel[0].atSea;
   }
-  const cost = (sel && mode !== move.FLYING) ? (move.COST[t] || 0) : 1;
+  // any tile with a road on it costs 1, a mountain pass too (18a9:0896)
+  const road = scn.roadAt(g.map, tx, ty) % 0x20 !== 0;
+  const cost = (sel && mode !== move.FLYING && !road) ? (move.COST[t] || 0) : 1;
   if (!game.seen(g, G.player, tx, ty) || cost <= 0) return PTR.HAND;
 
   const walk = () => (mode !== move.FLYING && (t === move.WATER || t === move.SHORE) ? PTR.BOAT : PTR.WALK);
@@ -1079,6 +1082,12 @@ ai.hooks.onFight = function* (g, stack, x, y, result) {
   const hiddenMany = g.map.options.hiddenMap !== 0 && humans.length > 1;
   const window_ = !hiddenMany && ((shownSide(G.aiSide) && defSide != null) || human);
   const cloud = !hiddenMany;
+  // 8961:0227 slides the view box to the battle and centres the map on it,
+  // Observe or not -- a human attacked gets to see where
+  if (!hiddenMany) {
+    centreOn(x, y);
+    stratDirty();
+  }
   yield* status(defSide ? fmt(t(0x94), defSide.name) : t(0x95), 5);
   if (cloud && !G.aiSkip) {
     startAssault(x, y, result);
@@ -1206,8 +1215,11 @@ function playComputers(side) {
 G.playComputer = () => playComputers(G.player);
 
 function endTurn() {
-  // End Turn (8065:2074) puts the stack down, and its route with it: the
-  // next player sees no other side's plans
+  // End Turn (8065:2074) does nothing once the game is won: the winner stays
+  // on the turn, to look the kingdom over
+  if (G.g.won) return;
+  // It puts the stack down, and its route with it: the next player sees no
+  // other side's plans
   G.selection = null; G.route = null;
   const side = game.endTurn(G.g);
   if (side && side.computer) return playComputers(side);
@@ -1874,11 +1886,13 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
   gfx.setScissor();
 };
 
-/** A hero's figure on the strategic map (834b:1f5f). */
-G.drawHeroFigure = (x, y, tx, ty) => {
+/** A hero's figure on the strategic map (834b:1f5f). Its third argument
+ *  picks the figure from 4125:2cae: 1, white, everywhere but the hero
+ *  dialog, which draws the other heroes with 0, dark (6c1b:10ac). */
+G.drawHeroFigure = (x, y, tx, ty, dark) => {
   gfx.setScissor(x, y, 224, 312);
   gfx.setColor(1, 1, 1);
-  gfx.draw(G.atransShields, G.heroMark, x + Math.max(0, Math.floor((tx * 2 - 2) / 8) * 8), y + Math.max(0, ty * 2 - 6));
+  gfx.draw(G.atransShields, dark ? G.heroMarkDark : G.heroMark, x + Math.max(0, Math.floor((tx * 2 - 2) / 8) * 8), y + Math.max(0, ty * 2 - 6));
   gfx.setScissor();
 };
 
@@ -2985,7 +2999,8 @@ function keypressed(k) {
     else if (alt && k.length === 1) accel = "alt " + k.toUpperCase();
     else if (shift && k === "/") accel = "?";
     else if (k.length === 1) accel = k;
-    if (accel && MENU_DOES[accel]) MENU_DOES[accel]();
+    // a key is its menu item, and does nothing while the item is greyed
+    if (accel && G.menuEnabled(accel)) MENU_DOES[accel]();
   }
 }
 

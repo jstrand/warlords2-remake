@@ -173,7 +173,8 @@ function love.load(arg)
   -- Drawn through a mask on colour 1 alone: colour 2 is part of the art
   -- (1997:027e, from 8cc6:0952).
   G.atransShields = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, 1)
-  G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6
+  G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6, figure 1: outlined in white
+  G.heroMarkDark = love.graphics.newQuad(96, 15, 16, 15, 144, 246) -- 4125:2cae, figure 0: dark
   G.bagQuad = love.graphics.newQuad(64, 0, 32, 29, 144, 246)
   G.blastQuad = love.graphics.newQuad(32, 0, 32, 29, 144, 246)   -- 6a35:0000
   -- HIDDEN.PCK: the hidden map's edges, fourteen 40 x 40 cells 48 apart in
@@ -1022,7 +1023,9 @@ local function pointerKind(x, y)
     atSea = sel[1].atSea and true or false
   end
   -- a tile out of sight, or one the stack cannot enter at all, is the hand
-  local cost = (sel and mode ~= move.FLYING) and (move.COST[t] or 0) or 1
+  -- any tile with a road on it costs 1, a mountain pass too (18a9:0896)
+  local road = scn.roadAt(g.map, tx, ty) % 0x20 ~= 0
+  local cost = (sel and mode ~= move.FLYING and not road) and (move.COST[t] or 0) or 1
   if not game.seen(g, G.player, tx, ty) or cost <= 0 then return PTR.HAND end
 
   local function walk()
@@ -1308,6 +1311,12 @@ ai.onFight = function(g, stack, x, y, result)
   local hiddenMany = g.map.options.hiddenMap ~= 0 and #humans > 1
   local window = not hiddenMany and ((shown(G.aiSide) and defSide ~= nil) or human)
   local cloud = not hiddenMany
+  -- 8961:0227 slides the view box to the battle and centres the map on it,
+  -- Observe or not -- a human attacked gets to see where
+  if not hiddenMany then
+    centreOn(x, y)
+    stratDirty()
+  end
   status(defSide and t(0x94):format(defSide.name) or t(0x95), 5)
   if cloud and not G.aiSkip then
     startAssault(x, y, result)
@@ -1419,8 +1428,11 @@ end
 end
 
 local function endTurn()
-  -- End Turn (8065:2074) puts the stack down, and its route with it: the
-  -- next player sees no other side's plans
+  -- End Turn (8065:2074) does nothing once the game is won: the winner stays
+  -- on the turn, to look the kingdom over
+  if G.g.won then return end
+  -- It puts the stack down, and its route with it: the next player sees no
+  -- other side's plans
   G.selection, G.route = nil, nil
   local side = game.endTurn(G.g)
   -- the computer plays its sides; a human side, one or several, is handed
@@ -2293,10 +2305,13 @@ end
 
 --- A hero's figure on the strategic map (834b:1f5f): ATRANS2.PCK's (96, 0)
 --- 16x15 at the hero's 2y - 6, and at 2x - 2 rounded down to a multiple of 8.
-function G.drawHeroFigure(x, y, tx, ty)
+--- Its third argument picks the figure from 4125:2cae: 1, white, everywhere
+--- but the hero dialog, which draws the other heroes with 0, dark -- (96, 15)
+--- (6c1b:10ac).
+function G.drawHeroFigure(x, y, tx, ty, dark)
   love.graphics.setScissor(x, y, 224, 312)
   love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(G.atransShields, G.heroMark,
+  love.graphics.draw(G.atransShields, dark and G.heroMarkDark or G.heroMark,
     x + math.max(0, math.floor((tx * 2 - 2) / 8) * 8), y + math.max(0, ty * 2 - 6))
   love.graphics.setScissor()
 end
@@ -3784,7 +3799,8 @@ function love.keypressed(key)
     elseif alt and #key == 1 then accel = "alt " .. key:upper()
     elseif shift and key == "/" then accel = "?"
     elseif #key == 1 then accel = key end
-    if accel and MENU_DOES[accel] then MENU_DOES[accel]() end
+    -- a key is its menu item, and does nothing while the item is greyed
+    if accel and G.menuEnabled(accel) then MENU_DOES[accel]() end
   end
 end
 

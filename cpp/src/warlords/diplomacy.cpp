@@ -126,7 +126,10 @@ int addScore(Game& g, Side& side, int from, int to) {
 std::map<int, std::string> ratings(const Game& g) {
   struct E { Side* side; int score; int seq; };
   std::vector<E> order;
-  for (size_t i = 0; i < g.sides.size(); i++) order.push_back(E{g.sides[i], g.sides[i]->diploScore, (int)i});
+  // only the sides still in the game are ranked (484e:0aed)
+  for (size_t i = 0; i < g.sides.size(); i++) {
+    if (g.sides[i]->alive) order.push_back(E{g.sides[i], g.sides[i]->diploScore, (int)i});
+  }
   luaSort(order, [](const E& p, const E& q) { return p.score != q.score ? p.score < q.score : p.seq < q.seq; });
   const std::vector<int>& ranks = ratingRanks((int)order.size());
   std::map<int, std::string> out;

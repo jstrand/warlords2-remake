@@ -4,8 +4,9 @@
 -- 8 over popup 2, (80, 60) 480x312, on the one nearest the cursor. With no
 -- hero it does nothing. auto_ui_army_info_labels (6c1b:00f9) draws:
 --
---   the strategic map with no city shields, but every hero's figure, the one
---     shown drawn last (6c1b:10ac)
+--   the strategic map with no city shields, but every hero's figure: the
+--     others dark (figure 0), the one shown white (figure 1) and drawn last
+--     (6c1b:10ac)
 --   a black outline at (308, 206) 248x129 inside a (4, 2) bevel
 --   the hero's name in font 1, centred on (432, 62)
 --   the hero and the rest of its stack on grey rings along y = 110 from
@@ -139,7 +140,7 @@ function M.open()
     kit.popup(R)
     G.drawStrategicMap(MAP.x, MAP.y, nil, true)
     for i, o in ipairs(heroes) do
-      if i ~= d.cur then G.drawHeroFigure(MAP.x, MAP.y, o.x, o.y) end
+      if i ~= d.cur then G.drawHeroFigure(MAP.x, MAP.y, o.x, o.y, true) end
     end
     G.drawHeroFigure(MAP.x, MAP.y, h.x, h.y)
 

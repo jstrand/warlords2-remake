@@ -832,6 +832,18 @@ function game.applyAttack(g, result)
       if room <= 0 then break end
       a.x, a.y, room = x, y, room - 1
     end
+    -- and the winner sees round what it took (67cc:0a6b calls 8611:1298):
+    -- the tile fought for, then each of a city's four, 2 out from a city
+    if g.map.options.hiddenMap ~= 0 and mine ~= nil then
+      local flying = move.stackMode(g, result.attackers) == move.FLYING
+      local found = game.reveal(g, mine, x, y, flying)
+      if city then
+        for dx = 0, 1 do
+          for dy = 0, 1 do found = found + game.reveal(g, mine, city.x + dx, city.y + dy, false) end
+        end
+      end
+      if found > 0 then move.invalidate(g) end
+    end
   end
   return result
 end

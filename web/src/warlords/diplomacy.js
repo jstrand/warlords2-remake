@@ -158,7 +158,11 @@ export function addScore(g, side, from, to) {
 
 /** Every side's diplomatic title, by side index (diplomatic_rating, 484e:0aed). */
 export function ratings(g) {
-  const order = g.sides.map((s, i) => ({ side: s, score: s.diploScore || 0, seq: i }));
+  // only the sides still in the game are ranked (484e:0aed)
+  const order = [];
+  g.sides.forEach((s, i) => {
+    if (s.alive) order.push({ side: s, score: s.diploScore || 0, seq: i });
+  });
   luaSort(order, (p, q) => (p.score !== q.score ? p.score < q.score : p.seq < q.seq));
   const ranks = RATING_RANKS[order.length] || RATING_RANKS[8];
   const out = {};
