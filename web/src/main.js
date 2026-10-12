@@ -423,7 +423,8 @@ G.setScreen = (how) => {
 };
 G.screenMode = () => (document.fullscreenElement ? "full" : "window");
 
-/** All of the screen, or only the original's 640x480 (View > 4:3). */
+/** Only the original's 640x480 (View > 4:3), or all of the screen (View >
+ *  Fit available space). */
 G.setOriginalSize = (on) => {
   relayout(() => { display.wanted = on ? { w: layoutMod.W, h: layoutMod.H } : null; });
   prefs.set("4:3", on ? "on" : "off");
@@ -433,6 +434,7 @@ G.setOriginalSize = (on) => {
 G.menuTicked = (k) => k === "map zoom " + G.zoom || k === "ui scale " + display.scale
   || k === "screen " + G.screenMode()
   || (k === "screen 4:3" && display.wanted != null)
+  || (k === "screen fit" && display.wanted == null)
   || k === "music " + sound.synth();
 
 // ------------------------------------------------------------------ walking
@@ -2856,7 +2858,8 @@ for (let n = 1; n <= 16; n++) {
 }
 MENU_DOES["screen full"] = () => G.setScreen("full");
 MENU_DOES["screen window"] = () => G.setScreen("window");
-MENU_DOES["screen 4:3"] = () => G.setOriginalSize(display.wanted == null);
+MENU_DOES["screen 4:3"] = () => G.setOriginalSize(true);
+MENU_DOES["screen fit"] = () => G.setOriginalSize(false);
 for (const synth of sound.SYNTHS) MENU_DOES["music " + synth] = () => sound.setSynth(synth);
 
 // What greys a menu item (8065:0519, the table at 4125:1798).

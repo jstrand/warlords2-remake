@@ -493,19 +493,20 @@ function G.screenMode()
   return display.windowed and "window" or "full"
 end
 
---- All of the screen or window, or only the original's 640x480 with black
---- round it (View > 4:3), in either video mode.
+--- Only the original's 640x480 with black round it (View > 4:3), or all of
+--- the screen or window (View > Fit available space), in either video mode.
 function G.setOriginalSize(on)
   relayout(function() display.wanted = on and { w = layoutMod.W, h = layoutMod.H } or nil end)
   prefs.set("4:3", on and "on" or "off")
 end
 
 --- Is this menu item the setting in use? The zoom items are ticked so,
---- 4:3 while it is on, and the synthesizer the music is played on.
+--- 4:3 or Fit available space, and the synthesizer the music is played on.
 function G.menuTicked(key)
   return key == "map zoom " .. tostring(G.zoom) or key == "ui scale " .. display.scale
          or key == "screen " .. G.screenMode()
          or (key == "screen 4:3" and display.wanted ~= nil)
+         or (key == "screen fit" and display.wanted == nil)
          or (G.audio ~= nil and key == "music " .. G.audio.synth())
 end
 G.centreOn = function(x, y) centreOn(x, y) end
@@ -3659,7 +3660,8 @@ for n = 1, 16 do
 end
 MENU_DOES["screen full"] = function() G.setScreen("full") end
 MENU_DOES["screen window"] = function() G.setScreen("window") end
-MENU_DOES["screen 4:3"] = function() G.setOriginalSize(display.wanted == nil) end
+MENU_DOES["screen 4:3"] = function() G.setOriginalSize(true) end
+MENU_DOES["screen fit"] = function() G.setOriginalSize(false) end
 -- Game's music items (not the original's; menu.withZooms)
 for _, synth in ipairs(require("sound").SYNTHS) do
   MENU_DOES["music " .. synth] = function() G.audio.setSynth(synth) end

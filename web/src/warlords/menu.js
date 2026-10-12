@@ -68,6 +68,7 @@ export function withZooms(maxUI, maxMap) {
       items.push(["Window", null, "screen window"]);
       items.push(["-"]);
       items.push(["4:3 (original)", null, "screen 4:3"]);
+      items.push(["Fit available space", null, "screen fit"]);
     }
     return { title: m.title, items };
   });
@@ -76,6 +77,13 @@ export function withZooms(maxUI, maxMap) {
 // The bar is 17 pixels deep and white (7ae8:02d8).
 export const BAR_H = 17;
 
+// The settings the menus tick when in use (not the original's): their tick
+// is a diamond 5 pixels wide in the key column.
+export const TICK_W = 5;
+export function tickable(act) {
+  return !!act && ["map zoom ", "ui scale ", "screen ", "music "].some((p) => act.startsWith(p));
+}
+
 /** Measure the bar and every dropdown for a font (7ae8:0052, 2372:049b). */
 export function layout(font, barHeight, screenWidth, menus) {
   const out = [];
@@ -83,7 +91,7 @@ export function layout(font, barHeight, screenWidth, menus) {
   const lh = font.lineHeight;
   for (const m of menus || MENUS) {
     const tw = Math.ceil(font.width(m.title) / 8) * 8;
-    let w = 0, keyCol = 0, keyW = 0;
+    let w = 0, keyCol = 0, keyW = 0, ticked = false;
     for (const it of m.items) {
       const [label, key] = it;
       if (label !== "-") {
@@ -92,10 +100,15 @@ export function layout(font, barHeight, screenWidth, menus) {
           keyCol = Math.max(keyCol, lw + 5);
           keyW = Math.max(keyW, font.width(key));
           lw = keyCol + keyW;
+        } else if (tickable(it[2])) {
+          // a setting's tick goes in the key column: keep it clear of the label
+          keyCol = Math.max(keyCol, lw + 5);
+          ticked = true;
         }
         w = Math.max(w, lw + 5);
       }
     }
+    if (ticked) w = Math.max(w, keyCol + Math.max(keyW, TICK_W) + 5);
     const y = BAR_H + 1;
     const rows = [];
     let at = 2;

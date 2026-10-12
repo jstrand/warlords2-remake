@@ -1098,14 +1098,26 @@ if G and G.menuLayout then
   if not G.menuTicked(last) then fail("music", last .. " was not ticked") end
   -- and every choice was written down
   prefsMod.reload()
-  if prefsMod.get("music") ~= last:match("%w+$") or prefsMod.get("4:3") ~= "on"
+  if prefsMod.get("music") ~= last:match("%w+$") or prefsMod.get("4:3") ~= "off"
      or prefsMod.get("screen") ~= "window" or not tonumber(prefsMod.get("scale"))
      or not tonumber(prefsMod.get("zoom")) then
     fail("prefs", "the menus' choices were not all written to " .. prefsMod.FILE)
   end
-  -- the last of View's is 4:3: the original's 640x480, whatever the screen
+  -- the last of View's is Fit available space, after 4:3: the whole screen
+  -- again, and it is the one ticked
+  if G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then
+    fail("fit", ("the screen is %dx%d, not %dx%d"):format(G.layout.w, G.layout.h, SCREEN_W, SCREEN_H))
+  end
+  if not G.menuTicked("screen fit") or G.menuTicked("screen 4:3") then
+    fail("fit", "Fit available space is not the one ticked")
+  end
+  -- 4:3: the original's 640x480, whatever the screen, and ticked instead
+  G.setOriginalSize(true)
   if G.layout.w ~= 640 or G.layout.h ~= 480 then
     fail("4:3", ("the screen is %dx%d, not 640x480"):format(G.layout.w, G.layout.h))
+  end
+  if not G.menuTicked("screen 4:3") or G.menuTicked("screen fit") then
+    fail("4:3", "4:3 is not the one ticked")
   end
   -- 4:3 stays on in a window (here with no real one to open), and off it
   -- the window has the whole of the screen

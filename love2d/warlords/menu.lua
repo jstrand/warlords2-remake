@@ -87,6 +87,7 @@ function menu.withZooms(maxUI, maxMap)
       items[#items + 1] = { "Window", nil, "screen window" }
       items[#items + 1] = { "-" }
       items[#items + 1] = { "4:3 (original)", nil, "screen 4:3" }
+      items[#items + 1] = { "Fit available space", nil, "screen fit" }
     end
     out[i] = { title = m.title, items = items }
   end
@@ -108,6 +109,17 @@ menu.BAR_H = 17
 --- 3 in), the accelerators start in a column 5 past the widest labelled
 --- item, and the whole is 5 wider than its widest line. Rows are the line
 --- height plus 2, a separator 2, with 2 above the first and 1 below the last.
+-- The settings the menus tick when in use (not the original's): their tick
+-- is a diamond 5 pixels wide in the key column.
+menu.TICK_W = 5
+function menu.tickable(act)
+  if not act then return false end
+  for _, p in ipairs({ "map zoom ", "ui scale ", "screen ", "music " }) do
+    if act:sub(1, #p) == p then return true end
+  end
+  return false
+end
+
 --- `menus` is the list to lay out, menu.MENUS unless given.
 function menu.layout(font, barHeight, screenWidth, menus)
   local out, x = {}, menu.BAR_X
@@ -116,6 +128,7 @@ function menu.layout(font, barHeight, screenWidth, menus)
     local tw = math.ceil(font.width(m.title) / 8) * 8
 
     local w, keyCol, keyW = 0, 0, 0
+    local ticked = false
     for _, it in ipairs(m.items) do
       local label, key = it[1], it[2]
       if label ~= "-" then
@@ -124,10 +137,15 @@ function menu.layout(font, barHeight, screenWidth, menus)
           keyCol = math.max(keyCol, lw + 5)
           keyW = math.max(keyW, font.width(key))
           lw = keyCol + keyW
+        elseif menu.tickable(it[3]) then
+          -- a setting's tick goes in the key column: keep it clear of the label
+          keyCol = math.max(keyCol, lw + 5)
+          ticked = true
         end
         w = math.max(w, lw + 5)
       end
     end
+    if ticked then w = math.max(w, keyCol + math.max(keyW, menu.TICK_W) + 5) end
 
     local y = menu.BAR_H + 1
     local rows, at = {}, 2

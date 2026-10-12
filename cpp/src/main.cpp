@@ -330,7 +330,8 @@ static void setScreen(bool window) {
 static bool menuTicked(const std::string& k) {
   return k == "map zoom " + std::to_string(G.zoom) || k == "ui scale " + std::to_string(display::d.scale) ||
          k == std::string("screen ") + (display::d.windowed ? "window" : "full") ||
-         (k == "screen 4:3" && display::d.wanted) || k == "music " + sound::synth();
+         (k == "screen 4:3" && display::d.wanted) || (k == "screen fit" && !display::d.wanted) ||
+         k == "music " + sound::synth();
 }
 
 // ------------------------------------------------------------------ walking
@@ -2766,7 +2767,8 @@ static std::map<std::string, std::function<void()>>& menuDoes() {
   }
   M["screen full"] = []() { setScreen(false); };
   M["screen window"] = []() { setScreen(true); };
-  M["screen 4:3"] = []() { setOriginalSize(!display::d.wanted); };
+  M["screen 4:3"] = []() { setOriginalSize(true); };
+  M["screen fit"] = []() { setOriginalSize(false); };
   for (const char* s : {"fm", "mt32", "sc55"}) {
     std::string synth = s;
     M["music " + synth] = [synth]() { sound::setSynth(synth); };

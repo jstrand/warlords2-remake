@@ -48,12 +48,22 @@ std::vector<Menu> withZooms(int maxUI, int maxMap) {
       n.items.push_back({"Window", "", "screen window"});
       n.items.push_back({"-", "", ""});
       n.items.push_back({"4:3 (original)", "", "screen 4:3"});
+      n.items.push_back({"Fit available space", "", "screen fit"});
     } else {
       n.items = m.items;
     }
     out.push_back(n);
   }
   return out;
+}
+
+// The settings the menus tick when in use (not the original's): their tick
+// is a diamond 5 pixels wide in the key column.
+static const int TICK_W = 5;
+static bool tickable(const std::string& act) {
+  for (const char* p : {"map zoom ", "ui scale ", "screen ", "music "})
+    if (act.rfind(p, 0) == 0) return true;
+  return false;
 }
 
 Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus) {
@@ -63,6 +73,7 @@ Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus)
   for (const Menu& m : menus) {
     int tw = (font.width(m.title) + 7) / 8 * 8;
     int w = 0, keyCol = 0, keyW = 0;
+    bool ticked = false;
     for (const Item& it : m.items) {
       if (it.label != "-") {
         int lw = 12 + font.width(it.label);
@@ -70,10 +81,15 @@ Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus)
           keyCol = std::max(keyCol, lw + 5);
           keyW = std::max(keyW, font.width(it.key));
           lw = keyCol + keyW;
+        } else if (tickable(it.act)) {
+          // a setting's tick goes in the key column: keep it clear of the label
+          keyCol = std::max(keyCol, lw + 5);
+          ticked = true;
         }
         w = std::max(w, lw + 5);
       }
     }
+    if (ticked) w = std::max(w, keyCol + std::max(keyW, TICK_W) + 5);
     int y = BAR_H + 1;
     Title t;
     t.title = m.title;

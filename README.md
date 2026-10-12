@@ -45,7 +45,7 @@ panel and the bottom bar move to the edges. A few things are new:
 | scale the interface | View › Interface 1x, 2x… picks a whole-number scale, so the art stays sharp; the biggest that fits is the default |
 | zoom the map | the mouse wheel, `PageUp` / `PageDown` or keypad `+` / `-`, or View › Map 1x, 2x… |
 | move the view | drag the map with the pointer; it slides smoothly, not a tile at a time |
-| switch the screen | View › Full screen / Window; View › 4:3 shows only the original's 640 × 480, with black round it |
+| switch the screen | View › Full screen / Window; View › 4:3 shows only the original's 640 × 480, with black round it, and Fit available space fills the screen or window again |
 | save quickly | `F5` saves, `F9` loads |
 | change the music | Game › AdLib music, MT-32 music or SC-55 music; the MT-32 is the default, and the two Roland sets play from recordings in `pre-rendered-sound/` |
 
