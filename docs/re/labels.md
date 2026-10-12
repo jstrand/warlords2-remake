@@ -26,6 +26,15 @@ $G build/ghidra WAR2 -process WAR2FLAT.EXE -noanalysis \
    -scriptPath tools/ghidra -postScript SetupWar2.java
 ```
 
+Then refresh the committed decompile in `decompiled/`. Commit it now and then,
+not on every new label, since a rename touches every caller's file:
+
+```sh
+rm -rf decompiled/*.c decompiled/index.txt
+$G build/ghidra WAR2 -process WAR2FLAT.EXE -noanalysis -readOnly \
+   -scriptPath tools/ghidra -postScript DumpFunctions.java 0 ffff $PWD/decompiled
+```
+
 For a fresh import use the command in `docs/formats/exe.md` (it includes
 `FixJumpTables.java`, without which switch-heavy functions don't analyse).
 
@@ -52,14 +61,14 @@ For a fresh import use the command in `docs/formats/exe.md` (it includes
 
 The comment on each generated line shows the evidence.
 
-## Coverage (September 2026)
+## Coverage (October 2026)
 
 | | functions |
 |---|---|
-| hand-named (`war2_labels.txt`) | 393 |
-| generated (`auto_`) | 142 |
-| still `FUN_` | 1041 |
-| thunks / fragments | 3 |
+| hand-named (`war2_labels.txt`) | 433 |
+| generated (`auto_`) | 132 |
+| still `FUN_` | 1013 |
+| thunks / fragments | 1 |
 | **total** | **1579** |
 
 The rest mostly shows no text and names no files: drawing, map and path

@@ -1000,13 +1000,13 @@ has not run yet.
 
 ## The dialogs
 
-144 functions carry an `auto_ui_*` label, generated from the `STRING.DAT`
-groups they reference (`labels.md`). That list is effectively the screen
-inventory — city info, army info, production, diplomacy ratings and state,
+Dialog functions get an `auto_ui_*` label from the `STRING.DAT` groups they
+reference (`labels.md`), and a hand name once read. Together they are
+effectively the screen inventory — city info, army info, production, diplomacy ratings and state,
 fighting order, history, triumphs, items, quests, temples, the sage, hero
 levels, reports, options, save/load, resign, pillage/sack/raze, the vector
-help, the medal effect. `grep auto_ui_ build/ghidra/all_funcs/index.txt` is
-the index to them.
+help, the medal effect. `grep auto_ui_ decompiled/index.txt` lists the 48
+not read yet.
 
 Static screens — credits, help pages, the tutorial — are not code at all:
 they are the `.GFX` markup scripts already decoded in `docs/formats/gfx.md`.

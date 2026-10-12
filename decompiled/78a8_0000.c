@@ -1,0 +1,14 @@
+
+void __cdecl16far FUN_78a8_0000(void)
+
+{
+  auto_file_x_fnt((char *)s_Chance36_4125_1467,0x4125,0x47d7,0x4125,0x137b,0x4125,0x13b6,0x4125,
+                  (undefined1 *)&LAB_451b_0873,0x4125);
+  auto_file_x_fnt((char *)s_Chance17_4125_1470,0x4125,0x47b6,0x4125,0x13f1,0x4125,0x142c,0x4125,
+                  (undefined1 *)&caseD_0_1,0x4125);
+  auto_file_x_fnt(0x1479,0x4125,0x47f8,0x4125,0x1305,0x4125,0x1340,0x4125,
+                  (undefined4 *)&DAT_451b_0894,0x4125);
+  return;
+}
+
+

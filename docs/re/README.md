@@ -6,6 +6,7 @@ What's here, and where to look first.
 |---|---|
 | [`../formats/exe.md`](../formats/exe.md) | the executable itself: Borland overlays, how `tools/exe.py` flattens it, the Ghidra import command, landmark addresses |
 | [`labels.md`](labels.md) | how functions get names: the hand-written and generated label files, and coverage |
+| [`../../decompiled/`](../../decompiled) | generated: Ghidra's C for every function, with the current names |
 | [`dice_callers.md`](dice_callers.md) | every caller of `dice()`, the index to the game's random rules |
 | [`runtime.md`](runtime.md) | segment 0: Borland runtime, SSG's assembly helpers, sound drivers |
 | [`ai.md`](ai.md) | computer players: turn pipeline, AI data, decoded decisions |
