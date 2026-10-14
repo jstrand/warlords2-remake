@@ -230,12 +230,12 @@ function openStart() {
       G.g = game.newGame(G.dataDir, dir, { seed: G.seed, options, sides, greatest: extra && extra.greatest });
       G.selection = null; G.over = null; G.stratImage = null;
       beginGame();
-      if (G.player.computer) {
+      if (G.g.side.computer) {
         // a game with no human in it says so as it begins (8065:00f1)
-        if (G.g.sides.some((s) => !s.computer)) playComputers(G.player);
+        if (G.g.sides.some((s) => !s.computer)) playComputers(G.g.side);
         else {
           const t = (i) => uidata.text(G.screen.ui, 0xe, i);
-          searchUi.message(t(0), t(1), () => playComputers(G.player));
+          searchUi.message(t(0), t(1), () => playComputers(G.g.side));
         }
       }
     });
@@ -271,12 +271,15 @@ function capOf(side) {
 
 /** Start its first turn, and centre the view on the capital. */
 function beginGame() {
-  G.player = game.begin(G.g);
+  const first = game.begin(G.g);
+  // a computer that opens the game plays to the screen of the human who
+  // follows it, on that human's hidden map
+  G.player = (first.computer && game.nextHuman(G.g)) || first;
   G.cursor = Object.assign({}, capOf(G.player));
   G.selection = null;
   centreOn(capOf(G.player).x, capOf(G.player).y);
   // the banner is a human's (8cc6:0259)
-  if (!G.player.computer) showBanner(G.player);
+  if (!first.computer) showBanner(G.player);
 }
 
 // ------------------------------------------------------------------ camera
@@ -1249,7 +1252,7 @@ function playComputers(side) {
   G.aiRun = computerTurns(side);
   resumeComputer();
 }
-G.playComputer = () => playComputers(G.player);
+G.playComputer = () => playComputers(G.g.side);
 
 function endTurn() {
   // End Turn (8065:2074) does nothing once the game is won: the winner stays

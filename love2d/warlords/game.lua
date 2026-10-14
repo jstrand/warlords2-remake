@@ -749,6 +749,20 @@ function game.begin(g)
   return nextSide(g, nil)
 end
 
+--- The human who plays next in the round, the side to play included; nil
+--- with no human left. While the computers before it play, the screen is
+--- this side's: the original keeps one seen bit per tile, set for its human
+--- only (8611:1298), so a computer's turn shows the human's hidden map.
+function game.nextHuman(g)
+  for i = math.max(g.orderAt, 0), 7 do
+    local side = g.map.sides[g.turnOrder[i + 1] + 1]
+    if side and side.inUse and side.alive and not side.computer then return side end
+  end
+  for _, s in ipairs(g.sides) do
+    if s.alive and not s.computer then return s end
+  end
+end
+
 --------------------------------------------------------------------- combat
 
 local function removeArmies(g, dead)

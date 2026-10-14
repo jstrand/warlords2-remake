@@ -608,6 +608,16 @@ Side* begin(Game& g) {
   return nextSide(g, nullptr);
 }
 
+Side* nextHuman(Game& g) {
+  for (int i = std::max(g.orderAt, 0); i <= 7; i++) {
+    Side* side = g.map->side(g.turnOrder[i]);
+    if (side && side->inUse && side->alive && !side->computer) return side;
+  }
+  for (Side* s : g.sides)
+    if (s->alive && !s->computer) return s;
+  return nullptr;
+}
+
 static void removeArmies(Game& g, const std::vector<Army*>& dead) {
   std::set<const Army*> gone(dead.begin(), dead.end());
   for (int i = (int)g.armies.size() - 1; i >= 0; i--) {

@@ -2766,6 +2766,15 @@ local function testHiddenMap()
   for _, s in ipairs(g.sides) do if s.index ~= side.index then other = s end end
   ok(not game.seen(g, other.index, side.capital.x, side.capital.y),
      "another side has not seen our capital")
+
+  -- a computer that opens the game plays to the next human's hidden map
+  local g3 = game.new(DATA, "ERYTHEA", { seed = 103, options = { hiddenMap = 1 } })
+  for i, s in ipairs(g3.sides) do s.computer = i ~= 3 end
+  local first = game.begin(g3)
+  eq(first, g3.sides[1], "a computer opens the game")
+  eq(game.nextHuman(g3), g3.sides[3], "the screen is the human's who follows it")
+  g3.sides[3].computer = true
+  eq(game.nextHuman(g3), nil, "and nobody's with no human playing")
 end
 
 --------------------------------------------------------------------- bugs

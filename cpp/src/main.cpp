@@ -1169,7 +1169,7 @@ static void playComputers(Side* side) {
   G.aiRun = std::make_unique<Coroutine>([side](Coroutine& co) { computerTurns(co, side); });
   resumeComputer();
 }
-void front::playComputer() { playComputers(G.player); }
+void front::playComputer() { playComputers(G.g->side); }
 
 static void endTurn() {
   // End Turn (8065:2074) does nothing once the game is won: the winner stays
@@ -3004,13 +3004,17 @@ static void textinput(const std::string& text) {
 
 // A fresh game: its first turn, the view on the capital.
 static void beginGame() {
-  G.player = game::begin(*G.g);
-  if (!G.player) return;
+  Side* first = game::begin(*G.g);
+  if (!first) return;
+  // a computer that opens the game plays to the screen of the human who
+  // follows it, on that human's hidden map
+  G.player = first->computer ? game::nextHuman(*G.g) : first;
+  if (!G.player) G.player = first;
   G.cursor = capOf(G.player);
   G.selection.reset();
   centreOn(capOf(G.player).first, capOf(G.player).second);
   // the banner is a human's (8cc6:0259)
-  if (!G.player->computer) showBanner(G.player);
+  if (!first->computer) showBanner(G.player);
 }
 
 void front::openStart() {
@@ -3034,12 +3038,12 @@ void front::openStart() {
           front::stratDirty();
           syncLayout();
           beginGame();
-          if (G.player && G.player->computer) {
+          if (G.g->side && G.g->side->computer) {
             // a game with no human in it says so as it begins (8065:00f1)
             bool human = false;
             for (Side* s : G.g->sides) if (!s->computer) human = true;
-            if (human) playComputers(G.player);
-            else search::message(kit::text(0xe, 0), kit::text(0xe, 1), []() { playComputers(G.player); });
+            if (human) playComputers(G.g->side);
+            else search::message(kit::text(0xe, 0), kit::text(0xe, 1), []() { playComputers(G.g->side); });
           }
         });
       },

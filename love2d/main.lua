@@ -286,7 +286,7 @@ function openStart()
                                         greatest = extra and extra.greatest })
       G.selection, G.over, G.stratImage = nil, nil, nil
       beginGame()
-      if G.player.computer and G.playComputer then
+      if G.g.side.computer and G.playComputer then
         -- a game with no human in it says so as it begins (8065:00f1)
         local human = false
         for _, s in ipairs(G.g.sides) do if not s.computer then human = true end end
@@ -324,14 +324,17 @@ end
 
 --- Start its first turn, and centre the view on the capital.
 function beginGame()
-  G.player = game.begin(G.g)
+  local first = game.begin(G.g)
+  -- a computer that opens the game plays to the screen of the human who
+  -- follows it, on that human's hidden map
+  G.player = first.computer and game.nextHuman(G.g) or first
   local cap = G.capOf(G.player)
   G.cursor = { x = cap.x, y = cap.y }
   G.selection = nil
   centreOn(cap.x, cap.y)
   -- the banner is a human's (8cc6:0259); a computer that opens the game goes
   -- straight to its turn, shown in the status bar (8cc6:0000)
-  if not G.player.computer then showBanner(G.player) end
+  if not first.computer then showBanner(G.player) end
 end
 
 --------------------------------------------------------------------- camera
@@ -1503,7 +1506,7 @@ function finishRound(side)
 end
 -- a computer side that opens the game plays its turn before anyone's
 G.playComputer = function()
-  playComputers(G.player)
+  playComputers(G.g.side)
 end
 
 -- The city dialog lives in ui/city.lua; these are the front end's ways in.

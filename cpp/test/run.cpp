@@ -2339,6 +2339,15 @@ static void testHiddenMap() {
   Side* other = nullptr;
   for (Side* s : g.sides) if (s->index != side->index) other = s;
   ok(!game::seen(g, other->index, side->capital->x, side->capital->y), "another side has not seen our capital");
+  // a computer that opens the game plays to the next human's hidden map
+  auto g3p = newGame("ERYTHEA", seedWith(103, {{"hiddenMap", 1}}));
+  Game& g3 = *g3p;
+  for (size_t i = 0; i < g3.sides.size(); i++) g3.sides[i]->computer = i != 2;
+  Side* first = game::begin(g3);
+  ok(first == g3.sides[0], "a computer opens the game");
+  ok(game::nextHuman(g3) == g3.sides[2], "the screen is the human's who follows it");
+  g3.sides[2]->computer = true;
+  ok(game::nextHuman(g3) == nullptr, "and nobody's with no human playing");
 }
 
 // --------------------------------------------------------------------- bugs

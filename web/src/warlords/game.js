@@ -681,6 +681,18 @@ export function begin(g) {
   return nextSide(g, null);
 }
 
+/** The human who plays next in the round, the side to play included; null
+ *  with no human left. While the computers before it play, the screen is
+ *  this side's: the original keeps one seen bit per tile, set for its human
+ *  only (8611:1298), so a computer's turn shows the human's hidden map. */
+export function nextHuman(g) {
+  for (let i = Math.max(g.orderAt, 0); i <= 7; i++) {
+    const side = g.map.sides[g.turnOrder[i]];
+    if (side && side.inUse && side.alive && !side.computer) return side;
+  }
+  return g.sides.find((s) => s.alive && !s.computer) || null;
+}
+
 function removeArmies(g, dead) {
   const gone = new Set(dead);
   for (let i = g.armies.length - 1; i >= 0; i--) {

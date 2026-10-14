@@ -1575,6 +1575,35 @@ do
   end
 end
 
+-- A computer that opens a game on a hidden map plays to the screen of the
+-- human who follows it: the hidden map shown is the human's, never the
+-- computer's (the original's one seen bit, 8611:1298)
+do
+  local game = require("warlords.game")
+  local kit = require("ui.kit")
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.starting, G.over, G.banner, G.aiRun, G.walk = false, nil, nil, nil, nil
+  G.g = game.new(G.dataDir, "ERYTHEA", { seed = 7, options = { hiddenMap = 1 } })
+  for i, s in ipairs(G.g.sides) do s.computer = i ~= 3 end
+  G.stratImage = nil
+  try("open with a computer", beginGame)
+  local human = G.g.sides[3]
+  if G.player ~= human then fail("hidden map", "a computer's opening shows its own map") end
+  if G.banner then fail("hidden map", "a banner went up for a computer") end
+  try("play the opening computers", G.playComputer)
+  local watched = 0
+  for _ = 1, 20000 do
+    if not G.aiRun then break end
+    if G.aiSide and G.aiSide.computer then watched = watched + 1 end
+    if G.player ~= human then fail("hidden map", "the screen became a computer's") break end
+    if kit.top() then love.keypressed("return") elseif not G.aiSkip then love.keypressed("x") end
+    try("draw the computer's turn", love.draw)
+  end
+  if watched == 0 then fail("hidden map", "the opening computers never played") end
+  if G.g.side ~= human then fail("hidden map", "the human's turn did not follow") end
+  print("  a computer's opening shows the human's hidden map")
+end
+
 os.remove("warlords-save.lua")
 os.remove(prefsMod.FILE)
 

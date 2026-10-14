@@ -104,6 +104,11 @@ bool producing(const City& c);
 Side* endTurn(Game& g);
 /** Start the very first turn of a new game. */
 Side* begin(Game& g);
+/** The human who plays next in the round, the side to play included; null
+ *  with no human left. While the computers before it play, the screen is
+ *  this side's: the original keeps one seen bit per tile, set for its human
+ *  only (8611:1298), so a computer's turn shows the human's hidden map. */
+Side* nextHuman(Game& g);
 
 /** The signpost on a tile, if there is one. */
 Sign* signAt(Game& g, int x, int y);
