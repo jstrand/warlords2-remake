@@ -87,11 +87,13 @@ function site.markRich(g)
   end
 end
 
---- Which content table a site draws from.
+--- Which content table a site draws from: rich, near (an in-play side's
+--- capital less than 15 away by map_distance, 1a8b:0acc) or far.
 local function band(g, s, capitals)
   if s.rich then return "rich" end
   for _, c in ipairs(capitals) do
-    if math.max(math.abs(s.x - c.x), math.abs(s.y - c.y)) < site.CAPITAL_RANGE then
+    local dx, dy = s.x - c.x, s.y - c.y
+    if math.floor(math.sqrt(dx * dx + dy * dy)) < site.CAPITAL_RANGE then
       return "near"
     end
   end
@@ -100,9 +102,10 @@ end
 
 --- Roll what every site holds. setup_random_sites, Ghidra 66d4:0000.
 function site.setup(g)
+  -- the in-play sides' capitals where they stand (+0x189), city or not
   local capitals = {}
   for _, s in ipairs(g.sides) do
-    if s.capital then capitals[#capitals + 1] = s.capital end
+    capitals[#capitals + 1] = { x = s.capX, y = s.capY }
   end
 
   site.markRich(g)
@@ -160,8 +163,9 @@ function site.setup(g)
     if s.content == site.TEMPLE then
       s.guardian = nil
     elseif s.content == site.ALLIES then
+      -- the allies' type takes the guardian's place (66d4:0000)
       s.allyType = g.rng:pick(site.ALLY_TYPES[s.band])
-      s.guardian = g.rng:dice(1, 9, 0)
+      s.guardian = nil
     else
       s.guardian = g.rng:dice(1, 9, 0)
     end
@@ -181,14 +185,14 @@ local function heroIn(stack)
   return nil
 end
 
---- Does the hero survive the ruin's guardian?
+--- Does the hero survive the ruin's guardian (6536:07ad)?
 -- 1d100 <= 90 + 5*(hero strength + battle items - monster strength)
---             + 3*(armies on the hero's tile, the hero included)
-function site.survivesGuardian(g, h, stack, monsterStrength)
+--             + 3*(armies on the hero's tile, whoever's, the hero included)
+function site.survivesGuardian(g, h, monsterStrength)
   local combat = require("warlords.combat")
   local margin = 90
                  + 5 * ((h.strength or 0) + combat.battleItems(h) - monsterStrength)
-                 + 3 * #stack
+                 + 3 * #require("warlords.game").armiesAt(g, h.x, h.y)
   return g.rng:dice(1, 100, 0) <= margin
 end
 
@@ -218,62 +222,62 @@ function site.bless(g, s, stack)
   return blessed
 end
 
---- Search the site a stack is standing on. Returns a table describing what
---- happened, or nil if there is nothing to search here.
--- site_search, Ghidra 6536:0000.
---- Search the site under a stack (site_search, 6536:0000). A human player
---- (`human` set) chooses at a temple what to do -- the blessing and the
---- quest are the temple dialog's buttons -- and a found item is left on the
---- ground at the ruin, for the Take button to pick up (6536:01ab); the
---- computer players are blessed and given the item there and then.
+--- Search the site under a stack (site_search, 6536:0000). Returns a table
+--- describing what happened, or nil if there is nothing to search here. The
+--- stack's first army needs a move left. With no hero only a temple does
+--- anything: it blesses at once. With one, a human player (`human` set)
+--- chooses at a temple what to do -- the blessing and the quest are the
+--- temple dialog's buttons -- and a found item is left on the ground at the
+--- ruin, for the Take button to pick up (6536:01ab); the computer players
+--- are blessed and given the item there and then.
 function site.search(g, stack, x, y, human)
-  local gameMod = require("warlords.game")
   local heroMod = require("warlords.hero")
+  local history = require("warlords.history")
   local s = g.map.siteAt and g.map.siteAt[y * g.map.width + x]
   if not s or s.searched then return nil end
+  if not stack[1] or (stack[1].moves or 0) < 1 then return nil end
 
   local h = heroIn(stack)
 
   if s.content == site.TEMPLE then
-    if human then return { site = s, kind = "temple", hero = h } end
+    if human and h then return { site = s, kind = "temple", hero = h } end
     local blessed = site.bless(g, s, stack)
-    local out = { site = s, kind = "temple", blessed = blessed }
-    -- a stack with a hero may also take a quest here
-    if h and g.map.options.quests ~= 0 then
-      local side = g.map.sides[h.owner + 1]
-      out.quest = require("warlords.quest").assign(g, side, h)
-    end
-    return out
+    return { site = s, kind = "temple", blessed = blessed, hero = h }
   end
 
   -- only a stack with a hero may search a ruin
   if not h then return { site = s, kind = "no hero" } end
-  s.searched = true
+  local side = g.map.sides[h.owner + 1]
 
   if s.content == site.SAGE then
     heroMod.addExperience(g, h, 3)
-    local history = require("warlords.history")
-    history.deed(g, g.map.sides[h.owner + 1], history.FINDS, history.SAGE, 0, h.name)  -- 6536:013c
+    history.deed(g, side, history.FINDS, history.SAGE, 0, h.name)  -- 6536:013c
+    s.searched = true
     return { site = s, kind = "sage", hero = h }
   end
 
+  -- ruin_search (6536:01ab)
   heroMod.addExperience(g, h, 3)
 
   -- the guardian fights once; a guardian beaten is reported with whatever
-  -- is found, as the popup tells it ("... and is victorious!")
+  -- is found, as the popup tells it ("... and is victorious!"). An allies
+  -- site holds its allies' type where the guardian would be, and nothing
+  -- guards it.
   local beaten
-  if s.guardian and s.guardian > 0 then
+  if s.content ~= site.ALLIES and s.guardian and s.guardian > 0 then
     local strength = site.guardianStrength(g, s)
-    beaten = g.map.monsters[s.guardian]
-    if not site.survivesGuardian(g, h, stack, strength) then
-      heroMod.dropItems(g, h, x, y)
-      local history = require("warlords.history")
-      history.deed(g, g.map.sides[h.owner + 1], history.KILLED, history.SEARCHING, 0, h.name)  -- 6536:02ef
+    local monster = g.map.monsters[s.guardian]
+    if not site.survivesGuardian(g, h, strength) then
+      history.deed(g, side, history.KILLED, history.SEARCHING, 0, h.name)  -- 6536:02ef
+      history.tally(g, h, nil, false)   -- the side's own losses
+      heroMod.dropItems(g, h, h.x, h.y, h.owner)
       for i, a in ipairs(g.armies) do
         if a == h then table.remove(g.armies, i) break end
       end
-      return { site = s, kind = "killed", monster = g.map.monsters[s.guardian], hero = h }
+      return { site = s, kind = "killed", monster = monster, hero = h }
     end
+    beaten = monster
+    s.guardian = 0
   end
 
   if s.content == site.ITEM then
@@ -288,49 +292,32 @@ function site.search(g, stack, x, y, human)
       h.items = h.items or {}
       h.items[#h.items + 1] = found
     end
-    local side = g.map.sides[h.owner + 1]
     if found then
-      local history = require("warlords.history")
       history.deed(g, side, history.FINDS, found.index, 0, h.name)   -- 6536:0571
     end
-    local q = require("warlords.quest").event(g, side, "item", { hero = h })
-    return { site = s, kind = "item", item = found, hero = h, quest = q, guardian = beaten }
+    s.searched = true
+    s.content = site.EMPTY
+    return { site = s, kind = "item", item = found, hero = h, guardian = beaten }
 
   elseif s.content == site.GOLD then
     local gold = s.rich and g.rng:dice(3, 1000, 1000) or g.rng:dice(3, 500, 500)
-    local side = g.map.sides[h.owner + 1]
     side.gold = side.gold + gold
+    s.searched = true
+    history.deed(g, side, history.FINDS, history.GOLD, 0, h.name)
     return { site = s, kind = "gold", gold = gold, hero = h, guardian = beaten }
 
   elseif s.content == site.ALLIES then
+    s.searched = true
     local type = g.types.byId[s.allyType] or g.types.byId[armytype.SCOUTS]
-    local n = s.rich and g.rng:dice(1, 2, 2) or g.rng:dice(1, 2, 0)
+    local n = g.rng:dice(1, 2, 0)
+    if s.rich then n = n + 2 end
     local joined = {}
     for _ = 1, n do
-      local ax, ay = x, y
-      if #gameMod.armiesAt(g, ax, ay) >= rules.MAX_STACK then
-        -- placed within one tile when the site is full
-        for dx = -1, 1 do
-          for dy = -1, 1 do
-            local nx, ny = x + dx, y + dy
-            if nx >= 0 and ny >= 0 and nx < g.map.width and ny < g.map.height
-               and #gameMod.armiesAt(g, nx, ny) < rules.MAX_STACK
-               and move.COST[scn.terrainAt(g.map, nx, ny)] ~= 0 then
-              ax, ay = nx, ny
-            end
-          end
-        end
-      end
-      if #gameMod.armiesAt(g, ax, ay) < rules.MAX_STACK then
-        local a = require("warlords.hero").newAlly(
-          g, type, ax, ay, h.owner, h.homeCity)
-        g.armies[#g.armies + 1] = a
-        joined[#joined + 1] = a
-      end
+      local a = heroMod.placeAlly(g, type, x, y, side)
+      if a then joined[#joined + 1] = a end
     end
-    local history = require("warlords.history")
-    history.deed(g, g.map.sides[h.owner + 1], history.FINDS, history.ALLIES, 0, h.name)  -- 6536:07a1
-    return { site = s, kind = "allies", armies = joined, type = type, hero = h,
+    history.deed(g, side, history.FINDS, history.ALLIES, 0, h.name)  -- 6536:07a1
+    return { site = s, kind = "allies", armies = joined, count = n, type = type, hero = h,
              guardian = beaten }
   end
 
@@ -350,9 +337,11 @@ local function sageDistance(s, hx, hy)
   return math.floor(math.sqrt((s.x - hx) ^ 2 + (s.y - hy) ^ 2))   -- 2012:1199
 end
 
-local function shownTo(s, side)
+--- Has the side been shown the site (its bit in +0x0c)?
+function site.shownTo(s, side)
   return math.floor((s.revealed or 0) / 2 ^ side.index) % 2 == 1
 end
+local shownTo = site.shownTo
 
 local function unshown(g, side, s, hx, hy)
   return s.rich and not s.searched and not shownTo(s, side)

@@ -11,7 +11,6 @@
 #include "warlords/hero.hpp"
 #include "warlords/history.hpp"
 #include "warlords/move.hpp"
-#include "warlords/quest.hpp"
 #include "warlords/rules.hpp"
 #include "warlords/scn.hpp"
 
@@ -78,17 +77,21 @@ void markRich(Game& g) {
   }
 }
 
-static std::string band(const Site& s, const std::vector<City*>& capitals) {
+// rich, near (an in-play side's capital less than 15 away by map_distance,
+// 1a8b:0acc) or far.
+static std::string band(const Site& s, const std::vector<std::pair<int, int>>& capitals) {
   if (s.rich) return "rich";
-  for (City* c : capitals) {
-    if (std::max(std::abs(s.x - c->x), std::abs(s.y - c->y)) < CAPITAL_RANGE) return "near";
+  for (auto& c : capitals) {
+    double dx = s.x - c.first, dy = s.y - c.second;
+    if ((int)std::floor(std::sqrt(dx * dx + dy * dy)) < CAPITAL_RANGE) return "near";
   }
   return "far";
 }
 
 void setup(Game& g) {
-  std::vector<City*> capitals;
-  for (Side* s : g.sides) if (s->capital) capitals.push_back(s->capital);
+  // the in-play sides' capitals where they stand (+0x189), city or not
+  std::vector<std::pair<int, int>> capitals;
+  for (Side* s : g.sides) capitals.emplace_back(s->capX, s->capY);
 
   markRich(g);
   int temples = 0;
@@ -141,8 +144,9 @@ void setup(Game& g) {
     if (s.content == TEMPLE) {
       s.guardian = NONE;
     } else if (s.content == ALLIES) {
+      // the allies' type takes the guardian's place (66d4:0000)
       s.allyType = g.rng.pick(allyTypes(s.band), 0);
-      s.guardian = g.rng.dice(1, 9, 0);
+      s.guardian = NONE;
     } else {
       s.guardian = g.rng.dice(1, 9, 0);
     }
@@ -156,8 +160,9 @@ static Army* heroIn(const std::vector<Army*>& stack) {
   return nullptr;
 }
 
-bool survivesGuardian(Game& g, const Army& h, const std::vector<Army*>& stack, int monsterStrength) {
-  int margin = 90 + 5 * (h.strength + combat::battleItems(h) - monsterStrength) + 3 * (int)stack.size();
+bool survivesGuardian(Game& g, const Army& h, int monsterStrength) {
+  int margin = 90 + 5 * (h.strength + combat::battleItems(h) - monsterStrength) +
+               3 * (int)game::armiesAt(g, h.x, h.y).size();
   return g.rng.dice(1, 100, 0) <= margin;
 }
 
@@ -191,46 +196,51 @@ std::shared_ptr<SearchResult> search(Game& g, const std::vector<Army*>& stack, i
   if (g.map->siteAt.empty() || x < 0 || y < 0) return nullptr;
   Site* s = g.map->siteAt[y * g.map->width + x];
   if (!s || s->searched) return nullptr;
+  if (stack.empty() || stack[0]->moves < 1) return nullptr;
   Army* h = heroIn(stack);
   auto out = std::make_shared<SearchResult>();
   out->site = s;
 
   if (s->content == TEMPLE) {
     out->kind = "temple";
-    if (human) { out->hero = h; return out; }
+    out->hero = h;
+    if (human && h) return out;
     out->blessed = bless(g, *s, stack);
-    if (h && g.map->options.quests != 0) {
-      Side* side = g.map->side(h->owner);
-      if (side) out->assigned = quest::assign(g, *side, h);
-    }
     return out;
   }
 
   if (!h) { out->kind = "no hero"; return out; }
-  s->searched = true;
+  Side* side = g.map->side(h->owner);
   out->hero = h;
 
   if (s->content == SAGE) {
     hero::addExperience(g, h, 3);
-    history::deed(g, g.map->side(h->owner), history::FINDS, history::SAGE, 0, h->name);  // 6536:013c
+    history::deed(g, side, history::FINDS, history::SAGE, 0, h->name);  // 6536:013c
+    s->searched = true;
     out->kind = "sage";
     return out;
   }
 
+  // ruin_search (6536:01ab)
   hero::addExperience(g, h, 3);
 
+  // an allies site holds its allies' type where the guardian would be, and
+  // nothing guards it
   const Monster* beaten = nullptr;
-  if (s->guardian != NONE && s->guardian > 0) {
+  if (s->content != ALLIES && s->guardian != NONE && s->guardian > 0) {
     int str = guardianStrength(g, *s);
-    beaten = monsterOf(g, s->guardian);
-    if (!survivesGuardian(g, *h, stack, str)) {
-      hero::dropItems(g, h, x, y);
-      history::deed(g, g.map->side(h->owner), history::KILLED, history::SEARCHING, 0, h->name);  // 6536:02ef
+    const Monster* monster = monsterOf(g, s->guardian);
+    if (!survivesGuardian(g, *h, str)) {
+      history::deed(g, side, history::KILLED, history::SEARCHING, 0, h->name);  // 6536:02ef
+      history::tally(g, h, NONE, false);   // the side's own losses
+      hero::dropItems(g, h, h->x, h->y, h->owner);
       g.remove(h);
       out->kind = "killed";
-      out->monster = monsterOf(g, s->guardian);
+      out->monster = monster;
       return out;
     }
+    beaten = monster;
+    s->guardian = 0;
   }
   out->guardian = beaten;
 
@@ -243,48 +253,34 @@ std::shared_ptr<SearchResult> search(Game& g, const std::vector<Army*>& stack, i
       found->status = 3;                              // carried
       h->items.push_back(found);
     }
-    Side* side = g.map->side(h->owner);
     if (found) history::deed(g, side, history::FINDS, found->index, 0, h->name);   // 6536:0571
-    if (side) {
-      quest::Event ev;
-      ev.hero = h;
-      out->quest = quest::event(g, *side, "item", ev);
-    }
+    s->searched = true;
+    s->content = EMPTY;
     out->kind = "item";
     out->item = found;
     return out;
   } else if (s->content == GOLD) {
     int gold = s->rich ? g.rng.dice(3, 1000, 1000) : g.rng.dice(3, 500, 500);
-    Side* side = g.map->side(h->owner);
     if (side) side->gold += gold;
+    s->searched = true;
+    history::deed(g, side, history::FINDS, history::GOLD, 0, h->name);
     out->kind = "gold";
     out->gold = gold;
     return out;
   } else if (s->content == ALLIES) {
+    s->searched = true;
     const ArmyType* type = g.types.byId(s->allyType);
     if (!type) type = g.types.byId(armytype::SCOUTS);
-    int n = s->rich ? g.rng.dice(1, 2, 2) : g.rng.dice(1, 2, 0);
+    int n = g.rng.dice(1, 2, 0);
+    if (s->rich) n += 2;
     for (int k = 0; k < n; k++) {
-      int ax = x, ay = y;
-      if ((int)game::armiesAt(g, ax, ay).size() >= rules::MAX_STACK) {
-        for (int dx = -1; dx <= 1; dx++) {
-          for (int dy = -1; dy <= 1; dy++) {
-            int nx = x + dx, ny = y + dy;
-            if (nx >= 0 && ny >= 0 && nx < g.map->width && ny < g.map->height &&
-                (int)game::armiesAt(g, nx, ny).size() < rules::MAX_STACK &&
-                move::COST[scn::terrainAt(*g.map, nx, ny)] != 0) {
-              ax = nx; ay = ny;
-            }
-          }
-        }
-      }
-      if ((int)game::armiesAt(g, ax, ay).size() < rules::MAX_STACK) {
-        out->armies.push_back(g.add(hero::newAlly(type, ax, ay, h->owner, h->homeCity)));
-      }
+      Army* a = hero::placeAlly(g, type, x, y, *side);
+      if (a) out->armies.push_back(a);
     }
-    history::deed(g, g.map->side(h->owner), history::FINDS, history::ALLIES, 0, h->name);  // 6536:07a1
+    history::deed(g, side, history::FINDS, history::ALLIES, 0, h->name);  // 6536:07a1
     out->kind = "allies";
     out->type = type;
+    out->count = n;
     return out;
   }
   out->kind = "empty";

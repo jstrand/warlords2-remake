@@ -41,6 +41,7 @@
 #include "util/json.hpp"
 #include "util/util.hpp"
 #include "warlords/ai.hpp"
+#include "warlords/ai/groups.hpp"
 #include "warlords/armytype.hpp"
 #include "warlords/cues.hpp"
 #include "warlords/diplomacy.hpp"
@@ -49,6 +50,7 @@
 #include "warlords/history.hpp"
 #include "warlords/move.hpp"
 #include "warlords/pal.hpp"
+#include "warlords/quest.hpp"
 #include "warlords/rules.hpp"
 #include "warlords/randommap.hpp"
 #include "warlords/save.hpp"
@@ -163,6 +165,9 @@ static void loadArt() {
   G.cityBack = img("/TERRAIN0/CITYBACK.PCK");
   G.searchPic = img("/PICS/SEARCH.PCK");
   G.templePic = img("/PICS/TEMPLE.PCK");
+  // a promotion's (popups 16-18) and a medal's (popups 24-27) pictures
+  for (int i = 2; i <= 4; i++) G.levelPic[i] = img("/PICS/LEVEL" + std::to_string(i) + ".PCK");
+  for (int i = 0; i < 4; i++) G.medalPic[i] = img("/PICS/MEDAL" + std::to_string(i) + ".PCK");
   G.scrollPic = img("/PICS/SCROLL.PCK", 10);
 }
 
@@ -539,8 +544,16 @@ void front::selectAt(int x, int y) { select(x, y); }
 // a time (8c07:040e). The next army is the nearest of the eligible ones to
 // where the cycle last stopped; one exactly there counts as far away.
 
+// Where a side's capital now stands (67cc:10d7): its own, or the city of
+// its it moved to while the side does not hold it.
+static std::pair<int, int> capOf(const Side* side) {
+  if (side->capNowX != NONE) return {side->capNowX, side->capNowY};
+  if (side->capital) return {side->capital->x, side->capital->y};
+  return {side->capX == NONE ? 0 : side->capX, side->capY == NONE ? 0 : side->capY};
+}
+
 static void cycleReset() {
-  G.cursor = G.player->capital ? std::make_pair(G.player->capital->x, G.player->capital->y) : std::make_pair(0, 0);
+  G.cursor = capOf(G.player);       // 8c07:0113
 }
 
 static int cycleRank(const Army* a) {
@@ -827,7 +840,7 @@ static void afterOffer();
 // Close the banner, and only then let the turn's first dialog through.
 static void dismissBanner() {
   G.banner.reset();
-  if (G.centreAfterBanner && G.player->capital) centreOn(G.player->capital->x, G.player->capital->y);
+  if (G.centreAfterBanner) centreOn(capOf(G.player).first, capOf(G.player).second);
   G.centreAfterBanner = false;
   // whoever is left on the water without a boat drowns (8cc6:0259), and only
   // then does the advisor have his say (6dda:026f(5)); 8cc6:04bd then puts on
@@ -837,13 +850,19 @@ static void dismissBanner() {
 
 static void afterBanner() {
   int says = sound::speechOn() ? w2::cues::advisor(*G.g, *G.player, front::roll) : NONE;
+  // then 8cc6:04bd: the heroes promoted, each in its own popup, and the hero
+  // offer with its music, or the turn's
   advisor::say(says, []() {
-    sound::music(G.player->heroOffer ? w2::cues::HERO : w2::cues::PLAY);
-    std::vector<std::string> moments;
-    if (G.g->turn == 2) moments.push_back("turn2");
-    if (G.player->heroOffer) moments.push_back("hero");
-    tutorial::chain(moments, []() {
-      if (!presentOffer(G.player)) afterOffer();
+    auto promoted = G.player->promoted;
+    G.player->promoted.clear();
+    honours::promotions(promoted, []() {
+      sound::music(G.player->heroOffer ? w2::cues::HERO : w2::cues::PLAY);
+      std::vector<std::string> moments;
+      if (G.g->turn == 2) moments.push_back("turn2");
+      if (G.player->heroOffer) moments.push_back("hero");
+      tutorial::chain(moments, []() {
+        if (!presentOffer(G.player)) afterOffer();
+      });
     });
   });
 }
@@ -876,24 +895,30 @@ static void acceptOffer() {
   auto offer = G.offer;
   offer->name = G.offerName;
   offer->female = G.offerFemale;
-  auto [h, allies] = w2::hero::recruit(*G.g, *G.player, *offer);
+  auto hired = w2::hero::recruit(*G.g, *G.player, *offer);
+  Army* h = hired.hero;
   G.offer.reset();
   G.player->heroOffer.reset();
   centreOn(h->x, h->y);
-  if (!allies.empty()) {
+  if (hired.count > 0) {
     // "And the hero brings 1 ally!" / "... %d allies!" (hero_brings_allies,
-    // 7563:01fc, through 8065:10fb)
-    std::string line = allies.size() == 1 ? kit::text(ALLY_GROUP, 0) : format(kit::text(ALLY_GROUP, 1), (int)allies.size());
+    // 7563:01fc, through 8065:10fb): the number rolled, placed or not
+    std::string line = hired.count == 1 ? kit::text(ALLY_GROUP, 0) : format(kit::text(ALLY_GROUP, 1), hired.count);
     search::say(line, []() { afterOffer(); });
     return;
   }
   afterOffer();
 }
 
-// The turn's opening, once any hero offer is settled: on turn 1 the
-// capital's dialog opens in Production.
+// The turn's opening, once any hero offer is settled (8cc6:04bd(1)): the
+// cities build -- or on turn 1 the capital's dialog opens in Production.
 static void afterOffer() {
-  if (G.g->turn == 1 && G.player->capital && !G.player->computer) city::open(G.player->capital, city::PRODUCTION);
+  if (G.player->computer) return;
+  game::humanProduction(*G.g, *G.player);
+  front::stratDirty();
+  auto cap = capOf(G.player);
+  City* city = game::cityAt(*G.g, cap.first, cap.second);
+  if (G.g->turn == 1 && city) city::open(city, city::PRODUCTION);
 }
 
 static void refuseOffer() {
@@ -1162,7 +1187,7 @@ static void finishRound(Side* side) {
   int humans = 0;
   for (auto& s : G.g->map->sides) if (s.inUse && s.alive && !s.computer) humans++;
   G.centreAfterBanner = G.g->map->options.hiddenMap != 0 && humans > 1;
-  if (!G.centreAfterBanner && side->capital) centreOn(side->capital->x, side->capital->y);
+  if (!G.centreAfterBanner) centreOn(capOf(side).first, capOf(side).second);
   ending::show(G.g->ending, [side]() { showBanner(side); });
 }
 
@@ -1177,7 +1202,7 @@ void front::takeLoaded(std::unique_ptr<w2::Game> loaded) {
   G.over = false;
   front::stratDirty();
   G.player = G.g->sides[G.g->current];
-  centreOn(G.player->capital->x, G.player->capital->y);
+  centreOn(capOf(G.player).first, capOf(G.player).second);
   sound::music(w2::cues::PLAY);               // 7721:02d3
 }
 
@@ -1703,7 +1728,7 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
     linePixels(x + a->x * 2 + 2, y + a->y * 2 + 2, x + b->x * 2 + 2, y + b->y * 2 + 2);
   };
   auto mine = game::sideCities(*G.g, *G.player);
-  auto building = [](const City* c) { return c->producing != NONE ? 0 : 3; };
+  auto building = [](const City* c) { return game::producing(*c) ? 0 : 3; };
   auto [sx, sy] = game::standardAt(*G.g, *G.player);
   auto toStandard = [&, sx = sx, sy = sy](const City* c, int colour) {
     palColour(colour);
@@ -1717,12 +1742,12 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
       auto incoming = game::vectoredTo(*G.g, c);
       int k = building(c);
       if (c->vectorTo != NONE) k = 2;
-      if (!incoming.empty()) k = c->producing != NONE ? 1 : 5;
+      if (!incoming.empty()) k = game::producing(*c) ? 1 : 5;
       marker(c, k);
       City* dest = c->vectorTo >= 0 ? G.g->map->city(c->vectorTo) : nullptr;
       if (dest) {
         done.insert(dest);
-        marker(dest, dest->producing != NONE ? 1 : 5);
+        marker(dest, game::producing(*dest) ? 1 : 5);
         line(dest, c, 7);
       } else if (c->vectorTo == game::STANDARD && sx != NONE) {
         toStandard(c, 8);
@@ -1745,13 +1770,13 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
       bool full = (filter == -1 && n + 1 > game::MAX_VECTORED_TO) || (filter >= 0 && filter != NONE && n + filter > game::MAX_VECTORED_TO);
       if (c == city || !full) {
         int k = building(c);
-        if (c == city) k = c->producing != NONE ? 4 : 6;
+        if (c == city) k = game::producing(*c) ? 4 : 6;
         marker(c, k);
       }
     }
     City* dest = city->vectorTo >= 0 ? G.g->map->city(city->vectorTo) : nullptr;
     if (dest) {
-      marker(dest, dest->producing != NONE ? 1 : 5);
+      marker(dest, game::producing(*dest) ? 1 : 5);
       line(city, dest, 7);
     } else if (city->vectorTo == game::STANDARD && sx != NONE) {
       toStandard(city, 7);
@@ -1977,6 +2002,7 @@ void front::closeAssault() {
   Assault a = std::move(*G.assault);
   G.assault.reset();
   game::applyAttack(*G.g, a.result);
+  G.medal = a.result.medal;
   front::stratDirty();
   if (a.after) a.after();
   // a computer's assault is the coroutine's: it carries on
@@ -2042,13 +2068,18 @@ static void pressAssault() {
   std::string victor = a.victor;
   // captured is set once applied: apply, then ask
   front::closeAssault();
+  Army* medal = G.medal;
+  G.medal = nullptr;
   if (!computer) {
     // the fight took effect in closeAssault; see whether a city fell
     if (G.selection && !G.selection->stack.empty()) {
       City* c = game::cityAt(*G.g, G.selection->stack[0]->x, G.selection->stack[0]->y);
       if (c && c->ownerIndex == G.player->index) city = c;
     }
-    if (city) presentVictory(city, victor);
+    // a medal is told before the city's fate is asked (67cc:0000)
+    auto then = [city, victor]() { if (city) presentVictory(city, victor); };
+    if (medal && G.g->alive(medal)) honours::medal(medal, then);
+    else then();
   }
 }
 
@@ -2122,8 +2153,26 @@ static void presentVictory(City* city, const std::string& victor) {
   auto& st = G.victoryView->state;
   st[AS_OCCUPY] = NORMAL;
   st[AS_RAZE] = NORMAL;
-  st[AS_PILLAGE] = city->slots.size() >= 1 ? NORMAL : DISABLED;
-  st[AS_SACK] = city->slots.size() >= 2 ? NORMAL : DISABLED;
+  // Pillage and Sack by the gold they would bring (63fa:0834, 63fa:07d0)
+  int pillageGold = city->slots.empty() ? 0 : std::abs(G.g->types.byId(city->slots.back().type)->price) / 2;
+  int sackGold = w2::ai::groups::sackValue(*G.g, *city);
+  st[AS_PILLAGE] = pillageGold != 0 ? NORMAL : DISABLED;
+  st[AS_SACK] = sackGold != 0 ? NORMAL : DISABLED;
+  // Enter is Occupy -- unless the stack's hero is on a quest this answers:
+  // Raze for a raze quest on this city, Sack (or Pillage) for gold (63fa:0000)
+  G.victory->enter = AS_OCCUPY;
+  auto q = G.player->quest;
+  Army* hero = nullptr;
+  if (G.selection) {
+    for (Army* a : G.selection->stack) if (a->type == w2::armytype::HERO) { hero = a; break; }
+  }
+  if (G.g->map->options.quests != 0 && q && hero && hero == q->hero) {
+    if (q->type == w2::quest::RAZE && q->city == city) G.victory->enter = AS_RAZE;
+    else if (q->type == w2::quest::PILLAGE_GOLD) {
+      if (sackGold != 0) G.victory->enter = AS_SACK;
+      else if (pillageGold != 0) G.victory->enter = AS_PILLAGE;
+    }
+  }
 }
 void front::presentVictory(City* city, const std::string& victor) { ::presentVictory(city, victor); }
 
@@ -2541,7 +2590,6 @@ static std::map<int, std::function<void()>>& actions() {
   // the pad's centre, 177, shares its handler with Home (8065:0f02)
   A[177] = []() {
     if (G.selection) centreOn(G.selection->x, G.selection->y);
-    else centreOn(G.player->capital->x, G.player->capital->y);
   };
   return A;
 }
@@ -2847,7 +2895,7 @@ static void keypressed(const std::string& k) {
   if (G.assault) { pressAssault(); return; }
   if (G.victory) {
     // Occupy heads both the default and the cancel lists
-    if (k == "return" || k == "kpenter" || k == "escape") takeCity(AS_OCCUPY);
+    if (k == "return" || k == "kpenter" || k == "escape") takeCity(G.victory->enter);
     return;
   }
   if (G.offer) {
@@ -2944,9 +2992,9 @@ static void textinput(const std::string& text) {
 static void beginGame() {
   G.player = game::begin(*G.g);
   if (!G.player) return;
-  G.cursor = G.player->capital ? std::make_pair(G.player->capital->x, G.player->capital->y) : std::make_pair(0, 0);
+  G.cursor = capOf(G.player);
   G.selection.reset();
-  centreOn(G.player->capital->x, G.player->capital->y);
+  centreOn(capOf(G.player).first, capOf(G.player).second);
   // the banner is a human's (8cc6:0259)
   if (!G.player->computer) showBanner(G.player);
 }

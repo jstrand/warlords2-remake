@@ -21,7 +21,7 @@ static void bump(Game& g, int side, int opp, int k, int n = 1) {
   row[k] += n;
 }
 
-void tally(Game& g, const Army* army, int killer) {
+void tally(Game& g, const Army* army, int killer, bool boat) {
   int loser = army->owner;
   int k;
   if (army->type == armytype::HERO) k = HEROES;
@@ -32,7 +32,7 @@ void tally(Game& g, const Army* army, int killer) {
   int rows[2][2] = {{loser, loser}, {killer, loser}};
   for (auto& row : rows) {
     bump(g, row[0], row[1], k);
-    if (army->atSea) bump(g, row[0], row[1], NAVIES);
+    if (boat) bump(g, row[0], row[1], NAVIES);
     if (std > 0) bump(g, row[0], row[1], STANDARDS, std);
   }
 }

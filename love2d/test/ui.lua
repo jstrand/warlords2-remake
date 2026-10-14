@@ -1469,6 +1469,27 @@ print(("  the game reached turn %d%s"):format(G.g.turn,
   G.over and ", and ended" or (not humanLeft() and ", the war going on without a human" or "")))
 G.aiRun = nil
 
+-- a hero's promotion and an army's medal (7563:0672, 67cc:2274): each popup
+-- draws, and goes at a key, then runs what comes after
+do
+  local kit = require("ui.kit")
+  local honours = require("ui.honours")
+  local h = { type = 28, owner = 0, name = "Sir Test", level = 3, strength = 7, maxMoves = 18 }
+  local a = { type = 11, owner = 0, name = "Scouts", strength = 4, maxMoves = 16, medals = 2 }
+  local done = 0
+  try("promotion popups", honours.promotions, { { hero = h, gain = 1 }, { hero = h, gain = 0 } },
+      function() done = done + 1 end)
+  for _ = 1, 2 do
+    try("promotion popup frame", love.draw)
+    love.keypressed("return")
+  end
+  try("medal popup", honours.medal, a, function() done = done + 1 end)
+  try("medal popup frame", love.draw)
+  love.mousepressed(320, 240, 1)
+  if done ~= 2 or kit.top() then fail("honours", "a popup did not close") end
+  print("  a promotion and a medal were shown")
+end
+
 -- the start screens keep the menu bar, with only Quit and Load game live
 -- (7f77:0200)
 do

@@ -47,8 +47,9 @@ function bump(g, side, opp, k, n) {
   row[k] += n == null ? 1 : n;
 }
 
-/** An army of its owner's killed by `killer`'s. */
-export function tally(g, army, killer) {
+/** An army of its owner's killed by `killer`'s; `boat` when it fought as a
+ *  boat, at sea on water or shore (67cc:1aff counts those navies). */
+export function tally(g, army, killer, boat) {
   const loser = army.owner;
   let k;
   if (army.type === armytype.HERO) k = HEROES;
@@ -58,7 +59,7 @@ export function tally(g, army, killer) {
   for (const it of army.items || []) if (it.index < 8) std++;
   for (const row of [[loser, loser], [killer, loser]]) {
     bump(g, row[0], row[1], k);
-    if (army.atSea) bump(g, row[0], row[1], NAVIES);
+    if (boat) bump(g, row[0], row[1], NAVIES);
     if (std > 0) bump(g, row[0], row[1], STANDARDS, std);
   }
 }

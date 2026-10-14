@@ -87,6 +87,22 @@ static std::unique_ptr<Game> newGame(const std::string& scenario, GameOpts o = G
   return game::newGame(DATA, scenario, n);
 }
 static GameOpts seed(double s) { GameOpts o; o.seed = s; return o; }
+// The turn passes as the interface passes it: a human's turn opens with the
+// hero offer left standing, and then its cities build (8cc6:04bd(1)).
+static Side* endTurn(Game& g) {
+  Side* side = game::endTurn(g);
+  if (side && !side->computer) game::humanProduction(g, *side);
+  return side;
+}
+// A human side played by the computer player, as some tests do: it takes
+// the hero it is offered first, as a computer does.
+static void playAI(Game& g, Side& side) {
+  if (!side.computer && side.heroOffer) {
+    hero::recruit(g, side, *side.heroOffer);
+    side.heroOffer.reset();
+  }
+  ai::playTurn(g, side);
+}
 static GameOpts seedWith(double s, std::vector<std::pair<std::string, int>> options) {
   GameOpts o;
   o.seed = s;
@@ -252,7 +268,7 @@ static void testTurnLoop(const std::string& scenario) {
   {
     Army* one = game::sideArmies(g, *side)[0];
     one->done = true; one->offered = true; one->fortified = true;
-    for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g);
+    for (size_t i = 0; i < g.sides.size(); i++) endTurn(g);
     eq(one->done, false, "done for this turn wears off with the turn");
     eq(one->offered, false, "and so does having been offered this pass");
     eq(one->fortified, true, "but digging in outlasts it");
@@ -261,17 +277,17 @@ static void testTurnLoop(const std::string& scenario) {
   Army* a = game::sideArmies(g, *side)[0];
   a->moves = 5;
   int before = a->maxMoves;
-  for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g);
+  for (size_t i = 0; i < g.sides.size(); i++) endTurn(g);
   eq(a->moves, before + rules::MOVE_CARRY, "at most 2 unused moves carry over");
   a->moves = 1;
-  for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g);
+  for (size_t i = 0; i < g.sides.size(); i++) endTurn(g);
   eq(a->moves, before + 1, "carry-over below the cap is exact");
 
   City* city = side->capital;
   game::setProduction(g, *city, 0);
   int want = city->slots[0].time;
   size_t n0 = game::sideArmies(g, *side).size();
-  for (size_t i = 0; i < want * g.sides.size(); i++) game::endTurn(g);
+  for (size_t i = 0; i < want * g.sides.size(); i++) endTurn(g);
   ok(game::sideArmies(g, *side).size() == n0 + 1, fmt("%s produced after %d turns", city->name.c_str(), want));
   Army* built = nullptr;
   for (Army* army : game::sideArmies(g, *side)) if (army->homeCity == city->index && army != a) built = army;
@@ -290,7 +306,7 @@ static void testTurnLoop(const std::string& scenario) {
   int roundOf = g.turn;
   while (g.turn == roundOf) {
     ok(victim->alive, "a side with no cities is in play until the round ends");
-    game::endTurn(g);
+    endTurn(g);
   }
   ok(!victim->alive, "a side with no cities is eliminated as the round ends");
   eq((int)game::sideArmies(g, *victim).size(), 0, "the eliminated side's armies are gone");
@@ -301,7 +317,7 @@ static void testTurnLoop(const std::string& scenario) {
   auto g2 = newGame(scenario, seed(6));
   game::begin(*g2);
   eq(g2->turn, 1, "the game starts on turn 1");
-  for (size_t i = 0; i < g2->sides.size(); i++) game::endTurn(*g2);
+  for (size_t i = 0; i < g2->sides.size(); i++) endTurn(*g2);
   eq(g2->turn, 2, "a full round advances the turn");
 }
 
@@ -321,12 +337,12 @@ static void testVectoring(const std::string& scenario) {
   game::vector(g, *from, dest);
   int time = from->slots[0].time;
   size_t atDest = game::armiesAt(g, dest->x, dest->y).size();
-  for (size_t i = 0; i < (time + 2) * g.sides.size(); i++) game::endTurn(g);
+  for (size_t i = 0; i < (time + 2) * g.sides.size(); i++) endTurn(g);
   ok(game::armiesAt(g, dest->x, dest->y).size() > atDest, "a vectored army arrives two turns after it is built");
   {
     // to the turn: the road moves before the cities build (6f8c:0000), so
     // the one sent this turn shows under "Turn after" and lands two turns on
-    auto round = [&]() { for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g); };
+    auto round = [&]() { for (size_t i = 0; i < g.sides.size(); i++) endTurn(g); };
     Army* sent = nullptr;
     for (int i = 0; i < 10 && !sent; i++) {
       round();
@@ -436,7 +452,7 @@ static void testReports(const std::string& scenario) {
   game::setProduction(g, *city, 0);
   city->countdown = 1;
   int turns = 0;
-  do { game::endTurn(g); turns++; } while (!(g.side == side || turns > 20));
+  do { endTurn(g); turns++; } while (!(g.side == side || turns > 20));
   ok(!side->produced.empty(), "the side's production is logged");
   if (!side->produced.empty()) {
     eq(side->produced[0].city, city->index, "with the city that built it");
@@ -450,7 +466,7 @@ static void testDisband(const std::string& scenario) {
   auto gp = newGame(scenario, seed(29));
   Game& g = *gp;
   Side* side = game::begin(g);
-  Army* h = hero::recruit(g, *side, *side->heroOffer).first;
+  Army* h = hero::recruit(g, *side, *side->heroOffer).hero;
   auto stack = game::armiesAt(g, h->x, h->y);
   h->strength = 5;
   auto fight = combat::stackStrengths(g, {h}, h->x, h->y);
@@ -501,7 +517,7 @@ static void testHistory(const std::string& scenario) {
   history::deed(g, side, history::PEACE, 0, 1, "");
   eq((int)g.deeds[side->index].size(), 2, "a higher type does not get in");
   int guard = 0;
-  while (g.turn < 3 && guard < 50) { game::endTurn(g); guard++; }
+  while (g.turn < 3 && guard < 50) { endTurn(g); guard++; }
   ok(!g.history.empty(), "a record for the round");
   if (!g.history.empty()) {
     const auto& r = g.history[0];
@@ -622,7 +638,7 @@ static void testHeroItems(const std::string& scenario) {
   auto gp = newGame(scenario, seed(29));
   Game& g = *gp;
   Side* side = game::begin(g);
-  Army* h = hero::recruit(g, *side, *side->heroOffer).first;
+  Army* h = hero::recruit(g, *side, *side->heroOffer).hero;
   eq(h->items[0], &g.map->items[side->index], "the first hero carries the side's own standard record");
   eq(h->items[0]->status, 3, "which is carried");
   eq((int)hero::itemsHere(g, h).size(), 1, "nothing else is listed yet");
@@ -657,7 +673,7 @@ static void testHeroItems(const std::string& scenario) {
   city->countdown = 1;
   ok(game::vectorToStandard(g, *city, *side), "a city may vector to the standard");
   size_t before = game::armiesAt(g, fx, fy).size();
-  for (size_t i = 0; i < 3 * g.sides.size() + 1; i++) game::endTurn(g);
+  for (size_t i = 0; i < 3 * g.sides.size() + 1; i++) endTurn(g);
   ok(game::armiesAt(g, fx, fy).size() > before, "a vectored army arrives at the standard");
   hero::takeItem(g, h, &g.map->items[side->index]);
   eq(game::standardAt(g, *side).first, NONE, "a standard picked up is no longer planted");
@@ -1114,7 +1130,9 @@ static void testHeroes(const std::string& scenario) {
   bool heroine = false;
   for (auto& n : hero::names(g, g.map->sides[0])) if (n.second) heroine = true;
   ok(!heroine, "side 0 has no heroines to offer");
-  auto [h, allies] = hero::recruit(g, *side, *offer);
+  auto hired = hero::recruit(g, *side, *offer);
+  Army* h = hired.hero;
+  auto& allies = hired.allies;
   eq(h->type, armytype::HERO, "the recruit is a hero");
   eq(h->name, offer->name, "the hero keeps the name it was offered under");
   eq(h->strength, 5, "a new hero has strength 5");
@@ -1145,7 +1163,7 @@ static void testHeroes(const std::string& scenario) {
   g.turn = 4;
   HeroOffer later;
   later.city = side->capital;
-  auto escort = hero::recruit(g, *side, later).second;
+  auto escort = hero::recruit(g, *side, later).allies;
   ok(!escort.empty(), "a later hero arrives with an escort");
   for (Army* a : escort) {
     eq(a->moves, a->maxMoves, "an ally joins with its moves already full");
@@ -1226,8 +1244,8 @@ static void testAIGame(const std::string& scenario, int turns) {
   std::map<int, int> ownedAtStart;
   for (Side* s : g.sides) ownedAtStart[s->index] = (int)game::sideCities(g, *s).size();
   while (side && g.turn <= turns) {
-    ai::playTurn(g, *side);
-    side = game::endTurn(g);
+    playAI(g, *side);
+    side = endTurn(g);
   }
   ok(g.turn > turns || side == nullptr, "the game ran to the turn limit");
   std::map<int, int> perTile;
@@ -1576,7 +1594,10 @@ static void testSites(const std::string& scenario) {
       ok(s.allyType != NONE, "an ally ruin knows what joins");
       ok(g.types.byId(s.allyType) != nullptr, "and it is a real army type");
     }
-    if (s.content != site::TEMPLE) ok(s.guardian >= 1 && s.guardian <= 9, "a ruin has a guardian");
+    // an allies site keeps its allies' type where the guardian would be,
+    // and nothing guards it (66d4:0000, 6536:01ab)
+    if (s.content == site::ALLIES) eq(s.guardian, NONE, "nothing guards an allies ruin");
+    else if (s.content != site::TEMPLE) ok(s.guardian >= 1 && s.guardian <= 9, "a ruin has a guardian");
   }
   eq(rich, (int)g.map->sites.size() * 3 / 10, "three in ten sites are rich");
   std::set<int> placed;
@@ -1615,16 +1636,23 @@ static void testSites(const std::string& scenario) {
       eq(side->gold, gold0 + r->gold, "the gold was paid");
       eq(h->experience, 3, "searching is worth 3 experience");
     }
-    ok(ruin->searched, "a searched ruin is used up");
-    ok(site::search(g, {h}, ruin->x, ruin->y) == nullptr, "and cannot be searched again");
+    if (r->kind == "gold") {
+      ok(ruin->searched, "a searched ruin is used up");
+      ok(site::search(g, {h}, ruin->x, ruin->y) == nullptr, "and cannot be searched again");
+    } else {
+      ok(!ruin->searched, "a hero who dies leaves the ruin to be searched again");
+    }
   }
   Site* temple = nullptr;
   for (auto& s : g.map->sites) if (!temple && s.content == site::TEMPLE && s.templeIndex == 0) temple = &s;
   if (temple) {
     Side* side = g.sides[0];
     Army a;
-    a.x = temple->x; a.y = temple->y; a.owner = side->index; a.type = 11; a.strength = 3;
-    auto r = site::search(g, {&a}, temple->x, temple->y);
+    a.x = temple->x; a.y = temple->y; a.owner = side->index; a.type = 11; a.strength = 3; a.moves = 0;
+    ok(site::search(g, {&a}, temple->x, temple->y) == nullptr, "searching needs a move left (6536:0000)");
+    a.moves = 10;
+    auto r = site::search(g, {&a}, temple->x, temple->y, true);
+    eq(r->kind, "temple", "with no hero a temple blesses at once, a human's too");
     eq(r->kind, "temple", "a temple blesses");
     eq(r->blessed, 1, "one army was blessed");
     eq(a.strength, 4, "the blessing adds a strength");
@@ -1639,8 +1667,8 @@ static void testSites(const std::string& scenario) {
   weak.strength = 1;
   int survived = 0, died = 0;
   for (int i = 0; i < 400; i++) {
-    if (site::survivesGuardian(g, strong, {&strong}, 3)) survived++;
-    if (!site::survivesGuardian(g, weak, {&weak}, 8)) died++;
+    if (site::survivesGuardian(g, strong, 3)) survived++;
+    if (!site::survivesGuardian(g, weak, 8)) died++;
   }
   eq(survived, 400, "a strong hero always beats a weak guardian");
   ok(died > 0, "a weak hero sometimes dies to a strong one");
@@ -1657,7 +1685,7 @@ static void testShips() {
   City* city = game::sideCities(g, *side)[0];
   Army* sailor = addArmy(g, city->x, city->y, side->index, 2, 3, 0, 14);
   sailor->atSea = true;
-  for (size_t i = 0; i < g.sides.size(); i++) game::endTurn(g);
+  for (size_t i = 0; i < g.sides.size(); i++) endTurn(g);
   ok(!sailor->atSea, "an army at sea in a city is ashore when its turn begins");
   eq(sailor->moves, sailor->maxMoves, "with its own movement, not the 20 at sea");
 
@@ -2084,10 +2112,10 @@ static void testEndGame() {
   g6.diplomacy.state[doomed->index * 8 + other->index] = diplomacy::WAR;
   g6.diplomacy.state[other->index * 8 + doomed->index] = diplomacy::WAR;
   ok(!game::sideArmies(g6, *doomed).empty(), "the doomed side still has armies");
-  game::endTurn(g6);
+  endTurn(g6);
   eq(g6.side, other, "a computer side with no city has no turn");
   ok(doomed->alive, "but it is not out before the round's end");
-  while (g6.turn == 1) game::endTurn(g6);
+  while (g6.turn == 1) endTurn(g6);
   ok(!doomed->alive, "the round's end puts it out");
   eq((int)game::sideArmies(g6, *doomed).size(), 0, "with all its armies");
   eq(doomed->gold, 0, "and no gold");
@@ -2105,15 +2133,15 @@ static void testEndGame() {
   game::begin(g7);
   Side* me7 = g7.sides.back();
   for (City* c : game::sideCities(g7, *me7)) c->ownerIndex = g7.sides[0]->index;
-  for (size_t i = 1; i < g7.sides.size(); i++) game::endTurn(g7);
+  for (size_t i = 1; i < g7.sides.size(); i++) endTurn(g7);
   eq(g7.side, me7, "the human's turn comes round without a city");
   ok(me7->alive, "and it is still in the game");
-  game::endTurn(g7);
+  endTurn(g7);
   ok(!me7->alive, "the round's end puts it out");
   ok(me7->computer, "a fallen human is the computer's from then on");
   ok(g7.ending.noHumans, "the last human's fall is said");
   ok(g7.noHumansSaid, "once");
-  for (size_t i = 0; i < g7.sides.size(); i++) game::endTurn(g7);
+  for (size_t i = 0; i < g7.sides.size(); i++) endTurn(g7);
   ok(!g7.ending.noHumans, "and only once");
   auto g3p = newGame("ERYTHEA", seed(83));
   Game& g3 = *g3p;
@@ -2170,8 +2198,8 @@ static void testSave() {
   Game& g = *gp;
   Side* side = game::begin(g);
   while (side && g.turn <= 8) {
-    ai::playTurn(g, *side);
-    side = game::endTurn(g);
+    playAI(g, *side);
+    side = endTurn(g);
   }
   Army* h = nullptr;
   for (Army* a : g.armies) if (a->type == armytype::HERO) h = a;
@@ -2242,8 +2270,8 @@ static void testSave() {
   int before = h2.turn;
   for (size_t i = 0; i < h2.sides.size() * 2; i++) {
     if (!side2) break;
-    ai::playTurn(h2, *side2);
-    side2 = game::endTurn(h2);
+    playAI(h2, *side2);
+    side2 = endTurn(h2);
   }
   ok(h2.turn > before, "the reloaded game plays on");
   // a file round trip
@@ -2410,7 +2438,7 @@ static void testRandomMap() {
   Game& g = *gp;
   for (Side* sd : g.sides) sd->computer = true;
   Side* side = game::begin(g);
-  while (side && g.turn <= 6) { ai::playTurn(g, *side); side = game::endTurn(g); }
+  while (side && g.turn <= 6) { playAI(g, *side); side = endTurn(g); }
   eq(g.turn, 7, "the computer players play a random world");
   std::string text = save::encode(g);
   randommap::install(DATA, make(8, {{3, 3, 2, 3}}, false));
@@ -2542,8 +2570,8 @@ static void testComputerPlayers() {
 
   Side* side = game::begin(g);
   while (side && g.turn <= 12) {
-    if (side->computer) ai::playTurn(g, *side);
-    side = game::endTurn(g);
+    if (side->computer) playAI(g, *side);
+    side = endTurn(g);
   }
   auto grp = warlord.ai->groups[1];
   grp->active = 2;
@@ -2698,6 +2726,266 @@ static void testSea() {
 
 // --------------------------------------------------------------------- sound
 
+// Rules checked against WARLORD2.EXE in web-verification.md, one by one.
+static void testVerified() {
+  printf("verified against the original\n");
+  auto mk = [](Game& g, int x, int y, int owner, int type, int strength = NONE) {
+    const ArmyType* t = g.types.byId(type);
+    Army a;
+    a.x = x; a.y = y; a.owner = owner; a.type = type; a.name = t->name;
+    a.strength = strength != NONE ? strength : t->strength;
+    a.maxMoves = t->move; a.moves = t->move; a.upkeep = 1;
+    return g.add(a);
+  };
+
+  // the army table: the lowest free slot (1b62:0309), tiles read from the top
+  {
+    auto gp = newGame("ERYTHEA", seed(1));
+    Game& g = *gp;
+    size_t n = g.armies.size();
+    Army* third = g.armies[2];
+    g.remove(third);
+    Army* a = mk(g, 0, 0, 0, 11);
+    eq(a->slot, 2, "a new army takes the lowest free slot");
+    eq((int)(std::find(g.armies.begin(), g.armies.end(), a) - g.armies.begin()), 2, "and stands in slot order");
+    eq(g.armies.size(), n, "the table is as long as before");
+    Army* b = mk(g, 0, 0, 0, 11);
+    eq(game::armiesAt(g, 0, 0)[0], b, "a tile is read from the top of the table down");
+  }
+
+  // P1: the production nudges are dice(1,100) < p
+  {
+    Rng r(3);
+    int hits = 0;
+    for (int i = 0; i < 20000; i++) if (r.chance(10)) hits++;
+    ok(hits > 20000 * 0.08 && hits < 20000 * 0.10, "chance(10) is 9 in 100: " + std::to_string(hits));
+    Rng t(1);
+    bool never = true;
+    for (int i = 0; i < 5000; i++) if (t.chance(1)) never = false;
+    ok(never, "chance(1) never comes up");
+  }
+
+  // P2, P3, P5: no spilling round a full city; a city that cannot build
+  // goes idle; a human's city that builds starts the next
+  {
+    auto gp = newGame("ERYTHEA", seed(2));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    City* city = side->capital;
+    game::setProduction(g, *city, 0);
+    city->countdown = 1;
+    for (auto d : std::vector<std::pair<int, int>>{{0, 0}, {1, 0}, {0, 1}, {1, 1}}) {
+      while (game::armiesAt(g, city->x + d.first, city->y + d.second).size() < 8) {
+        mk(g, city->x + d.first, city->y + d.second, side->index, 11);
+      }
+    }
+    size_t n = g.armies.size();
+    side->productionDue = true;
+    g.turn = 2;
+    game::humanProduction(g, *side);
+    eq(g.armies.size(), n, "a full city builds nothing: no spilling round it");
+    eq(city->countdown, 0, "its countdown stays at 0");
+    eq(game::producing(*city), false, "and it is idle");
+    for (Army* a : game::armiesAt(g, city->x + 1, city->y + 1)) g.remove(a);
+    side->productionDue = true;
+    game::humanProduction(g, *side);
+    eq(g.armies.size(), n - 8, "an idle city does not try again");
+    game::setProduction(g, *city, 0);
+    city->countdown = 1;
+    side->productionDue = true;
+    game::humanProduction(g, *side);
+    eq(g.armies.size(), n - 7, "set again, it builds");
+    eq((int)game::armiesAt(g, city->x + 1, city->y + 1).size(), 1, "on the tile with room");
+    eq(city->countdown, city->slots[0].time, "and starts the next (6f8c:06bd)");
+    Army* built = game::armiesAt(g, city->x + 1, city->y + 1)[0];
+    eq(built->moves, built->maxMoves, "a new army has its full move (6f8c:0dd7)");
+  }
+
+  // P7: the city's tiles fill x first
+  {
+    auto gp = newGame("ERYTHEA", seed(2));
+    Game& g = *gp;
+    City& city = g.map->cities[0];
+    for (Army* a : std::vector<Army*>(g.armies)) {
+      if (a->x >= city.x && a->x <= city.x + 1 && a->y >= city.y && a->y <= city.y + 1) g.remove(a);
+    }
+    for (int i = 0; i < 8; i++) mk(g, city.x, city.y, 0, 11);
+    auto [x, y] = game::freeTileIn(g, city, false);
+    eq(x, city.x + 1, "after (x,y) comes (x+1,y)");
+    eq(y, city.y, "on the same row");
+  }
+
+  // T1: Random Turns shuffles the order at each round's end
+  {
+    auto gp = newGame("ERYTHEA", seedWith(4, {{"randomTurns", 1}}));
+    Game& g = *gp;
+    for (Side* s : g.sides) s->computer = true;
+    Side* side = game::begin(g);
+    const std::array<int, 8> plain{0, 1, 2, 3, 4, 5, 6, 7};
+    bool shuffled = false;
+    while (side && g.turn <= 6) {
+      if (g.turnOrder != plain) shuffled = true;
+      eq(side->index, g.turnOrder[g.orderAt], "the side to play is the order's");
+      side = game::endTurn(g);
+    }
+    ok(shuffled, "with Random Turns the order is shuffled (8065:1732)");
+    auto sorted = g.turnOrder;
+    std::sort(sorted.begin(), sorted.end());
+    ok(sorted == plain, "it is still every side once");
+    auto g2p = newGame("ERYTHEA", seed(4));
+    Game& g2 = *g2p;
+    game::begin(g2);
+    for (int i = 0; i < 30; i++) game::endTurn(g2);
+    ok(g2.turnOrder == plain, "without it the order stays");
+  }
+
+  // C7: a neutral city that beats off an attack builds, Neutral Cities >= 2
+  {
+    auto gp = newGame("ERYTHEA", seedWith(5, {{"neutralCities", 2}}));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    City* city = nullptr;
+    for (auto& c : g.map->cities) if (!city && c.ownerIndex == NONE && !c.slots.empty()) city = &c;
+    for (Army* a : game::armiesAt(g, city->x, city->y)) a->strength = 9;
+    Army* weak = mk(g, city->x - 1, city->y, side->index, 11, 1);
+    Battle r = game::decideAttack(g, {weak}, city->x, city->y);
+    ok(city->attacked & (1 << side->index), "an attacked city is marked (67cc:02b1)");
+    if (!r.won) {
+      game::applyAttack(g, r);
+      size_t before = game::armiesAt(g, city->x, city->y).size();
+      for (size_t i = 0; i < 12 * g.sides.size(); i++) endTurn(g);
+      ok(game::armiesAt(g, city->x, city->y).size() > before, "the neutral city builds (6bd8:025a)");
+      ok(game::armiesAt(g, city->x, city->y).size() <= 4 || before >= 4, "while its tile holds fewer than 4");
+    }
+  }
+
+  // C10: a medal now and then for a hero's stack that wins
+  {
+    int medals = 0;
+    for (int sd = 1; sd <= 60 && medals == 0; sd++) {
+      auto gp = newGame("ERYTHEA", seed(sd));
+      Game& g = *gp;
+      Side* side = game::begin(g);
+      City* city = nullptr;
+      for (auto& c : g.map->cities) if (!city && c.ownerIndex == NONE) city = &c;
+      for (Army* a : game::armiesAt(g, city->x, city->y)) a->strength = 1;
+      while (game::armiesAt(g, city->x, city->y).size() < 2) mk(g, city->x, city->y, NONE, 11, 1);
+      std::vector<Army*> stack = {mk(g, city->x - 1, city->y, side->index, armytype::HERO, 9),
+                                  mk(g, city->x - 1, city->y, side->index, 11, 9),
+                                  mk(g, city->x - 1, city->y, side->index, 11, 9)};
+      Battle b = game::decideAttack(g, stack, city->x, city->y);
+      Battle& r = game::applyAttack(g, b);
+      if (r.medal) {
+        medals++;
+        eq(r.medal->medals, 1, "a first medal");
+        ok(r.medal->type != armytype::HERO, "for an ordinary army, not the hero");
+      }
+    }
+    ok(medals > 0, "a hero's stack wins medals (67cc:2274)");
+  }
+
+  // S1: nothing guards an allies ruin
+  {
+    bool tried = false;
+    for (int sd = 1; sd <= 20 && !tried; sd++) {
+      auto gp = newGame("ERYTHEA", seed(sd));
+      Game& g = *gp;
+      Side* side = game::begin(g);
+      Site* s = nullptr;
+      for (auto& x : g.map->sites) if (!s && x.content == site::ALLIES) s = &x;
+      if (!s) continue;
+      tried = true;
+      Army* h = mk(g, s->x, s->y, side->index, armytype::HERO, 1);
+      auto r = site::search(g, {h}, s->x, s->y, false);
+      eq(r->kind, "allies", "a hero always comes out of an allies ruin with allies");
+      ok(g.alive(h), "alive");
+    }
+    ok(tried, "found an allies ruin");
+  }
+
+  // Q1, Q4: a computer's quest types; Archons for a reward
+  {
+    auto gp = newGame("ERYTHEA", seedWith(8, {{"quests", 1}}));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    Army* h = mk(g, side->capital->x, side->capital->y, side->index, armytype::HERO);
+    std::set<int> seen;
+    for (int i = 0; i < 40; i++) {
+      side->quest.reset();
+      seen.insert(quest::assign(g, *side, h, true)->type);
+    }
+    bool only = true;
+    for (int t : seen) {
+      if (t != quest::OCCUPY && t != quest::RAZE && t != quest::SLAUGHTER && t != quest::PILLAGE_GOLD) only = false;
+    }
+    ok(only, "a computer only gets occupy, raze, slaughter or gold (quest_assign(1))");
+    bool archons = false;
+    Quest q;
+    q.hero = h;
+    for (int i = 0; i < 60 && !archons; i++) {
+      side->gold = 500;
+      auto r = quest::reward(g, *side, &q);
+      if (r->kind == "allies") {
+        archons = true;
+        eq(r->type->id, quest::REWARD_ALLY, "a quest's allies are Archons");
+      }
+    }
+    ok(archons, "a quest can give allies");
+  }
+
+  // H1: no hero once the surrender has been offered
+  {
+    auto gp = newGame("ERYTHEA", seed(9));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    g.surrenderOffered = true;
+    side->gold = 100000;
+    bool any = false;
+    for (int i = 0; i < 50; i++) if (hero::offer(g, *side)) any = true;
+    ok(!any, "no hero offers itself after the surrender is offered");
+  }
+
+  // M1: a cached route is taken by a stack standing on it
+  {
+    auto gp = newGame("ERYTHEA", seed(1));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    Army* a = game::sideArmies(g, *side)[0];
+    City* far = nullptr;
+    for (auto& c : g.map->cities) if (!far && movement::distance(c.x, c.y, a->x, a->y) > 20) far = &c;
+    auto p1 = movement::findPath(g, {a}, a->x, a->y, far->x, far->y);
+    ok(p1 && p1->size() > 3, "a long route");
+    bool cached = false;
+    for (auto& e : g.pathCache->slots) if (e && e->dx == far->x && e->dy == far->y) cached = true;
+    ok(cached, "is kept (1555:16f0)");
+    auto mid = (*p1)[2];
+    auto p2 = movement::findPath(g, {a}, mid.x, mid.y, far->x, far->y);
+    eq(p2->size(), p1->size() - 3, "from a tile on it the rest of it is taken");
+    bool same = true;
+    for (size_t i = 0; i < p2->size(); i++) {
+      if ((*p2)[i].x != (*p1)[i + 3].x || (*p2)[i].y != (*p1)[i + 3].y) same = false;
+    }
+    ok(same, "step for step");
+  }
+
+  // A1: the computer's flood goes no further than its rounds
+  {
+    auto gp = newGame("ERYTHEA", seed(1));
+    Game& g = *gp;
+    City& c = g.map->cities[0];
+    auto f = ai::core::floodFrom(g, 0, c.x, c.y, 5, nullptr, NONE);
+    bool beyond = false;
+    for (int y = 0; y < g.map->height; y++) {
+      for (int x = 0; x < g.map->width; x++) {
+        if (std::max(std::abs(x - c.x), std::abs(y - c.y)) > 5 && ai::core::floodAt(f, x, y) != ai::core::UNREACHED) {
+          beyond = true;
+        }
+      }
+    }
+    ok(!beyond, "a flood of 5 rounds reaches no further than 5 (1555:0373)");
+  }
+}
+
 // What plays when. The OPL synthesis is checked in the sound step.
 static void testSound() {
   printf("sound\n");
@@ -2783,6 +3071,7 @@ int main() {
   testAIGame("TUTORIA", 30);
   testAIGame("ERYTHEA", 25);
   if (fileExists(DATA + "/TUTORIA/TUTORIA.SCN")) testTutorialHero();
+  testVerified();
   testSound();
   printf("\n%d passed, %d failed\n", passed, failed);
   return failed == 0 ? 0 : 1;

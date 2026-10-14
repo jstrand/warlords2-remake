@@ -73,6 +73,11 @@ function moves.searchSite(g, sel, h, s)
     local stack = sel and sel.armies or { h }
     local r = siteMod.search(g, stack, s.x, s.y, false)
     if r and r.kind == "sage" then sage(g, side) end
+    -- at a temple the computer takes a quest, by its own rules (quest_assign(1))
+    if s.content == siteMod.TEMPLE and g.map.options.quests ~= 0 and not side.quest
+       and core.isHero(h) then
+      require("warlords.quest").assign(g, side, h, true)
+    end
     if not core.isHero(h) then return 0 end
     for _, a in ipairs(stack) do a.done = nil end
     if g.map.options.hiddenMap ~= 0 and s.content == siteMod.ALLIES then

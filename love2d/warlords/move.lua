@@ -359,13 +359,15 @@ end
 -- way to -- and stops once the sweep has passed the start. Only tiles in
 -- the rectangle round start and destination, `margin` wider on every side,
 -- spread: 6 on the first pass, 50 on the second, which carries on from the
--- square the first had reached. 1 when the start was reached.
+-- square the first had reached. 1 when the start was reached. A flood
+-- (flag 0x10, `q.flood`) spreads as far as its range, and as many rounds,
+-- and does not stop at the start.
 local function wavefront(q, pass)
   local W, H = q.W, q.H
   local sx, sy, dx, dy = q.sx, q.sy, q.dx, q.dy
   local dist, grid, mode = q.dist, q.grid, q.mode
-  local margin = pass == 0 and 6 or 50
-  if pass == 0 then q.ring = 0 end
+  local margin = q.flood or (pass == 0 and 6 or 50)
+  if pass == 0 or q.flood then q.ring = 0 end
   local lox, loy = math.min(sx, dx), math.min(sy, dy)
   local hix, hiy = math.max(sx, dx), math.max(sy, dy)
   local bx0 = lox < margin and 0 or lox - margin
@@ -376,6 +378,7 @@ local function wavefront(q, pass)
   local WATER, CROSS, CITY = move.WATER_F, move.CROSS_F, move.CITY_F
   local found, going = 1, true
   while going do
+    if q.flood and q.ring == q.flood then break end
     local any = false
     local r = q.ring
     -- the square at this distance, as far as it lies in the rectangle
@@ -442,7 +445,7 @@ local function wavefront(q, pass)
               if ok and nd + c < absval(nv) then dist[nk] = v - c end
             end
           end
-          if x == sx and y == sy then going = false end
+          if x == sx and y == sy and not q.flood then going = false end
         end
       end
     end
@@ -518,11 +521,102 @@ local function singleStep(g, mode, sx, sy, dx, dy)
   return true
 end
 
+--- A stack may always path *to* a city, just never through one it does not
+--- own (path_mark_cities, 1555:0bde): when (x, y) is a city tile the grid
+--- shuts, its four tiles open at the city cost, and a port is a crossing, so
+--- a stack at sea can attack it. Returns what to put back.
+local function openCityAt(g, grid, x0, y0)
+  local W, H = g.map.width, g.map.height
+  local restore = {}
+  local goal = y0 * W + x0
+  local goalByte = grid[goal]
+  local city = g.map.cityTile[goal]
+  if city and goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
+    local port = move.isPort(g, city)
+    for ox = 0, 1 do
+      for oy = 0, 1 do
+        local x, y = city.x + ox, city.y + oy
+        if x < W and y < H then
+          local k = y * W + x
+          restore[k] = grid[k]
+          local byte = grid[k] - grid[k] % 8 + move.COST[move.CITY]
+          if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
+          grid[k] = byte
+        end
+      end
+    end
+  end
+  return restore
+end
+
+-- The route cache (1555:1508-16f0): 20 slots, slot 0 for routes under 15
+-- tiles, 1-19 for longer ones, kept from game start or load for every side.
+move.CACHE_SLOTS = 20
+
+function move.newPathCache()
+  return { n = move.CACHE_SLOTS }
+end
+
+-- The request's flags (stack_movement_mode, 1c8c:0529): 8 at sea, else for
+-- a land stack 1 for the hills bonus and 2 for the woods'.
+local function routeFlags(mode, woods, hills, atSea)
+  if atSea then return 8 end
+  if mode ~= move.LAND then return 0 end
+  return (hills and 1 or 0) + (woods and 2 or 0)
+end
+
+local function stepDir(x, y, dir, W, H)
+  local nx, ny = x + move.DIRS[dir][1], y + move.DIRS[dir][2]
+  if nx < 0 or ny < 0 or nx >= W or ny >= H then return nil end
+  return nx, ny
+end
+
+-- A cached route the request can use (1555:1595 / 165c): same destination,
+-- mode and flags, with the start somewhere on it before its end. Returns the
+-- rest of it as directions, or nil.
+local function cacheHit(g, e, sx, sy, dx, dy, mode, flags)
+  if not e or e.dx ~= dx or e.dy ~= dy or e.mode ~= mode or e.flags ~= flags then return nil end
+  local x, y = e.sx, e.sy
+  for i, dir in ipairs(e.dirs) do
+    if x == sx and y == sy then
+      local rest = {}
+      for k = i, #e.dirs do rest[#rest + 1] = e.dirs[k] end
+      return rest
+    end
+    x, y = stepDir(x, y, dir, g.map.width, g.map.height)
+    if not x then return nil end
+  end
+  return nil
+end
+
+-- Keep a route found (1555:16f0): a short one in slot 0; a long one in the
+-- first free slot of 1-19, or over the one whose own route is shortest when
+-- that is shorter than this one.
+local function cacheStore(g, d, sx, sy, dx, dy, mode, flags, dirs)
+  local c = g.pathCache
+  local slot
+  if d < 15 then
+    slot = 0
+  else
+    local shortest, least = nil, 10000
+    for i = 1, move.CACHE_SLOTS - 1 do
+      local e = c[i]
+      if not e then slot = i break end
+      local ed = move.distance(e.dx, e.dy, e.sx, e.sy)
+      if ed < least then shortest, least = i, ed end
+    end
+    if not slot and shortest and least < d then slot = shortest end
+  end
+  if slot then
+    c[slot] = { mode = mode, flags = flags, sx = sx, sy = sy, dx = dx, dy = dy, dirs = dirs }
+  end
+end
+
 --- The path from (sx,sy) to (dx,dy) for a stack, as a list of { x, y, cost }
---- steps, or nil if there is no route: 1555:000a, step for step. The
---- original also keeps its last paths to hand them back unasked for
---- (1555:1508); with nothing changed in between they are the same path, so
---- that is not copied.
+--- steps, or nil if there is no route: pathfind (1555:000a), step for step.
+--- A route cached for the same destination that the stack stands on is
+--- taken as it is; then a step to a neighbouring tile; then the search, its
+--- route kept.
 function move.findPath(g, stack, sx, sy, dx, dy)
   if sx == dx and sy == dy then return {} end
   local W, H = g.map.width, g.map.height
@@ -531,33 +625,31 @@ function move.findPath(g, stack, sx, sy, dx, dy)
   local side = stack[1] and stack[1].owner
   local mode, woods, hills, atSea = move.stackMode(g, stack)
   local grid = move.grid(g, side)
+  local flags = routeFlags(mode, woods, hills, atSea)
+  local d = move.distance(dx, dy, sx, sy)
 
-  local path, restore = nil, {}
-  if move.distance(dx, dy, sx, sy) == 1 and singleStep(g, mode, sx, sy, dx, dy) then
+  local path, dirs
+  if g.pathCache then
+    dirs = cacheHit(g, g.pathCache[0], sx, sy, dx, dy, mode, flags)
+    local i = 1
+    while not dirs and d > 14 and i < move.CACHE_SLOTS do
+      dirs = cacheHit(g, g.pathCache[i], sx, sy, dx, dy, mode, flags)
+      i = i + 1
+    end
+  end
+  if dirs then
+    path = {}
+    local x, y = sx, sy
+    for _, dir in ipairs(dirs) do
+      local nx, ny = stepDir(x, y, dir, W, H)
+      if nx then x, y = nx, ny end
+      path[#path + 1] = { x = x, y = y }
+    end
+  elseif d == 1 and singleStep(g, mode, sx, sy, dx, dy) then
     path = { { x = dx, y = dy } }
   else
-    -- a stack may always path *to* a city, just never through one it does
-    -- not own: its footprint opens at the city cost for this search, and a
-    -- port is a crossing, so a stack at sea can attack it (path_mark_cities,
-    -- 1555:0bde)
     local goal = dy * W + dx
-    local goalByte = grid[goal]
-    local city = g.map.cityTile[goal]
-    if city and goalByte % 8 == 0 and has(goalByte, move.CITY_F) then
-      local port = move.isPort(g, city)
-      for ox = 0, 1 do
-        for oy = 0, 1 do
-          local x, y = city.x + ox, city.y + oy
-          if x < W and y < H then
-            local k = y * W + x
-            restore[k] = grid[k]
-            local byte = grid[k] - grid[k] % 8 + move.COST[move.CITY]
-            if port then byte = with(with(byte, move.CROSS_F), move.WATER_F) end
-            grid[k] = byte
-          end
-        end
-      end
-    end
+    local restore = openCityAt(g, grid, dx, dy)
 
     -- the water charge, set once for the move: 20 when it is aimed at water
     local penalty = 0
@@ -576,7 +668,15 @@ function move.findPath(g, stack, sx, sy, dx, dy)
         if found == 0 then found = wavefront(q, pass) end
       end
     end
-    if found == 1 then path = trace(q) end
+    if found == 1 then
+      path = trace(q)
+      if g.pathCache then
+        local ds = {}
+        for i, p in ipairs(path) do ds[i] = p.dir end
+        cacheStore(g, d, sx, sy, dx, dy, mode, flags, ds)
+      end
+    end
+    for k, byte in pairs(restore) do grid[k] = byte end
   end
 
   -- what the walk spends on each step (path_step_costs, 1555:18be): a land
@@ -592,9 +692,40 @@ function move.findPath(g, stack, sx, sy, dx, dy)
     end
     step.dir = nil
   end
-  for k, byte in pairs(restore) do grid[k] = byte end
   if path and #path == 0 then path = nil end
   return path
+end
+
+--- The flood the computer players measure distance with (1555:1ab9):
+--- pathfind from (x, y) to itself with flag 0x10 -- no route, no cache --
+--- which runs the wavefront (1555:0373) for `range` sweeps at most, each
+--- spreading every tile of a square that grows by one round (x, y), and
+--- stops early only when a sweep spreads nothing. A cost travels across the
+--- scan in one sweep but only a tile a sweep against it, so a winding route
+--- can be left long, or not reached. Returns the grid: SHUT, 30000
+--- unreached, else the cost from (x, y) plus 1 (negative while the tile had
+--- still to spread). `gridSide` is whose cost grid; `fogSide` whose hidden
+--- map shuts what it has not seen (only a human's, mid-turn).
+function move.flood(g, gridSide, x, y, range, mode, woods, hills, fogSide)
+  local W, H = g.map.width, g.map.height
+  local grid = move.grid(g, gridSide)
+  local goal = y * W + x
+  local restore = openCityAt(g, grid, x, y)
+  local penalty = 0
+  if mode == move.LAND then
+    local t = scn.terrainAt(g.map, x, y)
+    penalty = (t == move.WATER or t == move.SHORE) and move.WATER_PENALTY_TO
+              or move.WATER_PENALTY
+  end
+  local q = { W = W, H = H, sx = x, sy = y, dx = x, dy = y, grid = grid,
+              mode = mode, woods = woods, hills = hills, penalty = penalty,
+              dist = move.prepare(g, grid, fogSide, mode, x, y), flood = range }
+  if q.dist[goal] ~= SHUT or has(grid[goal], move.CITY_F) then
+    q.dist[goal] = -1
+    if wavefront(q, 0) == 0 then wavefront(q, 1) end
+  end
+  for k, byte in pairs(restore) do grid[k] = byte end
+  return q.dist
 end
 
 --- The route the random map generator lays a road along (5311:0c1c): the

@@ -42,7 +42,13 @@ struct NewGameOptions {
 std::unique_ptr<Game> newGame(const std::string& dataDir, const std::string& scenario,
                               const NewGameOptions& opts = NewGameOptions());
 
-/** Every army standing on a tile (in transit armies are nowhere). */
+/** The side whose turn it is while the game is set up: the scenario's own
+ *  current player (.SCN 0x110), 0 in every shipped scenario. Its Enhanced flag
+ *  is the one best_production_for and city_produce_army read. */
+constexpr int SETUP_PLAYER = 0;
+
+/** Every army standing on a tile (in transit armies are nowhere), the army
+ *  table walked from the top down as armies_at_tile (1b62:007d) walks it. */
 std::vector<Army*> armiesAt(const Game& g, int x, int y);
 /** The city standing on a tile, anywhere in its 2x2 footprint. */
 City* cityAt(const Game& g, int x, int y);
@@ -52,10 +58,12 @@ std::vector<City*> sideCities(const Game& g, const Side& side);
 std::vector<Army*> sideArmies(const Game& g, const Side& side);
 /** Items carried by a side's heroes, summed by effect type. */
 int itemBonus(const Game& g, const Side& side, int itemType);
-/** A tile in the city with room for another army: the four tiles of its
- *  footprint in order, then -- if `spill` -- up to 20 random tries within one
- *  step. {NONE, NONE} when there is none (FUN_6f8c_0bff). */
-std::pair<int, int> freeTileIn(Game& g, const City& city, bool spill);
+/** A tile in the city with room for another army (6f8c:0bff): the four tiles
+ *  of its footprint in the order (x,y), (x+1,y), (x,y+1), (x+1,y+1)
+ *  (DS:0e54/0e5c); then -- if `spill` -- up to 20 random tries within one
+ *  step for a tile no army stands on. {NONE, NONE} when there is none, with
+ *  the last tile tried in `last`, where hero_recruit puts its hero regardless. */
+std::pair<int, int> freeTileIn(Game& g, const City& city, bool spill, std::pair<int, int>* last = nullptr);
 /** docs/rules.md > Start of a side's turn, step 4. */
 int income(const Game& g, const Side& side);
 int upkeep(const Game& g, const Side& side);
@@ -67,12 +75,32 @@ void tidyTowers(Game& g);
 /** Is one of the side's heroes carrying a double-movement item on this tile? */
 bool heroWithDoubleMoveAt(const Game& g, const Side& side, int x, int y);
 
-/** Run the start of `side`'s turn; false if it has no turn to play: a
- *  computer side left with no city (8cc6:0000) does nothing more until the
- *  round's end puts it out. A human's turn (8cc6:0259) goes on regardless. */
+/** Before every side's turn the side's capital is put where it now is
+ *  (67cc:10d7): while more than one side plays and the side holds cities but
+ *  not its own capital, the city of its own nearest the capital it had; else
+ *  its own capital again. The turn opens centred there. */
+void followCapital(Game& g, Side& side);
+/** Run the start of `side`'s turn; false if the side has no turn to play.
+ *  The prelude every side gets (turn_loop, 8065:2123): its armies in a city
+ *  come ashore, its capital follows it. Then a computer's turn
+ *  (start_of_turn, 8cc6:0000): diplomacy; a side left with no city does
+ *  nothing more until the round's end puts it out; the hero, hired at once
+ *  (7563:0301); promotions, gold, production, the movement reset, the
+ *  encampments, the quest. A human's (8cc6:0259) goes on regardless: the
+ *  movement reset, the encampments and the gold come first, then the quest;
+ *  promotions and the hero follow (8cc6:04bd), and the cities build only
+ *  once the hero offer is settled (humanProduction). */
 bool startTurn(Game& g, Side& side);
-/** Hand the turn to the next living side, starting a new game turn when the
- *  list wraps. Returns the side now to play, or null if the game is over. */
+/** A human's cities build, once the turn's hero offer is taken or turned down
+ *  (8cc6:04bd(1)) -- on turn 1 they do not: the capital's production opens
+ *  instead. Each city that built starts its next army (6f8c:06bd). */
+void humanProduction(Game& g, Side& side);
+/** Is the city building? Its countdown is above 0 (7204:06de shows "none"
+ *  otherwise). */
+bool producing(const City& c);
+/** Hand the turn to the next side in the turn order (next_side, 8065:17f6),
+ *  ending the round when the order runs out. Returns the side now to play,
+ *  or null if the game is over. */
 Side* endTurn(Game& g);
 /** Start the very first turn of a new game. */
 Side* begin(Game& g);
@@ -83,14 +111,16 @@ Sign* signAt(Game& g, int x, int y);
 void disband(Game& g, Side& side, const std::vector<Army*>& armies);
 /** Gold taken with a city won from another side. */
 int loot(const Game& g, const Side* loser);
-/** Fight for a tile, deciding it and nothing more (combat_resolve, 67cc:08a6). */
+/** Fight for a tile, deciding it and nothing more (combat_setup, 6a89:008b,
+ *  and combat_resolve, 67cc:08a6); applyAttack makes it take effect. A city
+ *  attacked is marked with the attacker's bit (67cc:02b1): a neutral one
+ *  that holds out builds from then on (neutralProduction). */
 Battle decideAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
-/** What an attack costs, paid before it is fought (attack_tile, 67cc:005a,
- *  then 67cc:0522): every army in the stack loses the tile's movement cost,
- *  2 at least, down to 0. A land stack attacking onto water or shore puts
- *  to sea first -- each army that cannot fly loses all its moves. The
- *  original does that to a boat too; here it is left to land stacks, as a
- *  navy at sea would move by land rules. */
+/** What an attack costs (67cc:0522): a stack that is not flying and not at
+ *  sea, attacking onto water or shore, puts to sea first -- every army that
+ *  cannot fly, and has no flight item, at sea with no moves, boats too. Then
+ *  every army loses the tile's movement cost, 2 at least, down to 0, and
+ *  forgets its goal. */
 void chargeAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
 /** Armies left on water without a boat drown (auto_ui_armies_sunk,
  *  1b62:0ea0). On a water tile, or a crossing (map word bit 15), every army
@@ -102,7 +132,8 @@ void chargeAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
 int sinkStranded(Game& g, Side& side, int x = NONE, int y = NONE);
 /** Fight for a tile and apply the outcome at once. */
 Battle resolveAttack(Game& g, const std::vector<Army*>& stack, int x, int y);
-/** Let a decided fight take effect (after_battle, 67cc:0a6b). Once only. */
+/** Let a decided fight take effect (after_battle, 67cc:0a6b). Once only;
+ *  sets `captured` to the city taken, and `medal` to the army that won one. */
 Battle& applyAttack(Game& g, Battle& result);
 
 /** Raise a side's diplomatic score. */
@@ -147,9 +178,19 @@ constexpr int FALLEN_LINES = 5;
  *  order (8065:18ab); told in a box while a human plays or when the side was
  *  a human's, otherwise in the status bar. */
 std::vector<Fallen> eliminateFallen(Game& g);
-/** The round's end (8065:17f6): the fallen are put out, then the end is
- *  looked for. Leaves the finding in g.ending. */
-Ending endRound(Game& g);
+/** The round's end (8065:17f6): the sides left without a city are put out
+ *  of the game, then the end is looked for, then the neutral cities build.
+ *  `last` is the side that played last: its gold and Enhanced flag are the
+ *  ones the neutral cities' production reads. Leaves the finding in g.ending. */
+Ending endRound(Game& g, Side* last = nullptr);
+/** set_city_production (623c:0e5a) for side `who`: refused after turn 5 when
+ *  that side has less than the type's cost + 30 in gold. True if set. */
+bool setCityProduction(Game& g, const Side* who, City& c, int slot);
+/** neutral_production_turn (6bd8:025a), with Neutral Cities at 2 or more: a
+ *  neutral city that has beaten off an attack (City::attacked, 67cc:02b1)
+ *  counts its build down and, while fewer than 4 armies stand on its top-left
+ *  tile, starts the best balanced type (purpose 2). The last city first. */
+void neutralProduction(Game& g, const Side* who);
 /** Is the game over, or nearly? Run at the round's end, once the fallen are
  *  out (end_game_check, 8065:1aed). */
 Ending checkEnd(Game& g);

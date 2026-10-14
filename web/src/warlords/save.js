@@ -60,8 +60,9 @@ export function encode(g) {
   g.armies.forEach((a, i) => ids.set(a, i));
 
   const armies = g.armies.map((a) => ({
+    slot: a.slot,
     x: a.x, y: a.y, owner: a.owner, type: a.type, name: a.name,
-    female: a.female || undefined,
+    female: a.female || undefined, medals: a.medals || undefined,
     strength: a.strength, moves: a.moves, maxMoves: a.maxMoves,
     upkeep: a.upkeep, homeCity: a.homeCity, atSea: a.atSea || undefined,
     group: (a.group || 0) !== 0 ? a.group : undefined,
@@ -92,6 +93,7 @@ export function encode(g) {
     return {
       index: s.index, gold: s.gold, alive: s.alive, computer: s.computer,
       level: s.level, enhanced: s.enhanced, observe: s.observe || undefined,
+      capNow: s.capNow, productionDue: s.productionDue || undefined,
       diploScore: s.diploScore,
       income: s.income, upkeepTotal: s.upkeepTotal, produced: s.produced,
       ai: saveAI(s.ai, ids), aiSolidarity: s.aiSolidarity, card: s.card,
@@ -104,7 +106,7 @@ export function encode(g) {
     index: c.index, name: c.name, ownerIndex: c.ownerIndex, producing: c.producing,
     countdown: c.countdown, vectorTo: c.vectorTo, razed: c.razed || undefined,
     defence: c.defence, income: c.income, claim: c.claim,
-    razedBy: c.razedBy, slots: c.slots,
+    razedBy: c.razedBy, slots: c.slots, attacked: c.attacked || undefined,
   }));
 
   const sites = g.map.sites.map((s) => ({
@@ -127,6 +129,7 @@ export function encode(g) {
     version: VERSION,
     scenario: g.map.name,
     turn: g.turn, current: g.current, seed: g.rng.state,
+    turnOrder: g.turnOrder, orderAt: g.orderAt, aiNeighbours: g.aiNeighbours,
     won: g.won || undefined, over: g.over || undefined, noHumansSaid: g.noHumansSaid || undefined,
     greatest: g.greatest || undefined,
     surrenderOffered: g.surrenderOffered || undefined,
@@ -168,6 +171,8 @@ export function decode(text, dataDir) {
   const g = game.newGame(dataDir, state.scenario, { seed: 0, options: state.options });
   g.armies = [];
   g.turn = state.turn; g.current = state.current;
+  if (state.turnOrder) g.turnOrder = state.turnOrder;
+  if (state.aiNeighbours) g.aiNeighbours = state.aiNeighbours;
   g.rng.state = state.seed;
   g.won = state.won; g.over = state.over; g.surrenderOffered = state.surrenderOffered;
   g.noHumansSaid = state.noHumansSaid;
@@ -198,6 +203,7 @@ export function decode(text, dataDir) {
     c.income = saved.income; c.slots = saved.slots;
     c.claim = saved.claim ?? c.claim;
     c.razedBy = saved.razedBy ?? undefined;
+    c.attacked = saved.attacked || 0;
     c.name = saved.name || c.name;
     // ruins belong to nobody; older saves can have them won in a fight
     if (c.razed) c.ownerIndex = undefined;
@@ -238,13 +244,17 @@ export function decode(text, dataDir) {
     if (saved.items) a.items = saved.items.map((idx) => itemByIndex[idx]);
     return a;
   });
-  g.armies = armies.slice();
+  // the army table in slot order; older saves had none, and their order
+  armies.forEach((a, i) => { if (a.slot == null) a.slot = i; });
+  g.armies = armies.slice().sort((p, q) => p.slot - q.slot);
 
   for (const saved of state.sides) {
     const s = g.map.sides[saved.index];
     s.gold = saved.gold; s.alive = saved.alive; s.computer = saved.computer;
     s.level = saved.level; s.enhanced = saved.enhanced; s.diploScore = saved.diploScore;
     s.observe = saved.observe || false;
+    if (saved.capNow) s.capNow = saved.capNow;
+    s.productionDue = !!saved.productionDue;
     s.income = saved.income; s.upkeepTotal = saved.upkeepTotal;
     s.produced = saved.produced;
     if (saved.ai && saved.ai.groups) {
@@ -296,6 +306,9 @@ export function decode(text, dataDir) {
   }
 
   g.side = g.sides[g.current];
+  // where the side to play stands in the turn order; older saves: the order
+  // as it is
+  g.orderAt = state.orderAt != null ? state.orderAt : g.turnOrder.indexOf(g.side ? g.side.index : 0);
   move.invalidate(g);
   return g;
 }

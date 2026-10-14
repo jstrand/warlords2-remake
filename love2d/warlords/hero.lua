@@ -96,6 +96,8 @@ function hero.offer(g, side)
     return o
   end
 
+  -- none at all once the surrender has been offered (7563:0000)
+  if g.surrenderOffered then return nil end
   if g.turn == 1 then
     return named { price = 0, city = side.capital, first = true }
   end
@@ -118,20 +120,23 @@ function hero.offer(g, side)
   return named { price = price, city = city }
 end
 
---- The allies a hired hero brings: 1-3 of one random magical type.
--- hero_brings_allies (7563:01fc) has a "do allies come?" flag, but it is
--- hard-coded to 1, so they always do.
+--- A random magical army type (random_magical_type, 7563:1a9b): the types
+--- are counted in id order, 0-27; Dragons (25) when there is none.
+function hero.magicalType(g)
+  local ids = {}
+  for id = 0, 27 do
+    local t = g.types.byId[id]
+    if t and (t.bonus[48] or 0) ~= 0 then ids[#ids + 1] = id end
+  end
+  local n = g.rng:dice(1, #ids, 0)
+  return g.types.byId[ids[n] or 25]
+end
+
+--- The allies a hired hero brings (hero_brings_allies, 7563:01fc): 1-3 of one
+--- random magical type. It has a "do allies come?" flag, but it is
+--- hard-coded to 1, so they always do.
 function hero.allies(g)
-  local magical = {}
-  for _, a in ipairs(g.types.list) do
-    if (a.bonus[48] or 0) ~= 0 then magical[#magical + 1] = a end
-  end
-  local type = g.rng:pick(magical)
-  if not type then
-    for _, a in ipairs(g.types.list) do
-      if a.name:find("Dragon") then type = a end               -- the fallback
-    end
-  end
+  local type = hero.magicalType(g)
   local roll = g.rng:dice(1, 100, 0)
   local n = roll < 70 and 1 or roll < 95 and 2 or 3
   return type, n
@@ -139,25 +144,49 @@ end
 
 --- One ally army, as create_ally_army (Ghidra 6536:12e6) builds it: the type's
 --- own strength and move, arriving with its moves already full (+6 and +7 both
---- get the type's move) and with **no upkeep** -- allies are free to keep.
+--- get the type's move), with **no upkeep** -- allies are free to keep -- and
+--- home city 0.
 -- All three places allies appear (a hired hero's escort, a ruin, a quest
 -- reward) go through that one routine, so they go through this one.
-function hero.newAlly(g, type, x, y, owner, homeCity)
+function hero.newAlly(g, type, x, y, owner)
   return {
     x = x, y = y, owner = owner, type = type.id, name = type.name,
     strength = type.strength, maxMoves = type.move, moves = type.move,
-    upkeep = 0, homeCity = homeCity,
+    upkeep = 0, homeCity = 0,
   }
 end
 
---- Hire the offered hero. Returns the hero army and the allies it brought.
--- hero_recruit, Ghidra 7563:031b.
+--- Put an ally of the side's near (x, y) (create_ally_army, 6536:12e6): on
+--- the tile if it has room and no other side's army, else a random step
+--- from there and try again, ten tries in all. Returns the army, or nil
+--- when none of the tries had room -- the ally is lost.
+function hero.placeAlly(g, type, x, y, side)
+  local gameMod = require("warlords.game")
+  local px, py = x, y
+  for _ = 1, 10 do
+    if px >= 0 and py >= 0 and px < g.map.width and py < g.map.height then
+      local here = gameMod.armiesAt(g, px, py)
+      if #here < 8 and (#here == 0 or here[1].owner == side.index) then
+        return gameMod.addArmy(g, hero.newAlly(g, type, px, py, side.index))
+      end
+    end
+    px = px + g.rng:dice(1, 3, -2)
+    py = py + g.rng:dice(1, 3, -2)
+  end
+  return nil
+end
+
+--- Hire the offered hero (hero_recruit, Ghidra 7563:031b). The hero stands on
+--- the city's first tile with room, or on a free tile round it -- or, with
+--- none, on the last one tried. Its allies stand with it. Returns the hero
+--- army and the allies that found room, with `type` and `count`: what came,
+--- room or not.
 function hero.recruit(g, side, offer)
   local gameMod = require("warlords.game")
   local city = offer.city
   side.gold = math.max(0, side.gold - (offer.price or 0))
-  local hx, hy = gameMod.freeTileIn(g, city, true)
-  hx, hy = hx or city.x, hy or city.y
+  local hx, hy, lx, ly = gameMod.freeTileIn(g, city, true)
+  if not hx then hx, hy = lx or city.x, ly or city.y end
 
   local h = {
     x = hx, y = hy, owner = side.index, type = armytype.HERO,
@@ -180,18 +209,17 @@ function hero.recruit(g, side, offer)
       h.items[#h.items + 1] = std
     end
   end
-  g.armies[#g.armies + 1] = h
+  gameMod.addArmy(g, h)
   local history = require("warlords.history")
   history.deed(g, side, history.EMERGES, city.index, 0, h.name)     -- 7563:04e7
 
   local allies = {}
   if not offer.first then
     local type, n = hero.allies(g)
+    allies.type, allies.count = type, n
     for _ = 1, n do
-      local ax, ay = gameMod.freeTileIn(g, city, true)
-      local a = hero.newAlly(g, type, ax or hx, ay or hy, side.index, city.index)
-      g.armies[#g.armies + 1] = a
-      allies[#allies + 1] = a
+      local a = hero.placeAlly(g, type, hx, hy, side)
+      if a then allies[#allies + 1] = a end
     end
   end
   return h, allies
@@ -204,20 +232,24 @@ function hero.addExperience(g, h, n)
   h.experience = math.min(rules.MAX_HERO_XP, (h.experience or 0) + n)
 end
 
---- Promote a side's heroes, one step each. hero_check_promotions, 7563:0579.
--- Returns the list of heroes promoted.
+--- Promote a side's heroes, one step each (hero_check_promotions, 7563:0579;
+--- hero_promote, 7563:0672): +1 strength (9 at most) and +2 to the maximum
+--- move. Returns { hero =, gain = } for each, gain the strength it really
+--- gained.
 function hero.checkPromotions(g, side)
   local promoted = {}
-  for _, a in ipairs(g.armies) do
+  for i = #g.armies, 1, -1 do
+    local a = g.armies[i]
     if a.type == armytype.HERO and a.owner == side.index then
       local level = a.level or 1
       local need = hero.PROMOTION_AT[level]
       if need and (a.experience or 0) >= need then
+        local before = a.strength or 0
         a.level = level + 1
-        a.strength = math.min(hero.MAX_STRENGTH, a.strength + 1)
+        a.strength = math.min(hero.MAX_STRENGTH, before + 1)
         a.maxMoves = a.maxMoves + hero.PROMOTION_MOVES
         a.title = hero.LEVELS[a.level]
-        promoted[#promoted + 1] = a
+        promoted[#promoted + 1] = { hero = a, gain = a.strength - before }
       end
     end
   end
@@ -294,21 +326,25 @@ end
 
 --- A dead hero drops everything it carried on the tile where it fell -- and
 --- loses it all if that tile is water. hero_drop_items, Ghidra 67cc:16cd.
-function hero.dropItems(g, h, x, y)
+--- When the item is the current player's standard (item number = side),
+--- that side's cities stop vectoring to it. `cur` is the current player,
+--- g.side's by default.
+function hero.dropItems(g, h, x, y, cur)
   if not h.items or #h.items == 0 then return {} end
+  if cur == nil then cur = g.side and g.side.index end
   local drowned = scn.terrainAt(g.map, x, y) == move.WATER
   local dropped = {}
   for _, it in ipairs(h.items) do
+    it.planted = nil
     if drowned then
       it.status, it.x, it.y = 0, nil, nil            -- lost for good
     else
       it.status, it.x, it.y = 1, x, y                -- lying on the ground
       dropped[#dropped + 1] = it
     end
-    -- cities vectoring to a lost standard stop doing so
-    if it.standardOf then
+    if it.index == cur then
       for _, c in ipairs(g.map.cities) do
-        if c.vectorTo == -2 and c.ownerIndex == it.standardOf then c.vectorTo = nil end
+        if c.vectorTo == -2 and c.ownerIndex == cur then c.vectorTo = nil end
       end
     end
   end

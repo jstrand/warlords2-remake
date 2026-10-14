@@ -101,17 +101,22 @@ Active).
 
 ## Start of a side's turn
 
-`start_of_turn` (Ghidra `8cc6:0000`) runs these steps in this order:
+Every side's turn opens with the same prelude (`turn_loop`, `8065:2123`):
+its armies standing in a city come ashore (`8cc6:089d`), and its **capital
+follows it** (`67cc:10d7`) — while more than one side plays and the side
+holds cities but not its own capital, the city of its own nearest the
+capital it had stands in for it; otherwise its own capital again. The army
+cycle and the view start from there.
+
+A **computer's** turn (`start_of_turn`, Ghidra `8cc6:0000`) then runs:
 
 1. Reports and diplomacy messages; the side's proposals are applied
    (`diplomacy_apply`).
 2. **A side with no cities sits the turn out:** the turn strip is redrawn and
    nothing below runs — no hero, income, production or AI turn. It stays in
-   play until the round ends (see [Elimination](#elimination)). This is the
-   computer's turn start; a human's (`8cc6:0259`) has no such check, so a
-   human with no cities still plays the turn, with whatever armies it has
-   left.
-3. **Hero offer** (see Heroes), then **hero promotions**.
+   play until the round ends (see [Elimination](#elimination)).
+3. **Hero offer** (see Heroes) — a computer hires it at once (`7563:0301`) —
+   then **hero promotions**.
 4. **Gold:** `gold += income − upkeep`, never below 0 (`apply_income`,
    `8cc6:0827`).
    - **income** = sum of each owned city's income (city record `+42`)
@@ -120,23 +125,56 @@ Active).
    - **upkeep** = sum of each army's upkeep byte (`+0xb`, set to half the
      slot's cost when the army is built). Armies in transit don't pay; an
      army at sea pays at least 4.
-5. **Production** (`city_production_turn`, `6f8c:0000`). Each producing city's
-   countdown (city `+0x2d`) drops by 1. At 0 the army is built, but **only if
-   the side has more than 0 gold** after step 4. The build itself costs
-   nothing up front; the slot's cost is only its upkeep. A vectored army
-   leaves in transit and arrives **two turns later**. If it can't be placed
-   (destination full at 8 armies, or no longer the side's), it's sent back
-   home, taking another two turns. If it was already heading home, it's
-   **disbanded**. Vectoring itself is free and has no range limit
-   (`vector_city_to`, `623c:0f10`); it only sticks while the city is building.
-   A destination of `-2` means the side's standard rather than a city.
+5. **Production** (below).
 6. **Movement reset** (`reset_movement`, `8cc6:05fb`):
    - new moves = army's maximum + **min(unused moves, 2)**
    - an army **at sea** gets **20 + min(unused, 2)** instead
-   - a hero carrying a **double movement** item (type 6) adds each army's
-     maximum again for every army on its tile
-   - remaining moves are capped at 99
-7. Quest checks (`4976:1ded`), then the side plays.
+   - a goal the army stands on is forgotten
+   - every hero carrying a **double movement** item (type 6) adds each
+     army's maximum again to every army on its tile — a second such hero on
+     the tile adds it again
+   - then moves are capped at 99
+7. Encampments (`8c07:0000`), the army cycle's marks wiped and its cursor put
+   back on the capital (`8c07:0113`), the quest check (`4976:1ded`), then
+   the AI plays.
+
+A **human's** turn (`8cc6:0259`, then `8cc6:04bd`) has no "no cities"
+check — a human with no cities still plays, with whatever armies it has
+left — and goes in a different order: diplomacy, the **movement reset**,
+encampments, **gold**, the cycle's marks, the drowning check, the **quest
+check**, the advisor; then **promotions**, each shown in a popup; then the
+**hero offer**; and only once that is settled does **production** run. On
+turn 1 it does not: the capital's production dialog opens instead.
+
+Because production follows the movement reset for a computer and comes after
+it for a human, a computer's new army starts with its maximum + 2, a human's
+with its maximum.
+
+**Production** (`city_production_turn`, `6f8c:0000`):
+
+- First the armies **on the road** move on, from the top of the army table
+  down. One that arrives needs room on one of its destination's **four
+  tiles** — there is no spilling round a full city — and the city must
+  still be the side's (`6f8c:0d4f`); otherwise it is sent home, two turns
+  more. One that fails again, or fails at home, is **disbanded**. An army
+  arrives with the moves it set off with.
+- Then each city counts down (city `+0x2d`), **only while its countdown is
+  above 0** (`6f8c:04f3`). One that reaches 0 builds — if the side has
+  **more than 0 gold** after step 4 and the army has room on the city's own
+  four tiles (or the city is vectoring) — and otherwise stays at 0: the city
+  is **idle** until its production is set again. The build costs nothing up
+  front; the slot's cost is only its upkeep.
+- A new army has its **full move** (`6f8c:0dd7` writes it to both `+6` and
+  `+7`). A vectored one leaves in transit and arrives **two turns later**.
+- A **human's** city that built starts the next army at once (`6f8c:06bd`); a
+  computer's waits for its AI to set it again.
+
+Vectoring itself is free and has no range limit (`vector_city_to`,
+`623c:0f10`); it only sticks while the city is building. A destination of
+`-2` means the side's standard rather than a city.
+
+A city counts as **building** only while its countdown is above 0
+(`7204:06de` shows "none" otherwise), even though it keeps its chosen type.
 
 ### Item types
 
@@ -176,10 +214,13 @@ per-slot values stored in the `.SCN` file are ignored.**
 
 | stat | chance | effect |
 |---|---|---|
-| strength | 10% | 60%: +1 (max 9), else −1 (min 1) |
-| move | 20% | 1d100 < 10: +4 · < 60: +2 · < 95: −2 · else −4 (never below 2), **then at least 6** |
-| cost | 10% | 60%: −¼ of cost, else +¼ |
-| time | 10% | 60%: −1 (min 1), else +1 |
+| strength | 9% | 59%: +1 (max 9), else −1 (min 1) |
+| move | 19% | 1d100 < 10: +4 · < 60: +2 · < 95: −2 · else −4 (never below 2), **then at least 6** |
+| cost | 9% | 59%: −¼ of cost, else +¼ |
+| time | 9% | 59%: −1 (min 1), else +1 |
+
+The percentages are the code's own: it writes them as `dice(1,100) < p`, and
+1d100 runs 1–100, so "10%" is 9 in 100.
 
 So the same army type can have different stats in different cities, which is
 why the production screen's numbers differ per city.
@@ -191,14 +232,22 @@ at setup and whenever a type is bought.
 **Where a new army stands** (`6f8c:0bff`, the guard on every army the game
 places in a city). A city covers **2×2 tiles** and each tile holds up to 8
 armies, so a city holds up to 32. The routine returns the **first of the four
-tiles with room**, in the order (x,y), (x,y+1), (x+1,y), (x+1,y+1); if all
-four are full it tries **20 random tiles within ±1** of the city, and if that
-fails too the army is not placed — production waits. The same test gates
-garrisons, hired heroes and their allies, and armies arriving from vectoring.
+tiles with room**, in the order (x,y), (x+1,y), (x,y+1), (x+1,y+1)
+(`DS:0e54/0e5c`). Production and arrivals stop there: a full city builds
+nothing. Asked to spill (a hired hero), it then tries **20 random tiles
+within ±1** of the city for one **no army stands on**; failing that, the hero
+stands on the last tile tried regardless.
 
 **A new army** (`city_produce_army`, `6f8c:0dd7`) takes its move and strength
-from the city slot. Upkeep is half the slot's cost. Strength gets **+2 (max 9)**
-when the owning side's **Enhanced** flag (`.SCN` `0x00f0 + 2·side`) is set.
+from the city slot, with its moves left full. Upkeep is half the slot's
+cost. Strength gets **+2 (max 9)** when the owning side's **Enhanced** flag
+(`.SCN` `0x00f0 + 2·side`) is set.
+
+**The army table** (`1b62:0309`) has 1000 slots, and a new army takes the
+**lowest free one**. Everything that scans the table — the armies on a tile
+(`armies_at_tile`, `1b62:007d`), the battle lines, the road, promotions —
+reads it from the top down, so where an army sits in it decides orders and
+ties.
 
 **Buying a type** (`buy_production_type`, `7087:1299` / `7087:0ee3`) copies
 the unmodified `ARMYTYPE.DAT` stats into the slot, with no random nudge, and
@@ -209,7 +258,8 @@ subtracts the purchase price (`+30`) from the side's gold (`.SCN`
 
 ### One army per city (`setup_garrisons`, Ghidra `6bd8:00cc`)
 
-Every city gets **exactly one** starting army:
+Every standing city gets **exactly one** starting army, the last city in
+the list first:
 
 | city | garrison level |
 |---|---|
@@ -220,7 +270,10 @@ Every city gets **exactly one** starting army:
 The level picks a **purpose** (`DS:0d60` = `1 6 2 3` for levels 0–3). The city
 builds its best production type for that purpose immediately
 (`best_production_for`, `623c:103d`, then `produce_garrison`, `6bd8:0381`). The
-new army has 0 moves left.
+new army has 0 moves left. The **Enhanced** flag both routines read is the
+current player's, and while the game is set up that is the scenario's own
+current player (`.SCN` `0x110`, 0 in every shipped scenario) — so side 0's
+flag decides every garrison, neutral ones included.
 
 ### Choosing the best type for a purpose
 
@@ -246,17 +299,22 @@ score = (10 − time)·Wtime + str·Wstr + (move·Wmove)/2
 The highest score wins. Slots are scanned from last to first with a strict
 `>`, so ties go to the later slot.
 
-### Neutral production during play — dead code
+### Neutral production during play (`neutral_production_turn`, `6bd8:025a`)
 
-`neutral_production_turn` (`6bd8:025a`) runs every turn and would let a neutral
-city keep building (up to 4 armies) when *Neutral Cities* is 2 or higher. It
-only acts on cities whose flag at city `+0x30` is set — and **nothing in the
-game ever sets that flag**: the only writes are the zeroing in the city-init
-routine (`623c:0000`), and the `.SCN` byte lies in the record's zero padding.
+At every round's end, with *Neutral Cities* at **2 or more**, a neutral city
+that has **been attacked** keeps building. The mark is a bit per side at city
+`+0x30`, set by `combat_setup`'s caller as an attack on the city begins
+(`67cc:02b1`) and cleared when the city changes hands — so it is a neutral
+city that has **beaten off** an attack. For each such city, the last first:
 
-So neutral cities never produce during play, and the *Neutral Cities* option
-only affects how strong their starting garrison is. A faithful remake should
-leave this out.
+- a countdown above 0 drops by 1; at 0 the garrison is built
+  (`produce_garrison`, `6bd8:0381`): on the city's top-left tile, room or
+  not, with no moves, and the city's production is cleared;
+- then, unless it is in the middle of a build, while **fewer than 4 armies**
+  stand on its top-left tile it starts the best **balanced** type
+  (purpose 2) through `set_city_production` (`623c:0e5a`), which refuses
+  after turn 5 when the side that played last has less than the type's cost
+  + 30 gold. That side's Enhanced flag is the one the new army gets.
 
 ## Movement
 
@@ -312,8 +370,23 @@ It is not a best-first search, and its routes are not always the cheapest:
    either side (left first), then straight away (`4125:0212`); a land stack
    does not step over the shoreline but at a crossing. At most 198 steps.
 
-It also keeps its last twenty paths (`1555:1508`, `16f0`) and hands one back
-when asked for it again; with nothing changed since, that is the same path.
+It also keeps **twenty routes** (`1555:1508`–`16f0`), for every side alike
+and from turn to turn: slot 0 for one under 15 tiles, slots 1–19 for longer
+ones (the first free one, or over the shortest kept when that is shorter).
+Before searching, it looks for a kept route to the **same destination**,
+with the same mode and flags (at sea; hills and woods bonuses), that passes
+through the stack's tile before its end — slot 0 first, then 1–19 for a
+journey over 14 — and if there is one, takes **the rest of it as it is**,
+whatever has changed since. A single step and a search come only after that,
+and a search's route is kept. Loading a game empties the routes
+(`623c:0dff`).
+
+The computer players measure distance with the same wavefront run as a
+**flood** (flag `0x10`, `1555:1ab9`): from a tile to itself, no route, no
+cache, for a given number of rounds (15, 45, 60 …), each spreading every tile
+of a square that grows by one round the start. A cost travels across the
+scan in one sweep but only a tile a sweep against it, so a winding way can
+come out long, or not be reached.
 
 ### Terrain costs (`DS:1274`, static)
 
@@ -441,10 +514,13 @@ directly; there is no walk, so the step's cost does not matter:
 2. The stack needs **at least 1** move left; with 0 it is put down
    (`1b62:08b3`).
 3. `67cc:0522` charges every army in the stack the tile's movement cost,
-   **2 at least** (so a city or road costs 2), floored at 0. A land stack not
-   at sea attacking onto water or shore first puts every army that cannot fly
-   (and carries no flight item) to sea with 0 moves. The computer's attacks
-   (`67cc:124a`) go through `67cc:0522` too.
+   **2 at least** (so a city or road costs 2), floored at 0, and every army
+   forgets its goal. A stack that is not flying and not at sea, attacking
+   onto water or shore, first puts every army that cannot fly (and carries no
+   flight item) to sea with 0 moves — boats too. The computer's attacks
+   (`67cc:124a`) go through `67cc:0522` too, and a computer attacking a city
+   of a side it is not at war with commits the treachery below (`67cc:20a8`)
+   without asking.
 
 `armies_at_tile` (`1b62:007d`) lists up to 8 armies on a tile and returns the
 one highest in its owner's **fight order**, which is the army the map shows
@@ -461,13 +537,15 @@ difference is called out.
 
 - **Attackers:** the selected stack.
 - **Defenders:** every army not owned by the attacker on the target tile, or
-  on any of the 2×2 tiles when the target is a city.
-- Each line is sorted by its owner's **fight order**: a per-player table of
-  29 values (one per army type), lowest first. Neutral defenders use row 8.
-  Ties keep stack order.
-- On water, shore or mountain tiles, a side that includes a Hero sends one
-  qualifying army (by a per-type flag, probably *can fly*) to the back of its
-  line. That keeps the hero's carrier alive longest.
+  on any of the 2×2 tiles when the target is a city, gathered from the top
+  of the army table down.
+- On water, shore or mountain tiles, a line that includes a Hero gives its
+  **first flier not at sea** (in the order gathered) **80** on its rank
+  below, sending it to the back. That keeps the hero's carrier alive
+  longest.
+- Each line is then sorted by its owner's **fight order**: a per-player table
+  of 29 values (one per army type), lowest first (an insertion sort,
+  `6a89:05f1`). Neutral defenders use row 8. Ties keep the order gathered.
 - Every army starts with **2 hit points**.
 
 ### Terrain class of the battle tile
@@ -558,7 +636,7 @@ Resolution, army against army — **verified in `WARLORD2.EXE`**
 - attacker hits if it rolls ≤ its modified strength **and** the defender rolls
   above his
 - defender hits on the mirror condition; if neither, re-roll
-- after 10000 throws with no hit, the defender wins by default
+- after 10000 throws in one duel, the defender wins it by default
 
 What the code adds to the manual:
 
@@ -571,8 +649,8 @@ What the code adds to the manual:
   between fights.
 - the battle ends when one line is empty; the attacker wins only if **every**
   defender is dead. A battle with nobody on one side counts as an attacker win.
-- the 10000 counter is per fight. Past it, every throw is forced to a
-  defender hit.
+- the 10000 counter is per duel: it starts again whenever an army falls.
+  Past it, every throw is forced to a defender hit.
 - **tutorial exception:** in the tutorial scenario (tutorial flag,
   `.SCN`/`2c04` offset `0x12e`, is 1 only in `TUTORIA.SCN`) defender hits
   are **ignored** when:
@@ -633,7 +711,26 @@ loser gold    -= 2 * loot                            (clamped to 0 at the loser'
 ```
 
 The city's previous owner is recorded in city `+0x2f` (set to neutral if the
-side retakes its own city). The production countdown is cleared.
+side retakes its own city), and its attacked mark (`+0x30`) is cleared. The
+production countdown is cleared, so the city is idle, though it keeps its
+chosen type. Every city that was vectoring to it stops: no vector, and
+nothing in production.
+
+**History.** A capture is written down as a *won a battle* deed
+(`67cc:0af5`) only when it was a big one: **eight armies or more** in the two
+lines, **four of them defending** — under the leading hero's name if a hero
+led the stack. A fallen hero's deed names the city on the tile (ruins too).
+The Triumphs tally (`67cc:1aff`) counts a navy lost only for an army that
+fought as a boat — at sea, on water or shore.
+
+**Medals** (`auto_ui_medal_effect`, `67cc:2274`). After a battle won by a
+stack with a hero and no army at sea, and worth the name — **two armies a
+side**, or before turn 20 a first defender stronger than 3 — one of the
+survivors that is neither a hero nor magical may win a medal: a chance of
+**40% less 5 for each** of the side's ordinary armies already decorated,
+**12%** at least. A random such survivor gets it, if it has fewer than four:
+**+1 strength** (max 9), or **+1 move** once its strength is past 14. A human
+is shown it (popup 24–27, `MEDAL0–3.PCK`) before the city's fate is asked.
 
 ### What to do with it (`63fa:0000` dialog)
 
@@ -646,7 +743,12 @@ Production), and "value" means **half a type's purchase price**
 | **Occupy** | – | nothing | – | – |
 | **Pillage** | ≥ 1 type | remove the **most expensive** type | its value | +1d5 |
 | **Sack** | ≥ 2 types | remove **all but the cheapest** type | sum of their values | +1d10+5 |
-| **Raze** | – | city becomes ruins: owner neutral, city `+0x2f` = 15, map tiles replaced, vectoring to it cancelled | – | +1d15+10 |
+| **Raze** | – | city becomes ruins: owner neutral, city `+0x2f` = 15, map tiles replaced; the cities vectoring to it stop, vector and production both (`649c:016b`) | – | +1d15+10 |
+
+Pillage and Sack are offered by the gold they would bring (`63fa:0834`,
+`63fa:07d0`). Enter (and Escape) choose Occupy — unless the stack's hero is
+on a quest this answers: Raze for a raze quest on this city, Sack (or
+Pillage) for a gold quest.
 
 Pillage and sack recompute the city's defence (fewer types can drop it from
 2 to 1). The **atrocity** score is a `u16` per side at `.SCN` `0x10e3 +
@@ -656,7 +758,8 @@ Pillage and sack recompute the city's defence (fewer types can drop it from
 
 ### When a hero offers to join (`hero_offer_check`, Ghidra `7563:0000`)
 
-Checked once per turn for the current side:
+Checked once per turn for the current side — never again once the
+surrender has been offered:
 
 - **Turn 1:** a hero always appears, free, at the side's capital, carrying
   the side's **standard** (item record = side number).
@@ -674,8 +777,9 @@ Checked once per turn for the current side:
 
 A hero is an army of type 28 with **strength 5** and **14 movement**. The 14 is
 written to **both** the maximum (`+6`) and the moves left (`+7`), so a hero
-**can move on the turn it joins** — unlike a produced army, which arrives with
-0 moves left (see Start of a side's turn, step 5). Its name
+**can move on the turn it joins**. It stands on the first of the city's
+tiles with room, or a free tile round it, or the last one tried (see
+Production › Where a new army stands). Its name
 is a random entry from `TERRAIN<n>\HERONAM<side>.DAT` (`load_hero_name`), one
 `1d100` roll picking the n'th line of `#<sex> <name>`; the flag **is** the sex,
 1 being female, and it settles the portrait and the wording, not the name. The
@@ -686,7 +790,8 @@ image: name `0x223 + 20·hero` (40 slots), in-use flags `0x543`, experience
 byte `0x5e3`.
 
 **Allies:** every hero hired after turn 1 arrives with **1–3 allies** (1d100:
-<70 → 1, <95 → 2, else 3) of one random **magical** type (`ARMYTYPE +48`,
+<70 → 1, <95 → 2, else 3) of one random **magical** type
+(`random_magical_type`, `7563:1a9b`: the types 0–27 with `ARMYTYPE +48` set,
 Dragons if none qualify). The price is paid first. `hero_brings_allies`
 (`7563:01fc`) does have a "do allies come?" flag, but it is **hard-coded to 1**
 and the test is dead code, so allies always arrive. Worth watching for in a
@@ -695,17 +800,20 @@ real game.
 Allies are built by `create_ally_army` (`6536:12e6`), which is also what a ruin
 and a quest reward use. It takes the type's own strength and move, writes the
 move to both `+6` and `+7` so allies too are ready at once, and sets **upkeep
-(`+11`) to 0** — allies cost nothing to keep. It also leaves the home city
-(`+9`) at 0 rather than the city they appeared in; the remake records the real
-city instead, since nothing yet depends on the difference.
+(`+11`) to 0** — allies cost nothing to keep. It leaves the home city (`+9`)
+at 0. Each ally goes on the hero's tile if it has room and no other side's
+army; otherwise a random step from there (1d3−2 each way) and try again, ten
+tries in all, after which it is lost. The number announced is the number
+rolled, placed or not.
 
 ### Death (`hero_drop_items`, Ghidra `67cc:16cd`)
 
 When a hero dies (in battle, or to a ruin guardian), its slot is freed and
-**every item it carried is dropped on the tile where it died** (item status 1,
-at that x, y). If that tile is **Water**, the items are **lost for good**
-(status 0, with a splash sound). If the side's own standard was among them,
-cities vectoring their production to the standard stop doing so.
+**every item it carried is dropped** (item status 1) — in battle on the tile
+fought for, attacker's hero too. If that tile is **Water**, the items are
+**lost for good** (status 0, with a splash sound). If the **current
+player's** standard was among them, that side's cities vectoring their
+production to the standard stop doing so.
 
 ### Levels (`hero_check_promotions`, Ghidra `7563:0579`)
 
@@ -720,9 +828,10 @@ checked for promotion one step at a time:
 | Champion → **Paladin** | ≥ 60 |
 
 Each promotion gives **+1 strength (max 9)** and **+2 maximum movement**
-(`hero_promote`, `7563:0672`). The announcement uses `STRING.DAT` group
-101/102/103, with the heroine wording when the hero's flag at `.SCN`
-`0x593 + 2·hero` is set.
+(`hero_promote`, `7563:0672`). The heroes are checked from the top of the army
+table down. A human is shown each in a popup (16–18, `LEVEL2–4.PCK`) with
+`STRING.DAT` group 101/102/103, with the heroine wording when the hero's flag
+at `.SCN` `0x593 + 2·hero` is set.
 
 Experience comes from (all call sites of `hero_add_experience`):
 
@@ -776,8 +885,12 @@ gold, 5 = allies):
 | no capital within 15 tiles | 2/5 | 2/5 | 1/5 |
 | a capital within 15 tiles | 1/3 | 1/3 | 1/3 |
 
+"Within 15" is `map_distance` (`1a8b:0acc`, the straight line rounded down)
+from the capital each side in play has at `+0x189`.
+
 **Guardians:** a monster from the scenario's monster table (1d9; temples
-have none). Ally ruins store the ally *type* instead:
+have none). Ally ruins store the ally *type* in its place, so **nothing
+guards an allies ruin**:
 
 | ruin | ally type (equal odds) |
 |---|---|
@@ -787,15 +900,17 @@ have none). Ally ruins store the ally *type* instead:
 
 ### Searching (`site_search`, Ghidra `6536:0000`)
 
-A searched site is marked explored (tile flag `0x40`) and can't be searched
-again. Only a stack **with a hero** can search a ruin. Any stack can visit a
-temple.
+The stack's first army needs **a move left**. A site searched to the end
+is marked explored (tile flag `0x40`) and can't be searched again; a hero
+who dies to the guardian leaves it to be searched again. Only a stack **with
+a hero** can search a ruin. Any stack can visit a temple.
 
 - **Temple:** each army in the stack gets **+1 strength (max 9)**, once per
   temple per army. Only the first four temples in the site list can bless,
-  one flag bit each. A blessed hero also gains 1 experience. A human player
-  whose stack includes a hero gets the temple dialog instead (blessing or
-  quest).
+  one flag bit each. A blessed hero also gains 1 experience. A stack with no
+  hero is blessed at once, a human's too; a human player whose stack
+  includes a hero gets the temple dialog instead (blessing or quest), and a
+  computer's hero takes a quest there as well (`5ad0:15c3`).
 - **Sage:** no fight. The hero gains 3 experience and gets the sage dialog
   (below).
 - **Ruin:** the hero gains 3 experience. If there's a guardian, it fights
@@ -803,17 +918,19 @@ temple.
 
   ```
   hero survives if 1d100 <= 90 + 5 * (hero strength + battle items − monster strength)
-                               + 3 * (armies on the hero's tile, hero included)
+                               + 3 * (armies on the hero's tile, whoever's, hero included)
   ```
 
   Monster strengths are a `u16` table at `.SCN` `0x1007` (Erythea: Troll 5,
   Giant 7, Wolf 4, Goblin 3, Dragon/Demon/Devil/Wizard 8, Ghost 7). A slain
-  hero is removed and drops its items (see Heroes › Death). With no
+  hero is removed, counted among its side's losses in Triumphs, and drops
+  its items (see Heroes › Death). A guardian beaten is gone. With no
   guardian, or after a win, the ruin gives up:
-  - **item:** the hero finds it
-  - **gold:** **3d500+500** (**3d1000+1000** if rich)
-  - **allies:** **1d2** armies of the stored type (**3–4** if rich) join on
-    the spot, placed within ±1 tile if the site is full
+  - **item:** the hero finds it, and the site is empty from then on
+  - **gold:** **3d500+500** (**3d1000+1000** if rich), recorded as a
+    *finds gold* deed
+  - **allies:** **1d2** armies of the stored type (**3–4** if rich), placed
+    as a hero's allies are (Heroes › What a new hero is)
 
 Hero experience is capped at 60 (hero record byte `.SCN` `0x5e3 + hero`,
 upper 6 bits).
@@ -875,17 +992,19 @@ counting quests.
 | 5 | conquer a city and **raze** it (26) | a city | 20% |
 | 6 | sack and pillage *n* gold (27) | – | 20% |
 
-The second entry point (used without the temple dialog) picks type 5 (1 in 5)
-or 4, then falls back to 3, then 6.
+The second entry point, `quest_assign(1)` — the computer players' (from
+`5ad0:15c3`) — picks type 5 (1 in 5) or 4, then falls back to 3, then 6.
+The *quest given* deed is written before the type is picked, and the tries
+go on until one finds a target, which type 6 always does.
 
 **Targets** (read from raw disassembly; Ghidra mis-disassembles this switch).
 If a type finds no valid target, the type is rolled again.
 
 | type | how the target is picked |
 |---|---|
-| 0 | a random hero belonging to any other side |
-| 1 | a random non-reserved item lying in a ruin within 50 tiles of the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side. The counting loop wants items in ruins, but the picking loop accepts any item that's in play, so the picked item can differ from the counted set. |
-| 2 | up to 5 tries: a random magical army type (`ARMYTYPE +48`) that some other side has on the map |
+| 0 | a random hero belonging to any other side, counted from the top of the army table down |
+| 1 | a random non-reserved item (records up to 21) still hidden in a ruin less than 50 tiles from the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side, and uncovered on its map. |
+| 2 | up to 5 tries: a random magical army type (`random_magical_type`) that some army not the side's has on the map — neutral ones included |
 | 3 | a random other side that's still alive (up to 200 tries); **n = 1d12+10** armies |
 | 4 | a random city not owned by the side, within map distance 60 (40 from the second entry point); after 100 failed tries any such city will do |
 | 5 | as type 4, always within 60 |
@@ -927,11 +1046,16 @@ Checked in order:
 1. The side owns **fewer than 10 cities** and it's past **turn 15** →
    **1d3+5 allies** (6–8).
 2. The side has **less than 100 gold** → **2d1000+1000 gold**.
-3. An unclaimed magic item exists (the side's own standard also counts) →
-   1 in 3: **that item**, otherwise go to step 5.
-4. No such item, but an unexplored rich site the side hasn't been shown →
-   2 in 3: **the priests reveal the nearest one**, otherwise step 5.
+3. An unused **reserved** item exists (of the standards, only the side's own)
+   → 1 in 3: **a random one of them**, otherwise go to step 5.
+4. No such item, but a rich site not yet emptied that the side hasn't been
+   shown → 2 in 3: **the priests reveal the nearest one to the hero**
+   (largest of the x and y distances, the first of equals), otherwise
+   step 5.
 5. 1 in 2: **1d3+2 allies** (3–5), otherwise **2d1000+1000 gold**.
+
+The allies are always **Archons** (type 19, `quest_give_reward`,
+`4976:1d5b`), placed at the quest hero as a hero's allies are.
 
 Completing a quest also gives the hero **+10 experience**.
 
@@ -1010,8 +1134,11 @@ proposals" and "has only de-escalation offers" (`484e:0cc7`).
 
 Everything here happens at **the round's end**: when the turn order wraps,
 `next_side` (Ghidra `8065:17f6`) counts the turn on, deals a new order
-(*Random Turns*), puts the fallen out of the game, runs the end check, and
-writes the turn to `CURRENT.HST`. Nothing is checked as a single turn ends.
+(`turn_order`, `8065:1732`: with *Random Turns*, 20 swaps of two sides picked
+by 1d8 each; otherwise sides 0–7 in turn), puts the fallen out of the game,
+runs the end check, lets the neutral cities build (see Starting garrisons
+and neutral production), and writes the turn to `CURRENT.HST`. Nothing is
+checked as a single turn ends.
 
 ### Elimination
 
@@ -1031,7 +1158,8 @@ city, before `end_game_check` runs. For each such side, in side order:
 ### Victory and surrender
 
 `end_game_check` (`8065:1aed`) counts sides in play by controller, and
-counts the cities that still exist (razed ones excluded). A human side
+counts the cities that still exist (razed ones excluded) for the victory
+test. A human side
 found **out of play is turned into a computer**, so its fall is noticed
 only once.
 
@@ -1052,7 +1180,8 @@ only once.
   its turn opens as a human's, so the game can be inspected, and the *game
   won* flag is set.
 - **One human side with computer sides still playing**: if it owns more than
-  half of all cities *and* more than the largest computer side + cities/8,
+  half of **all** cities — ruins included, the scenario's whole city count —
+  *and* more than the largest computer side + cities/8,
   the *surrender offered* flag (`.SCN` `0x15d`) is set — once; it is never
   offered again. That leads to the "Surrender!" message (group 17).
 

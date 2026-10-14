@@ -158,6 +158,8 @@ end
 --- scores -- 1d8 each, and 400 more for a human when *I am the Greatest* is
 --- on (79fa:0000).
 function ai.startGame(g)
+  -- the neighbour table, from the cities as the game begins (623c:0398)
+  g.aiNeighbours = core.buildNeighbours(g)
   for _, s in ipairs(g.map.sides) do ai.initSide(g, s) end
   shareOutCities(g)
   for _, s in ipairs(g.map.sides) do
@@ -172,6 +174,11 @@ end
 --- can see it, the explorer roles lapse, and each city's "cleaned" mark goes.
 local function turnSetup(g, side)
   local d = core.data(g, side)
+  -- the side is at peace with itself, state and proposal (5db9:0000)
+  if g.diplomacy then
+    g.diplomacy.state[side.index * 9] = 0
+    g.diplomacy.proposal[side.index * 9] = 0
+  end
   side.aiSolidarity = d.solidarity
   local quick = g.map.options.quickStart ~= 0 and g.map.options.hiddenMap ~= 0
   for i = #g.map.cities, 1, -1 do
@@ -200,13 +207,6 @@ function ai.playTurn(g, side, yield)
   local diplo  = require("warlords.ai.diplomacy")
   local pause = yield or function() end
   local hidden = g.map.options.hiddenMap ~= 0
-
-  -- the computer always hires an offered hero it can afford (hero_offer_check
-  -- priced it; the side pays on recruiting)
-  if side.heroOffer and side.gold >= (side.heroOffer.price or 0) then
-    require("warlords.hero").recruit(g, side, side.heroOffer)
-    side.heroOffer = nil
-  end
 
   -- every army starts the phases unmoved
   for _, a in ipairs(g.armies) do

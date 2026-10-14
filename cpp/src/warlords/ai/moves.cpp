@@ -8,6 +8,7 @@
 #include "warlords/ai/diplomacy.hpp"
 #include "warlords/game.hpp"
 #include "warlords/move.hpp"
+#include "warlords/quest.hpp"
 #include "warlords/scn.hpp"
 #include "warlords/site.hpp"
 
@@ -70,6 +71,10 @@ int searchSite(Game& g, Sel* sel, Army* h, Site& s) {
     std::vector<Army*> stack = sel ? sel->armies : std::vector<Army*>{h};
     auto r = site::search(g, stack, s.x, s.y, false);
     if (r && r->kind == "sage") sage(g, side);
+    // at a temple the computer takes a quest, by its own rules (quest_assign(1))
+    if (s.content == site::TEMPLE && g.map->options.quests != 0 && !side.quest && isHero(h)) {
+      quest::assign(g, side, h, true);
+    }
     if (!isHero(h)) return 0;
     for (Army* a : stack) a->done = false;
     if (g.map->options.hiddenMap != 0 && s.content == site::ALLIES) {

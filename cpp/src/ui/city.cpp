@@ -64,7 +64,7 @@ void smallShield(int side, int x, int y) {
 }
 
 const w2::Slot* building(const w2::City* city) {
-  return city->producing != NONE && city->producing < (int)city->slots.size() ? &city->slots[city->producing] : nullptr;
+  return w2::game::producing(*city) && city->producing < (int)city->slots.size() ? &city->slots[city->producing] : nullptr;
 }
 
 // Income, defence and owner (7204:0727, :1769).
@@ -118,7 +118,7 @@ struct CityDialog : kit::Modal {
       shown.insert(DONE_PROD);
       st[DONE_PROD] = w2::uidata::NORMAL;
       shown.insert(STOP);
-      st[STOP] = city->producing != NONE ? w2::uidata::NORMAL : w2::uidata::DISABLED;
+      st[STOP] = w2::game::producing(*city) ? w2::uidata::NORMAL : w2::uidata::DISABLED;
     } else {
       shown.insert(DONE);
       st[DONE] = w2::uidata::NORMAL;
@@ -132,7 +132,7 @@ struct CityDialog : kit::Modal {
       st[all] = w2::uidata::NORMAL;
       int send = sub == 1 ? V_SEND_LIT : V_SEND;
       shown.insert(send);
-      st[send] = (sub == 1 || city->producing != NONE) ? w2::uidata::NORMAL : w2::uidata::DISABLED;
+      st[send] = (sub == 1 || w2::game::producing(*city)) ? w2::uidata::NORMAL : w2::uidata::DISABLED;
       int mv = sub == 2 ? V_MOVE_LIT : V_MOVE;
       shown.insert(mv);
       st[mv] = (sub == 2 || !w2::game::vectoredTo(*G.g, city).empty()) ? w2::uidata::NORMAL : w2::uidata::DISABLED;
@@ -266,7 +266,7 @@ struct CityDialog : kit::Modal {
     kit::right(f, kit::text(S_CURRENT, 0), 408, 110);
     const w2::Slot* b = building(city);
     kit::army(b ? b->type : NONE, owner, 416, 104, 1);
-    std::string text = city->producing != NONE ? w2::fmt("%dt", city->countdown) : "-";
+    std::string text = w2::game::producing(*city) ? w2::fmt("%dt", city->countdown) : "-";
     gfx::setColor(1, 1, 1);
     if (city->vectorTo != NONE) {
       std::string where;
@@ -308,7 +308,7 @@ struct CityDialog : kit::Modal {
     const w2::Slot* b = building(city);
     kit::army(b ? b->type : NONE, owner, 368, 103, 1);
     gfx::setColor(1, 1, 1);
-    f.draw(city->producing != NONE ? format(kit::text(S_VECTOR, 1), city->countdown) : "-", 408, 109);
+    f.draw(w2::game::producing(*city) ? format(kit::text(S_VECTOR, 1), city->countdown) : "-", 408, 109);
     w2::Army* out = nullptr;
     w2::Army* onRoad = nullptr;
     std::vector<w2::Army*> next, after;
@@ -372,7 +372,7 @@ struct CityDialog : kit::Modal {
   // Send what this city builds to the side's city nearest (mx, my), or its
   // planted standard if that is nearer (828e:0651).
   void sendTo(int mx, int my) {
-    if (city->producing == NONE) return;
+    if (!w2::game::producing(*city)) return;
     w2::City* target = w2::game::nearestCity(*G.g, mx, my, G.player);
     if (!target) return;
     auto [sx, sy] = w2::game::standardAt(*G.g, *G.player);

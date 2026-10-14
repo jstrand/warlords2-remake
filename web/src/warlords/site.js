@@ -12,7 +12,6 @@ import * as game from "./game.js";
 import * as heroMod from "./hero.js";
 import * as combat from "./combat.js";
 import * as history from "./history.js";
-import * as quest from "./quest.js";
 
 // what a site holds
 export const EMPTY = 0, TEMPLE = 1, ITEM = 2, SAGE = 3, GOLD = 4, ALLIES = 5;
@@ -81,18 +80,22 @@ export function markRich(g) {
   }
 }
 
+/** rich, near (an in-play side's capital less than 15 away by map_distance,
+ *  1a8b:0acc) or far. */
 function band(g, s, capitals) {
   if (s.rich) return "rich";
   for (const c of capitals) {
-    if (Math.max(Math.abs(s.x - c.x), Math.abs(s.y - c.y)) < CAPITAL_RANGE) return "near";
+    const dx = s.x - c.x, dy = s.y - c.y;
+    if (Math.floor(Math.sqrt(dx * dx + dy * dy)) < CAPITAL_RANGE) return "near";
   }
   return "far";
 }
 
 /** Roll what every site holds (setup_random_sites, 66d4:0000). */
 export function setup(g) {
+  // the in-play sides' capitals where they stand (+0x189), city or not
   const capitals = [];
-  for (const s of g.sides) if (s.capital) capitals.push(s.capital);
+  for (const s of g.sides) capitals.push({ x: s.capX, y: s.capY });
 
   markRich(g);
   let temples = 0;
@@ -141,8 +144,9 @@ export function setup(g) {
     if (s.content === TEMPLE) {
       s.guardian = undefined;
     } else if (s.content === ALLIES) {
+      // the allies' type takes the guardian's place (66d4:0000)
       s.allyType = g.rng.pick(ALLY_TYPES[s.band]);
-      s.guardian = g.rng.dice(1, 9, 0);
+      s.guardian = undefined;
     } else {
       s.guardian = g.rng.dice(1, 9, 0);
     }
@@ -155,10 +159,11 @@ function heroIn(stack) {
   return stack.find((a) => a.type === armytype.HERO) || null;
 }
 
-/** Does the hero survive the ruin's guardian? */
-export function survivesGuardian(g, h, stack, monsterStrength) {
+/** Does the hero survive the ruin's guardian (6536:07ad)? 3 more in 100 for
+ *  every army on its tile, whoever's. */
+export function survivesGuardian(g, h, monsterStrength) {
   const margin = 90 + 5 * ((h.strength || 0) + combat.battleItems(h) - monsterStrength)
-               + 3 * stack.length;
+               + 3 * game.armiesAt(g, h.x, h.y).length;
   return g.rng.dice(1, 100, 0) <= margin;
 }
 
@@ -187,46 +192,51 @@ export function bless(g, s, stack) {
   return blessed;
 }
 
-/** Search the site under a stack (site_search, 6536:0000). A human chooses at
- *  a temple; a found item is left on the ground for Take to pick up. */
+/** Search the site under a stack (site_search, 6536:0000). The stack's first
+ *  army needs a move left. With no hero only a temple does anything: it
+ *  blesses at once. With one, a human chooses at a temple; a found item is
+ *  left on the ground for Take to pick up. */
 export function search(g, stack, x, y, human) {
   const s = g.map.siteAt && g.map.siteAt[y * g.map.width + x];
   if (!s || s.searched) return null;
+  if (!stack[0] || (stack[0].moves || 0) < 1) return null;
   const h = heroIn(stack);
 
   if (s.content === TEMPLE) {
-    if (human) return { site: s, kind: "temple", hero: h };
+    if (human && h) return { site: s, kind: "temple", hero: h };
     const blessed = bless(g, s, stack);
-    const out = { site: s, kind: "temple", blessed };
-    if (h && g.map.options.quests !== 0) {
-      const side = g.map.sides[h.owner];
-      out.quest = quest.assign(g, side, h);
-    }
-    return out;
+    return { site: s, kind: "temple", blessed, hero: h };
   }
 
   if (!h) return { site: s, kind: "no hero" };
-  s.searched = true;
+  const side = g.map.sides[h.owner];
 
   if (s.content === SAGE) {
     heroMod.addExperience(g, h, 3);
-    history.deed(g, g.map.sides[h.owner], history.FINDS, history.SAGE, 0, h.name);  // 6536:013c
+    history.deed(g, side, history.FINDS, history.SAGE, 0, h.name);  // 6536:013c
+    s.searched = true;
     return { site: s, kind: "sage", hero: h };
   }
 
+  // ruin_search (6536:01ab)
   heroMod.addExperience(g, h, 3);
 
+  // an allies site holds its allies' type where the guardian would be, and
+  // nothing guards it
   let beaten;
-  if (s.guardian != null && s.guardian > 0) {
+  if (s.content !== ALLIES && s.guardian != null && s.guardian > 0) {
     const str = guardianStrength(g, s);
-    beaten = g.map.monsters[s.guardian];
-    if (!survivesGuardian(g, h, stack, str)) {
-      heroMod.dropItems(g, h, x, y);
-      history.deed(g, g.map.sides[h.owner], history.KILLED, history.SEARCHING, 0, h.name);  // 6536:02ef
+    const monster = g.map.monsters[s.guardian];
+    if (!survivesGuardian(g, h, str)) {
+      history.deed(g, side, history.KILLED, history.SEARCHING, 0, h.name);  // 6536:02ef
+      history.tally(g, h, undefined, false);   // the side's own losses
+      heroMod.dropItems(g, h, h.x, h.y, h.owner);
       const i = g.armies.indexOf(h);
       if (i >= 0) g.armies.splice(i, 1);
-      return { site: s, kind: "killed", monster: g.map.monsters[s.guardian], hero: h };
+      return { site: s, kind: "killed", monster, hero: h };
     }
+    beaten = monster;
+    s.guardian = 0;
   }
 
   if (s.content === ITEM) {
@@ -239,41 +249,28 @@ export function search(g, stack, x, y, human) {
       h.items = h.items || [];
       h.items.push(found);
     }
-    const side = g.map.sides[h.owner];
     if (found) history.deed(g, side, history.FINDS, found.index, 0, h.name);   // 6536:0571
-    const q = quest.event(g, side, "item", { hero: h });
-    return { site: s, kind: "item", item: found, hero: h, quest: q, guardian: beaten };
+    s.searched = true;
+    s.content = EMPTY;
+    return { site: s, kind: "item", item: found, hero: h, guardian: beaten };
   } else if (s.content === GOLD) {
     const gold = s.rich ? g.rng.dice(3, 1000, 1000) : g.rng.dice(3, 500, 500);
-    const side = g.map.sides[h.owner];
     side.gold += gold;
+    s.searched = true;
+    history.deed(g, side, history.FINDS, history.GOLD, 0, h.name);
     return { site: s, kind: "gold", gold, hero: h, guardian: beaten };
   } else if (s.content === ALLIES) {
+    s.searched = true;
     const type = g.types.byId[s.allyType] || g.types.byId[armytype.SCOUTS];
-    const n = s.rich ? g.rng.dice(1, 2, 2) : g.rng.dice(1, 2, 0);
+    let n = g.rng.dice(1, 2, 0);
+    if (s.rich) n += 2;
     const joined = [];
     for (let k = 0; k < n; k++) {
-      let ax = x, ay = y;
-      if (game.armiesAt(g, ax, ay).length >= rules.MAX_STACK) {
-        for (let dx = -1; dx <= 1; dx++) {
-          for (let dy = -1; dy <= 1; dy++) {
-            const nx = x + dx, ny = y + dy;
-            if (nx >= 0 && ny >= 0 && nx < g.map.width && ny < g.map.height
-                && game.armiesAt(g, nx, ny).length < rules.MAX_STACK
-                && move.COST[scn.terrainAt(g.map, nx, ny)] !== 0) {
-              ax = nx; ay = ny;
-            }
-          }
-        }
-      }
-      if (game.armiesAt(g, ax, ay).length < rules.MAX_STACK) {
-        const a = heroMod.newAlly(g, type, ax, ay, h.owner, h.homeCity);
-        g.armies.push(a);
-        joined.push(a);
-      }
+      const a = heroMod.placeAlly(g, type, x, y, side);
+      if (a) joined.push(a);
     }
-    history.deed(g, g.map.sides[h.owner], history.FINDS, history.ALLIES, 0, h.name);  // 6536:07a1
-    return { site: s, kind: "allies", armies: joined, type, hero: h, guardian: beaten };
+    history.deed(g, side, history.FINDS, history.ALLIES, 0, h.name);  // 6536:07a1
+    return { site: s, kind: "allies", armies: joined, count: n, type, hero: h, guardian: beaten };
   }
   return { site: s, kind: "empty", hero: h, guardian: beaten };
 }

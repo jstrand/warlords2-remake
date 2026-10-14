@@ -14,7 +14,8 @@ loadData({ images: false });
 const [scen = "ERYTHEA", seedS = "1", turnsS = "10", ...flags] = process.argv.slice(2);
 const hidden = flags.includes("hidden") ? "hidden" : null;
 // "save": write the game out and read it back after every turn, which must
-// change nothing
+// change nothing but the route cache -- a load empties it, as the
+// original's does (623c:0dff)
 const roundTrip = flags.includes("save");
 const opts = { seed: Number(seedS) };
 opts.options = {};

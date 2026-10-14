@@ -27,7 +27,7 @@ combat.HERO_TABLE = { [0] = 0, 0, 0, 0, 1, 1, 1, 2, 2, 3 }
 combat.HIT_POINTS = 2
 combat.MAX_STRENGTH = 15
 combat.DIE, combat.DIE_INTENSE = 20, 24
-combat.STALEMATE = 10000                    -- throws before the defender wins
+combat.STALEMATE = 10000                    -- throws in one duel before the attacker loses it
 
 --------------------------------------------------------------------- the tile
 
@@ -49,73 +49,67 @@ local function fightOrder(g, ownerIndex)
   return function(a) return g.map.fightOrder[row][a.type] or 0 end
 end
 
---- Sort a line by its owner's fight order, lowest first, ties keeping stack
---- order.
-local function sortLine(g, line, ownerIndex)
+--- On water, shore and mountains a side holding a hero sends one flier to
+--- the back, keeping the hero's carrier alive longest: the first flier in
+--- the order the line was gathered that is not at sea gets 80 on its rank
+--- (6a89:008b, before the sort). Returns the army, or nil.
+local function heroCarrier(g, line, x, y)
+  local t = scn.terrainAt(g.map, x, y)
+  if t ~= move.WATER and t ~= move.SHORE and t ~= move.MOUNTAINS then return nil end
+  local hasHero = false
+  for _, a in ipairs(line) do if a.type == armytype.HERO then hasHero = true end end
+  if not hasHero then return nil end
+  for _, a in ipairs(line) do
+    if not a.atSea and g.types.byId[a.type].flies then return a end
+  end
+  return nil
+end
+
+--- Sort a line by its owner's fight order, lowest first, ties keeping the
+--- order it was gathered in (an insertion sort, 6a89:05f1).
+local function sortLine(g, line, ownerIndex, carrier)
   local rank = fightOrder(g, ownerIndex)
-  local order = {}
-  for i, a in ipairs(line) do order[a] = i end
+  local key, order = {}, {}
+  for i, a in ipairs(line) do
+    key[a] = rank(a) + (a == carrier and 80 or 0)
+    order[a] = i
+  end
   table.sort(line, function(p, q)
-    local rp, rq = rank(p), rank(q)
-    if rp ~= rq then return rp < rq end
+    if key[p] ~= key[q] then return key[p] < key[q] end
     return order[p] < order[q]
   end)
   return line
 end
 
---- On water, shore and mountain tiles a side holding a hero sends one
---- qualifying army to the back, keeping the hero's carrier alive longest.
-local function protectHeroCarrier(g, line, x, y)
-  local t = scn.terrainAt(g.map, x, y)
-  if t ~= move.WATER and t ~= move.SHORE and t ~= move.MOUNTAINS then return end
-  local hasHero = false
-  for _, a in ipairs(line) do if a.type == armytype.HERO then hasHero = true end end
-  if not hasHero then return end
-  for i, a in ipairs(line) do
-    if g.types.byId[a.type].flies then
-      table.remove(line, i)
-      line[#line + 1] = a
-      return
-    end
-  end
-end
-
 --- Build both battle lines for an attack on (x, y).
 -- Defenders are every army on the tile that the attacker does not own -- or on
--- any of the 2x2 tiles when the target is a city.
+-- any of the 2x2 tiles when the target is a city -- gathered from the top of
+-- the army table down (combat_setup, 6a89:008b).
 function combat.lines(g, stack, x, y)
-  local gameMod = require("warlords.game")
   local attacker = stack[1] and stack[1].owner
   -- only a standing city is fought for as one (its terrain is 10, which
   -- combat_setup and after_battle test); ruins are open ground
   local city = g.map.cityTile[y * g.map.width + x]
   if city and city.razed then city = nil end
 
-  local tiles = { { x, y } }
-  if city then
-    tiles = {}
-    for dx = 0, 1 do
-      for dy = 0, 1 do tiles[#tiles + 1] = { city.x + dx, city.y + dy } end
-    end
-  end
+  local x0, y0 = city and city.x or x, city and city.y or y
+  local x1, y1 = city and city.x + 1 or x, city and city.y + 1 or y
 
   local defenders, defOwner = {}, nil
-  for _, t in ipairs(tiles) do
-    for _, a in ipairs(gameMod.armiesAt(g, t[1], t[2])) do
-      if a.owner ~= attacker then
-        defenders[#defenders + 1] = a
-        if defOwner == nil then defOwner = a.owner end
-      end
+  for i = #g.armies, 1, -1 do
+    local a = g.armies[i]
+    if not a.transit and a.owner ~= attacker and a.x and a.x >= x0 and a.x <= x1
+       and a.y >= y0 and a.y <= y1 then
+      defenders[#defenders + 1] = a
+      if defOwner == nil then defOwner = a.owner end
     end
   end
 
   local attackers = {}
   for _, a in ipairs(stack) do attackers[#attackers + 1] = a end
 
-  sortLine(g, attackers, attacker)
-  sortLine(g, defenders, defOwner)
-  protectHeroCarrier(g, attackers, x, y)
-  protectHeroCarrier(g, defenders, x, y)
+  sortLine(g, attackers, attacker, heroCarrier(g, attackers, x, y))
+  sortLine(g, defenders, defOwner, heroCarrier(g, defenders, x, y))
   return attackers, defenders, defOwner, city
 end
 
@@ -125,7 +119,7 @@ local function itemTotal(army, itemType)
   local total = 0
   if army.items then
     for _, it in ipairs(army.items) do
-      if it.type == itemType then total = total + math.max(1, it.value) end
+      if it.type == itemType then total = total + (it.value or 0) end
     end
   end
   return total
@@ -291,6 +285,14 @@ function combat.resolve(g, attackers, defenders, x, y)
   end
 
   local atk, def = prepare(attackers, attackMod), prepare(defenders, defendMod)
+  -- an army at sea on water or shore fights as a boat, strength 4
+  -- (DS:029c / DS:02a4); Triumphs counts it a navy
+  local boats = {}
+  for _, line in ipairs({ attackers, defenders }) do
+    for _, a in ipairs(line) do
+      if a.atSea and (terrain == move.WATER or terrain == move.SHORE) then boats[a] = true end
+    end
+  end
   local log, ai, di, throws = {}, 1, 1, 0
 
   while atk[ai] and def[di] do
@@ -298,8 +300,10 @@ function combat.resolve(g, attackers, defenders, x, y)
     local ra, rd = g.rng:dice(1, die, 0), g.rng:dice(1, die, 0)
     local aHits = ra <= a.strength and rd > d.strength
     local dHits = rd <= d.strength and ra > a.strength
-    throws = throws + 1
+    -- past 10,000 throws in one duel the attacker takes the hit; the count
+    -- starts again with each army that falls (67cc:08a6)
     if throws > combat.STALEMATE then aHits, dHits = false, true end
+    throws = throws + 1
 
     -- Tutorial: a human player's hero cannot die attacking a neutral defender.
     if dHits and g.map.options.tutorial ~= 0
@@ -315,6 +319,7 @@ function combat.resolve(g, attackers, defenders, x, y)
         d.dead = true
         log[#log + 1] = 0
         di = di + 1
+        throws = 0
       end
     elseif dHits then
       a.hits = a.hits - 1
@@ -322,6 +327,7 @@ function combat.resolve(g, attackers, defenders, x, y)
         a.dead = true
         log[#log + 1] = 1
         ai = ai + 1
+        throws = 0
       end
     end
   end
@@ -344,7 +350,8 @@ function combat.resolve(g, attackers, defenders, x, y)
     won = #survivors(def) == 0,
     deadByArmy = deadByArmy,
     log = log,
-    attackMod = attackMod, defendMod = defendMod, class = class,
+    attackMod = attackMod, defendMod = defendMod, class = class, boats = boats,
+    defStrength0 = defenders[1] and combat.strength(g, defenders[1], defendMod, class, terrain) or 0,
     attackers = survivors(atk), defenders = survivors(def),
     deadAttackers = deadAttackers, deadDefenders = deadDefenders,
   }

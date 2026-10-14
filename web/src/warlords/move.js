@@ -276,8 +276,9 @@ function wavefront(q, pass) {
   const W = q.W, H = q.H;
   const sx = q.sx, sy = q.sy, dx = q.dx, dy = q.dy;
   const dist = q.dist, grid = q.grid, mode = q.mode;
-  const margin = pass === 0 ? 6 : 50;
-  if (pass === 0) q.ring = 0;
+  // a flood (flag 0x10) spreads as far as its range, and as many rounds
+  const margin = q.flood != null ? q.flood : (pass === 0 ? 6 : 50);
+  if (pass === 0 || q.flood != null) q.ring = 0;
   const lox = Math.min(sx, dx), loy = Math.min(sy, dy);
   const hix = Math.max(sx, dx), hiy = Math.max(sy, dy);
   const bx0 = lox < margin ? 0 : lox - margin;
@@ -286,6 +287,7 @@ function wavefront(q, pass) {
   const by1 = hiy + margin < H ? hiy + margin : H - 1;
   let found = 1, going = true;
   while (going) {
+    if (q.flood != null && q.ring === q.flood) break;
     let any = false;
     const r = q.ring;
     const x0 = Math.max(dx - r, 0, bx0), x1 = Math.min(dx + r, W - 1, bx1);
@@ -342,7 +344,7 @@ function wavefront(q, pass) {
               if (ok && nd + c < absval(nv)) dist[nk] = v - c;
             }
           }
-          if (x === sx && y === sy) going = false;
+          if (x === sx && y === sy && q.flood == null) going = false;
         }
       }
     }
@@ -410,8 +412,97 @@ function singleStep(g, mode, sx, sy, dx, dy) {
   return true;
 }
 
+/** A stack may always path *to* a city, just never through one it does not
+ *  own (path_mark_cities, 1555:0bde): when (x, y) is a city tile the grid
+ *  shuts, its four tiles are opened. Returns what to put back. */
+function openCityAt(g, grd, x0, y0) {
+  const W = g.map.width, H = g.map.height;
+  const restore = new Map();
+  const goal = y0 * W + x0;
+  const goalByte = grd[goal];
+  const city = g.map.cityTile[goal];
+  if (city && goalByte % 8 === 0 && has(goalByte, CITY_F)) {
+    const port = isPort(g, city);
+    for (let ox = 0; ox <= 1; ox++) {
+      for (let oy = 0; oy <= 1; oy++) {
+        const x = city.x + ox, y = city.y + oy;
+        if (x < W && y < H) {
+          const k = y * W + x;
+          restore.set(k, grd[k]);
+          let byte = grd[k] - grd[k] % 8 + COST[CITY];
+          if (port) byte = withF(withF(byte, CROSS_F), WATER_F);
+          grd[k] = byte;
+        }
+      }
+    }
+  }
+  return restore;
+}
+
+// The route cache (1555:1508-16f0): 20 slots, slot 0 for routes under 15
+// tiles, 1-19 for longer ones, kept from game start or load for every side.
+export const CACHE_SLOTS = 20;
+
+export function newPathCache() {
+  const c = [];
+  for (let i = 0; i < CACHE_SLOTS; i++) c.push(null);
+  return c;
+}
+
+/** The request's flags (stack_movement_mode, 1c8c:0529): 8 at sea, else for
+ *  a land stack 1 for the hills bonus and 2 for the woods'. */
+function routeFlags(mode, woods, hills, atSea) {
+  if (atSea) return 8;
+  if (mode !== LAND) return 0;
+  return (hills ? 1 : 0) | (woods ? 2 : 0);
+}
+
+function step(x, y, dir, W, H) {
+  const nx = x + DIRS[dir][0], ny = y + DIRS[dir][1];
+  if (nx < 0 || ny < 0 || nx >= W || ny >= H) return null;
+  return [nx, ny];
+}
+
+/** A cached route the request can use (1555:1595 / 165c): same destination,
+ *  mode and flags, with the start somewhere on it before its end. Returns the
+ *  rest of it as directions, or null. */
+function cacheHit(g, e, sx, sy, dx, dy, mode, flags) {
+  if (!e || e.dx !== dx || e.dy !== dy || e.mode !== mode || e.flags !== flags) return null;
+  let x = e.sx, y = e.sy;
+  for (let i = 0; i < e.dirs.length; i++) {
+    if (x === sx && y === sy) return e.dirs.slice(i);
+    const n = step(x, y, e.dirs[i], g.map.width, g.map.height);
+    if (!n) return null;
+    [x, y] = n;
+  }
+  return null;
+}
+
+/** Keep a route found (1555:16f0): a short one in slot 0; a long one in the
+ *  first free slot of 1-19, or over the one whose own route is shortest when
+ *  that is shorter than this one. */
+function cacheStore(g, d, sx, sy, dx, dy, mode, flags, dirs) {
+  const c = g.pathCache;
+  let slot = -1;
+  if (d < 15) {
+    slot = 0;
+  } else {
+    let shortest = -1, least = 10000;
+    for (let i = 1; i < CACHE_SLOTS; i++) {
+      const e = c[i];
+      if (!e) { slot = i; break; }
+      const ed = distance(e.dx, e.dy, e.sx, e.sy);
+      if (ed < least) { shortest = i; least = ed; }
+    }
+    if (slot === -1 && shortest !== -1 && least < d) slot = shortest;
+  }
+  if (slot !== -1) c[slot] = { mode, flags, sx, sy, dx, dy, dirs: dirs.slice() };
+}
+
 /** The path from (sx,sy) to (dx,dy) for a stack, as a list of { x, y, cost }
- *  steps, or null if there is no route: 1555:000a, step for step. */
+ *  steps, or null if there is no route: pathfind (1555:000a). A route cached
+ *  for the same destination that the stack stands on is taken as it is;
+ *  then a step to a neighbouring tile; then the search, its route kept. */
 export function findPath(g, stack, sx, sy, dx, dy) {
   if (sx === dx && sy === dy) return [];
   const W = g.map.width, H = g.map.height;
@@ -420,32 +511,29 @@ export function findPath(g, stack, sx, sy, dx, dy) {
   const side = stack[0] ? stack[0].owner : undefined;
   const [mode, woods, hills, atSea] = stackMode(g, stack);
   const grd = grid(g, side);
+  const flags = routeFlags(mode, woods, hills, atSea);
+  const d = distance(dx, dy, sx, sy);
 
   let path = null;
-  const restore = new Map();
-  if (distance(dx, dy, sx, sy) === 1 && singleStep(g, mode, sx, sy, dx, dy)) {
+  let dirs = null;
+  if (g.pathCache) {
+    dirs = cacheHit(g, g.pathCache[0], sx, sy, dx, dy, mode, flags);
+    for (let i = 1; !dirs && d > 14 && i < CACHE_SLOTS; i++) {
+      dirs = cacheHit(g, g.pathCache[i], sx, sy, dx, dy, mode, flags);
+    }
+  }
+  if (dirs) {
+    path = [];
+    let x = sx, y = sy;
+    for (const dir of dirs) {
+      [x, y] = step(x, y, dir, W, H) || [x, y];
+      path.push({ x, y });
+    }
+  } else if (d === 1 && singleStep(g, mode, sx, sy, dx, dy)) {
     path = [{ x: dx, y: dy }];
   } else {
-    // a stack may always path *to* a city, just never through one it does
-    // not own (path_mark_cities, 1555:0bde)
     const goal = dy * W + dx;
-    const goalByte = grd[goal];
-    const city = g.map.cityTile[goal];
-    if (city && goalByte % 8 === 0 && has(goalByte, CITY_F)) {
-      const port = isPort(g, city);
-      for (let ox = 0; ox <= 1; ox++) {
-        for (let oy = 0; oy <= 1; oy++) {
-          const x = city.x + ox, y = city.y + oy;
-          if (x < W && y < H) {
-            const k = y * W + x;
-            restore.set(k, grd[k]);
-            let byte = grd[k] - grd[k] % 8 + COST[CITY];
-            if (port) byte = withF(withF(byte, CROSS_F), WATER_F);
-            grd[k] = byte;
-          }
-        }
-      }
-    }
+    const restore = openCityAt(g, grd, dx, dy);
     let penalty = 0;
     if (mode === LAND) {
       const t = scn.terrainAt(g.map, dx, dy);
@@ -460,24 +548,57 @@ export function findPath(g, stack, sx, sy, dx, dy) {
         if (found === 0) found = wavefront(q, pass);
       }
     }
-    if (found === 1) path = trace(q);
+    if (found === 1) {
+      path = trace(q);
+      if (g.pathCache) cacheStore(g, d, sx, sy, dx, dy, mode, flags, path.map((p) => p.dir));
+    }
+    for (const [k, byte] of restore) grd[k] = byte;
   }
 
   // what the walk spends on each step (path_step_costs, 1555:18be)
   let ashore = false;
-  for (const step of path || []) {
-    const byte = grd[step.y * W + step.x];
+  for (const p of path || []) {
+    const byte = grd[p.y * W + p.x];
     if (ashore) {
-      step.cost = PAST_SHORE;
+      p.cost = PAST_SHORE;
     } else {
-      step.cost = walkCost(byte, mode, woods, hills);
+      p.cost = walkCost(byte, mode, woods, hills);
       ashore = mode === LAND && crossesShore(byte, atSea);
     }
-    delete step.dir;
+    delete p.dir;
   }
-  for (const [k, byte] of restore) grd[k] = byte;
   if (path && path.length === 0) path = null;
   return path;
+}
+
+/** The flood the computer players measure distance with (1555:1ab9):
+ *  pathfind from (x, y) to itself with flag 0x10 -- no route, no cache --
+ *  which runs the wavefront (1555:0373) for `range` sweeps at most, each
+ *  spreading every tile of a square that grows by one round (x, y), and
+ *  stops early only when a sweep spreads nothing. A cost travels across the
+ *  scan in one sweep but only a tile a sweep against it, so a winding route
+ *  can be left long, or not reached. Returns the grid: SHUT, 30000
+ *  unreached, else the cost from (x, y) plus 1 (negative while the tile had
+ *  still to spread). `gridSide` is whose cost grid; `fogSide` whose hidden
+ *  map shuts what it has not seen (only a human's, mid-turn). */
+export function flood(g, gridSide, x, y, range, mode, woods, hills, fogSide) {
+  const W = g.map.width, H = g.map.height;
+  const grd = grid(g, gridSide);
+  const goal = y * W + x;
+  const restore = openCityAt(g, grd, x, y);
+  let penalty = 0;
+  if (mode === LAND) {
+    const t = scn.terrainAt(g.map, x, y);
+    penalty = (t === WATER || t === SHORE) ? WATER_PENALTY_TO : WATER_PENALTY;
+  }
+  const q = { W, H, sx: x, sy: y, dx: x, dy: y, grid: grd, mode, woods, hills, penalty,
+              dist: prepare(g, grd, fogSide, mode, x, y), flood: range };
+  if (q.dist[goal] !== SHUT || has(grd[goal], CITY_F)) {
+    q.dist[goal] = -1;
+    if (wavefront(q, 0) === 0) wavefront(q, 1);
+  }
+  for (const [k, byte] of restore) grd[k] = byte;
+  return q.dist;
 }
 
 /** The route the random map generator lays a road along (5311:0c1c): the

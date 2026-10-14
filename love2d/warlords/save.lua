@@ -121,8 +121,10 @@ function save.encode(g)
       for _, it in ipairs(a.items) do items[#items + 1] = it.index end
     end
     armies[i] = {
+      -- its place in the army table (1b62:0309)
+      slot = a.slot,
       x = a.x, y = a.y, owner = a.owner, type = a.type, name = a.name,
-      female = a.female or nil,
+      female = a.female or nil, medals = a.medals,
       strength = a.strength, moves = a.moves, maxMoves = a.maxMoves,
       upkeep = a.upkeep, homeCity = a.homeCity, atSea = a.atSea or nil,
       -- the army's own record carries which group it moves with (+17 in the
@@ -151,6 +153,9 @@ function save.encode(g)
     sides[#sides + 1] = {
       index = s.index, gold = s.gold, alive = s.alive, computer = s.computer,
       level = s.level, enhanced = s.enhanced, observe = s.observe or nil,
+      -- where its capital now stands (67cc:10d7), and whether a human's
+      -- cities have still to build this turn
+      capNow = s.capNow, productionDue = s.productionDue or nil,
       diploScore = s.diploScore,
       income = s.income, upkeepTotal = s.upkeepTotal, produced = s.produced,
       ai = saveAI(s.ai, ids), aiSolidarity = s.aiSolidarity, card = s.card,
@@ -175,6 +180,8 @@ function save.encode(g)
       countdown = c.countdown, vectorTo = c.vectorTo, razed = c.razed or nil,
       defence = c.defence, income = c.income, claim = c.claim,
       razedBy = c.razedBy, slots = c.slots,
+      -- the sides that have attacked it (+0x30)
+      attacked = (c.attacked or 0) ~= 0 and c.attacked or nil,
     }
   end
 
@@ -207,6 +214,9 @@ function save.encode(g)
     version = save.VERSION,
     scenario = g.map.name,
     turn = g.turn, current = g.current, seed = g.rng.state,
+    -- the round's turn order and the place in it, and the computers'
+    -- neighbour table, built as the game began
+    turnOrder = g.turnOrder, orderAt = g.orderAt, aiNeighbours = g.aiNeighbours,
     won = g.won or nil, over = g.over or nil, noHumansSaid = g.noHumansSaid or nil,
     greatest = g.greatest or nil,
     surrenderOffered = g.surrenderOffered or nil,
@@ -247,6 +257,8 @@ function save.decode(text, dataDir)
   local g = game.new(dataDir, state.scenario, { seed = 0, options = state.options })
   g.armies = {}
   g.turn, g.current = state.turn, state.current
+  if state.turnOrder then g.turnOrder = state.turnOrder end
+  if state.aiNeighbours then g.aiNeighbours = state.aiNeighbours end
   g.rng.state = state.seed
   g.won, g.over, g.surrenderOffered = state.won, state.over, state.surrenderOffered
   g.noHumansSaid = state.noHumansSaid
@@ -272,6 +284,7 @@ function save.decode(text, dataDir)
     c.income, c.slots = saved.income, saved.slots
     c.claim = saved.claim or saved.previousOwner or c.claim
     c.razedBy = saved.razedBy
+    c.attacked = saved.attacked or 0
     c.name = saved.name or c.name            -- renamed; older saves lack it
     -- ruins belong to nobody; older saves can have them won in a fight
     if c.razed then c.ownerIndex = nil end
@@ -312,15 +325,21 @@ function save.decode(text, dataDir)
         a.items[#a.items + 1] = itemByIndex[idx]
       end
     end
+    -- older saves had no slots, and their order
+    if a.slot == nil then a.slot = i - 1 end
     armies[i] = a
     g.armies[i] = a
   end
+  -- the army table in slot order (a stable sort: slots are unique)
+  table.sort(g.armies, function(p, q) return p.slot < q.slot end)
 
   for _, saved in ipairs(state.sides) do
     local s = g.map.sides[saved.index + 1]
     s.gold, s.alive, s.computer = saved.gold, saved.alive, saved.computer
     s.level, s.enhanced, s.diploScore = saved.level, saved.enhanced, saved.diploScore
     s.observe = saved.observe or false
+    if saved.capNow then s.capNow = saved.capNow end
+    s.productionDue = saved.productionDue or nil
     s.income, s.upkeepTotal = saved.income, saved.upkeepTotal
     s.produced = saved.produced
     -- an older save kept the roles alone; it keeps the data set up anew
@@ -370,6 +389,16 @@ function save.decode(text, dataDir)
   end
 
   g.side = g.sides[g.current]
+  -- where the side to play stands in the turn order; older saves: the order
+  -- as it is
+  if state.orderAt then
+    g.orderAt = state.orderAt
+  else
+    g.orderAt = -1
+    for i, v in ipairs(g.turnOrder) do
+      if g.side and v == g.side.index then g.orderAt = i - 1 end
+    end
+  end
   require("warlords.move").invalidate(g)
   return g
 end

@@ -71,7 +71,7 @@ function smallShield(side, x, y) {
 }
 
 function building(city) {
-  return city.producing != null ? city.slots[city.producing] : null;
+  return game.producing(city) ? city.slots[city.producing] : null;
 }
 
 /** Income, defence and owner (7204:0727, :1769). */
@@ -149,7 +149,7 @@ function drawCityMode(d) {
 }
 
 function countdown(city) {
-  if (city.producing != null) return fmt("%dt", city.countdown || 0);
+  if (game.producing(city)) return fmt("%dt", city.countdown || 0);
   return "-";
 }
 
@@ -210,7 +210,7 @@ function drawVector(d) {
   const b = building(city);
   kit.army(b ? b.type : null, owner, 368, 103, 1);
   gfx.setColor(1, 1, 1);
-  f.draw(city.producing != null ? fmt(kit.text(S_VECTOR, 1), city.countdown || 0) : "-", 408, 109);
+  f.draw(game.producing(city) ? fmt(kit.text(S_VECTOR, 1), city.countdown || 0) : "-", 408, 109);
 
   let out = null, onRoad = null;
   const next = [], after = [];
@@ -263,7 +263,7 @@ function refresh(d) {
     for (let i = 0; i <= 3; i++) { shown[SLOT_FIRST + i] = true; st[SLOT_FIRST + i] = uidata.NORMAL; }
     shown[DONE_PROD] = true; st[DONE_PROD] = uidata.NORMAL;
     shown[STOP] = true;
-    st[STOP] = d.city.producing != null ? uidata.NORMAL : uidata.DISABLED;
+    st[STOP] = game.producing(d.city) ? uidata.NORMAL : uidata.DISABLED;
   } else {
     shown[DONE] = true; st[DONE] = uidata.NORMAL;
   }
@@ -276,7 +276,7 @@ function refresh(d) {
     shown[all] = true; st[all] = uidata.NORMAL;
     const send = d.sub === 1 ? V_SEND_LIT : V_SEND;
     shown[send] = true;
-    st[send] = (d.sub === 1 || d.city.producing != null) ? uidata.NORMAL : uidata.DISABLED;
+    st[send] = (d.sub === 1 || game.producing(d.city)) ? uidata.NORMAL : uidata.DISABLED;
     const mv = d.sub === 2 ? V_MOVE_LIT : V_MOVE;
     shown[mv] = true;
     st[mv] = (d.sub === 2 || game.vectoredTo(G.g, d.city).length > 0) ? uidata.NORMAL : uidata.DISABLED;
@@ -413,7 +413,7 @@ export function open(city, mode) {
   /** Send what this city builds to the side's city nearest (mx, my), or its
    *  planted standard if that is nearer (828e:0651). */
   d.sendTo = (mx, my) => {
-    if (city.producing == null) return;
+    if (!game.producing(city)) return;
     const target = game.nearestCity(G.g, mx, my, G.player);
     if (!target) return;
     const [sx, sy] = game.standardAt(G.g, G.player);

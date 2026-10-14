@@ -24,7 +24,7 @@ void init(Game& g) {
   int start = g.map->options.diplomacy != 0 ? PEACE : WAR;
   for (int a = 0; a < 8; a++) {
     for (int b = 0; b < 8; b++) {
-      int v = a == b ? PEACE : start;
+      int v = start;
       g.diplomacy.state[key(a, b)] = v;
       g.diplomacy.proposal[key(a, b)] = v;
     }

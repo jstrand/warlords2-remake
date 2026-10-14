@@ -50,6 +50,24 @@ local function exists(path)
   return false
 end
 
+-- The turn passes as the interface passes it: a human's turn opens with the
+-- hero offer left standing, and then its cities build (8cc6:04bd(1)).
+local function endTurn(g)
+  local side = game.endTurn(g)
+  if side and not side.computer then game.humanProduction(g, side) end
+  return side
+end
+
+-- A human side played by the computer player, as some tests do: it takes
+-- the hero it is offered first, as a computer does.
+local function playAI(g, side)
+  if not side.computer and side.heroOffer then
+    require("warlords.hero").recruit(g, side, side.heroOffer)
+    side.heroOffer = nil
+  end
+  require("warlords.ai").playTurn(g, side)
+end
+
 --------------------------------------------------------------------- dice
 
 local function testDice()
@@ -235,7 +253,7 @@ local function testTurnLoop(scenario)
   do
     local one = game.sideArmies(g, side)[1]
     one.done, one.offered, one.fortified = true, true, true
-    for _ = 1, #g.sides do game.endTurn(g) end
+    for _ = 1, #g.sides do endTurn(g) end
     eq(one.done, nil, "done for this turn wears off with the turn")
     eq(one.offered, nil, "and so does having been offered this pass")
     eq(one.fortified, true, "but digging in outlasts it")
@@ -246,11 +264,11 @@ local function testTurnLoop(scenario)
   local a = game.sideArmies(g, side)[1]
   a.moves = 5
   local before = a.maxMoves
-  for _ = 1, #g.sides do game.endTurn(g) end
+  for _ = 1, #g.sides do endTurn(g) end
   eq(a.moves, before + rules.MOVE_CARRY, "at most 2 unused moves carry over")
 
   a.moves = 1
-  for _ = 1, #g.sides do game.endTurn(g) end
+  for _ = 1, #g.sides do endTurn(g) end
   eq(a.moves, before + 1, "carry-over below the cap is exact")
 
   -- production: a city builds its slot after `time` turns
@@ -258,7 +276,7 @@ local function testTurnLoop(scenario)
   game.setProduction(g, city, 1)
   local want = city.slots[1].time
   local n0 = #game.sideArmies(g, side)
-  for _ = 1, want * #g.sides do game.endTurn(g) end
+  for _ = 1, want * #g.sides do endTurn(g) end
   ok(#game.sideArmies(g, side) == n0 + 1,
      ("%s produced after %d turns"):format(city.name, want))
 
@@ -283,7 +301,7 @@ local function testTurnLoop(scenario)
   local roundOf = g.turn
   while g.turn == roundOf do
     ok(victim.alive, "a side with no cities is in play until the round ends")
-    game.endTurn(g)
+    endTurn(g)
   end
   ok(not victim.alive, "a side with no cities is eliminated as the round ends")
   eq(#game.sideArmies(g, victim), 0, "the eliminated side's armies are gone")
@@ -297,7 +315,7 @@ local function testTurnLoop(scenario)
   local g2 = game.new(DATA, scenario, { seed = 6 })
   game.begin(g2)
   eq(g2.turn, 1, "the game starts on turn 1")
-  for _ = 1, #g2.sides do game.endTurn(g2) end
+  for _ = 1, #g2.sides do endTurn(g2) end
   eq(g2.turn, 2, "a full round advances the turn")
 end
 
@@ -324,13 +342,13 @@ local function testVectoring(scenario)
   local time = from.slots[1].time
 
   local atDest = #game.armiesAt(g, dest.x, dest.y)
-  for _ = 1, (time + 2) * #g.sides do game.endTurn(g) end
+  for _ = 1, (time + 2) * #g.sides do endTurn(g) end
   ok(#game.armiesAt(g, dest.x, dest.y) > atDest,
      "a vectored army arrives two turns after it is built")
   do
     -- to the turn: the road moves before the cities build (6f8c:0000), so
     -- the one sent this turn shows under "Turn after" and lands two turns on
-    local function round() for _ = 1, #g.sides do game.endTurn(g) end end
+    local function round() for _ = 1, #g.sides do endTurn(g) end end
     local sent
     for _ = 1, 10 do
       round()
@@ -478,7 +496,7 @@ local function testReports(scenario)
   game.setProduction(g, city, 1)
   city.countdown = 1
   local turns = 0
-  repeat game.endTurn(g); turns = turns + 1 until g.side == side or turns > 20
+  repeat endTurn(g); turns = turns + 1 until g.side == side or turns > 20
   ok(side.produced and #side.produced >= 1, "the side's production is logged")
   if side.produced and side.produced[1] then
     eq(side.produced[1].city, city.index, "with the city that built it")
@@ -549,7 +567,7 @@ local function testHistory(scenario)
   eq(#g.deeds[side.index], 2, "a higher type does not get in")
 
   local guard = 0
-  while g.turn < 3 and guard < 50 do game.endTurn(g) guard = guard + 1 end
+  while g.turn < 3 and guard < 50 do endTurn(g) guard = guard + 1 end
   ok(g.history and #g.history >= 1, "a record for the round")
   local r = g.history[1]
   eq(#r.owners, #g.map.cities, "every city's owner")
@@ -700,7 +718,7 @@ local function testHeroItems(scenario)
   city.countdown = 1
   ok(game.vectorToStandard(g, city, side), "a city may vector to the standard")
   local before = #game.armiesAt(g, fx, fy)
-  for _ = 1, 3 * #g.sides + 1 do game.endTurn(g) end
+  for _ = 1, 3 * #g.sides + 1 do endTurn(g) end
   ok(#game.armiesAt(g, fx, fy) > before, "a vectored army arrives at the standard")
 
   -- picking the flag up again takes it off the map
@@ -1463,8 +1481,8 @@ local function testAIGame(scenario, turns)
   for _, s in ipairs(g.sides) do ownedAtStart[s.index] = #game.sideCities(g, s) end
 
   while side and g.turn <= turns do
-    aiMod.playTurn(g, side)
-    side = game.endTurn(g)
+    playAI(g, side)
+    side = endTurn(g)
   end
 
   ok(g.turn > turns or side == nil, "the game ran to the turn limit")
@@ -1901,7 +1919,11 @@ local function testSites(scenario)
       ok(s.allyType ~= nil, "an ally ruin knows what joins")
       ok(g.types.byId[s.allyType] ~= nil, "and it is a real army type")
     end
-    if s.content ~= siteMod.TEMPLE then
+    -- an allies site keeps its allies' type where the guardian would be,
+    -- and nothing guards it (66d4:0000, 6536:01ab)
+    if s.content == siteMod.ALLIES then
+      eq(s.guardian, nil, "nothing guards an allies ruin")
+    elseif s.content ~= siteMod.TEMPLE then
       ok(s.guardian and s.guardian >= 1 and s.guardian <= 9, "a ruin has a guardian")
     end
   end
@@ -1967,8 +1989,12 @@ local function testSites(scenario)
       eq(side.gold, gold0 + r.gold, "the gold was paid")
       eq(h.experience, 3, "searching is worth 3 experience")
     end
-    ok(ruin.searched, "a searched ruin is used up")
-    eq(siteMod.search(g, { h }, ruin.x, ruin.y), nil, "and cannot be searched again")
+    if r.kind == "gold" then
+      ok(ruin.searched, "a searched ruin is used up")
+      eq(siteMod.search(g, { h }, ruin.x, ruin.y), nil, "and cannot be searched again")
+    else
+      ok(not ruin.searched, "a hero who dies leaves the ruin to be searched again")
+    end
   end
 
   -- a temple blesses each army once, and only the first four temples bless
@@ -1978,8 +2004,11 @@ local function testSites(scenario)
   end
   if temple then
     local side = g.sides[1]
-    local a = { x = temple.x, y = temple.y, owner = side.index, type = 11, strength = 3 }
-    local r = siteMod.search(g, { a }, temple.x, temple.y)
+    local a = { x = temple.x, y = temple.y, owner = side.index, type = 11, strength = 3, moves = 0 }
+    eq(siteMod.search(g, { a }, temple.x, temple.y), nil, "searching needs a move left (6536:0000)")
+    a.moves = 10
+    local r = siteMod.search(g, { a }, temple.x, temple.y, true)
+    eq(r.kind, "temple", "with no hero a temple blesses at once, a human's too")
     eq(r.kind, "temple", "a temple blesses")
     eq(r.blessed, 1, "one army was blessed")
     eq(a.strength, 4, "the blessing adds a strength")
@@ -1996,8 +2025,8 @@ local function testSites(scenario)
   local weak = { strength = 1, items = {} }
   local survived, died = 0, 0
   for _ = 1, 400 do
-    if siteMod.survivesGuardian(g, strong, { strong }, 3) then survived = survived + 1 end
-    if not siteMod.survivesGuardian(g, weak, { weak }, 8) then died = died + 1 end
+    if siteMod.survivesGuardian(g, strong, 3) then survived = survived + 1 end
+    if not siteMod.survivesGuardian(g, weak, 8) then died = died + 1 end
   end
   eq(survived, 400, "a strong hero always beats a weak guardian")
   ok(died > 0, "a weak hero sometimes dies to a strong one")
@@ -2026,7 +2055,7 @@ local function testShips()
   local city = game.sideCities(g, side)[1]
   local sailor = mk(city.x, city.y, 2, true)
   sailor.moves = 0
-  for _ = 1, #g.sides do game.endTurn(g) end
+  for _ = 1, #g.sides do endTurn(g) end
   ok(not sailor.atSea, "an army at sea in a city is ashore when its turn begins")
   eq(sailor.moves, sailor.maxMoves, "with its own movement, not the 20 at sea")
 
@@ -2460,10 +2489,10 @@ local function testEndGame()
   g6.diplomacy.state[doomed.index * 8 + other.index] = d6.WAR
   g6.diplomacy.state[other.index * 8 + doomed.index] = d6.WAR
   ok(#game.sideArmies(g6, doomed) > 0, "the doomed side still has armies")
-  game.endTurn(g6)
+  endTurn(g6)
   eq(g6.side, other, "a computer side with no city has no turn")
   ok(doomed.alive, "but it is not out before the round's end")
-  while g6.turn == 1 do game.endTurn(g6) end
+  while g6.turn == 1 do endTurn(g6) end
   ok(not doomed.alive, "the round's end puts it out")
   eq(#game.sideArmies(g6, doomed), 0, "with all its armies")
   eq(doomed.gold, 0, "and no gold")
@@ -2480,15 +2509,15 @@ local function testEndGame()
   game.begin(g7)
   local me7 = g7.sides[#g7.sides]
   for _, c in ipairs(game.sideCities(g7, me7)) do c.ownerIndex = g7.sides[1].index end
-  for _ = 2, #g7.sides do game.endTurn(g7) end
+  for _ = 2, #g7.sides do endTurn(g7) end
   eq(g7.side, me7, "the human's turn comes round without a city")
   ok(me7.alive, "and it is still in the game")
-  game.endTurn(g7)
+  endTurn(g7)
   ok(not me7.alive, "the round's end puts it out")
   ok(me7.computer, "a fallen human is the computer's from then on")
   ok(g7.ending.noHumans, "the last human's fall is said")
   ok(g7.noHumansSaid, "once")
-  for _ = 1, #g7.sides do game.endTurn(g7) end
+  for _ = 1, #g7.sides do endTurn(g7) end
   ok(not (g7.ending and g7.ending.noHumans), "and only once")
 
   -- a lone human needs more than half the standing cities
@@ -2547,10 +2576,10 @@ end
 
 -------------------------------------------------------------- saving a game
 
--- The computer's neighbour table is shared by every game of a map, but each
--- game must read it as its own cities, not the first game's.
+-- Each game reads the computer's neighbour table as its own cities, not
+-- another game's.
 local function testNeighbourCache()
-  print("neighbour table across games")
+  print("neighbour table")
   local core = require("warlords.ai.core")
   local g1 = game.new(DATA, "ERYTHEA", { seed = 5 })
   local first = core.neighbours(g1, g1.map.cities[1])
@@ -2576,7 +2605,7 @@ local function testSave()
 
   local g = game.new(DATA, "ERYTHEA", { seed = 91, options = { quests = 1, diplomacy = 1 } })
   local side = game.begin(g)
-  while side and g.turn <= 8 do aiMod.playTurn(g, side); side = game.endTurn(g) end
+  while side and g.turn <= 8 do playAI(g, side); side = endTurn(g) end
 
   -- give a hero an item and a quest, so the references are exercised
   local h
@@ -2653,8 +2682,8 @@ local function testSave()
   local before = h2.turn
   for _ = 1, #h2.sides * 2 do
     if not side2 then break end
-    aiMod.playTurn(h2, side2)
-    side2 = game.endTurn(h2)
+    playAI(h2, side2)
+    side2 = endTurn(h2)
   end
   ok(h2.turn > before, "the reloaded game plays on")
 
@@ -2834,7 +2863,7 @@ local function testRandomMap()
   local g = game.new(DATA, "RANDOM", { seed = 4 })
   for _, sd in ipairs(g.sides) do sd.computer = true end
   local side = game.begin(g)
-  while side and g.turn <= 6 do aiMod.playTurn(g, side) side = game.endTurn(g) end
+  while side and g.turn <= 6 do playAI(g, side) side = endTurn(g) end
   eq(g.turn, 7, "the computer players play a random world")
   local text = saveMod.encode(g)
   randommap.install(DATA, make(8, { 3, 3, 2, 3 }, false))
@@ -2987,7 +3016,7 @@ local function testComputerPlayers()
   local side = game.begin(g)
   while side and g.turn <= 12 do
     if side.computer then aiMod.playTurn(g, side) end
-    side = game.endTurn(g)
+    side = endTurn(g)
   end
   local grp = warlord.ai.groups[1]
   grp.active, grp.target, grp.rally = 2, 1, warlord.capital.index
@@ -3200,6 +3229,289 @@ testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")
 
+-- Rules checked against WARLORD2.EXE in web-verification.md, one by one.
+local function testVerified()
+  print("verified against the original")
+  local hero = require("warlords.hero")
+  local siteMod = require("warlords.site")
+  local quest = require("warlords.quest")
+  local core = require("warlords.ai.core")
+  local function mk(g, x, y, owner, type, extra)
+    local t = g.types.byId[type]
+    local a = { x = x, y = y, owner = owner, type = type, name = t.name, strength = t.strength,
+                maxMoves = t.move, moves = t.move, upkeep = 1 }
+    for k, v in pairs(extra or {}) do a[k] = v end
+    return game.addArmy(g, a)
+  end
+  local function remove(g, a)
+    for i, b in ipairs(g.armies) do
+      if b == a then table.remove(g.armies, i) return end
+    end
+  end
+
+  -- the army table: the lowest free slot (1b62:0309), tiles read from the top
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 1 })
+    local n = #g.armies
+    remove(g, g.armies[3])
+    local a = mk(g, 0, 0, 0, 11)
+    eq(a.slot, 2, "a new army takes the lowest free slot")
+    eq(g.armies[3], a, "and stands in slot order")
+    eq(#g.armies, n, "the table is as long as before")
+    local b = mk(g, 0, 0, 0, 11)
+    eq(game.armiesAt(g, 0, 0)[1], b, "a tile is read from the top of the table down")
+  end
+
+  -- P1: the production nudges are dice(1,100) < p
+  do
+    local r = rng.new(3)
+    local hits = 0
+    for _ = 1, 20000 do
+      if r:chance(10) then hits = hits + 1 end
+    end
+    ok(hits > 20000 * 0.08 and hits < 20000 * 0.10, "chance(10) is 9 in 100: " .. hits)
+    local t = rng.new(1)
+    local never = true
+    for _ = 1, 5000 do
+      if t:chance(1) then never = false end
+    end
+    ok(never, "chance(1) never comes up")
+  end
+
+  -- P2, P3, P5: no spilling round a full city; a city that cannot build
+  -- goes idle; a human's city that builds starts the next
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 2 })
+    local side = game.begin(g)
+    local city = side.capital
+    game.setProduction(g, city, 1)
+    city.countdown = 1
+    for _, d in ipairs({ { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }) do
+      while #game.armiesAt(g, city.x + d[1], city.y + d[2]) < 8 do
+        mk(g, city.x + d[1], city.y + d[2], side.index, 11)
+      end
+    end
+    local n = #g.armies
+    side.productionDue = true
+    g.turn = 2
+    game.humanProduction(g, side)
+    eq(#g.armies, n, "a full city builds nothing: no spilling round it")
+    eq(city.countdown, 0, "its countdown stays at 0")
+    eq(game.producing(city), false, "and it is idle")
+    for _, a in ipairs(game.armiesAt(g, city.x + 1, city.y + 1)) do remove(g, a) end
+    side.productionDue = true
+    game.humanProduction(g, side)
+    eq(#g.armies, n - 8, "an idle city does not try again")
+    game.setProduction(g, city, 1)
+    city.countdown = 1
+    side.productionDue = true
+    game.humanProduction(g, side)
+    eq(#g.armies, n - 7, "set again, it builds")
+    eq(#game.armiesAt(g, city.x + 1, city.y + 1), 1, "on the tile with room")
+    eq(city.countdown, city.slots[1].time, "and starts the next (6f8c:06bd)")
+    local built = game.armiesAt(g, city.x + 1, city.y + 1)[1]
+    eq(built.moves, built.maxMoves, "a new army has its full move (6f8c:0dd7)")
+  end
+
+  -- P7: the city's tiles fill x first
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 2 })
+    local city = g.map.cities[1]
+    for i = #g.armies, 1, -1 do
+      local a = g.armies[i]
+      if a.x and a.x >= city.x and a.x <= city.x + 1 and a.y >= city.y and a.y <= city.y + 1 then
+        table.remove(g.armies, i)
+      end
+    end
+    for _ = 1, 8 do mk(g, city.x, city.y, 0, 11) end
+    local x, y = game.freeTileIn(g, city, false)
+    eq(x, city.x + 1, "after (x,y) comes (x+1,y)")
+    eq(y, city.y, "on the same row")
+  end
+
+  -- T1: Random Turns shuffles the order at each round's end
+  do
+    local plain = "0,1,2,3,4,5,6,7"
+    local g = game.new(DATA, "ERYTHEA", { seed = 4, options = { randomTurns = 1 } })
+    for _, s in ipairs(g.sides) do s.computer = true end
+    local side = game.begin(g)
+    local shuffled = false
+    while side and g.turn <= 6 do
+      if table.concat(g.turnOrder, ",") ~= plain then shuffled = true end
+      eq(side.index, g.turnOrder[g.orderAt + 1], "the side to play is the order's")
+      side = game.endTurn(g)
+    end
+    ok(shuffled, "with Random Turns the order is shuffled (8065:1732)")
+    local sorted = {}
+    for i, v in ipairs(g.turnOrder) do sorted[i] = v end
+    table.sort(sorted)
+    eq(table.concat(sorted, ","), plain, "it is still every side once")
+    local g2 = game.new(DATA, "ERYTHEA", { seed = 4 })
+    game.begin(g2)
+    for _ = 1, 30 do game.endTurn(g2) end
+    eq(table.concat(g2.turnOrder, ","), plain, "without it the order stays")
+  end
+
+  -- C7: a neutral city that beats off an attack builds, Neutral Cities >= 2
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 5, options = { neutralCities = 2 } })
+    local side = game.begin(g)
+    local city
+    for _, c in ipairs(g.map.cities) do
+      if c.ownerIndex == nil and #c.slots > 0 then city = c break end
+    end
+    for _, a in ipairs(game.armiesAt(g, city.x, city.y)) do a.strength = 9 end
+    local weak = mk(g, city.x - 1, city.y, side.index, 11, { strength = 1 })
+    local r = game.decideAttack(g, { weak }, city.x, city.y)
+    ok(math.floor((city.attacked or 0) / 2 ^ side.index) % 2 == 1, "an attacked city is marked (67cc:02b1)")
+    if not r.won then
+      game.applyAttack(g, r)
+      local before = #game.armiesAt(g, city.x, city.y)
+      for _ = 1, 12 * #g.sides do endTurn(g) end
+      ok(#game.armiesAt(g, city.x, city.y) > before, "the neutral city builds (6bd8:025a)")
+      ok(#game.armiesAt(g, city.x, city.y) <= 4 or before >= 4, "while its tile holds fewer than 4")
+    end
+  end
+
+  -- C10: a medal now and then for a hero's stack that wins
+  do
+    local medals = 0
+    for seed = 1, 60 do
+      if medals > 0 then break end
+      local g = game.new(DATA, "ERYTHEA", { seed = seed })
+      local side = game.begin(g)
+      local city
+      for _, c in ipairs(g.map.cities) do
+        if c.ownerIndex == nil then city = c break end
+      end
+      for _, a in ipairs(game.armiesAt(g, city.x, city.y)) do a.strength = 1 end
+      while #game.armiesAt(g, city.x, city.y) < 2 do mk(g, city.x, city.y, nil, 11, { strength = 1 }) end
+      local stack = { mk(g, city.x - 1, city.y, side.index, armytype.HERO, { strength = 9 }),
+                      mk(g, city.x - 1, city.y, side.index, 11, { strength = 9 }),
+                      mk(g, city.x - 1, city.y, side.index, 11, { strength = 9 }) }
+      local r = game.applyAttack(g, game.decideAttack(g, stack, city.x, city.y))
+      if r.medal then
+        medals = medals + 1
+        eq(r.medal.medals, 1, "a first medal")
+        ok(r.medal.type ~= armytype.HERO, "for an ordinary army, not the hero")
+      end
+    end
+    ok(medals > 0, "a hero's stack wins medals (67cc:2274)")
+  end
+
+  -- S1: nothing guards an allies ruin
+  do
+    local tried = false
+    for seed = 1, 20 do
+      if tried then break end
+      local g = game.new(DATA, "ERYTHEA", { seed = seed })
+      local side = game.begin(g)
+      local s
+      for _, x in ipairs(g.map.sites) do
+        if x.content == siteMod.ALLIES then s = x break end
+      end
+      if s then
+        tried = true
+        local h = mk(g, s.x, s.y, side.index, armytype.HERO, { strength = 1 })
+        local r = siteMod.search(g, { h }, s.x, s.y, false)
+        eq(r.kind, "allies", "a hero always comes out of an allies ruin with allies")
+        local alive = false
+        for _, a in ipairs(g.armies) do
+          if a == h then alive = true end
+        end
+        ok(alive, "alive")
+      end
+    end
+    ok(tried, "found an allies ruin")
+  end
+
+  -- Q1, Q4: a computer's quest types; Archons for a reward
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 8, options = { quests = 1 } })
+    local side = game.begin(g)
+    local h = mk(g, side.capital.x, side.capital.y, side.index, armytype.HERO)
+    local seen = {}
+    for _ = 1, 40 do
+      side.quest = nil
+      seen[quest.assign(g, side, h, true).type] = true
+    end
+    local only = true
+    for t in pairs(seen) do
+      if t ~= quest.OCCUPY and t ~= quest.RAZE and t ~= quest.SLAUGHTER and t ~= quest.PILLAGE_GOLD then
+        only = false
+      end
+    end
+    ok(only, "a computer only gets occupy, raze, slaughter or gold (quest_assign(1))")
+    local archons = false
+    for _ = 1, 60 do
+      if archons then break end
+      side.gold = 500
+      local r = quest.reward(g, side, { hero = h })
+      if r.kind == "allies" then
+        archons = true
+        eq(r.type.id, quest.REWARD_ALLY, "a quest's allies are Archons")
+      end
+    end
+    ok(archons, "a quest can give allies")
+  end
+
+  -- H1: no hero once the surrender has been offered
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 9 })
+    local side = game.begin(g)
+    g.surrenderOffered = true
+    side.gold = 100000
+    local any = false
+    for _ = 1, 50 do
+      if hero.offer(g, side) then any = true end
+    end
+    ok(not any, "no hero offers itself after the surrender is offered")
+  end
+
+  -- M1: a cached route is taken by a stack standing on it
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 1 })
+    local side = game.begin(g)
+    local a = game.sideArmies(g, side)[1]
+    local far
+    for _, c in ipairs(g.map.cities) do
+      if movement.distance(c.x, c.y, a.x, a.y) > 20 then far = c break end
+    end
+    local p1 = movement.findPath(g, { a }, a.x, a.y, far.x, far.y)
+    ok(p1 and #p1 > 3, "a long route")
+    local cached = false
+    for i = 0, movement.CACHE_SLOTS - 1 do
+      local e = g.pathCache[i]
+      if e and e.dx == far.x and e.dy == far.y then cached = true end
+    end
+    ok(cached, "is kept (1555:16f0)")
+    local mid = p1[3]
+    local p2 = movement.findPath(g, { a }, mid.x, mid.y, far.x, far.y)
+    eq(#p2, #p1 - 3, "from a tile on it the rest of it is taken")
+    local same = true
+    for i, st in ipairs(p2) do
+      if st.x ~= p1[i + 3].x or st.y ~= p1[i + 3].y then same = false end
+    end
+    ok(same, "step for step")
+  end
+
+  -- A1: the computer's flood goes no further than its rounds
+  do
+    local g = game.new(DATA, "ERYTHEA", { seed = 1 })
+    local c = g.map.cities[1]
+    local f = core.flood(g, 0, c.x, c.y, 5, nil, false)
+    local beyond = false
+    for y = 0, g.map.height - 1 do
+      for x = 0, g.map.width - 1 do
+        if math.max(math.abs(x - c.x), math.abs(y - c.y)) > 5 and core.floodAt(f, x, y) ~= core.UNREACHED then
+          beyond = true
+        end
+      end
+    end
+    ok(not beyond, "a flood of 5 rounds reaches no further than 5 (1555:0373)")
+  end
+end
+
 -- The music and the advisor: docs/re/sound.md. The synthesis itself is only
 -- run for a moment -- plain Lua is slow at it -- but the driver's decisions
 -- are what is checked.
@@ -3327,6 +3639,7 @@ testRandomMap()
 testAIGame("TUTORIA", 30)
 testAIGame("ERYTHEA", 25)
 if exists(DATA .. "/TUTORIA/TUTORIA.SCN") then testTutorialHero() end
+testVerified()
 testSound()
 
 print(("\n%d passed, %d failed"):format(passed, failed))

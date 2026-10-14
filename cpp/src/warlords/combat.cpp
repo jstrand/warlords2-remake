@@ -39,38 +39,37 @@ int terrainClass(const Game& g, int x, int y) {
 }
 
 namespace {
-// Sort a line by its owner's fight order, lowest first, ties keeping stack
-// order.
-void sortLine(const Game& g, std::vector<Army*>& line, int ownerIndex) {
-  const auto& row = g.map->fightOrder[ownerIndex == NONE ? 8 : ownerIndex];
-  std::map<const Army*, int> order;
-  for (size_t i = 0; i < line.size(); i++) order[line[i]] = (int)i;
-  luaSort(line, [&](Army* p, Army* q) {
-    int rp = row[p->type], rq = row[q->type];
-    if (rp != rq) return rp < rq;
-    return order[p] < order[q];
-  });
+// On water, shore and mountains a side holding a hero sends one flier to the
+// back, keeping the hero's carrier alive longest: the first flier in the
+// order the line was gathered that is not at sea gets 80 on its rank
+// (6a89:008b, before the sort). Returns the army, or null.
+const Army* heroCarrier(const Game& g, const std::vector<Army*>& line, int x, int y) {
+  int t = scn::terrainAt(*g.map, x, y);
+  if (t != move::WATER && t != move::SHORE && t != move::MOUNTAINS) return nullptr;
+  if (std::none_of(line.begin(), line.end(), [](Army* a) { return a->type == armytype::HERO; })) return nullptr;
+  for (Army* a : line) if (!a->atSea && g.types.byId(a->type)->flies) return a;
+  return nullptr;
 }
 
-// On water, shore and mountain tiles a side holding a hero sends one flier to
-// the back, keeping the hero's carrier alive longest.
-void protectHeroCarrier(const Game& g, std::vector<Army*>& line, int x, int y) {
-  int t = scn::terrainAt(*g.map, x, y);
-  if (t != move::WATER && t != move::SHORE && t != move::MOUNTAINS) return;
-  if (std::none_of(line.begin(), line.end(), [](Army* a) { return a->type == armytype::HERO; })) return;
+// Sort a line by its owner's fight order, lowest first, ties keeping the
+// order it was gathered in (an insertion sort, 6a89:05f1).
+void sortLine(const Game& g, std::vector<Army*>& line, int ownerIndex, const Army* carrier) {
+  const auto& row = g.map->fightOrder[ownerIndex == NONE ? 8 : ownerIndex];
+  std::map<const Army*, std::pair<int, int>> key;
   for (size_t i = 0; i < line.size(); i++) {
-    Army* a = line[i];
-    if (g.types.byId(a->type)->flies) {
-      line.erase(line.begin() + i);
-      line.push_back(a);
-      return;
-    }
+    key[line[i]] = {row[line[i]->type] + (line[i] == carrier ? 80 : 0), (int)i};
   }
+  luaSort(line, [&](Army* p, Army* q) {
+    const auto& kp = key[p];
+    const auto& kq = key[q];
+    if (kp.first != kq.first) return kp.first < kq.first;
+    return kp.second < kq.second;
+  });
 }
 
 int itemTotal(const Army& army, int itemType) {
   int total = 0;
-  for (Item* it : army.items) if (it->type == itemType) total += std::max(1, it->value);
+  for (Item* it : army.items) if (it->type == itemType) total += it->value;
   return total;
 }
 
@@ -98,27 +97,20 @@ Lines lines(const Game& g, const std::vector<Army*>& stack, int x, int y) {
   // combat_setup and after_battle test); ruins are open ground
   City* city = g.map->cityTile[y * g.map->width + x];
   if (city && city->razed) city = nullptr;
-  std::vector<std::pair<int, int>> tiles = {{x, y}};
-  if (city) {
-    tiles.clear();
-    for (int dx = 0; dx <= 1; dx++)
-      for (int dy = 0; dy <= 1; dy++) tiles.emplace_back(city->x + dx, city->y + dy);
-  }
+  int x0 = city ? city->x : x, y0 = city ? city->y : y;
+  int x1 = city ? city->x + 1 : x, y1 = city ? city->y + 1 : y;
   Lines out;
   bool any = false;
-  for (auto& t : tiles) {
-    for (Army* a : game::armiesAt(g, t.first, t.second)) {
-      if (a->owner != attacker) {
-        out.defenders.push_back(a);
-        if (!any) { out.defOwner = a->owner; any = true; }
-      }
+  for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
+    Army* a = g.armies[i];
+    if (!a->transit && a->owner != attacker && a->x >= x0 && a->x <= x1 && a->y >= y0 && a->y <= y1) {
+      out.defenders.push_back(a);
+      if (!any) { out.defOwner = a->owner; any = true; }
     }
   }
   out.attackers = stack;
-  sortLine(g, out.attackers, attacker);
-  sortLine(g, out.defenders, out.defOwner);
-  protectHeroCarrier(g, out.attackers, x, y);
-  protectHeroCarrier(g, out.defenders, x, y);
+  sortLine(g, out.attackers, attacker, heroCarrier(g, out.attackers, x, y));
+  sortLine(g, out.defenders, out.defOwner, heroCarrier(g, out.defenders, x, y));
   out.city = city;
   return out;
 }
@@ -213,6 +205,13 @@ Battle resolve(Game& g, const std::vector<Army*>& attackers, const std::vector<A
   };
   auto atk = prepare(attackers, attackMod), def = prepare(defenders, defendMod);
   Battle b;
+  // an army at sea on water or shore fights as a boat, strength 4
+  // (DS:029c / DS:02a4); Triumphs counts it a navy
+  for (const auto* line : {&attackers, &defenders}) {
+    for (Army* a : *line) {
+      if (a->atSea && (terrain == move::WATER || terrain == move::SHORE)) b.boats.insert(a);
+    }
+  }
   size_t ai = 0, di = 0;
   int throws = 0;
   while (ai < atk.size() && di < def.size()) {
@@ -221,8 +220,10 @@ Battle resolve(Game& g, const std::vector<Army*>& attackers, const std::vector<A
     int ra = g.rng.dice(1, die, 0), rd = g.rng.dice(1, die, 0);
     bool aHits = ra <= a.strength && rd > d.strength;
     bool dHits = rd <= d.strength && ra > a.strength;
-    throws++;
+    // past 10,000 throws in one duel the attacker takes the hit; the count
+    // starts again with each army that falls (67cc:08a6)
     if (throws > STALEMATE) { aHits = false; dHits = true; }
+    throws++;
 
     // Tutorial: a human player's hero cannot die attacking a neutral defender.
     if (dHits && g.map->options.tutorial != 0 && a.army->type == armytype::HERO) {
@@ -231,10 +232,10 @@ Battle resolve(Game& g, const std::vector<Army*>& attackers, const std::vector<A
     }
     if (aHits) {
       d.hits--;
-      if (d.hits < 0) { d.dead = true; b.log.push_back(0); di++; }
+      if (d.hits < 0) { d.dead = true; b.log.push_back(0); di++; throws = 0; }
     } else if (dHits) {
       a.hits--;
-      if (a.hits < 0) { a.dead = true; b.log.push_back(1); ai++; }
+      if (a.hits < 0) { a.dead = true; b.log.push_back(1); ai++; throws = 0; }
     }
   }
   for (auto& e : atk) (e.dead ? b.deadAttackers : b.attackers).push_back(e.army);
@@ -245,6 +246,7 @@ Battle resolve(Game& g, const std::vector<Army*>& attackers, const std::vector<A
   b.attackMod = attackMod;
   b.defendMod = defendMod;
   b.cls = cls;
+  b.defStrength0 = defenders.empty() ? 0 : strength(g, *defenders[0], defendMod, cls, terrain);
   return b;
 }
 

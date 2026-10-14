@@ -76,6 +76,8 @@ export function offer(g, side) {
     [o.name, o.female] = rollName(g, side);
     return o;
   };
+  // none at all once the surrender has been offered (7563:0000)
+  if (g.surrenderOffered) return null;
   if (g.turn === 1) return named({ price: 0, city: side.capital, first: true });
 
   const [all, mine] = countHeroes(g, side);
@@ -95,34 +97,64 @@ export function offer(g, side) {
   return named({ price, city });
 }
 
-/** The allies a hired hero brings: 1-3 of one random magical type. */
-export function allies(g) {
-  const magical = g.types.list.filter((a) => (a.bonus[48] || 0) !== 0);
-  let type = g.rng.pick(magical);
-  if (!type) {
-    for (const a of g.types.list) if (a.name.includes("Dragon")) type = a;
+/** A random magical army type (random_magical_type, 7563:1a9b): the types
+ *  are counted in id order, 0-27; Dragons (25) when there is none. */
+export function magicalType(g) {
+  const ids = [];
+  for (let id = 0; id <= 27; id++) {
+    const t = g.types.byId[id];
+    if (t && (t.bonus[48] || 0) !== 0) ids.push(id);
   }
+  const n = g.rng.dice(1, ids.length, -1);
+  return g.types.byId[ids.length > 0 && ids[n] != null ? ids[n] : 25];
+}
+
+/** The allies a hired hero brings (hero_brings_allies, 7563:01fc): 1-3 of one
+ *  random magical type. */
+export function allies(g) {
+  const type = magicalType(g);
   const roll = g.rng.dice(1, 100, 0);
   const n = roll < 70 ? 1 : roll < 95 ? 2 : 3;
   return [type, n];
 }
 
 /** One ally army, as create_ally_army (6536:12e6) builds it: moves full, no
- *  upkeep. */
-export function newAlly(g, type, x, y, owner, homeCity) {
+ *  upkeep, home city 0. */
+export function newAlly(g, type, x, y, owner) {
   return {
     x, y, owner, type: type.id, name: type.name,
     strength: type.strength, maxMoves: type.move, moves: type.move,
-    upkeep: 0, homeCity,
+    upkeep: 0, homeCity: 0,
   };
 }
 
-/** Hire the offered hero: [hero, allies] (hero_recruit, 7563:031b). */
+/** Put an ally of the side's near (x, y) (create_ally_army, 6536:12e6): on
+ *  the tile if it has room and no other side's army, else a random step
+ *  from there and try again, ten tries in all. Returns the army, or null
+ *  when none of the tries had room -- the ally is lost. */
+export function placeAlly(g, type, x, y, side) {
+  let px = x, py = y;
+  for (let tries = 10; tries > 0; tries--) {
+    if (px >= 0 && py >= 0 && px < g.map.width && py < g.map.height) {
+      const here = game.armiesAt(g, px, py);
+      if (here.length < 8 && (here.length === 0 || here[0].owner === side.index)) {
+        return game.addArmy(g, newAlly(g, type, px, py, side.index));
+      }
+    }
+    px += g.rng.dice(1, 3, -2);
+    py += g.rng.dice(1, 3, -2);
+  }
+  return null;
+}
+
+/** Hire the offered hero: [hero, allies] (hero_recruit, 7563:031b). The hero
+ *  stands on the city's first tile with room, or on a free tile round it --
+ *  or, with none, on the last one tried. Its allies stand with it. */
 export function recruit(g, side, off) {
   const city = off.city;
   side.gold = Math.max(0, side.gold - (off.price || 0));
-  let [hx, hy] = game.freeTileIn(g, city, true);
-  if (hx == null) { hx = city.x; hy = city.y; }
+  let [hx, hy, lx, ly] = game.freeTileIn(g, city, true);
+  if (hx == null) { hx = lx != null ? lx : city.x; hy = ly != null ? ly : city.y; }
 
   const h = {
     x: hx, y: hy, owner: side.index, type: armytype.HERO,
@@ -140,17 +172,16 @@ export function recruit(g, side, off) {
       h.items.push(std);
     }
   }
-  g.armies.push(h);
+  game.addArmy(g, h);
   history.deed(g, side, history.EMERGES, city.index, 0, h.name);     // 7563:04e7
 
   const out = [];
   if (!off.first) {
     const [type, n] = allies(g);
+    out.type = type; out.count = n;
     for (let i = 0; i < n; i++) {
-      const [ax, ay] = game.freeTileIn(g, city, true);
-      const a = newAlly(g, type, ax != null ? ax : hx, ay != null ? ay : hy, side.index, city.index);
-      g.armies.push(a);
-      out.push(a);
+      const a = placeAlly(g, type, hx, hy, side);
+      if (a) out.push(a);
     }
   }
   return [h, out];
@@ -161,19 +192,23 @@ export function addExperience(g, h, n) {
   h.experience = Math.min(rules.MAX_HERO_XP, (h.experience || 0) + n);
 }
 
-/** Promote a side's heroes, one step each (hero_check_promotions, 7563:0579). */
+/** Promote a side's heroes, one step each (hero_check_promotions, 7563:0579;
+ *  hero_promote, 7563:0672): +1 strength (9 at most) and +2 to the maximum
+ *  move. Returns [{ hero, gain }], gain the strength it really gained. */
 export function checkPromotions(g, side) {
   const promoted = [];
-  for (const a of g.armies) {
+  for (let i = g.armies.length - 1; i >= 0; i--) {
+    const a = g.armies[i];
     if (a.type === armytype.HERO && a.owner === side.index) {
       const level = a.level || 1;
       const need = PROMOTION_AT[level];
       if (need != null && (a.experience || 0) >= need) {
+        const before = a.strength || 0;
         a.level = level + 1;
-        a.strength = Math.min(MAX_STRENGTH, a.strength + 1);
+        a.strength = Math.min(MAX_STRENGTH, before + 1);
         a.maxMoves += PROMOTION_MOVES;
         a.title = LEVELS[a.level];
-        promoted.push(a);
+        promoted.push({ hero: a, gain: a.strength - before });
       }
     }
   }
@@ -232,22 +267,25 @@ export function takeItem(g, h, it) {
 }
 
 /** A dead hero drops everything it carried where it fell -- lost on water
- *  (hero_drop_items, 67cc:16cd). */
-export function dropItems(g, h, x, y) {
+ *  (hero_drop_items, 67cc:16cd). When the item is the current player's
+ *  standard (item number = side), that side's cities stop vectoring to it.
+ *  `cur` is the current player, g.side's by default. */
+export function dropItems(g, h, x, y, cur) {
   if (!h.items || h.items.length === 0) return [];
+  if (cur == null) cur = g.side ? g.side.index : undefined;
   const drowned = scn.terrainAt(g.map, x, y) === move.WATER;
   const dropped = [];
   for (const it of h.items) {
+    it.planted = undefined;
     if (drowned) {
       it.status = 0; it.x = undefined; it.y = undefined;
     } else {
       it.status = 1; it.x = x; it.y = y;
       dropped.push(it);
     }
-    // cities vectoring to a lost standard stop doing so
-    if (it.standardOf != null) {
+    if (it.index === cur) {
       for (const c of g.map.cities) {
-        if (c.vectorTo === -2 && c.ownerIndex === it.standardOf) c.vectorTo = undefined;
+        if (c.vectorTo === -2 && c.ownerIndex === cur) c.vectorTo = undefined;
       }
     }
   }

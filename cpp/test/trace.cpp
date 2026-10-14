@@ -36,7 +36,8 @@ int main(int argc, char** argv) {
   for (int i = 4; i < argc; i++) {
     if (!strcmp(argv[i], "hidden")) hidden = true;
     // "save": write the game out and read it back after every turn, which
-    // must change nothing
+    // must change nothing but the route cache -- a load empties it, as the
+    // original's does (623c:0dff)
     if (!strcmp(argv[i], "save")) roundTrip = true;
     // "diplo": with Diplomacy on, so that sides make peace
     if (!strcmp(argv[i], "diplo")) diplo = true;

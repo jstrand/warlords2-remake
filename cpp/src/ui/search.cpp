@@ -75,7 +75,8 @@ std::vector<std::string> ruinLines(const w2::SearchResult& r) {
   } else if (r.kind == "gold") {
     lines.push_back(format(kit::text(0x35, 0), name, r.gold));
   } else if (r.kind == "allies") {
-    int n = (int)r.armies.size();
+    // the number rolled (6536:01ab), placed or not
+    int n = r.count > 0 ? r.count : (int)r.armies.size();
     std::string tname = r.type ? r.type->name : "";
     lines.push_back(n == 1 ? format(kit::text(0x36, 0), tname, name) : format(kit::text(0x36, 1), n, tname, name));
   }
@@ -165,6 +166,13 @@ void openRuin(std::vector<std::string> lines, bool guarded, bool canTake, w2::Ar
 const kit::Rect TEMPLE{160, 60, 320, 280}; // popup 9
 const int TEMPLE_DIALOG = 15, BLESS = 328, QUEST = 329;
 
+// How many a temple blessed (temple_bless, 6536:08a1).
+std::string blessLine(int n) {
+  if (n == 0) return kit::text(0x37, 0);
+  if (n == 1) return kit::text(0x38, 0);
+  return format(kit::text(0x38, 1), n);
+}
+
 struct Temple : kit::Modal {
   std::shared_ptr<w2::SearchResult> r;
   std::vector<w2::Army*> stack;
@@ -187,12 +195,7 @@ struct Temple : kit::Modal {
       auto res = r;
       auto st = stack;
       kit::pop(this);
-      int n = w2::site::bless(*G.g, *res->site, st);
-      std::string line;
-      if (n == 0) line = kit::text(0x37, 0);
-      else if (n == 1) line = kit::text(0x38, 0);
-      else line = format(kit::text(0x38, 1), n);
-      message(line, kit::text(0x38, 2));
+      message(blessLine(w2::site::bless(*G.g, *res->site, st)), kit::text(0x38, 2));
     } else if (c->id == QUEST) {
       auto res = r;
       kit::pop(this);
@@ -357,6 +360,8 @@ void open(const std::vector<w2::Army*>& stack) {
   if (stack.empty()) return;
   auto r = w2::game::searchHere(*G.g, stack, true);
   if (!r || r->kind == "no hero") return;
+  // with no hero a temple blesses at once, with only its message (6536:0000)
+  if (r->kind == "temple" && !r->hero) return message(blessLine(r->blessed), kit::text(0x38, 2));
   if (r->kind == "temple") return openTemple(r, stack);
   if (r->kind == "sage") {
     sound::music(w2::cues::SAGE);

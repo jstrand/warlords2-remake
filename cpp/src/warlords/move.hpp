@@ -111,9 +111,41 @@ struct RoadGround {
 std::optional<std::vector<std::pair<int, int>>> roadRoute(const RoadGround& m, const int costs[12], int W, int H,
                                                           int sx, int sy, int dx, int dy);
 
+// The route cache (1555:1508-16f0): 20 slots, slot 0 for routes under 15
+// tiles, 1-19 for longer ones, kept from game start or load for every side.
+constexpr int CACHE_SLOTS = 20;
+struct CachedRoute {
+  int mode = 0, flags = 0;
+  int sx = 0, sy = 0, dx = 0, dy = 0;
+  std::vector<int> dirs;
+};
+}  // namespace w2::move
+namespace w2 {
+struct PathCache {
+  std::array<std::optional<move::CachedRoute>, move::CACHE_SLOTS> slots;
+};
+}  // namespace w2
+namespace w2::move {
+std::shared_ptr<PathCache> newPathCache();
+
 /** The path from (sx,sy) to (dx,dy) for a stack, or none if there is no
- *  route: 1555:000a, step for step. An empty path means "already there". */
+ *  route: pathfind (1555:000a). A route cached for the same destination that
+ *  the stack stands on is taken as it is; then a step to a neighbouring tile;
+ *  then the search, its route kept. An empty path means "already there". */
 std::optional<Path> findPath(Game& g, const Stack& stack, int sx, int sy, int dx, int dy);
+
+/** The flood the computer players measure distance with (1555:1ab9):
+ *  pathfind from (x, y) to itself with flag 0x10 -- no route, no cache --
+ *  which runs the wavefront (1555:0373) for `range` sweeps at most, each
+ *  spreading every tile of a square that grows by one round (x, y), and
+ *  stops early only when a sweep spreads nothing. A cost travels across the
+ *  scan in one sweep but only a tile a sweep against it, so a winding route
+ *  can be left long, or not reached. Returns the grid: SHUT, 30000
+ *  unreached, else the cost from (x, y) plus 1 (negative while the tile had
+ *  still to spread). `gridSide` is whose cost grid; `fogSide` whose hidden
+ *  map shuts what it has not seen (only a human's, mid-turn). */
+std::vector<int> flood(Game& g, int gridSide, int x, int y, int range, int mode, bool woods, bool hills,
+                       int fogSide);
 
 struct Attack {
   int x = 0, y = 0;

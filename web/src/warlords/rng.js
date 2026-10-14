@@ -34,9 +34,10 @@ export class Rng {
     return total;
   }
 
-  /** True with probability percent/100, i.e. the game's dice(1,100,0) < p. */
+  /** The game's `dice(1,100,0) < percent`: true (percent - 1) times in 100,
+   *  as WARLORD2.EXE writes its percentages (79fa:0a75). */
   chance(percent) {
-    return this.dice(1, 100, 0) <= percent;
+    return this.dice(1, 100, 0) < percent;
   }
 
   /** A random element of a list, or undefined if it is empty. */

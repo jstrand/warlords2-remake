@@ -39,6 +39,10 @@ struct Battle {
   std::optional<Fought> fought;   // until applied
   std::shared_ptr<QuestResult> quest;
   City* captured = nullptr;
+  std::set<const Army*> boats;   // those that fought as boats, at sea on water or shore
+  int defStrength0 = 0;          // the first defender's battle strength
+  Army* hero = nullptr;          // the stack's hero, set by game::decideAttack
+  Army* medal = nullptr;         // the army that won a medal, set by game::applyAttack
 };
 
 namespace combat {
@@ -55,7 +59,7 @@ constexpr int HERO_TABLE[10] = {0, 0, 0, 0, 1, 1, 1, 2, 2, 3};
 constexpr int HIT_POINTS = 2;
 constexpr int MAX_STRENGTH = 15;
 constexpr int DIE = 20, DIE_INTENSE = 24;
-constexpr int STALEMATE = 10000;              // throws before the defender wins
+constexpr int STALEMATE = 10000;              // throws in one duel before the attacker loses it
 
 /** The battle tile's terrain class (combat_terrain_class, 6a89:0000). */
 int terrainClass(const Game& g, int x, int y);

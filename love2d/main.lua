@@ -232,6 +232,10 @@ function love.load(arg)
   -- the pictures of Hero > Search: a ruin, and a temple
   G.searchPic = pck.toImage(dataDir .. "/PICS/SEARCH.PCK", palette)
   G.templePic = pck.toImage(dataDir .. "/PICS/TEMPLE.PCK", palette)
+  -- a promotion's (popups 16-18) and a medal's (popups 24-27) pictures
+  G.levelPic, G.medalPic = {}, {}
+  for i = 2, 4 do G.levelPic[i] = pck.toImage(dataDir .. "/PICS/LEVEL" .. i .. ".PCK", palette) end
+  for i = 0, 3 do G.medalPic[i + 1] = pck.toImage(dataDir .. "/PICS/MEDAL" .. i .. ".PCK", palette) end
   -- the quest's parchment, blitted through a mask (1997:027e)
   G.scrollPic = pck.toImage(dataDir .. "/PICS/SCROLL.PCK", palette, SCROLL_KEY)
   kit.init(G)
@@ -310,13 +314,21 @@ function newGame(seed)
   G.stratImage = nil
 end
 
+--- Where a side's capital now stands (67cc:10d7): its own, or the city of
+--- its it moved to while the side does not hold it.
+function G.capOf(side)
+  if side.capNow then return side.capNow end
+  if side.capital then return { x = side.capital.x, y = side.capital.y } end
+  return { x = side.capX or 0, y = side.capY or 0 }
+end
+
 --- Start its first turn, and centre the view on the capital.
 function beginGame()
   G.player = game.begin(G.g)
-  G.cursor = G.player.capital and
-             { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
+  local cap = G.capOf(G.player)
+  G.cursor = { x = cap.x, y = cap.y }
   G.selection = nil
-  centreOn(G.player.capital.x, G.player.capital.y)
+  centreOn(cap.x, cap.y)
   -- the banner is a human's (8cc6:0259); a computer that opens the game goes
   -- straight to its turn, shown in the status bar (8cc6:0000)
   if not G.player.computer then showBanner(G.player) end
@@ -777,8 +789,8 @@ end
 -- there counts as far away instead of near, so "next" never hands you back
 -- the stack you are already standing on. docs/re/ui.md > The army cycle.
 local function cycleReset()
-  G.cursor = G.player.capital and
-             { x = G.player.capital.x, y = G.player.capital.y } or { x = 0, y = 0 }
+  local cap = G.capOf(G.player)                 -- 8c07:0113
+  G.cursor = { x = cap.x, y = cap.y }
 end
 
 --- Manhattan distance to where the cycle last stopped, with 0 pushed to the
@@ -1098,9 +1110,7 @@ end
 --- away and reaches the hero offer afterwards, so the two are never both up.
 function dismissBanner()
   G.banner = nil
-  if G.centreAfterBanner and G.player.capital then
-    centreOn(G.player.capital.x, G.player.capital.y)
-  end
+  if G.centreAfterBanner then centreOn(G.capOf(G.player).x, G.capOf(G.player).y) end
   G.centreAfterBanner = nil
   -- whoever is left on the water without a boat drowns (8cc6:0259) before
   -- the advisor has his say
@@ -1108,20 +1118,25 @@ function dismissBanner()
 end
 
 --- The advisor has his say (6dda:026f(5)) -- with Speech off the original
---- skips him before he so much as updates his marks -- and then 8cc6:04bd
---- puts on the hero's music or the turn's.
+--- skips him before he so much as updates his marks -- and then 8cc6:04bd:
+--- the heroes promoted, each in its own popup, and the hero offer with its
+--- music, or the turn's.
 function G.afterBanner()
   local cues = require("warlords.cues")
   local says = G.audio.speechOn() and cues.advisor(G.g, G.player, function(n) return math.random(n) end)
   require("ui.advisor").say(says, function()
-    G.audio.music(G.player.heroOffer and cues.HERO or cues.PLAY)
-    -- the tutorial's pages for the second turn and the hero offer come first
-    local tutorial = require("ui.tutorial")
-    local moments = {}
-    if G.g.turn == 2 then moments[#moments + 1] = "turn2" end
-    if G.player.heroOffer then moments[#moments + 1] = "hero" end
-    tutorial.chain(moments, function()
-      if not presentOffer(G.player) then afterOffer() end
+    local promoted = G.player.promoted
+    G.player.promoted = nil
+    require("ui.honours").promotions(promoted, function()
+      G.audio.music(G.player.heroOffer and cues.HERO or cues.PLAY)
+      -- the tutorial's pages for the second turn and the hero offer come first
+      local tutorial = require("ui.tutorial")
+      local moments = {}
+      if G.g.turn == 2 then moments[#moments + 1] = "turn2" end
+      if G.player.heroOffer then moments[#moments + 1] = "hero" end
+      tutorial.chain(moments, function()
+        if not presentOffer(G.player) then afterOffer() end
+      end)
     end)
   end)
 end
@@ -1197,14 +1212,14 @@ local function acceptOffer()
   local h, allies = hero.recruit(G.g, G.player, offer)
   G.offer, G.player.heroOffer = nil, nil
   centreOn(h.x, h.y)
-  if #allies > 0 then
+  if (allies.count or 0) > 0 then
     say("%s joins at %s, with %d %s.", h.name,
-        G.g.map.cities[h.homeCity + 1].name, #allies, allies[1].name)
+        G.g.map.cities[h.homeCity + 1].name, allies.count, allies.type.name)
     -- "And the hero brings 1 ally!" / "... %d allies!" (hero_brings_allies,
-    -- 7563:01fc, through 8065:10fb)
+    -- 7563:01fc, through 8065:10fb): the number rolled, placed or not
     local ui = G.screen.ui
-    local line = #allies == 1 and uidata.text(ui, HERO.ALLY_GROUP, 0)
-                 or uidata.text(ui, HERO.ALLY_GROUP, 1):format(#allies)
+    local line = allies.count == 1 and uidata.text(ui, HERO.ALLY_GROUP, 0)
+                 or uidata.text(ui, HERO.ALLY_GROUP, 1):format(allies.count)
     searchUi.say(line, afterOffer)
     return
   end
@@ -1212,13 +1227,16 @@ local function acceptOffer()
   afterOffer()
 end
 
---- The turn's opening, once any hero offer is settled (8cc6:04bd, the
---- stage after 7563:0d5c): on turn 1 the capital's dialog opens in
---- Production, for the first thing to build to be chosen.
+--- The turn's opening, once any hero offer is settled (8cc6:04bd(1), the
+--- stage after 7563:0d5c): the cities build -- or on turn 1 the capital's
+--- dialog opens in Production, for the first thing to build to be chosen.
 function afterOffer()
-  if G.g.turn == 1 and G.player.capital and not G.player.computer then
-    cityUi.open(G.player.capital, cityUi.PRODUCTION)
-  end
+  if G.player.computer then return end
+  game.humanProduction(G.g, G.player)
+  stratDirty()
+  local cap = G.capOf(G.player)
+  local city = game.cityAt(G.g, cap.x, cap.y)
+  if G.g.turn == 1 and city then cityUi.open(city, cityUi.PRODUCTION) end
 end
 
 local function refuseOffer()
@@ -1465,7 +1483,7 @@ function finishRound(side)
     if s.inUse and s.alive ~= false and not s.computer then humans = humans + 1 end
   end
   G.centreAfterBanner = G.g.map.options.hiddenMap ~= 0 and humans > 1
-  if not G.centreAfterBanner and side.capital then centreOn(side.capital.x, side.capital.y) end
+  if not G.centreAfterBanner then centreOn(G.capOf(side).x, G.capOf(side).y) end
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   -- what the round's end found comes first, then the turn's banner
   ending.show(G.g.ending, function() showBanner(side) end)
@@ -1491,7 +1509,7 @@ local function takeLoaded(loaded)
   G.g, G.selection, G.route = loaded, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
-  centreOn(G.player.capital.x, G.player.capital.y)
+  centreOn(G.capOf(G.player).x, G.capOf(G.player).y)
   G.audio.music(require("warlords.cues").PLAY)     -- 7721:02d3
 end
 
@@ -1505,7 +1523,7 @@ local function loadGame()
   G.g, G.selection, G.route = loaded, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
-  centreOn(G.player.capital.x, G.player.capital.y)
+  centreOn(G.capOf(G.player).x, G.capOf(G.player).y)
   say("Loaded: turn %d, %s to play.", loaded.turn, G.player.name)
 end
 
@@ -2230,7 +2248,7 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
     linePixels(x + a.x * 2 + 2, y + a.y * 2 + 2, x + b.x * 2 + 2, y + b.y * 2 + 2)
   end
   local mine = game.sideCities(G.g, G.player)
-  local function building(c) return c.producing and 0 or 3 end
+  local function building(c) return game.producing(c) and 0 or 3 end
   -- The side's planted standard: its flag (ATRANS2.PCK's (96, 15), 16x15,
   -- 834b:1f5f with figure 0), and a line from each city sending armies there
   -- to the standard's (2x, 2y).
@@ -2249,12 +2267,12 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
         local incoming = game.vectoredTo(G.g, c)
         local k = building(c)
         if c.vectorTo then k = 2 end
-        if #incoming > 0 then k = c.producing and 1 or 5 end
+        if #incoming > 0 then k = game.producing(c) and 1 or 5 end
         marker(c, k)
         local dest = c.vectorTo and c.vectorTo >= 0 and G.g.map.cities[c.vectorTo + 1]
         if dest then
           done[dest] = true
-          marker(dest, dest.producing and 1 or 5)
+          marker(dest, game.producing(dest) and 1 or 5)
           line(dest, c, 7)
         elseif c.vectorTo == game.STANDARD and sx then
           toStandard(c, 8)
@@ -2280,13 +2298,13 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
                    or (filter and filter >= 0 and n + filter > game.MAX_VECTORED_TO)
       if c == city or not full then
         local k = building(c)
-        if c == city then k = c.producing and 4 or 6 end
+        if c == city then k = game.producing(c) and 4 or 6 end
         marker(c, k)
       end
     end
     local dest = city.vectorTo and city.vectorTo >= 0 and G.g.map.cities[city.vectorTo + 1]
     if dest then
-      marker(dest, dest.producing and 1 or 5)
+      marker(dest, game.producing(dest) and 1 or 5)
       line(city, dest, 7)
     elseif city.vectorTo == game.STANDARD and sx then
       toStandard(city, 7)
@@ -2676,7 +2694,12 @@ function pressAssault()
   end
   G.closeAssault()
   local city = a.result.captured
-  if city and not a.computer then presentVictory(city, a.victor) end
+  -- a medal is told before the city's fate is asked (67cc:0000)
+  local function after()
+    if city and not a.computer then presentVictory(city, a.victor) end
+  end
+  if a.result.medal and not a.computer then require("ui.honours").medal(a.result.medal, after)
+  else after() end
 end
 
 --- The cloud over the tile, drawn with the map, in map pixels.
@@ -2769,8 +2792,29 @@ function presentVictory(city, victor)
   local v = G.victoryView
   v.state[AS.occupy] = uidata.NORMAL
   v.state[AS.raze] = uidata.NORMAL
-  v.state[AS.pillage] = #city.slots >= 1 and uidata.NORMAL or uidata.DISABLED
-  v.state[AS.sack] = #city.slots >= 2 and uidata.NORMAL or uidata.DISABLED
+  -- Pillage and Sack by the gold they would bring (63fa:0834, 63fa:07d0)
+  local last = city.slots[#city.slots]
+  local pillageGold = last and math.floor(math.abs(G.g.types.byId[last.type].price) / 2) or 0
+  local sackGold = require("warlords.ai.groups").sackValue(G.g, city)
+  v.state[AS.pillage] = pillageGold ~= 0 and uidata.NORMAL or uidata.DISABLED
+  v.state[AS.sack] = sackGold ~= 0 and uidata.NORMAL or uidata.DISABLED
+  -- Enter is Occupy -- unless the stack's hero is on a quest this answers:
+  -- Raze for a raze quest on this city, Sack (or Pillage) for gold (63fa:0000)
+  G.victory.enter = AS.occupy
+  local quest = require("warlords.quest")
+  local q = G.player.quest
+  local stackHero
+  for _, a in ipairs(G.selection and G.selection.stack or {}) do
+    if a.type == armytype.HERO then stackHero = a break end
+  end
+  if G.g.map.options.quests ~= 0 and q and stackHero and stackHero == q.hero then
+    if q.type == quest.RAZE and q.target == city then
+      G.victory.enter = AS.raze
+    elseif q.type == quest.PILLAGE_GOLD then
+      if sackGold ~= 0 then G.victory.enter = AS.sack
+      elseif pillageGold ~= 0 then G.victory.enter = AS.pillage end
+    end
+  end
 end
 
 local function drawVictory(v)
@@ -3315,8 +3359,7 @@ end
 
 -- The pad's centre, id 177, shares its handler (8065:0f02) with the Home key.
 ACTION[177] = function()
-  if G.selection then centreOn(G.selection.x, G.selection.y)
-  else centreOn(G.player.capital.x, G.player.capital.y) end
+  if G.selection then centreOn(G.selection.x, G.selection.y) end
 end
 
 --- Which buttons are live. 8065:0174 is the original's own refresh -- it runs
@@ -3712,7 +3755,7 @@ function love.keypressed(key)
   if G.assault then pressAssault() return end
   if G.victory then
     -- Occupy heads both the default and the cancel lists
-    if key == "return" or key == "kpenter" or key == "escape" then takeCity(AS.occupy) end
+    if key == "return" or key == "kpenter" or key == "escape" then takeCity(G.victory.enter or AS.occupy) end
     return
   end
 

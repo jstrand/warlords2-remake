@@ -8,6 +8,7 @@ import * as scn from "../scn.js";
 import * as move from "../move.js";
 import * as game from "../game.js";
 import * as siteMod from "../site.js";
+import * as quest from "../quest.js";
 import * as core from "./core.js";
 import * as cities from "./cities.js";
 import * as diplo from "./diplomacy.js";
@@ -65,6 +66,10 @@ export function* searchSite(g, sel, h, s) {
     const stack = sel ? sel.armies : [h];
     const r = siteMod.search(g, stack, s.x, s.y, false);
     if (r && r.kind === "sage") sage(g, side);
+    // at a temple the computer takes a quest, by its own rules (quest_assign(1))
+    if (s.content === siteMod.TEMPLE && g.map.options.quests !== 0 && !side.quest && core.isHero(h)) {
+      quest.assign(g, side, h, true);
+    }
     if (!core.isHero(h)) return 0;
     for (const a of stack) a.done = undefined;
     if (g.map.options.hiddenMap !== 0 && s.content === siteMod.ALLIES) {

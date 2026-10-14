@@ -167,6 +167,8 @@ function shareOutCities(g) {
 
 /** Set the computer players up for a new game (79fa:0000). */
 export function startGame(g) {
+  // the neighbour table, from the cities as the game begins (623c:0398)
+  g.aiNeighbours = core.buildNeighbours(g);
   for (const s of g.map.sides) initSide(g, s);
   shareOutCities(g);
   for (const s of g.map.sides) {
@@ -178,6 +180,11 @@ export function startGame(g) {
 /** ai_turn_setup (5db9:0386). */
 function turnSetup(g, side) {
   const d = core.data(g, side);
+  // the side is at peace with itself, state and proposal (5db9:0000)
+  if (g.diplomacy) {
+    g.diplomacy.state[side.index * 9] = 0;
+    g.diplomacy.proposal[side.index * 9] = 0;
+  }
   side.aiSolidarity = d.solidarity;
   const quick = g.map.options.quickStart !== 0 && g.map.options.hiddenMap !== 0;
   for (let i = g.map.cities.length - 1; i >= 0; i--) {
@@ -203,11 +210,6 @@ export function* playTurn(g, side, pause) {
   const p = pause || function* () {};
   const hidden = g.map.options.hiddenMap !== 0;
 
-  // the computer always hires an offered hero it can afford
-  if (side.heroOffer && side.gold >= (side.heroOffer.price || 0)) {
-    heroMod.recruit(g, side, side.heroOffer);
-    side.heroOffer = null;
-  }
   for (const a of g.armies) if (a.owner === side.index) a.aiMoved = undefined;
 
   turnSetup(g, side);

@@ -225,93 +225,85 @@ function core.clearCflag(d, c, bit) d.flags[c.index] = core.clear(d.flags[c.inde
 
 ------------------------------------------------------------ neighbours
 
---- The shared neighbour table (623c:0398, at game start): each city's six
---- nearest cities by land path, spread over the four directions, with the
---- path length to each. Kept on the game; built on first use.
--- The table depends on the map alone, so it is kept per scenario too -- as
--- city indices, since another game of the map (or a loaded save) has city
--- objects of its own.
-local neighbourCache = {}
-
+--- The shared neighbour table (623c:0398): each city's six nearest cities
+--- by land, with the distance to each. It is built once, as the game is set
+--- up, over side 0's cost grid -- the cities as they are then -- and kept
+--- with the game (g.aiNeighbours, city indices, so that it saves).
 function core.neighbours(g, c)
-  if not g.aiNeighbours then
-    -- keyed on the cities themselves, so a random map never borrows another's
-    local parts = { g.map.name or "" }
-    for _, o in ipairs(g.map.cities) do parts[#parts + 1] = o.x .. "," .. o.y end
-    local key = table.concat(parts, ";")
-    local shared = neighbourCache[key]
-    if shared then
-      local t = {}
-      for k, e in pairs(shared) do
-        local cs = {}
-        for i, index in ipairs(e.cities) do cs[i] = g.map.cities[index + 1] end
-        t[k] = { cities = cs, dist = e.dist }
-      end
-      g.aiNeighbours = t
-    else
-      g.aiNeighbours = core.buildNeighbours(g)
-      shared = {}
-      for k, e in pairs(g.aiNeighbours) do
-        local is = {}
-        for i, o in ipairs(e.cities) do is[i] = o.index end
-        shared[k] = { cities = is, dist = e.dist }
-      end
-      neighbourCache[key] = shared
-    end
-  end
+  if not g.aiNeighbours then g.aiNeighbours = core.buildNeighbours(g) end
   local e = g.aiNeighbours[c.index]
-  return e and e.cities or {}, e and e.dist or {}
+  if not e then return {}, {} end
+  local cs = {}
+  for i, index in ipairs(e.cities) do cs[i] = g.map.cities[index + 1] end
+  return cs, e.dist
 end
 
---- For every city: flood by land from it (radius 45, then 60 when that finds
---- nothing) and keep six neighbours. 623c:0749 takes them nearest first, but
---- once three lie on one side (west, east, north or south) of the city,
---- further ones on that side count 50 farther.
-function core.buildNeighbours(g)
-  local out = {}
-  local cities = g.map.cities
-  for _, c in ipairs(cities) do
-    local function pick(range)
-      -- 623c:0398 floods for player 0 with each city lent to it in turn;
-      -- -1 is nobody, so every city but the start blocks the way
-      local flood = core.flood(g, -1, c.x, c.y, range, { mode = require("warlords.move").LAND })
-      local cand = {}
-      for _, o in ipairs(cities) do
-        if o ~= c then
-          local d = core.cityDistance(g, flood, o)
-          if d < 100 then cand[#cand + 1] = { city = o, d = d } end
+--- 623c:0749: every other city under 100 away goes into a list of 50 -- the
+--- first free place, or over the farthest one when this one is nearer --
+--- walking the cities from the last; then six are taken, nearest first and
+--- 50 further off for a direction that has three already, the list read from
+--- its end so a tie goes to the later place. Returns the cities' indices,
+--- their distances, and how many were found.
+local function pickNeighbours(g, c, flood)
+  local slotCity, slotDist = {}, {}
+  for k = 1, 50 do slotCity[k], slotDist[k] = -1, 0 end
+  local found = 0
+  for i = #g.map.cities, 1, -1 do
+    local o = g.map.cities[i]
+    if o ~= c then
+      local d, px = core.cityDistance(g, flood, o)
+      if px then
+        found = found + 1
+        local at, worst = nil, d
+        local k = 1
+        while k <= 50 and slotCity[k] ~= -1 do
+          if worst < slotDist[k] then worst, at = slotDist[k], k end
+          k = k + 1
+        end
+        if k <= 50 then at = k end
+        if at and (slotCity[at] == -1 or d < slotDist[at]) then
+          slotCity[at], slotDist[at] = o.index, d % 256
         end
       end
-      -- the best fifty, as 623c:0749 keeps them
-      table.sort(cand, function(p, q) return p.d < q.d end)
-      while #cand > 50 do table.remove(cand) end
-      local left, right, up, down = 0, 0, 0, 0
-      local picked, dists = {}, {}
-      while #picked < 6 do
-        local best, bestScore
-        for i, e in ipairs(cand) do
-          if not e.taken then
-            local score = e.d
-            if (e.city.x < c.x and left > 2) or (c.x < e.city.x and right > 2)
-               or (e.city.y < c.y and up > 2) or (c.y < e.city.y and down > 2) then
-              score = score + 50
-            end
-            if not bestScore or score < bestScore then best, bestScore = i, score end
-          end
-        end
-        if not best then break end
-        local e = cand[best]
-        e.taken = true
-        picked[#picked + 1], dists[#dists + 1] = e.city, e.d
-        if e.city.x < c.x then left = left + 1 end
-        if c.x < e.city.x then right = right + 1 end
-        if e.city.y < c.y then up = up + 1 end
-        if c.y < e.city.y then down = down + 1 end
-      end
-      return picked, dists, #cand
     end
-    local picked, dists, found = pick(45)
-    if found == 0 then picked, dists = pick(60) end
+  end
+  local left, right, up, down = 0, 0, 0, 0
+  local picked, dists = {}, {}
+  while #picked < 6 do
+    local best, bestScore = nil, 10000
+    for k = 50, 1, -1 do
+      if slotCity[k] ~= -1 then
+        local o = g.map.cities[slotCity[k] + 1]
+        local score = slotDist[k]
+        if (o.x < c.x and left > 2) or (c.x < o.x and right > 2)
+           or (o.y < c.y and up > 2) or (c.y < o.y and down > 2) then
+          score = score + 50
+        end
+        if score < bestScore then best, bestScore = k, score end
+      end
+    end
+    if not best then break end
+    local o = g.map.cities[slotCity[best] + 1]
+    picked[#picked + 1], dists[#dists + 1] = o.index, slotDist[best]
+    if o.x < c.x then left = left + 1 end
+    if c.x < o.x then right = right + 1 end
+    if o.y < c.y then up = up + 1 end
+    if c.y < o.y then down = down + 1 end
+    slotCity[best] = -1
+  end
+  return picked, dists, found
+end
+
+--- For every city: flood by land from it (45 rounds, or 60 when that finds
+--- no city), as side 0 with every tile seen, and pick six (623c:0749).
+function core.buildNeighbours(g)
+  local move = require("warlords.move")
+  local out = {}
+  for _, c in ipairs(g.map.cities) do
+    local picked, dists, found = pickNeighbours(g, c, core.flood(g, 0, c.x, c.y, 45, { mode = move.LAND }, false))
+    if found == 0 then
+      picked, dists = pickNeighbours(g, c, core.flood(g, 0, c.x, c.y, 60, { mode = move.LAND }, false))
+    end
     out[c.index] = { cities = picked, dist = dists }
   end
   return out
@@ -465,78 +457,28 @@ end
 
 ------------------------------------------------------------ the flood
 
---- Flood the map from (x, y) the way the selection moves (1555:1ab9): every
---- tile within `range` tiles either way gets its path cost from the start,
---- plus one. The start is 1, anything unreached UNREACHED.
-function core.flood(g, sideIndex, x, y, range, sel)
+--- Flood the map from (x, y) the way the selection moves (1555:1ab9): the
+--- original's bounded sweep (move.flood) over `sideIndex`'s cost grid, at
+--- most `range` rounds. `fogSide` is whose hidden map counts: the flooding
+--- side's when nil (a computer's: none), nobody's when false.
+function core.flood(g, sideIndex, x, y, range, sel, fogSide)
   local move = require("warlords.move")
-  local W, H = g.map.width, g.map.height
-  local grid = move.grid(g, sideIndex)
   local mode = sel and sel.mode or move.LAND
   local woods, hills = false, false
   if sel and sel.armies then
     local _, w, h = move.stackMode(g, sel.armies)
     woods, hills = w, h
   end
-  local x0, x1 = math.max(0, x - range), math.min(W - 1, x + range)
-  local y0, y1 = math.max(0, y - range), math.min(H - 1, y + range)
-  local dist, done = {}, {}
-  local start = y * W + x
-  dist[start] = 0
-  local heap, n = { { start, 0 } }, 1
-  local function push(k, d)
-    n = n + 1
-    heap[n] = { k, d }
-    local i = n
-    while i > 1 do
-      local p = math.floor(i / 2)
-      if heap[p][2] <= heap[i][2] then break end
-      heap[p], heap[i] = heap[i], heap[p]
-      i = p
-    end
-  end
-  local function pop()
-    local top = heap[1]
-    heap[1] = heap[n]; heap[n] = nil; n = n - 1
-    local i = 1
-    while true do
-      local l, r, best = i * 2, i * 2 + 1, i
-      if l <= n and heap[l][2] < heap[best][2] then best = l end
-      if r <= n and heap[r][2] < heap[best][2] then best = r end
-      if best == i then break end
-      heap[best], heap[i] = heap[i], heap[best]
-      i = best
-    end
-    return top
-  end
-  while n > 0 do
-    local top = pop()
-    local k = top[1]
-    if not done[k] then
-      done[k] = true
-      local d = dist[k]
-      local kx, ky = k % W, math.floor(k / W)
-      for _, dir in pairs(move.DIRS) do
-        local nx, ny = kx + dir[1], ky + dir[2]
-        if nx >= x0 and ny >= y0 and nx <= x1 and ny <= y1 then
-          local nk = ny * W + nx
-          if not done[nk] then
-            local c = move.stepCost(grid[k], grid[nk], mode, woods, hills, move.WATER_PENALTY)
-            if c and (dist[nk] == nil or d + c < dist[nk]) then
-              dist[nk] = d + c
-              push(nk, d + c)
-            end
-          end
-        end
-      end
-    end
-  end
-  return { dist = dist, W = W, H = H }
+  if fogSide == nil then fogSide = sideIndex end
+  local dist = move.flood(g, sideIndex, x, y, range, mode, woods, hills, fogSide or nil)
+  return { dist = dist, W = g.map.width }
 end
 
+--- The flood's cost to (x, y), plus 1, or UNREACHED.
 function core.floodAt(flood, x, y)
-  local d = flood.dist[y * flood.W + x]
-  return d and d + 1 or core.UNREACHED
+  local v = flood.dist[y * flood.W + x]
+  if v == nil or v == 30000 or v == require("warlords.move").SHUT then return core.UNREACHED end
+  return math.abs(v)
 end
 
 -- the ring round a city's 2x2 footprint, as 59bf:0a85 walks it: from the
@@ -642,8 +584,19 @@ end
 --- Fight for (x, y) with the selection, for real. Returns the result.
 function core.fight(g, sel, x, y)
   local game = require("warlords.game")
-  -- decided, shown, and only then taken effect (after_battle, 67cc:0a6b)
+  local diplomacy = require("warlords.diplomacy")
+  -- the computer's attack (67cc:124a): the lines are drawn up first; a city
+  -- of a side it is not at war with is treachery -- war, and the score's
+  -- penalty (67cc:20a8); then the attack is paid for and fought, shown, and
+  -- only then taken effect (after_battle, 67cc:0a6b)
   local result = game.decideAttack(g, sel.armies, x, y)
+  local me = sel.armies[1] and sel.armies[1].owner
+  local city = result.lines.city
+  if city and city.ownerIndex ~= nil and me ~= nil and g.map.options.diplomacy ~= 0
+     and diplomacy.state(g, me, city.ownerIndex) ~= diplomacy.WAR then
+    diplomacy.attackAnyway(g, me, city.ownerIndex)
+  end
+  game.chargeAttack(g, sel.armies, x, y)
   local ai = require("warlords.ai")
   if ai.onFight then ai.onFight(g, sel.armies, x, y, result) end
   game.applyAttack(g, result)

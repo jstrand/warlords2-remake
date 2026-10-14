@@ -54,6 +54,22 @@ export function eq(got, want, what) {
 }
 
 const newGame = (scenario, opts) => game.newGame(DATA, scenario, opts);
+// The turn passes as the interface passes it: a human's turn opens with the
+// hero offer left standing, and then its cities build (8cc6:04bd(1)).
+// A human side played by the computer player, as some tests do: it takes
+// the hero it is offered first, as a computer does.
+function playAI(g, side) {
+  if (!side.computer && side.heroOffer) {
+    hero.recruit(g, side, side.heroOffer);
+    side.heroOffer = null;
+  }
+  ai.runSync(ai.playTurn(g, side));
+}
+function endTurn(g) {
+  const side = game.endTurn(g);
+  if (side && !side.computer) game.humanProduction(g, side);
+  return side;
+}
 const removeArmy = (g, a) => { const i = g.armies.indexOf(a); if (i >= 0) g.armies.splice(i, 1); };
 
 // ------------------------------------------------------------------ dice
@@ -185,7 +201,7 @@ function testTurnLoop(scenario) {
   {
     const one = game.sideArmies(g, side)[0];
     one.done = true; one.offered = true; one.fortified = true;
-    for (let i = 0; i < g.sides.length; i++) game.endTurn(g);
+    for (let i = 0; i < g.sides.length; i++) endTurn(g);
     eq(one.done, null, "done for this turn wears off with the turn");
     eq(one.offered, null, "and so does having been offered this pass");
     eq(one.fortified, true, "but digging in outlasts it");
@@ -194,17 +210,17 @@ function testTurnLoop(scenario) {
   const a = game.sideArmies(g, side)[0];
   a.moves = 5;
   const before = a.maxMoves;
-  for (let i = 0; i < g.sides.length; i++) game.endTurn(g);
+  for (let i = 0; i < g.sides.length; i++) endTurn(g);
   eq(a.moves, before + rules.MOVE_CARRY, "at most 2 unused moves carry over");
   a.moves = 1;
-  for (let i = 0; i < g.sides.length; i++) game.endTurn(g);
+  for (let i = 0; i < g.sides.length; i++) endTurn(g);
   eq(a.moves, before + 1, "carry-over below the cap is exact");
 
   const city = side.capital;
   game.setProduction(g, city, 0);
   const want = city.slots[0].time;
   const n0 = game.sideArmies(g, side).length;
-  for (let i = 0; i < want * g.sides.length; i++) game.endTurn(g);
+  for (let i = 0; i < want * g.sides.length; i++) endTurn(g);
   ok(game.sideArmies(g, side).length === n0 + 1, fmt("%s produced after %d turns", city.name, want));
   let built = null;
   for (const army of game.sideArmies(g, side)) if (army.homeCity === city.index && army !== a) built = army;
@@ -223,7 +239,7 @@ function testTurnLoop(scenario) {
   const roundOf = g.turn;
   while (g.turn === roundOf) {
     ok(victim.alive, "a side with no cities is in play until the round ends");
-    game.endTurn(g);
+    endTurn(g);
   }
   ok(!victim.alive, "a side with no cities is eliminated as the round ends");
   eq(game.sideArmies(g, victim).length, 0, "the eliminated side's armies are gone");
@@ -234,7 +250,7 @@ function testTurnLoop(scenario) {
   const g2 = newGame(scenario, { seed: 6 });
   game.begin(g2);
   eq(g2.turn, 1, "the game starts on turn 1");
-  for (let i = 0; i < g2.sides.length; i++) game.endTurn(g2);
+  for (let i = 0; i < g2.sides.length; i++) endTurn(g2);
   eq(g2.turn, 2, "a full round advances the turn");
 }
 
@@ -252,12 +268,12 @@ function testVectoring(scenario) {
   game.vector(g, from, dest);
   const time = from.slots[0].time;
   const atDest = game.armiesAt(g, dest.x, dest.y).length;
-  for (let i = 0; i < (time + 2) * g.sides.length; i++) game.endTurn(g);
+  for (let i = 0; i < (time + 2) * g.sides.length; i++) endTurn(g);
   ok(game.armiesAt(g, dest.x, dest.y).length > atDest, "a vectored army arrives two turns after it is built");
   {
     // to the turn: the road moves before the cities build (6f8c:0000), so
     // the one sent this turn shows under "Turn after" and lands two turns on
-    const round = () => { for (let i = 0; i < g.sides.length; i++) game.endTurn(g); };
+    const round = () => { for (let i = 0; i < g.sides.length; i++) endTurn(g); };
     const onRoad = () => g.armies.filter((a) => a.transit && a.owner === side.index && a.transit.dest === dest.index);
     let sent = null;
     for (let i = 0; i < 10 && !sent; i++) {
@@ -359,7 +375,7 @@ function testReports(scenario) {
   game.setProduction(g, city, 0);
   city.countdown = 1;
   let turns = 0;
-  do { game.endTurn(g); turns++; } while (!(g.side === side || turns > 20));
+  do { endTurn(g); turns++; } while (!(g.side === side || turns > 20));
   ok(side.produced && side.produced.length >= 1, "the side's production is logged");
   if (side.produced && side.produced[0]) {
     eq(side.produced[0].city, city.index, "with the city that built it");
@@ -417,7 +433,7 @@ function testHistory(scenario) {
   history.deed(g, side, history.PEACE, 0, 1, "");
   eq(g.deeds[side.index].length, 2, "a higher type does not get in");
   let guard = 0;
-  while (g.turn < 3 && guard < 50) { game.endTurn(g); guard++; }
+  while (g.turn < 3 && guard < 50) { endTurn(g); guard++; }
   ok(g.history && g.history.length >= 1, "a record for the round");
   const r = g.history[0];
   eq(r.owners.length, g.map.cities.length, "every city's owner");
@@ -543,7 +559,7 @@ function testHeroItems(scenario) {
   city.countdown = 1;
   ok(game.vectorToStandard(g, city, side), "a city may vector to the standard");
   const before = game.armiesAt(g, fx, fy).length;
-  for (let i = 0; i < 3 * g.sides.length + 1; i++) game.endTurn(g);
+  for (let i = 0; i < 3 * g.sides.length + 1; i++) endTurn(g);
   ok(game.armiesAt(g, fx, fy).length > before, "a vectored army arrives at the standard");
   hero.takeItem(g, h, g.map.items[side.index]);
   eq(game.standardAt(g, side)[0], null, "a standard picked up is no longer planted");
@@ -1043,8 +1059,8 @@ function testAIGame(scenario, turns) {
   const ownedAtStart = {};
   for (const s of g.sides) ownedAtStart[s.index] = game.sideCities(g, s).length;
   while (side && g.turn <= turns) {
-    ai.runSync(ai.playTurn(g, side));
-    side = game.endTurn(g);
+    playAI(g, side);
+    side = endTurn(g);
   }
   ok(g.turn > turns || side == null, "the game ran to the turn limit");
   const perTile = {};
@@ -1358,7 +1374,10 @@ function testSites(scenario) {
       ok(s.allyType != null, "an ally ruin knows what joins");
       ok(g.types.byId[s.allyType] != null, "and it is a real army type");
     }
-    if (s.content !== site.TEMPLE) ok(s.guardian != null && s.guardian >= 1 && s.guardian <= 9, "a ruin has a guardian");
+    // an allies site keeps its allies' type where the guardian would be,
+    // and nothing guards it (66d4:0000, 6536:01ab)
+    if (s.content === site.ALLIES) eq(s.guardian, null, "nothing guards an allies ruin");
+    else if (s.content !== site.TEMPLE) ok(s.guardian != null && s.guardian >= 1 && s.guardian <= 9, "a ruin has a guardian");
   }
   eq(rich, Math.floor(g.map.sites.length * 3 / 10), "three in ten sites are rich");
   const placed = new Set();
@@ -1397,14 +1416,21 @@ function testSites(scenario) {
       eq(side.gold, gold0 + r.gold, "the gold was paid");
       eq(h.experience, 3, "searching is worth 3 experience");
     }
-    ok(ruin.searched, "a searched ruin is used up");
-    eq(site.search(g, [h], ruin.x, ruin.y), null, "and cannot be searched again");
+    if (r.kind === "gold") {
+      ok(ruin.searched, "a searched ruin is used up");
+      eq(site.search(g, [h], ruin.x, ruin.y), null, "and cannot be searched again");
+    } else {
+      ok(!ruin.searched, "a hero who dies leaves the ruin to be searched again");
+    }
   }
   const temple = g.map.sites.find((s) => s.content === site.TEMPLE && s.templeIndex === 0);
   if (temple) {
     const side = g.sides[0];
-    const a = { x: temple.x, y: temple.y, owner: side.index, type: 11, strength: 3 };
-    const r = site.search(g, [a], temple.x, temple.y);
+    const a = { x: temple.x, y: temple.y, owner: side.index, type: 11, strength: 3, moves: 0 };
+    eq(site.search(g, [a], temple.x, temple.y), null, "searching needs a move left (6536:0000)");
+    a.moves = 10;
+    const r = site.search(g, [a], temple.x, temple.y, true);
+    eq(r.kind, "temple", "with no hero a temple blesses at once, a human's too");
     eq(r.kind, "temple", "a temple blesses");
     eq(r.blessed, 1, "one army was blessed");
     eq(a.strength, 4, "the blessing adds a strength");
@@ -1417,8 +1443,8 @@ function testSites(scenario) {
   const strong = { strength: 9, items: [] }, weak = { strength: 1, items: [] };
   let survived = 0, died = 0;
   for (let i = 0; i < 400; i++) {
-    if (site.survivesGuardian(g, strong, [strong], 3)) survived++;
-    if (!site.survivesGuardian(g, weak, [weak], 8)) died++;
+    if (site.survivesGuardian(g, strong, 3)) survived++;
+    if (!site.survivesGuardian(g, weak, 8)) died++;
   }
   eq(survived, 400, "a strong hero always beats a weak guardian");
   ok(died > 0, "a weak hero sometimes dies to a strong one");
@@ -1441,7 +1467,7 @@ function testShips() {
   };
   const city = game.sideCities(g, side)[0];
   const sailor = mk(city.x, city.y, 2, { atSea: true, moves: 0 });
-  for (let i = 0; i < g.sides.length; i++) game.endTurn(g);
+  for (let i = 0; i < g.sides.length; i++) endTurn(g);
   ok(!sailor.atSea, "an army at sea in a city is ashore when its turn begins");
   eq(sailor.moves, sailor.maxMoves, "with its own movement, not the 20 at sea");
 
@@ -1783,10 +1809,10 @@ function testEndGame() {
   g6.diplomacy.state[doomed.index * 8 + other.index] = diplomacy.WAR;
   g6.diplomacy.state[other.index * 8 + doomed.index] = diplomacy.WAR;
   ok(game.sideArmies(g6, doomed).length > 0, "the doomed side still has armies");
-  game.endTurn(g6);
+  endTurn(g6);
   eq(g6.side, other, "a computer side with no city has no turn");
   ok(doomed.alive, "but it is not out before the round's end");
-  while (g6.turn === 1) game.endTurn(g6);
+  while (g6.turn === 1) endTurn(g6);
   ok(!doomed.alive, "the round's end puts it out");
   eq(game.sideArmies(g6, doomed).length, 0, "with all its armies");
   eq(doomed.gold, 0, "and no gold");
@@ -1803,15 +1829,15 @@ function testEndGame() {
   game.begin(g7);
   const me7 = g7.sides[g7.sides.length - 1];
   for (const c of game.sideCities(g7, me7)) c.ownerIndex = g7.sides[0].index;
-  for (let i = 1; i < g7.sides.length; i++) game.endTurn(g7);
+  for (let i = 1; i < g7.sides.length; i++) endTurn(g7);
   eq(g7.side, me7, "the human's turn comes round without a city");
   ok(me7.alive, "and it is still in the game");
-  game.endTurn(g7);
+  endTurn(g7);
   ok(!me7.alive, "the round's end puts it out");
   ok(me7.computer, "a fallen human is the computer's from then on");
   ok(g7.ending.noHumans, "the last human's fall is said");
   ok(g7.noHumansSaid, "once");
-  for (let i = 0; i < g7.sides.length; i++) game.endTurn(g7);
+  for (let i = 0; i < g7.sides.length; i++) endTurn(g7);
   ok(!(g7.ending && g7.ending.noHumans), "and only once");
   const g3 = newGame("ERYTHEA", { seed: 83 });
   for (const s of g3.sides) s.computer = false;
@@ -1862,7 +1888,7 @@ function testEndGame() {
 // The computer's neighbour table is shared by every game of a map, but each
 // game must read it as its own cities, not the first game's.
 function testNeighbourCache() {
-  console.log("neighbour table across games");
+  console.log("neighbour table");
   const g1 = newGame("ERYTHEA", { seed: 5 });
   const [first, firstDist] = aicore.neighbours(g1, g1.map.cities[0]);
   ok(first.length > 0, "a city has neighbours");
@@ -1927,7 +1953,7 @@ function testRandomMap() {
   const g = newGame("RANDOM", { seed: 4 });
   for (const s of g.sides) s.computer = true;
   let side = game.begin(g);
-  while (side && g.turn <= 6) { ai.runSync(ai.playTurn(g, side)); side = game.endTurn(g); }
+  while (side && g.turn <= 6) { playAI(g, side); side = endTurn(g); }
   eq(g.turn, 7, "the computer players play a random world");
   const text = saveMod.encode(g);
   randommap.install(DATA, make(8, [3, 3, 2, 3], false));
@@ -1942,7 +1968,7 @@ function testSave() {
   const q = quest;
   const g = newGame("ERYTHEA", { seed: 91, options: { quests: 1, diplomacy: 1 } });
   let side = game.begin(g);
-  while (side && g.turn <= 8) { ai.runSync(ai.playTurn(g, side)); side = game.endTurn(g); }
+  while (side && g.turn <= 8) { playAI(g, side); side = endTurn(g); }
   let h = null;
   for (const a of g.armies) if (a.type === armytype.HERO) h = a;
   ok(h != null, "the game has a hero to save");
@@ -1996,8 +2022,8 @@ function testSave() {
   const before = h2.turn;
   for (let i = 0; i < h2.sides.length * 2; i++) {
     if (!side2) break;
-    ai.runSync(ai.playTurn(h2, side2));
-    side2 = game.endTurn(h2);
+    playAI(h2, side2);
+    side2 = endTurn(h2);
   }
   ok(h2.turn > before, "the reloaded game plays on");
   // the Lua's file round trip is the browser's localStorage here: a save is
@@ -2169,7 +2195,7 @@ function testComputerPlayers() {
   let side = game.begin(g);
   while (side && g.turn <= 12) {
     if (side.computer) ai.runSync(ai.playTurn(g, side));
-    side = game.endTurn(g);
+    side = endTurn(g);
   }
   const grp = warlord.ai.groups[1];
   grp.active = 2; grp.target = 1; grp.rally = warlord.capital.index;
@@ -2341,6 +2367,224 @@ function testSound() {
   eq(cues.advisor(g, side, first), 54, "on a seventh turn, short of gold: VGOLD00");
 }
 
+// Rules checked against WARLORD2.EXE in web-verification.md, one by one.
+function testVerified() {
+  console.log("verified against the original");
+  const mk = (g, x, y, owner, type, extra) => {
+    const t = g.types.byId[type];
+    return game.addArmy(g, Object.assign({ x, y, owner, type, name: t.name, strength: t.strength,
+                                           maxMoves: t.move, moves: t.move, upkeep: 1 }, extra));
+  };
+
+  // the army table: the lowest free slot (1b62:0309), tiles read from the top
+  {
+    const g = newGame("ERYTHEA", { seed: 1 });
+    const n = g.armies.length;
+    const third = g.armies[2];
+    removeArmy(g, third);
+    const a = mk(g, 0, 0, 0, 11);
+    eq(a.slot, 2, "a new army takes the lowest free slot");
+    eq(g.armies.indexOf(a), 2, "and stands in slot order");
+    eq(g.armies.length, n, "the table is as long as before");
+    const b = mk(g, 0, 0, 0, 11);
+    eq(game.armiesAt(g, 0, 0)[0], b, "a tile is read from the top of the table down");
+  }
+
+  // P1: the production nudges are dice(1,100) < p
+  {
+    const r = new Rng(3);
+    let hits = 0;
+    for (let i = 0; i < 20000; i++) if (r.chance(10)) hits++;
+    ok(hits > 20000 * 0.08 && hits < 20000 * 0.10, "chance(10) is 9 in 100: " + hits);
+    const t = new Rng(1);
+    let never = true;
+    for (let i = 0; i < 5000; i++) if (t.chance(1)) never = false;
+    ok(never, "chance(1) never comes up");
+  }
+
+  // P2, P3, P5: no spilling round a full city; a city that cannot build
+  // goes idle; a human's city that builds starts the next
+  {
+    const g = newGame("ERYTHEA", { seed: 2 });
+    const side = game.begin(g);
+    const city = side.capital;
+    game.setProduction(g, city, 0);
+    city.countdown = 1;
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      while (game.armiesAt(g, city.x + dx, city.y + dy).length < 8) mk(g, city.x + dx, city.y + dy, side.index, 11);
+    }
+    const n = g.armies.length;
+    side.productionDue = true;
+    g.turn = 2;
+    game.humanProduction(g, side);
+    eq(g.armies.length, n, "a full city builds nothing: no spilling round it");
+    eq(city.countdown, 0, "its countdown stays at 0");
+    eq(game.producing(city), false, "and it is idle");
+    for (const a of game.armiesAt(g, city.x + 1, city.y + 1)) removeArmy(g, a);
+    side.productionDue = true;
+    game.humanProduction(g, side);
+    eq(g.armies.length, n - 8, "an idle city does not try again");
+    game.setProduction(g, city, 0);
+    city.countdown = 1;
+    side.productionDue = true;
+    game.humanProduction(g, side);
+    eq(g.armies.length, n - 7, "set again, it builds");
+    eq(game.armiesAt(g, city.x + 1, city.y + 1).length, 1, "on the tile with room");
+    eq(city.countdown, city.slots[0].time, "and starts the next (6f8c:06bd)");
+    const built = game.armiesAt(g, city.x + 1, city.y + 1)[0];
+    eq(built.moves, built.maxMoves, "a new army has its full move (6f8c:0dd7)");
+  }
+
+  // P7: the city's tiles fill x first
+  {
+    const g = newGame("ERYTHEA", { seed: 2 });
+    const city = g.map.cities[0];
+    for (const a of g.armies.slice()) if (a.x >= city.x && a.x <= city.x + 1 && a.y >= city.y && a.y <= city.y + 1) removeArmy(g, a);
+    for (let i = 0; i < 8; i++) mk(g, city.x, city.y, 0, 11);
+    const [x, y] = game.freeTileIn(g, city, false);
+    eq(x, city.x + 1, "after (x,y) comes (x+1,y)");
+    eq(y, city.y, "on the same row");
+  }
+
+  // T1: Random Turns shuffles the order at each round's end
+  {
+    const g = newGame("ERYTHEA", { seed: 4, options: { randomTurns: 1 } });
+    for (const s of g.sides) s.computer = true;
+    let side = game.begin(g);
+    let shuffled = false;
+    while (side && g.turn <= 6) {
+      if (g.turnOrder.join() !== "0,1,2,3,4,5,6,7") shuffled = true;
+      eq(side.index, g.turnOrder[g.orderAt], "the side to play is the order's");
+      side = game.endTurn(g);
+    }
+    ok(shuffled, "with Random Turns the order is shuffled (8065:1732)");
+    eq([...g.turnOrder].sort().join(), "0,1,2,3,4,5,6,7", "it is still every side once");
+    const g2 = newGame("ERYTHEA", { seed: 4 });
+    game.begin(g2);
+    for (let i = 0; i < 30; i++) game.endTurn(g2);
+    eq(g2.turnOrder.join(), "0,1,2,3,4,5,6,7", "without it the order stays");
+  }
+
+  // C7: a neutral city that beats off an attack builds, Neutral Cities >= 2
+  {
+    const g = newGame("ERYTHEA", { seed: 5, options: { neutralCities: 2 } });
+    const side = game.begin(g);
+    const city = g.map.cities.find((c) => c.ownerIndex == null && c.slots.length > 0);
+    for (const a of game.armiesAt(g, city.x, city.y)) a.strength = 9;
+    const weak = mk(g, city.x - 1, city.y, side.index, 11, { strength: 1 });
+    const r = game.decideAttack(g, [weak], city.x, city.y);
+    ok(city.attacked & (1 << side.index), "an attacked city is marked (67cc:02b1)");
+    if (!r.won) {
+      game.applyAttack(g, r);
+      const before = game.armiesAt(g, city.x, city.y).length;
+      for (let i = 0; i < 12 * g.sides.length; i++) endTurn(g);
+      ok(game.armiesAt(g, city.x, city.y).length > before, "the neutral city builds (6bd8:025a)");
+      ok(game.armiesAt(g, city.x, city.y).length <= 4 || before >= 4, "while its tile holds fewer than 4");
+    }
+  }
+
+  // C10: a medal now and then for a hero's stack that wins
+  {
+    let medals = 0;
+    for (let seed = 1; seed <= 60 && medals === 0; seed++) {
+      const g = newGame("ERYTHEA", { seed });
+      const side = game.begin(g);
+      const city = g.map.cities.find((c) => c.ownerIndex == null);
+      for (const a of game.armiesAt(g, city.x, city.y)) a.strength = 1;
+      while (game.armiesAt(g, city.x, city.y).length < 2) mk(g, city.x, city.y, undefined, 11, { strength: 1 });
+      const stack = [mk(g, city.x - 1, city.y, side.index, armytype.HERO, { strength: 9 }),
+                     mk(g, city.x - 1, city.y, side.index, 11, { strength: 9 }),
+                     mk(g, city.x - 1, city.y, side.index, 11, { strength: 9 })];
+      const r = game.applyAttack(g, game.decideAttack(g, stack, city.x, city.y));
+      if (r.medal) {
+        medals++;
+        eq(r.medal.medals, 1, "a first medal");
+        ok(r.medal.type !== armytype.HERO, "for an ordinary army, not the hero");
+      }
+    }
+    ok(medals > 0, "a hero's stack wins medals (67cc:2274)");
+  }
+
+  // S1: nothing guards an allies ruin
+  {
+    let tried = false;
+    for (let seed = 1; seed <= 20 && !tried; seed++) {
+      const g = newGame("ERYTHEA", { seed });
+      const side = game.begin(g);
+      const s = g.map.sites.find((x) => x.content === site.ALLIES);
+      if (!s) continue;
+      tried = true;
+      const h = mk(g, s.x, s.y, side.index, armytype.HERO, { strength: 1 });
+      const r = site.search(g, [h], s.x, s.y, false);
+      eq(r.kind, "allies", "a hero always comes out of an allies ruin with allies");
+      ok(g.armies.includes(h), "alive");
+    }
+    ok(tried, "found an allies ruin");
+  }
+
+  // Q1, Q4: a computer's quest types; Archons for a reward
+  {
+    const g = newGame("ERYTHEA", { seed: 8, options: { quests: 1 } });
+    const side = game.begin(g);
+    const h = mk(g, side.capital.x, side.capital.y, side.index, armytype.HERO);
+    const seen = new Set();
+    for (let i = 0; i < 40; i++) {
+      side.quest = undefined;
+      seen.add(quest.assign(g, side, h, true).type);
+    }
+    ok([...seen].every((t) => [quest.OCCUPY, quest.RAZE, quest.SLAUGHTER, quest.PILLAGE_GOLD].includes(t)),
+       "a computer only gets occupy, raze, slaughter or gold (quest_assign(1))");
+    let archons = false;
+    for (let i = 0; i < 60 && !archons; i++) {
+      side.gold = 500;
+      const r = quest.reward(g, side, { hero: h });
+      if (r.kind === "allies") { archons = true; eq(r.type.id, quest.REWARD_ALLY, "a quest's allies are Archons"); }
+    }
+    ok(archons, "a quest can give allies");
+  }
+
+  // H1: no hero once the surrender has been offered
+  {
+    const g = newGame("ERYTHEA", { seed: 9 });
+    const side = game.begin(g);
+    g.surrenderOffered = true;
+    side.gold = 100000;
+    let any = false;
+    for (let i = 0; i < 50; i++) if (hero.offer(g, side)) any = true;
+    ok(!any, "no hero offers itself after the surrender is offered");
+  }
+
+  // M1: a cached route is taken by a stack standing on it
+  {
+    const g = newGame("ERYTHEA", { seed: 1 });
+    const side = game.begin(g);
+    const a = game.sideArmies(g, side)[0];
+    const far = g.map.cities.find((c) => movement.distance(c.x, c.y, a.x, a.y) > 20);
+    const p1 = movement.findPath(g, [a], a.x, a.y, far.x, far.y);
+    ok(p1 && p1.length > 3, "a long route");
+    const cached = g.pathCache.some((e) => e && e.dx === far.x && e.dy === far.y);
+    ok(cached, "is kept (1555:16f0)");
+    const mid = p1[2];
+    const p2 = movement.findPath(g, [a], mid.x, mid.y, far.x, far.y);
+    eq(p2.length, p1.length - 3, "from a tile on it the rest of it is taken");
+    ok(p2.every((s, i) => s.x === p1[i + 3].x && s.y === p1[i + 3].y), "step for step");
+  }
+
+  // A1: the computer's flood goes no further than its rounds
+  {
+    const g = newGame("ERYTHEA", { seed: 1 });
+    const c = g.map.cities[0];
+    const f = aicore.floodFrom(g, 0, c.x, c.y, 5, null, null);
+    let beyond = false;
+    for (let y = 0; y < g.map.height; y++) {
+      for (let x = 0; x < g.map.width; x++) {
+        if (Math.max(Math.abs(x - c.x), Math.abs(y - c.y)) > 5 && aicore.floodAt(f, x, y) !== aicore.UNREACHED) beyond = true;
+      }
+    }
+    ok(!beyond, "a flood of 5 rounds reaches no further than 5 (1555:0373)");
+  }
+}
+
 // --------------------------------------------------------------------- main
 
 if (!vfs.exists(DATA + "/TERRAIN0/ARMYTYPE.DAT")) {
@@ -2390,6 +2634,7 @@ testComputerPlayers();
 testAIGame("TUTORIA", 30);
 testAIGame("ERYTHEA", 25);
 if (vfs.exists(DATA + "/TUTORIA/TUTORIA.SCN")) testTutorialHero();
+testVerified();
 testSound();
 
 console.log(fmt("\n%d passed, %d failed", passed, failed));

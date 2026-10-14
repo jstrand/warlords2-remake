@@ -181,7 +181,7 @@ end
 --- What the city is building and how long it has to go, as the Production
 --- and Vector modes both write it: "%dt", or "-" when it builds nothing.
 local function countdown(city)
-  if city.producing then return ("%dt"):format(city.countdown or 0) end
+  if game.producing(city) then return ("%dt"):format(city.countdown or 0) end
   return "-"
 end
 
@@ -197,7 +197,7 @@ local function drawProduction(d)
   if cap then smallShield(cap, 312, 110) end
   love.graphics.setColor(1, 1, 1)
   kit.right(f, kit.text(S_CURRENT, 0), 408, 110)
-  local building = city.producing and city.slots[city.producing]
+  local building = game.producing(city) and city.slots[city.producing]
   kit.army(building and building.type, owner, 416, 104, 1)
   local text = countdown(city)
   love.graphics.setColor(1, 1, 1)
@@ -249,10 +249,10 @@ local function drawVector(d)
   local owner = city.ownerIndex or 8
   love.graphics.setColor(1, 1, 1)
   kit.right(f, kit.text(S_VECTOR, 0), 360, 109)
-  local building = city.producing and city.slots[city.producing]
+  local building = game.producing(city) and city.slots[city.producing]
   kit.army(building and building.type, owner, 368, 103, 1)
   love.graphics.setColor(1, 1, 1)
-  f.draw(city.producing and kit.text(S_VECTOR, 1):format(city.countdown or 0) or "-", 408, 109)
+  f.draw(game.producing(city) and kit.text(S_VECTOR, 1):format(city.countdown or 0) or "-", 408, 109)
 
   local out, onRoad, next, after = nil, nil, {}, {}
   for _, a in ipairs(G.g.armies) do
@@ -312,7 +312,7 @@ local function refresh(d)
     for i = 0, 3 do shown[SLOT_FIRST + i] = true; st[SLOT_FIRST + i] = uidata.NORMAL end
     shown[DONE_PROD], st[DONE_PROD] = true, uidata.NORMAL
     shown[STOP] = true
-    st[STOP] = d.city.producing and uidata.NORMAL or uidata.DISABLED
+    st[STOP] = game.producing(d.city) and uidata.NORMAL or uidata.DISABLED
   else
     shown[DONE], st[DONE] = true, uidata.NORMAL
   end
@@ -325,7 +325,7 @@ local function refresh(d)
     shown[all], st[all] = true, uidata.NORMAL
     local send = d.sub == 1 and V_SEND_LIT or V_SEND
     shown[send] = true
-    st[send] = (d.sub == 1 or d.city.producing) and uidata.NORMAL or uidata.DISABLED
+    st[send] = (d.sub == 1 or game.producing(d.city)) and uidata.NORMAL or uidata.DISABLED
     local move = d.sub == 2 and V_MOVE_LIT or V_MOVE
     shown[move] = true
     st[move] = (d.sub == 2 or #game.vectoredTo(G.g, d.city) > 0)
@@ -352,7 +352,7 @@ function M.open(city, mode)
     if m ~= M.INFO and city.ownerIndex ~= G.player.index then m = M.INFO end
     -- 7204:0000: going into Production chooses what the city builds now
     if m == M.PRODUCTION and d.mode ~= M.PRODUCTION then
-      local b = city.producing and city.slots[city.producing]
+      local b = game.producing(city) and city.slots[city.producing]
       d.chosen = b and b.type or nil
     end
     d.mode = m
@@ -490,7 +490,7 @@ function M.open(city, mode)
   --- building, four to a city at most, and this city itself lifts the
   --- vector (7087:028b).
   function d.sendTo(mx, my)
-    if not city.producing then return end
+    if not game.producing(city) then return end
     local target = game.nearestCity(G.g, mx, my, G.player)
     if not target then return end
     local sx, sy = game.standardAt(G.g, G.player)

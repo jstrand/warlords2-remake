@@ -49,17 +49,38 @@ std::pair<std::string, bool> rollName(Game& g, const Side& side);
 /** Does a hero offer itself to `side` this turn, and at what price? None when
  *  none does (hero_offer_check, 7563:0000). */
 std::shared_ptr<HeroOffer> offer(Game& g, Side& side);
-/** The allies a hired hero brings: 1-3 of one random magical type. */
+/** A random magical army type (random_magical_type, 7563:1a9b): the types
+ *  are counted in id order, 0-27; Dragons (25) when there is none. */
+const ArmyType* magicalType(Game& g);
+/** The allies a hired hero brings (hero_brings_allies, 7563:01fc): 1-3 of one
+ *  random magical type. */
 std::pair<const ArmyType*, int> allies(Game& g);
 /** One ally army, as create_ally_army (6536:12e6) builds it: moves full, no
- *  upkeep. */
-Army newAlly(const ArmyType* type, int x, int y, int owner, int homeCity);
-/** Hire the offered hero: the hero and its allies (hero_recruit, 7563:031b). */
-std::pair<Army*, std::vector<Army*>> recruit(Game& g, Side& side, const HeroOffer& off);
+ *  upkeep, home city 0. */
+Army newAlly(const ArmyType* type, int x, int y, int owner);
+/** Put an ally of the side's near (x, y) (create_ally_army, 6536:12e6): on
+ *  the tile if it has room and no other side's army, else a random step
+ *  from there and try again, ten tries in all. Null when none of the tries
+ *  had room -- the ally is lost. */
+Army* placeAlly(Game& g, const ArmyType* type, int x, int y, const Side& side);
+/** A hired hero, and the allies it brought: their type, how many came, and
+ *  those that found room. */
+struct Recruited {
+  Army* hero = nullptr;
+  std::vector<Army*> allies;
+  const ArmyType* type = nullptr;
+  int count = 0;
+};
+/** Hire the offered hero (hero_recruit, 7563:031b). The hero stands on the
+ *  city's first tile with room, or on a free tile round it -- or, with none,
+ *  on the last one tried. Its allies stand with it. */
+Recruited recruit(Game& g, Side& side, const HeroOffer& off);
 /** Give a hero experience, capped at 60. */
 void addExperience(Game& g, Army* h, int n);
-/** Promote a side's heroes, one step each (hero_check_promotions, 7563:0579). */
-std::vector<Army*> checkPromotions(Game& g, const Side& side);
+/** Promote a side's heroes, one step each (hero_check_promotions, 7563:0579;
+ *  hero_promote, 7563:0672): +1 strength (9 at most) and +2 to the maximum
+ *  move. Returns each hero and the strength it really gained. */
+std::vector<Promotion> checkPromotions(Game& g, const Side& side);
 /** Award experience after a battle. **Original bug**: a surviving defending
  *  hero is credited only when the attacker at the same place in the line is
  *  a hero (67cc:0c8e). */
@@ -73,8 +94,10 @@ void dropItem(Game& g, Army* h, Item* it);
 /** Pick an item up off the hero's tile (7563:08c7). */
 void takeItem(Game& g, Army* h, Item* it);
 /** A dead hero drops everything it carried where it fell -- lost on water
- *  (hero_drop_items, 67cc:16cd). */
-std::vector<Item*> dropItems(Game& g, Army* h, int x, int y);
+ *  (hero_drop_items, 67cc:16cd). When the item is the current player's
+ *  standard (item number = side), that side's cities stop vectoring to it.
+ *  `cur` is the current player, g.side's when NONE. */
+std::vector<Item*> dropItems(Game& g, Army* h, int x, int y, int cur = NONE);
 
 }  // namespace hero
 }  // namespace w2

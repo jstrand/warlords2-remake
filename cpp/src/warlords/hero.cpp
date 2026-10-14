@@ -76,6 +76,8 @@ std::shared_ptr<HeroOffer> offer(Game& g, Side& side) {
     o.female = f;
     return std::make_shared<HeroOffer>(o);
   };
+  // none at all once the surrender has been offered (7563:0000)
+  if (g.surrenderOffered) return nullptr;
   if (g.turn == 1) return named(HeroOffer{0, side.capital, true, "", false});
 
   auto [all, mine] = countHeroes(g, &side);
@@ -95,34 +97,58 @@ std::shared_ptr<HeroOffer> offer(Game& g, Side& side) {
   return named(HeroOffer{price, city, false, "", false});
 }
 
-std::pair<const ArmyType*, int> allies(Game& g) {
-  std::vector<const ArmyType*> magical;
-  for (auto* a : g.types.list()) if (a->bonus[48] != 0) magical.push_back(a);
-  const ArmyType* type = g.rng.pick(magical, (const ArmyType*)nullptr);
-  if (!type) {
-    for (auto* a : g.types.list()) if (contains(a->name, "Dragon")) type = a;
+const ArmyType* magicalType(Game& g) {
+  std::vector<int> ids;
+  for (int id = 0; id <= 27; id++) {
+    const ArmyType* t = g.types.byId(id);
+    if (t && t->bonus[48] != 0) ids.push_back(id);
   }
+  int n = g.rng.dice(1, (int)ids.size(), -1);
+  return g.types.byId(n >= 0 && n < (int)ids.size() ? ids[n] : 25);
+}
+
+std::pair<const ArmyType*, int> allies(Game& g) {
+  const ArmyType* type = magicalType(g);
   int roll = g.rng.dice(1, 100, 0);
   int n = roll < 70 ? 1 : roll < 95 ? 2 : 3;
   return {type, n};
 }
 
-Army newAlly(const ArmyType* type, int x, int y, int owner, int homeCity) {
+Army newAlly(const ArmyType* type, int x, int y, int owner) {
   Army a;
   a.x = x; a.y = y; a.owner = owner;
   a.type = type->id; a.name = type->name;
   a.strength = type->strength;
   a.maxMoves = type->move; a.moves = type->move;
   a.upkeep = 0;
-  a.homeCity = homeCity;
+  a.homeCity = 0;
   return a;
 }
 
-std::pair<Army*, std::vector<Army*>> recruit(Game& g, Side& side, const HeroOffer& off) {
+Army* placeAlly(Game& g, const ArmyType* type, int x, int y, const Side& side) {
+  int px = x, py = y;
+  for (int tries = 10; tries > 0; tries--) {
+    if (px >= 0 && py >= 0 && px < g.map->width && py < g.map->height) {
+      auto here = game::armiesAt(g, px, py);
+      if (here.size() < 8 && (here.empty() || here[0]->owner == side.index)) {
+        return g.add(newAlly(type, px, py, side.index));
+      }
+    }
+    px += g.rng.dice(1, 3, -2);
+    py += g.rng.dice(1, 3, -2);
+  }
+  return nullptr;
+}
+
+Recruited recruit(Game& g, Side& side, const HeroOffer& off) {
   City* city = off.city;
   side.gold = std::max(0, side.gold - off.price);
-  auto [hx, hy] = game::freeTileIn(g, *city, true);
-  if (hx == NONE) { hx = city->x; hy = city->y; }
+  std::pair<int, int> last{NONE, NONE};
+  auto [hx, hy] = game::freeTileIn(g, *city, true, &last);
+  if (hx == NONE) {
+    hx = last.first != NONE ? last.first : city->x;
+    hy = last.second != NONE ? last.second : city->y;
+  }
 
   Army h;
   h.x = hx; h.y = hy; h.owner = side.index; h.type = armytype::HERO;
@@ -140,37 +166,39 @@ std::pair<Army*, std::vector<Army*>> recruit(Game& g, Side& side, const HeroOffe
       h.items.push_back(std);
     }
   }
-  Army* hp = g.add(h);
-  history::deed(g, &side, history::EMERGES, city->index, 0, hp->name);     // 7563:04e7
+  Recruited out;
+  out.hero = g.add(h);
+  history::deed(g, &side, history::EMERGES, city->index, 0, out.hero->name);     // 7563:04e7
 
-  std::vector<Army*> out;
   if (!off.first) {
     auto [type, n] = allies(g);
+    out.type = type; out.count = n;
     for (int i = 0; i < n; i++) {
-      auto [ax, ay] = game::freeTileIn(g, *city, true);
-      Army* a = g.add(newAlly(type, ax != NONE ? ax : hx, ay != NONE ? ay : hy, side.index, city->index));
-      out.push_back(a);
+      Army* a = placeAlly(g, type, hx, hy, side);
+      if (a) out.allies.push_back(a);
     }
   }
-  return {hp, out};
+  return out;
 }
 
 void addExperience(Game& g, Army* h, int n) {
   h->experience = std::min(rules::MAX_HERO_XP, h->experience + n);
 }
 
-std::vector<Army*> checkPromotions(Game& g, const Side& side) {
-  std::vector<Army*> promoted;
-  for (Army* a : g.armies) {
+std::vector<Promotion> checkPromotions(Game& g, const Side& side) {
+  std::vector<Promotion> promoted;
+  for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
+    Army* a = g.armies[i];
     if (a->type == armytype::HERO && a->owner == side.index) {
       int level = a->level ? a->level : 1;
       int need = promotionAt(level);
       if (need != NONE && a->experience >= need) {
+        int before = a->strength;
         a->level = level + 1;
-        a->strength = std::min(MAX_STRENGTH, a->strength + 1);
+        a->strength = std::min(MAX_STRENGTH, before + 1);
         a->maxMoves += PROMOTION_MOVES;
         a->title = levelName(a->level);
-        promoted.push_back(a);
+        promoted.push_back(Promotion{a, a->strength - before});
       }
     }
   }
@@ -223,21 +251,22 @@ void takeItem(Game& g, Army* h, Item* it) {
   h->items.push_back(it);
 }
 
-std::vector<Item*> dropItems(Game& g, Army* h, int x, int y) {
+std::vector<Item*> dropItems(Game& g, Army* h, int x, int y, int cur) {
   std::vector<Item*> dropped;
   if (h->items.empty()) return dropped;
+  if (cur == NONE && g.side) cur = g.side->index;
   bool drowned = scn::terrainAt(*g.map, x, y) == move::WATER;
   for (Item* it : h->items) {
+    it->planted = false;
     if (drowned) {
       it->status = 0; it->x = NONE; it->y = NONE;
     } else {
       it->status = 1; it->x = x; it->y = y;
       dropped.push_back(it);
     }
-    // cities vectoring to a lost standard stop doing so
-    if (it->standardOf != NONE) {
+    if (cur != NONE && it->index == cur) {
       for (auto& c : g.map->cities) {
-        if (c.vectorTo == -2 && c.ownerIndex == it->standardOf) c.vectorTo = NONE;
+        if (c.vectorTo == -2 && c.ownerIndex == cur) c.vectorTo = NONE;
       }
     }
   }

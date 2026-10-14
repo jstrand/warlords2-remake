@@ -20,13 +20,32 @@ game.STANDARD = STANDARD_DEST
 
 local function key(g, x, y) return y * g.map.width + x end
 
---- Every army standing on a tile (in transit armies are nowhere).
+--- Every army standing on a tile (in transit armies are nowhere), the army
+--- table walked from the top down as armies_at_tile (1b62:007d) walks it.
 function game.armiesAt(g, x, y)
   local out = {}
-  for _, a in ipairs(g.armies) do
+  for i = #g.armies, 1, -1 do
+    local a = g.armies[i]
     if not a.transit and a.x == x and a.y == y then out[#out + 1] = a end
   end
   return out
+end
+
+--- Put an army in the army table (1b62:0309): it takes the lowest slot no
+--- army holds, and g.armies stays in slot order, so a scan from the end is
+--- the original's scan from the top down.
+function game.addArmy(g, army)
+  local used = {}
+  for _, a in ipairs(g.armies) do
+    if a.slot then used[a.slot] = true end
+  end
+  local slot = 0
+  while used[slot] do slot = slot + 1 end
+  army.slot = slot
+  local i = #g.armies + 1
+  while i > 1 and (g.armies[i - 1].slot or 0) > slot do i = i - 1 end
+  table.insert(g.armies, i, army)
+  return army
 end
 
 --- The city standing on a tile, anywhere in its 2x2 footprint.
@@ -69,30 +88,32 @@ function game.itemBonus(g, side, itemType)
   return total
 end
 
---- A tile in the city with room for another army: the four tiles of its
---- footprint in order, then -- if `spill` is set -- up to 20 tries on a random
---- tile within one step of it. Returns x, y or nil.
--- FUN_6f8c_0bff, the guard on every army the game places in a city.
+--- A tile in the city with room for another army (6f8c:0bff): the four tiles
+--- of its footprint in the order (x,y), (x+1,y), (x,y+1), (x+1,y+1)
+--- (DS:0e54/0e5c); then -- if `spill` -- up to 20 random tries within one
+--- step for a tile no army stands on. Returns x, y; or nil, nil, lx, ly with
+--- the last tile tried, where hero_recruit puts its hero regardless.
+local CITY_TILES = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }
+
 function game.freeTileIn(g, city, spill)
-  for dx = 0, 1 do
-    for dy = 0, 1 do
-      local x, y = city.x + dx, city.y + dy
-      if x < g.map.width and y < g.map.height
-         and #game.armiesAt(g, x, y) < rules.MAX_STACK then
-        return x, y
-      end
-    end
-  end
-  if not spill then return nil end
-  for _ = 1, 20 do
-    local x = city.x + g.rng:dice(1, 3, -2)
-    local y = city.y + g.rng:dice(1, 3, -2)
-    if x >= 0 and y >= 0 and x < g.map.width and y < g.map.height
+  for _, d in ipairs(CITY_TILES) do
+    local x, y = city.x + d[1], city.y + d[2]
+    if x < g.map.width and y < g.map.height
        and #game.armiesAt(g, x, y) < rules.MAX_STACK then
       return x, y
     end
   end
-  return nil
+  if not spill then return nil end
+  local lx, ly
+  for _ = 1, 20 do
+    local x = city.x + g.rng:dice(1, 3, -2)
+    local y = city.y + g.rng:dice(1, 3, -2)
+    if x >= 0 and y >= 0 and x < g.map.width and y < g.map.height then
+      lx, ly = x, y
+      if #game.armiesAt(g, x, y) == 0 then return x, y end
+    end
+  end
+  return nil, nil, lx, ly
 end
 
 --------------------------------------------------------------------- economy
@@ -121,33 +142,40 @@ end
 --------------------------------------------------------------------- setup
 
 local function placeArmy(g, army)
-  g.armies[#g.armies + 1] = army
-  return army
+  return game.addArmy(g, army)
 end
 
---- One starting army per city (docs/rules.md > Starting garrisons).
-local function setupGarrisons(g)
-  for _, c in ipairs(g.map.cities) do
-    local owned = c.ownerIndex ~= nil
-    local level = rules.garrisonLevel(owned, g.map.options.neutralCities, g.rng)
-    local slot
-    if level and #c.slots > 0 then
-      local side = owned and g.map.sides[c.ownerIndex + 1] or nil
-      slot = rules.bestSlot(c.slots, rules.GARRISON_PURPOSE[level], g.types,
-                            side and side.enhanced)
-    end
-    if slot then
-      local a = rules.armyFromSlot(slot, owned and g.map.sides[c.ownerIndex + 1].enhanced)
-      a.x, a.y, a.owner, a.moves, a.homeCity = c.x, c.y, c.ownerIndex, 0, c.index
+--- The side whose turn it is while the game is set up: the scenario's own
+--- current player (.SCN 0x110), 0 in every shipped scenario. Its Enhanced flag
+--- is the one best_production_for and city_produce_army read.
+game.SETUP_PLAYER = 0
 
-      placeArmy(g, a)
-    else
-      -- Neutral Cities off: a placeholder Scouts army of strength 1.
-      local a = g.types.byId[armytype.SCOUTS]
-      placeArmy(g, {
-        x = c.x, y = c.y, owner = nil, type = armytype.SCOUTS, name = a.name,
-        strength = 1, maxMoves = a.move, moves = 0, upkeep = 0, homeCity = c.index,
-      })
+--- One starting army per city (setup_garrisons, 6bd8:00cc), the last city
+--- first (docs/rules.md > Starting garrisons).
+local function setupGarrisons(g)
+  local setup = g.map.sides[game.SETUP_PLAYER + 1]
+  local enhanced = setup and setup.enhanced and true or false
+  for i = #g.map.cities, 1, -1 do
+    local c = g.map.cities[i]
+    if not c.razed then
+      local owned = c.ownerIndex ~= nil
+      local level = rules.garrisonLevel(owned, g.map.options.neutralCities, g.rng)
+      local slot
+      if level and #c.slots > 0 then
+        slot = rules.bestSlot(c.slots, rules.GARRISON_PURPOSE[level], g.types, enhanced)
+      end
+      if slot then
+        local a = rules.armyFromSlot(slot, enhanced)
+        a.x, a.y, a.owner, a.moves, a.homeCity = c.x, c.y, c.ownerIndex, 0, c.index
+        placeArmy(g, a)
+      else
+        -- Neutral Cities off: a placeholder Scouts army of strength 1.
+        local a = g.types.byId[armytype.SCOUTS]
+        placeArmy(g, {
+          x = c.x, y = c.y, owner = nil, type = armytype.SCOUTS, name = a.name,
+          strength = 1, maxMoves = a.move, moves = 0, upkeep = 0, homeCity = c.index,
+        })
+      end
     end
   end
 end
@@ -268,8 +296,13 @@ function game.new(dataDir, scenario, opts)
   -- diplomatic score (59bf:084d, 623c:010b, 79fa:0000)
   require("warlords.ai").startGame(g)
 
+  -- the turn order (.SCN 0x163), as the scenario gives it; Random Turns
+  -- shuffles it at each round's end (turn_order, 8065:1732)
+  g.turnOrder = { 0, 1, 2, 3, 4, 5, 6, 7 }
+  g.orderAt = -1            -- the place in it of the side to play, from 0
   g.current = 1             -- index into g.sides
   g.side = g.sides[1]
+  g.pathCache = move.newPathCache()
   return g
 end
 
@@ -297,12 +330,11 @@ local function eliminate(g, side, boxed)
   side.gold = 0
   local diplomacy = require("warlords.diplomacy")
   if g.diplomacy then
+    -- every pair with the fallen side, its pair with itself too (8065:18ab)
     for o = 0, 7 do
-      if o ~= side.index then
-        for _, k in ipairs({ side.index * 8 + o, o * 8 + side.index }) do
-          g.diplomacy.state[k] = diplomacy.INTERMEDIATE
-          g.diplomacy.proposal[k] = diplomacy.INTERMEDIATE
-        end
+      for _, k in ipairs({ side.index * 8 + o, o * 8 + side.index }) do
+        g.diplomacy.state[k] = diplomacy.INTERMEDIATE
+        g.diplomacy.proposal[k] = diplomacy.INTERMEDIATE
       end
     end
   end
@@ -333,12 +365,16 @@ local function applyIncome(g, side)
   side.gold = math.max(0, side.gold + side.income - side.upkeepTotal)
 end
 
---- Place a produced army, or send it back. Returns the army, or nil if it was
---- disbanded. docs/rules.md > Start of a side's turn, step 5.
+--- Place an army arriving from the road (6f8c:0123), or send it back; nil if
+--- it was disbanded. It needs room on one of the city's four tiles -- there is
+--- no spilling round a full city -- and the city must still be the side's
+--- (6f8c:0d4f). One sent back that fails again, at home, is disbanded. It
+--- keeps the moves it set off with. docs/rules.md > Start of a side's turn,
+--- step 5.
 local function deliver(g, army, city)
-  local x, y = game.freeTileIn(g, city, true)
+  local x, y = game.freeTileIn(g, city, false)
   if not x or city.ownerIndex ~= army.owner then
-    if army.returning then
+    if army.returning or army.homeCity == city.index then
       return nil                      -- already heading home: disbanded
     end
     local home = g.map.cities[army.homeCity + 1]
@@ -347,22 +383,26 @@ local function deliver(g, army, city)
     return army
   end
   army.x, army.y, army.transit, army.returning = x, y, nil, nil
-  army.moves = 0
   return army
 end
 
---- Step 5: run every producing city the side owns.
+--- Step 5: city_production_turn (6f8c:0000). The armies on the road move on
+--- first, from the top of the army table down; then each city counts down,
+--- and only while its countdown is above 0 (6f8c:04f3): one that reaches 0
+--- builds if the side has gold and the army has room on the city's own four
+--- tiles (or goes vectored), and otherwise stays at 0 -- idle until its
+--- production is set again. A new army has its full move (6f8c:0dd7).
+--- Whether the city starts the next one is the caller's: a human's do
+--- (6f8c:06bd), a computer's wait for its AI.
 ---
 --- What happened is logged in `side.produced`, for the Production report:
 --- the armies that arrived from vectoring this turn, then each army built,
---- kept at home or sent on its way -- the log city_production_turn
---- (6f8c:0000) keeps, in its order.
+--- kept at home or sent on its way -- the log city_production_turn keeps,
+--- in its order. Returns the built ones.
 local function runProduction(g, side)
   local arrived, built = {}, {}
-  -- The armies on the road move on first, then the cities build
-  -- (6f8c:0000), so one sent this turn is not counted down until the next:
-  -- it arrives two turns later.
-  for _, a in ipairs(g.armies) do
+  for i = #g.armies, 1, -1 do
+    local a = g.armies[i]
     if a.transit and a.owner == side.index then
       a.transit.turns = a.transit.turns - 1
       if a.transit.turns <= 0 then
@@ -374,7 +414,7 @@ local function runProduction(g, side)
           local sx, sy = game.standardAt(g, side)
           a.transit = nil
           if sx and #game.armiesAt(g, sx, sy) < rules.MAX_STACK then
-            a.x, a.y, a.moves, a.returning = sx, sy, 0, nil
+            a.x, a.y, a.returning = sx, sy, nil
             arrived[#arrived + 1] = { kind = "arrived", type = a.type, standard = true }
           else
             a.returning = true
@@ -393,28 +433,26 @@ local function runProduction(g, side)
   end
 
   for _, c in ipairs(game.sideCities(g, side)) do
-    if c.producing then
+    if c.producing and c.countdown > 0 then
       c.countdown = c.countdown - 1
       if c.countdown <= 0 then
-        local vectored = c.vectorTo and c.vectorTo ~= c.index
-        local x, y = game.freeTileIn(g, c, true)
-        if side.gold <= 0 then
-          c.countdown = 0               -- no gold: it waits, built but unpaid
-        elseif not (x or vectored) then
-          c.countdown = 0               -- nowhere to stand: it waits too
-        else
-          local slot = c.slots[c.producing]
-          local a = rules.armyFromSlot(slot, side.enhanced)
-          a.owner, a.homeCity, a.moves = side.index, c.index, 0
-          a.x, a.y = x, y
-          if vectored then
-            a.transit = { turns = TRANSIT_TURNS, dest = c.vectorTo }
-            a.x, a.y = nil, nil
+        c.countdown = 0
+        if side.gold > 0 then
+          local vectored = c.vectorTo and c.vectorTo ~= c.index
+          local x, y = game.freeTileIn(g, c, false)
+          if x or vectored then
+            local slot = c.slots[c.producing]
+            local a = rules.armyFromSlot(slot, side.enhanced)
+            a.owner, a.homeCity, a.moves = side.index, c.index, a.maxMoves
+            a.x, a.y = x, y
+            if vectored then
+              a.transit = { turns = TRANSIT_TURNS, dest = c.vectorTo }
+              a.x, a.y = nil, nil
+            end
+            placeArmy(g, a)
+            built[#built + 1] = { kind = vectored and "sent" or "built", type = a.type,
+                                  city = c.index }
           end
-          placeArmy(g, a)
-          built[#built + 1] = { kind = vectored and "sent" or "built", type = a.type,
-                                city = c.index }
-          c.countdown = slot.time       -- the city starts the next one
         end
       end
     end
@@ -426,27 +464,47 @@ local function runProduction(g, side)
 
   side.produced = arrived
   for _, e in ipairs(built) do arrived[#arrived + 1] = e end
+  return built
 end
 
---- Step 6: movement reset.
+--- Step 6: movement reset (reset_movement, 8cc6:05fb). Each army gets its
+--- maximum (20 at sea) plus what it kept, 2 at most; a goal it stands on is
+--- forgotten; every hero carrying double movement adds each army's maximum
+--- again to every army on its tile -- a second such hero there adds it
+--- again; then 99 at most.
 local function resetMovement(g, side)
-  local doubleMove = game.itemBonus(g, side, rules.ITEM_DOUBLE_MOVE) > 0
+  -- 8c07:0113 wipes both of the cycle's per-turn marks for every army of
+  -- the side whose turn it is: the one that says "done, do not offer me
+  -- again this turn" and the one that says "already offered this pass".
+  -- Being fortified is not one of them -- that outlives the turn.
   for _, a in ipairs(g.armies) do
-    -- 8c07:0113 wipes both of the cycle's per-turn marks for every army of
-    -- the side whose turn it is: the one that says "done, do not offer me
-    -- again this turn" and the one that says "already offered this pass".
-    -- Being fortified is not one of them -- that outlives the turn.
     if a.owner == side.index then a.done, a.offered = nil, nil end
+  end
+  for i = #g.armies, 1, -1 do
+    local a = g.armies[i]
     if a.owner == side.index and not a.transit then
       local carry = math.min(a.moves or 0, rules.MOVE_CARRY)
-      local base = a.atSea and rules.SEA_MOVES or a.maxMoves
-      -- A hero with a double-movement item adds each army's maximum again
-      -- for every army on its tile.
-      if doubleMove and game.heroWithDoubleMoveAt(g, side, a.x, a.y) then
-        base = base + a.maxMoves
-      end
-      a.moves = math.min(rules.MAX_MOVE, base + carry)
+      a.moves = (a.atSea and rules.SEA_MOVES or a.maxMoves) + carry
+      if a.target and a.target.x == a.x and a.target.y == a.y then a.target = nil end
     end
+  end
+  for i = #g.armies, 1, -1 do
+    local h = g.armies[i]
+    if h.owner == side.index and h.type == armytype.HERO and not h.transit and h.items then
+      local double = false
+      for _, it in ipairs(h.items) do
+        if it.type == rules.ITEM_DOUBLE_MOVE then double = true end
+      end
+      if double then
+        local here = game.armiesAt(g, h.x, h.y)
+        for k = 1, math.min(#here, rules.MAX_STACK) do
+          here[k].moves = (here[k].moves or 0) + (here[k].maxMoves or 0)
+        end
+      end
+    end
+  end
+  for _, a in ipairs(g.armies) do
+    if a.owner == side.index and (a.moves or 0) > rules.MAX_MOVE then a.moves = rules.MAX_MOVE end
   end
 end
 
@@ -511,11 +569,6 @@ function game.heroWithDoubleMoveAt(g, side, x, y)
   return false
 end
 
---- Run the start of `side`'s turn. Returns false if the side has no turn to
---- play: a computer side left with no city (start_of_turn, Ghidra 8cc6:0000,
---- whose order this is) does nothing more until the round's end puts it
---- out. A human's turn (8cc6:0259) goes on regardless, with whatever armies
---- it still has.
 --- At the start of every side's turn, before anything else, its armies
 --- standing in a city -- any city, ruins too -- are no longer at sea
 --- (8cc6:089d, from 8065:2123). It costs no movement: the reset that follows
@@ -529,8 +582,48 @@ local function comeAshore(g, side)
   end
 end
 
+--- Before every side's turn the side's capital is put where it now is
+--- (67cc:10d7): while more than one side plays and the side holds cities but
+--- not its own capital, the city of its own nearest the capital it had; else
+--- its own capital again. The turn opens centred there.
+function game.followCapital(g, side)
+  if not side.capNow then side.capNow = { x = side.capX, y = side.capY } end
+  local playing = 0
+  for _, s in ipairs(g.sides) do
+    if s.alive then playing = playing + 1 end
+  end
+  if playing ~= 1 then
+    local c = game.cityAt(g, side.capX, side.capY)
+    if c and c.razed then c = nil end
+    if #game.sideCities(g, side) ~= 0 and (not c or c.ownerIndex ~= side.index) then
+      local n = game.nearestCity(g, side.capNow.x, side.capNow.y, side)
+      if n then side.capNow = { x = n.x, y = n.y } end
+      return
+    end
+  end
+  side.capNow = { x = side.capX, y = side.capY }
+end
+
+local function turnQuest(g, side)
+  local questResult = require("warlords.quest").event(g, side, "turn")
+  if questResult and questResult.failed then
+    g.log[#g.log + 1] = ("Quest abandoned: %s."):format(questResult.failed)
+  end
+end
+
+--- Run the start of `side`'s turn; false if the side has no turn to play.
+--- The prelude every side gets (turn_loop, 8065:2123): its armies in a city
+--- come ashore, its capital follows it. Then a computer's turn
+--- (start_of_turn, 8cc6:0000): diplomacy; a side left with no city does
+--- nothing more until the round's end puts it out; the hero, hired at once
+--- (7563:0301); promotions, gold, production, the movement reset, the
+--- encampments, the quest. A human's (8cc6:0259) goes on regardless: the
+--- movement reset, the encampments and the gold come first, then the quest;
+--- promotions and the hero follow (8cc6:04bd), and the cities build only
+--- once the hero offer is settled (game.humanProduction).
 function game.startTurn(g, side)
   comeAshore(g, side)
+  game.followCapital(g, side)
   game.tidyExplored(g, side)
   local heroMod = require("warlords.hero")
   -- what changed is said in the status bar, for a watched computer
@@ -538,23 +631,104 @@ function game.startTurn(g, side)
   for _, m in ipairs(side.diploNews) do
     g.log[#g.log + 1] = m
   end
-  if side.computer and #game.sideCities(g, side) == 0 then return false end
-  side.heroOffer = heroMod.offer(g, side)
-  heroMod.checkPromotions(g, side)
-  local questResult = require("warlords.quest").event(g, side, "turn")
-  if questResult and questResult.failed then
-    g.log[#g.log + 1] = ("Quest abandoned: %s."):format(questResult.failed)
+  side.heroOffer = nil
+  side.productionDue = nil
+  if side.computer then
+    if #game.sideCities(g, side) == 0 then return false end
+    local offer = heroMod.offer(g, side)
+    if offer then heroMod.recruit(g, side, offer) end
+    heroMod.checkPromotions(g, side)
+    applyIncome(g, side)
+    runProduction(g, side)
+    resetMovement(g, side)
+    game.tidyTowers(g)
+    encamp(g, side)
+    -- the army cycle's cursor goes back to the capital (8c07:0113)
+    if side.ai then side.ai.cursor = { x = side.capNow.x, y = side.capNow.y } end
+    turnQuest(g, side)
+    return true
   end
-  applyIncome(g, side)
-  runProduction(g, side)
   resetMovement(g, side)
   game.tidyTowers(g)
   encamp(g, side)
+  applyIncome(g, side)
+  turnQuest(g, side)
+  side.promoted = heroMod.checkPromotions(g, side)
+  side.heroOffer = heroMod.offer(g, side)
+  side.productionDue = true
   return true
 end
 
---- Hand the turn to the next living side, starting a new game turn when the
---- list wraps. Returns the side now to play, or nil if the game is over.
+--- A human's cities build, once the turn's hero offer is taken or turned down
+--- (8cc6:04bd(1)) -- on turn 1 they do not: the capital's production opens
+--- instead. Each city that built starts its next army (6f8c:06bd).
+function game.humanProduction(g, side)
+  if not side.productionDue then return end
+  side.productionDue = nil
+  if g.turn == 1 then return end
+  for _, e in ipairs(runProduction(g, side)) do
+    local c = g.map.cities[e.city + 1]
+    local slot = c.producing and c.slots[c.producing]
+    if slot then c.countdown = slot.time end
+  end
+end
+
+--- Is the city building? Its countdown is above 0 (7204:06de shows "none"
+--- otherwise).
+function game.producing(c)
+  return c.producing ~= nil and (c.countdown or 0) > 0
+end
+
+--- The turn order for the next round (turn_order, 8065:1732): with Random
+--- Turns, 20 swaps of two sides picked by dice.
+local function turnOrder(g)
+  g.turnOrder = { 0, 1, 2, 3, 4, 5, 6, 7 }
+  if g.map.options.randomTurns ~= 0 then
+    for _ = 1, 20 do
+      local a, b = g.rng:dice(1, 8, 0), g.rng:dice(1, 8, 0)
+      g.turnOrder[a], g.turnOrder[b] = g.turnOrder[b], g.turnOrder[a]
+    end
+  end
+end
+
+local function indexOf(list, v)
+  for i, x in ipairs(list) do
+    if x == v then return i end
+  end
+end
+
+--- next_side (8065:17f6): the next side in the turn order, ending the round
+--- when the order runs out.
+local function nextSide(g, leaving)
+  for _ = 1, 3 * 8 + 1 do
+    if g.orderAt >= 7 then
+      g.orderAt = -1
+      g.turn = g.turn + 1
+      -- the round's end: the order, the fallen put out of the game, the end
+      -- looked for, the neutral cities' production, then the history
+      turnOrder(g)
+      game.endRound(g, leaving)
+      if g.ending.over then
+        g.side = nil
+        return nil
+      end
+      require("warlords.history").record(g)     -- 8065:17f6 -> 6d51:0d60
+    end
+    g.orderAt = g.orderAt + 1
+    local side = g.map.sides[g.turnOrder[g.orderAt + 1] + 1]
+    if side and side.inUse and side.alive then
+      g.side = side
+      g.current = indexOf(g.sides, side)
+      if game.startTurn(g, side) then return side end
+    end
+  end
+  g.side = nil
+  return nil
+end
+
+--- Hand the turn to the next side in the turn order (next_side, 8065:17f6),
+--- ending the round when the order runs out. Returns the side now to play,
+--- or nil if the game is over.
 function game.endTurn(g)
   -- the side's peace overtures are scored as its turn ends: at the end of
   -- ai_turn for a computer, and of the turn (8065:2074) for a human while
@@ -565,35 +739,14 @@ function game.endTurn(g)
   end
   -- what the last round's end found is for the turn that followed it only
   g.ending = nil
-  for _ = 1, 2 * #g.sides + 1 do
-    g.current = g.current + 1
-    if g.current > #g.sides then
-      g.current = 1
-      g.turn = g.turn + 1
-      -- the round's end (8065:17f6): the fallen are put out of the game and
-      -- the end looked for, and then the turn is written to the history
-      game.endRound(g)
-      if g.ending.over then
-        g.side = nil
-        return nil
-      end
-      require("warlords.history").record(g)     -- 8065:17f6 -> 6d51:0d60
-    end
-    local side = g.sides[g.current]
-    if side.alive then
-      g.side = side
-      if game.startTurn(g, side) then return side end
-    end
-  end
-  g.side = nil
-  return nil
+  return nextSide(g, leaving)
 end
 
 --- Start the very first turn of a new game.
 function game.begin(g)
-  g.current, g.side = 1, g.sides[1]
-  if not game.startTurn(g, g.side) then return game.endTurn(g) end
-  return g.side
+  g.orderAt = -1
+  g.ending = nil
+  return nextSide(g, nil)
 end
 
 --------------------------------------------------------------------- combat
@@ -673,7 +826,7 @@ function game.disband(g, side, armies)
   local heroMod = require("warlords.hero")
   for _, a in ipairs(armies) do
     if a.type == armytype.HERO then
-      heroMod.dropItems(g, a, a.x, a.y)
+      heroMod.dropItems(g, a, a.x, a.y, side.index)
       if side.quest and side.quest.hero == a then side.quest = nil end
     end
   end
@@ -689,13 +842,19 @@ function game.loot(g, loser)
   return math.floor(share / 2)
 end
 
---- Fight for a tile, deciding it and nothing more (combat_resolve,
---- 67cc:08a6): the game is left as it was, for the battle to be shown over
---- it. Returns the combat result, with the loot a city taken will pay; the
---- fight takes effect with game.applyAttack.
+--- Fight for a tile, deciding it and nothing more (combat_setup, 6a89:008b,
+--- and combat_resolve, 67cc:08a6): the game is left as it was, for the
+--- battle to be shown over it -- but for the city attacked, which is marked
+--- with the attacker's bit (67cc:02b1): a neutral one that holds out builds
+--- from then on (neutralProduction). Returns the combat result, with the
+--- loot a city taken will pay; the fight takes effect with game.applyAttack.
 function game.decideAttack(g, stack, x, y)
   local combat = require("warlords.combat")
   local attackers, defenders, defOwner, city = combat.lines(g, stack, x, y)
+  local me = stack[1] and stack[1].owner
+  if city and me and math.floor((city.attacked or 0) / 2 ^ me) % 2 == 0 then
+    city.attacked = (city.attacked or 0) + 2 ^ me
+  end
   local result = combat.resolve(g, attackers, defenders, x, y)
   -- the lines as they were drawn up, which is what the battle window shows:
   -- `result.log` then kills them off in the order the fight went
@@ -704,22 +863,26 @@ function game.decideAttack(g, stack, x, y)
   -- loser's
   local loser = defOwner and g.map.sides[defOwner + 1] or nil
   if result.won and city and loser then result.loot = game.loot(g, loser) end
+  -- the stack's hero (stack_movement_mode, 1c8c:0529): the leader if a
+  -- hero, else its first hero
+  for _, a in ipairs(stack) do
+    if a.type == armytype.HERO then result.hero = a break end
+  end
   result.fought = { stack = stack, x = x, y = y, defOwner = defOwner }
   return result
 end
 
---- What an attack costs, paid before it is fought (attack_tile, 67cc:005a,
---- then 67cc:0522): every army in the stack loses the tile's movement cost,
---- 2 at least, down to 0. A land stack attacking onto water or shore puts
---- to sea first -- each army that cannot fly loses all its moves. The
---- original does that to a boat too; here it is left to land stacks, as a
---- navy at sea would move by land rules.
+--- What an attack costs (attack_tile, 67cc:005a, then 67cc:0522): a stack
+--- that is not flying and not at sea, attacking onto water or shore, puts to
+--- sea first -- every army that cannot fly, and has no flight item, at sea
+--- with no moves, boats too. Then every army loses the tile's movement cost,
+--- 2 at least, down to 0, and forgets its goal.
 function game.chargeAttack(g, stack, x, y)
   local city = game.cityAt(g, x, y)
   local t = (city and not city.razed) and move.CITY or scn.terrainAt(g.map, x, y)
   local cost = math.max(2, move.COST[t] or 0)
   local mode, _, _, atSea = move.stackMode(g, stack)
-  if mode == move.LAND and not atSea and (t == move.WATER or t == move.SHORE) then
+  if mode ~= move.FLYING and not atSea and (t == move.WATER or t == move.SHORE) then
     for _, a in ipairs(stack) do
       local flight = false
       if a.type == armytype.HERO then
@@ -730,7 +893,10 @@ function game.chargeAttack(g, stack, x, y)
       if not g.types.byId[a.type].flies and not flight then a.atSea, a.moves = true, 0 end
     end
   end
-  for _, a in ipairs(stack) do a.moves = math.max(0, (a.moves or 0) - cost) end
+  for _, a in ipairs(stack) do
+    a.moves = math.max(0, (a.moves or 0) - cost)
+    a.target = nil
+  end
 end
 
 --- Fight for a tile and apply the outcome at once. Returns the combat
@@ -742,7 +908,8 @@ end
 --- Let a decided fight take effect (after_battle, 67cc:0a6b), which the
 --- original does once the battle window has closed: the dead are removed,
 --- a city whose last defender falls changes hands, and the survivors walk
---- in. Once only; returns the result with `captured` set to the city taken.
+--- in. Once only; returns the result with `captured` set to the city taken,
+--- and `medal` to the army that won one.
 function game.applyAttack(g, result)
   local f = result.fought
   if not f then return result end
@@ -752,13 +919,16 @@ function game.applyAttack(g, result)
   local stack, x, y, defOwner = f.stack, f.x, f.y, f.defOwner
   local attackers, defenders = result.lines.attackers, result.lines.defenders
   local city = result.lines.city
+  -- the city on the tile, ruins too (828e:044a)
+  local tileCity = g.map.cityTile[y * g.map.width + x]
+  local boats = result.boats or {}
 
-  -- a dead hero drops what it carried where it fell, and is remembered as
-  -- killed in the city the fight was for, or in battle (67cc:0ba1, 0c5a)
+  -- a dead hero drops what it carried on the tile fought for, and is
+  -- remembered as killed in the city there, or in battle (67cc:0ba1, 0c5a)
   local history = require("warlords.history")
   local function fallen(h)
     history.deed(g, g.map.sides[(h.owner or 8) + 1], history.KILLED,
-                 city and city.index or history.IN_BATTLE, 0, h.name)
+                 tileCity and tileCity.index or history.IN_BATTLE, 0, h.name)
   end
   local mine = stack[1] and stack[1].owner
   -- the defending side remembers who attacked it (ai_record_battle, 5db9:09d7)
@@ -770,13 +940,27 @@ function game.applyAttack(g, result)
     require("warlords.ai").recordBattle(g, defOwner, mine, x, y, heroesLost,
       #result.deadDefenders, result.won and #defenders > 0, city ~= nil)
   end
+  for _, a in ipairs(result.deadAttackers) do history.tally(g, a, defOwner, boats[a]) end
+  for _, d in ipairs(result.deadDefenders) do history.tally(g, d, mine, boats[d]) end
+  -- a big battle won at a city goes down in history (67cc:0af5): eight
+  -- armies or more, four of them defending -- by the hero's name when a hero
+  -- led the stack
+  if tileCity and result.won and mine ~= nil and #attackers + #defenders >= 8
+     and #defenders >= 4 then
+    local side = g.map.sides[mine + 1]
+    if result.hero then
+      history.deed(g, side, history.WON, history.BY_NAME, tileCity.index, result.hero.name)
+    else
+      history.deed(g, side, history.WON, mine, tileCity.index, "")
+    end
+  end
+  -- the fallen heroes' items drop on the tile fought for, attacker's too
+  -- (67cc:16cd with after_battle's x, y)
   for _, a in ipairs(result.deadAttackers) do
-    history.tally(g, a, defOwner)
-    if a.type == armytype.HERO then heroMod.dropItems(g, a, a.x, a.y) fallen(a) end
+    if a.type == armytype.HERO then fallen(a) heroMod.dropItems(g, a, x, y, mine) end
   end
   for _, d in ipairs(result.deadDefenders) do
-    history.tally(g, d, mine)
-    if d.type == armytype.HERO then heroMod.dropItems(g, d, x, y) fallen(d) end
+    if d.type == armytype.HERO then fallen(d) heroMod.dropItems(g, d, x, y, mine) end
   end
   heroMod.battleExperience(g, attackers, defenders, result, city ~= nil)
   local questMod = require("warlords.quest")
@@ -796,7 +980,14 @@ function game.applyAttack(g, result)
       winner.gold = winner.gold + loot
       loser.gold = math.max(0, loser.gold - 2 * loot)
     end
-    city.producing, city.countdown, city.vectorTo = nil, 0, nil
+    -- whom the city was taken from (+0x2f): its owner, or no one when that
+    -- side takes its own back
+    if city.ownerIndex ~= nil then
+      city.claim = (city.claim == winner.index) and rules.NEUTRAL or city.ownerIndex
+    end
+    city.attacked = 0
+    -- what it was building stays chosen, but idle (67cc:0a6b)
+    city.countdown, city.vectorTo = 0, nil
     -- every city that was sending its armies here stops: no vector, and
     -- nothing in production either (67cc:0a6b)
     for _, c in ipairs(g.map.cities) do
@@ -806,8 +997,6 @@ function game.applyAttack(g, result)
     scn.setCityTiles(g.map, city)
     move.invalidate(g)
     result.captured = city
-    local history = require("warlords.history")
-    history.deed(g, winner, history.WON, winner.index, city.index, winner.name)   -- 67cc:0af5
     -- a computer's quest hero taking its quest city (5e97:038d) razes it
     -- when that is the quest
     local handled = winner.computer
@@ -845,7 +1034,51 @@ function game.applyAttack(g, result)
       if found > 0 then move.invalidate(g) end
     end
   end
+  result.medal = game.medal(g, result, mine)
   return result
+end
+
+-- An ordinary army: not a hero, not a magical creature.
+local function ordinary(g, a)
+  return a.type ~= armytype.HERO and (g.types.byId[a.type].bonus[48] or 0) == 0
+end
+
+--- A medal for a battle won (auto_ui_medal_effect, 67cc:2274): a stack with a
+--- hero and no army at sea that won a fight worth the name -- two armies a
+--- side, or before turn 20 a first defender above strength 3 -- gives one of
+--- its ordinary armies a medal, 40% of the time less 5 for each of the side's
+--- ordinary armies with one already, 12% at least. A medal is +1 strength
+--- (9 at most), or +1 move past strength 14; four at most. Returns the army.
+function game.medal(g, result, side)
+  if side == nil or not result.won then return nil end
+  local survivors = result.attackers
+  for _, a in ipairs(survivors) do
+    if a.atSea then return nil end
+  end
+  local nAtk, nDef = #result.lines.attackers, #result.lines.defenders
+  local counted = (nAtk >= 2 and nDef >= 2)
+    or (g.turn < 20 and nDef >= 1 and (result.defStrength0 or 0) > 3)
+  if not counted then return nil end
+  local plain = {}
+  for _, a in ipairs(survivors) do
+    if ordinary(g, a) then plain[#plain + 1] = a end
+  end
+  if #plain == 0 then return nil end
+  local decorated = 0
+  for _, a in ipairs(g.armies) do
+    if a.owner == side and ordinary(g, a) and (a.medals or 0) > 0 then decorated = decorated + 1 end
+  end
+  local chance = math.max(12, 40 - 5 * decorated)
+  if not (g.rng:dice(1, 100, 0) < chance) or not result.hero then return nil end
+  local a = plain[g.rng:dice(1, #plain, 0)]
+  if (a.medals or 0) >= 4 then return nil end
+  a.medals = (a.medals or 0) + 1
+  if (a.strength or 0) > 14 then
+    a.maxMoves = (a.maxMoves or 0) + 1
+  else
+    a.strength = math.min(9, (a.strength or 0) + 1)
+  end
+  return a
 end
 
 ----------------------------------------------------- what to do with a city
@@ -924,8 +1157,10 @@ local function makeRuins(g, city)
   city.producing, city.countdown, city.vectorTo = nil, 0, nil
   city.defence = 0
   city.income = 0
+  -- every city sending its armies here stops: no vector, nothing in
+  -- production (649c:016b)
   for _, c in ipairs(g.map.cities) do
-    if c.vectorTo == city.index then c.vectorTo = nil end
+    if c.vectorTo == city.index then c.vectorTo, c.producing, c.countdown = nil, nil, 0 end
   end
   scn.setCityTiles(g.map, city)
   move.invalidate(g)
@@ -1103,15 +1338,68 @@ function game.acceptSurrender(g, side)
 end
 
 --- The round's end (8065:17f6): the sides left without a city are put out
---- of the game, then the end is looked for. Leaves the finding in g.ending,
---- with `fallen` (game.eliminateFallen) for the interface to tell first.
-function game.endRound(g)
+--- of the game, then the end is looked for, then the neutral cities build.
+--- `last` is the side that played last: its gold and Enhanced flag are the
+--- ones the neutral cities' production reads. Leaves the finding in
+--- g.ending, with `fallen` (game.eliminateFallen) for the interface to tell
+--- first.
+function game.endRound(g, last)
   local fallen = game.eliminateFallen(g)
   local ending = game.checkEnd(g)
   ending.fallen = fallen
   if ending.message then g.log[#g.log + 1] = ending.message end
   g.ending = ending
+  game.neutralProduction(g, last or g.map.sides[game.SETUP_PLAYER + 1])
   return ending
+end
+
+--- set_city_production (623c:0e5a) for side `who`: refused after turn 5 when
+--- that side has less than the type's cost + 30 in gold. True if set.
+function game.setCityProduction(g, who, c, slot)
+  local i
+  for k, s in ipairs(c.slots) do
+    if s == slot then i = k end
+  end
+  if not i then return false end
+  if (who and who.gold or 0) < (slot.cost or 0) + 30 and g.turn > 5 then return false end
+  game.setProduction(g, c, i)
+  return true
+end
+
+--- A neutral city's garrison is built (produce_garrison, 6bd8:0381): on its
+--- top-left tile, room or not, with no moves, and the city builds nothing
+--- more until it is set to again.
+local function produceGarrison(g, c, who)
+  local slot = c.producing and c.slots[c.producing]
+  if slot then
+    local a = rules.armyFromSlot(slot, who and who.enhanced and true or false)
+    a.x, a.y, a.owner, a.moves, a.homeCity = c.x, c.y, c.ownerIndex, 0, c.index
+    placeArmy(g, a)
+  end
+  c.producing, c.countdown = nil, 0
+end
+
+--- neutral_production_turn (6bd8:025a), with Neutral Cities at 2 or more: a
+--- neutral city that has beaten off an attack (city.attacked, 67cc:02b1)
+--- counts its build down and, while fewer than 4 armies stand on its top-left
+--- tile, starts the best balanced type (purpose 2). The last city first.
+function game.neutralProduction(g, who)
+  if not ((g.map.options.neutralCities or 0) > 1) then return end
+  for i = #g.map.cities, 1, -1 do
+    local c = g.map.cities[i]
+    if c.ownerIndex == nil and not c.razed and (c.attacked or 0) ~= 0 then
+      if c.countdown and c.countdown ~= 0 then
+        c.countdown = c.countdown - 1
+        if c.countdown == 0 then produceGarrison(g, c, who) end
+      end
+      local slot = c.producing and c.slots[c.producing]
+      local building = slot ~= nil and c.countdown ~= 0 and c.countdown ~= slot.time
+      if not building and math.min(#game.armiesAt(g, c.x, c.y), rules.MAX_STACK) < 4 then
+        local best = rules.bestSlot(c.slots, 2, g.types, who and who.enhanced and true or false)
+        if best then game.setCityProduction(g, who, c, best) end
+      end
+    end
+  end
 end
 
 --- Is the game over, or nearly? Run at the round's end, once the fallen are
@@ -1181,7 +1469,9 @@ function game.checkEnd(g)
     for _, s in ipairs(computers) do
       biggest = math.max(biggest, #game.sideCities(g, s))
     end
-    if mine * 2 > standing and mine > biggest + math.floor(standing / 8) then
+    -- every city counts here, ruins too (8065:1aed reads city_count)
+    local all = #g.map.cities
+    if mine > math.floor(all / 2) and mine > biggest + math.floor(all / 8) then
       g.surrenderOffered = true
       ending.surrender = true
       ending.message = "Your enemies offer their surrender!"

@@ -23,7 +23,9 @@ quest.DESCRIPTIONS = {
   "sack and pillage %d gold",
 }
 
+-- how far a target may be from the hero: a human's, a computer's
 quest.ITEM_RANGE, quest.CITY_RANGE = 50, 60
+quest.AI_ITEM_RANGE, quest.AI_CITY_RANGE, quest.RAZE_RANGE = 30, 40, 60
 
 -- what a quest's target *is*, so it can be saved and restored by reference
 quest.TARGET_KIND = {
@@ -31,77 +33,92 @@ quest.TARGET_KIND = {
 }
 quest.EXPERIENCE = 10
 
+-- The allies a quest gives are always Archons (4976:1d5b pushes 19).
+quest.REWARD_ALLY = 19
+
 --------------------------------------------------------------------- targets
 
-local function otherSides(g, side)
-  local out = {}
-  for _, s in ipairs(g.sides) do
-    if s.alive and s.index ~= side.index then out[#out + 1] = s end
-  end
-  return out
+local function dist(x1, y1, x2, y2)
+  return math.floor(math.sqrt((x1 - x2) ^ 2 + (y1 - y2) ^ 2))
 end
 
---- Pick a target for a quest of this type, or nil if there is none.
+--- Pick a target for a quest of this type (quest_assign, 4976:0d7a), or nil
+--- if there is none. `computer` is quest_assign(1): shorter ranges.
 -- Read from raw disassembly; Ghidra mis-disassembles the switch.
-function quest.pickTarget(g, side, type, h)
+function quest.pickTarget(g, side, type, h, computer)
   if type == quest.SLAY_HERO then
+    -- another side's hero, counted from the top of the army table down
     local heroes = {}
-    for _, a in ipairs(g.armies) do
-      if a.type == armytype.HERO and a.owner ~= nil and a.owner ~= side.index then
+    for i = #g.armies, 1, -1 do
+      local a = g.armies[i]
+      if a.type == armytype.HERO and a.owner ~= side.index then
         heroes[#heroes + 1] = a
       end
     end
-    return g.rng:pick(heroes)
+    if #heroes == 0 then return nil end
+    return heroes[g.rng:dice(1, #heroes, 0)]
 
   elseif type == quest.RETRIEVE_ITEM then
+    -- an ordinary item still hidden in a ruin, less than 50 (30) away each way
     local site = require("warlords.site")
+    local range = computer and quest.AI_ITEM_RANGE or quest.ITEM_RANGE
     local choices = {}
-    for _, s in ipairs(g.map.sites) do
-      if s.content == site.ITEM and not s.searched then
-        local item
-        for _, it in ipairs(g.map.items) do if it.index == s.item then item = it end end
-        if item and not site.itemReserved(item)
-           and math.abs(s.x - h.x) <= quest.ITEM_RANGE
-           and math.abs(s.y - h.y) <= quest.ITEM_RANGE then
-          choices[#choices + 1] = { item = item, site = s }
+    for _, it in ipairs(g.map.items) do
+      if it.index <= 21 and it.status == 2 and not site.itemReserved(it) then
+        local at
+        for _, s in ipairs(g.map.sites) do
+          if s.content == site.ITEM and s.item == it.index then at = s break end
+        end
+        if at and math.abs(h.x - at.x) < range and math.abs(h.y - at.y) < range then
+          choices[#choices + 1] = { item = it, site = at }
         end
       end
     end
-    local pick = g.rng:pick(choices)
-    if not pick then return nil end
-    pick.site.revealed = 0                       -- the priests show where it lies
+    if #choices == 0 then return nil end
+    local pick = choices[g.rng:dice(1, #choices, 0)]
+    -- the priests show the side where it lies
+    if not site.shownTo(pick.site, side) then
+      pick.site.revealed = (pick.site.revealed or 0) + math.floor(2 ^ side.index)
+    end
+    require("warlords.game").reveal(g, side.index, pick.site.x, pick.site.y, false)
     return pick.item
 
   elseif type == quest.SLAY_TYPE then
-    for _ = 1, 5 do                              -- up to five tries
-      local magical = {}
-      for _, a in ipairs(g.types.list) do
-        if (a.bonus[48] or 0) ~= 0 then magical[#magical + 1] = a end
-      end
-      local want = g.rng:pick(magical)
-      if want then
-        for _, a in ipairs(g.armies) do
-          if a.type == want.id and a.owner ~= nil and a.owner ~= side.index then
-            return want
-          end
+    -- up to five magical types, one of which some other army on the map is
+    local heroMod = require("warlords.hero")
+    for _ = 1, 5 do
+      local want = heroMod.magicalType(g)
+      for i = #g.armies, 1, -1 do
+        local a = g.armies[i]
+        if a.type == want.id and a.owner ~= side.index and not a.transit and a.x then
+          return want
         end
       end
     end
     return nil
 
   elseif type == quest.SLAUGHTER then
-    return g.rng:pick(otherSides(g, side))
+    if g.won then return nil end
+    for _ = 1, 200 do
+      local o = g.map.sides[g.rng:dice(1, 8, 0)]
+      if o and o.index ~= side.index and o.inUse and o.alive then return o end
+    end
+    return nil
 
   elseif type == quest.OCCUPY or type == quest.RAZE then
-    local choices, any = {}, {}
-    for _, c in ipairs(g.map.cities) do
-      if c.ownerIndex ~= side.index and not c.razed then
-        any[#any + 1] = c
-        local d = math.max(math.abs(c.x - h.x), math.abs(c.y - h.y))
-        if d <= quest.CITY_RANGE then choices[#choices + 1] = c end
+    -- any standing city not the side's, near the hero -- after a hundred
+    -- tries, anywhere
+    if g.won then return nil end
+    local range = type == quest.RAZE and quest.RAZE_RANGE
+                  or (computer and quest.AI_CITY_RANGE or quest.CITY_RANGE)
+    for t = 0, 199 do
+      local c = g.map.cities[g.rng:dice(1, #g.map.cities, 0)]
+      if c and c.ownerIndex ~= side.index and not c.razed
+         and (dist(h.x, h.y, c.x, c.y) <= range or t > 99) then
+        return c
       end
     end
-    return g.rng:pick(choices) or g.rng:pick(any)
+    return nil
 
   elseif type == quest.PILLAGE_GOLD then
     return true                                  -- no target, just a count
@@ -109,31 +126,38 @@ function quest.pickTarget(g, side, type, h)
   return nil
 end
 
---- Take a quest at a temple. Returns the quest, or nil if none could be made.
--- quest_assign, Ghidra 4976:0d7a.
-function quest.assign(g, side, h)
+--- The type of a quest's `n`th try (from 1). A human's is rolled from the
+--- table; a computer's (quest_assign(1)) is raze or occupy first, then
+--- slaughter, then pillage gold.
+local function questType(g, n, computer)
+  if not computer then return quest.TYPE_TABLE[g.rng:dice(1, 10, 0)] end
+  if n == 1 then return g.rng:dice(1, 5, -1) == 0 and quest.RAZE or quest.OCCUPY end
+  if n == 2 then return quest.SLAUGHTER end
+  return quest.PILLAGE_GOLD
+end
+
+--- Take a quest at a temple. Returns the quest, or nil if none could be made
+--- (quest_assign, Ghidra 4976:0d7a): tries until a quest finds a target --
+--- pillage gold always does. `computer` for a computer player's (5ad0:15c3).
+function quest.assign(g, side, h, computer)
   if side.quest then return nil end              -- one at a time
   if g.map.options.quests == 0 then return nil end
-
-  for _ = 1, 20 do                               -- reroll the type if it has no target
-    local type = quest.TYPE_TABLE[g.rng:dice(1, 10, 0)]
-    -- types 3, 4 and 5 are skipped once the game has been won
-    if not (g.won and (type == quest.SLAUGHTER or type == quest.OCCUPY
-                       or type == quest.RAZE)) then
-      local target = quest.pickTarget(g, side, type, h)
-      if target then
-        local q = { type = type, hero = h, target = target, done = 0,
-                    targetKind = quest.TARGET_KIND[type] }
-        if type == quest.SLAUGHTER then q.required = g.rng:dice(1, 12, 10)
-        elseif type == quest.PILLAGE_GOLD then q.required = g.rng:dice(3, 300, 500) end
-        side.quest = q
-        local history = require("warlords.history")
-        history.deed(g, side, history.QUEST_GIVEN, 0, 0, h and h.name)   -- 4976:0dae
-        return q
-      end
+  local history = require("warlords.history")
+  history.deed(g, side, history.QUEST_GIVEN, 0, 0, h and h.name)   -- 4976:0dae
+  local n = 0
+  while true do
+    n = n + 1
+    local type = questType(g, n, computer)
+    local target = quest.pickTarget(g, side, type, h, computer)
+    if target then
+      local q = { type = type, hero = h, target = target, done = 0,
+                  targetKind = quest.TARGET_KIND[type] }
+      if type == quest.SLAUGHTER then q.required = g.rng:dice(1, 12, 10)
+      elseif type == quest.PILLAGE_GOLD then q.required = g.rng:dice(3, 300, 500) end
+      side.quest = q
+      return q
     end
   end
-  return nil
 end
 
 --- A line of prose for a quest.
@@ -270,26 +294,24 @@ end
 
 --------------------------------------------------------------------- reward
 
---- Choose and give the reward. quest_choose_reward, Ghidra 4976:1909.
+--- Choose and give the reward (quest_choose_reward, Ghidra 4976:1909, and
+--- quest_give_reward, 4976:1c02).
 function quest.reward(g, side, q)
   local gameMod = require("warlords.game")
+  local site = require("warlords.site")
   local cities = #gameMod.sideCities(g, side)
+  local h = q and q.hero
 
+  -- Archons, on the quest hero's tile (create_ally_army)
   local function allies(n)
     local heroMod = require("warlords.hero")
-    local type = heroMod.allies(g)               -- one random magical type
+    local type = g.types.byId[quest.REWARD_ALLY]
     local joined = {}
-    local h = q and q.hero
-    local home = g.map.cities[(h and h.homeCity or 0) + 1] or side.capital
     for _ = 1, n do
-      local x, y = gameMod.freeTileIn(g, home, true)
-      if x then
-        local a = heroMod.newAlly(g, type, x, y, side.index, home.index)
-        g.armies[#g.armies + 1] = a
-        joined[#joined + 1] = a
-      end
+      local a = h and heroMod.placeAlly(g, type, h.x, h.y, side)
+      if a then joined[#joined + 1] = a end
     end
-    return { kind = "allies", armies = joined, type = type }
+    return { kind = "allies", armies = joined, type = type, count = n }
   end
 
   local function gold()
@@ -301,33 +323,40 @@ function quest.reward(g, side, q)
   if cities < 10 and g.turn > 15 then return allies(g.rng:dice(1, 3, 5)) end
   if side.gold < 100 then return gold() end
 
-  -- an unclaimed magic item, one time in three
-  local unclaimed = {}
+  -- an unused reserved item -- of the standards only the side's own
+  local unused = {}
   for _, it in ipairs(g.map.items) do
-    if (it.status or 0) == 0 then unclaimed[#unclaimed + 1] = it end
+    if it.index <= 21 and (it.status or 0) == 0 and site.itemReserved(it)
+       and (it.index > 7 or it.index == side.index) then
+      unused[#unused + 1] = it
+    end
   end
-  if #unclaimed > 0 then
-    if g.rng:dice(1, 3, 0) == 1 then
-      local it = g.rng:pick(unclaimed)
-      local h = q and q.hero
-      if h then
-        h.items = h.items or {}
-        h.items[#h.items + 1] = it
-        it.status = 3
-      end
-      return { kind = "item", item = it }
+  -- a rich site the side does not know of yet, not emptied
+  local unknown = {}
+  for _, s in ipairs(g.map.sites) do
+    if s.rich and not site.shownTo(s, side) and s.content ~= site.EMPTY then
+      unknown[#unknown + 1] = s
     end
-  else
-    -- otherwise the priests may point at a rich site, two times in three
-    local hidden = {}
-    for _, s in ipairs(g.map.sites) do
-      if s.rich and not s.searched then hidden[#hidden + 1] = s end
+  end
+  if #unused > 0 and g.rng:dice(1, 3, 0) == 1 then
+    local it = unused[g.rng:dice(1, #unused, 0)]
+    if h then
+      h.items = h.items or {}
+      h.items[#h.items + 1] = it
+      it.status = 3
     end
-    if #hidden > 0 and g.rng:dice(1, 3, 0) <= 2 then
-      local s = g.rng:pick(hidden)
-      s.revealed = 0
-      return { kind = "revealed", site = s }
+    return { kind = "item", item = it }
+  end
+  if #unused == 0 and #unknown > 0 and g.rng:dice(1, 3, 0) < 3 then
+    -- the nearest to the hero, the first of equals
+    local best, bestD = nil, 10000
+    for _, s in ipairs(unknown) do
+      local d = h and math.max(math.abs(s.x - h.x), math.abs(s.y - h.y)) or 0
+      if d < bestD then best, bestD = s, d end
     end
+    best.revealed = (best.revealed or 0) + math.floor(2 ^ side.index)
+    if not side.computer or side.observe then gameMod.reveal(g, side.index, best.x, best.y, false) end
+    return { kind = "revealed", site = best }
   end
 
   if g.rng:dice(1, 2, 0) == 1 then return allies(g.rng:dice(1, 3, 2)) end

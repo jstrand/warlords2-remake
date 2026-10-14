@@ -31,8 +31,9 @@ void deed(Game& g, const Side* side, int type, int v1, int v2, const std::string
 // row for another side, what it killed of them (67cc:1b43-1e92).
 constexpr int ARMIES = 0, CREATURES = 1, HEROES = 2, NAVIES = 3, STANDARDS = 4;
 
-/** An army of its owner's killed by `killer`'s. */
-void tally(Game& g, const Army* army, int killer);
+/** An army of its owner's killed by `killer`'s; `boat` when it fought as a
+ *  boat, at sea on water or shore (67cc:1aff counts those navies). */
+void tally(Game& g, const Army* army, int killer, bool boat = false);
 /** The count for side `me` against `opp`, kind k. */
 int triumph(const Game& g, int me, int opp, int k);
 /** The round's record (6d51:0d60), taken as the turn counter goes up. */

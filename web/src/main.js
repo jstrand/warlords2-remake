@@ -26,6 +26,8 @@ import * as rules from "./warlords/rules.js";
 import * as diplomacy from "./warlords/diplomacy.js";
 import * as hero from "./warlords/hero.js";
 import * as armytype from "./warlords/armytype.js";
+import * as quest from "./warlords/quest.js";
+import * as aigroups from "./warlords/ai/groups.js";
 import * as saveMod from "./warlords/save.js";
 import * as screen from "./warlords/screen.js";
 import * as layoutMod from "./warlords/layout.js";
@@ -43,6 +45,7 @@ import * as reportsUi from "./ui/reports.js";
 import * as heroInfo from "./ui/heroinfo.js";
 import * as levelsUi from "./ui/levels.js";
 import * as searchUi from "./ui/search.js";
+import * as honours from "./ui/honours.js";
 import * as questUi from "./ui/quest.js";
 import * as advisorUi from "./ui/advisor.js";
 import * as tutorial from "./ui/tutorial.js";
@@ -179,6 +182,9 @@ function load(params) {
   G.shieldsImg = img("/TERRAIN0/SHIELDS.PCK");
   G.cityBack = img("/TERRAIN0/CITYBACK.PCK");
   G.searchPic = img("/PICS/SEARCH.PCK");
+  // a promotion's (popups 16-18) and a medal's (popups 24-27) pictures
+  G.levelPic = { 2: img("/PICS/LEVEL2.PCK"), 3: img("/PICS/LEVEL3.PCK"), 4: img("/PICS/LEVEL4.PCK") };
+  G.medalPic = [0, 1, 2, 3].map((i) => img("/PICS/MEDAL" + i + ".PCK"));
   G.templePic = img("/PICS/TEMPLE.PCK");
   G.scrollPic = img("/PICS/SCROLL.PCK", SCROLL_KEY);
   kit.init(G);
@@ -256,12 +262,19 @@ function newGame(seed) {
   G.stratImage = null;
 }
 
+/** Where a side's capital now stands (67cc:10d7): its own, or the city of
+ *  its it moved to while the side does not hold it. */
+function capOf(side) {
+  if (side.capNow) return side.capNow;
+  return side.capital ? { x: side.capital.x, y: side.capital.y } : { x: side.capX || 0, y: side.capY || 0 };
+}
+
 /** Start its first turn, and centre the view on the capital. */
 function beginGame() {
   G.player = game.begin(G.g);
-  G.cursor = G.player.capital ? { x: G.player.capital.x, y: G.player.capital.y } : { x: 0, y: 0 };
+  G.cursor = Object.assign({}, capOf(G.player));
   G.selection = null;
-  centreOn(G.player.capital.x, G.player.capital.y);
+  centreOn(capOf(G.player).x, capOf(G.player).y);
   // the banner is a human's (8cc6:0259)
   if (!G.player.computer) showBanner(G.player);
 }
@@ -645,7 +658,7 @@ G.selectAt = (x, y) => select(x, y);
 // where the cycle last stopped; one exactly there counts as far away.
 
 function cycleReset() {
-  G.cursor = G.player.capital ? { x: G.player.capital.x, y: G.player.capital.y } : { x: 0, y: 0 };
+  G.cursor = Object.assign({}, capOf(G.player));       // 8c07:0113
 }
 
 function cycleRank(a) {
@@ -917,7 +930,7 @@ function showBanner(side) {
 /** Close the banner, and only then let the turn's first dialog through. */
 function dismissBanner() {
   G.banner = null;
-  if (G.centreAfterBanner && G.player.capital) centreOn(G.player.capital.x, G.player.capital.y);
+  if (G.centreAfterBanner) centreOn(capOf(G.player).x, capOf(G.player).y);
   G.centreAfterBanner = null;
   // whoever is left on the water without a boat drowns (8cc6:0259), and only
   // then does the advisor have his say
@@ -928,7 +941,10 @@ function afterBanner() {
   // the advisor has his say (6dda:026f(5)), then 8cc6:04bd puts on the
   // hero's music or the turn's
   const says = sound.speechOn() ? cues.advisor(G.g, G.player, (n) => Math.floor(Math.random() * n) + 1) : null;
-  advisorUi.say(says, () => {
+  // then 8cc6:04bd: the heroes promoted, each in its own popup, and the hero
+  // offer with its music, or the turn's
+  advisorUi.say(says, () => honours.promotions(G.player.promoted, () => {
+    G.player.promoted = null;
     sound.music(G.player.heroOffer ? cues.HERO : cues.PLAY);
     const moments = [];
     if (G.g.turn === 2) moments.push("turn2");
@@ -936,7 +952,7 @@ function afterBanner() {
     tutorial.chain(moments, () => {
       if (!presentOffer(G.player)) afterOffer();
     });
-  });
+  }));
 }
 
 // The hero offer is popup 2 -- (80, 60) 480x312, MARBLE.PCK cropped -- with
@@ -993,12 +1009,12 @@ function acceptOffer() {
   const [h, allies] = hero.recruit(G.g, G.player, offer);
   G.offer = null; G.player.heroOffer = null;
   centreOn(h.x, h.y);
-  if (allies.length > 0) {
-    say("%s joins at %s, with %d %s.", h.name, G.g.map.cities[h.homeCity].name, allies.length, allies[0].name);
+  if (allies.count > 0) {
+    say("%s joins at %s, with %d %s.", h.name, G.g.map.cities[h.homeCity].name, allies.count, allies.type.name);
     // "And the hero brings 1 ally!" / "... %d allies!" (hero_brings_allies,
-    // 7563:01fc, through 8065:10fb)
-    const line = allies.length === 1 ? uidata.text(G.screen.ui, ALLY_GROUP, 0)
-                                     : fmt(uidata.text(G.screen.ui, ALLY_GROUP, 1), allies.length);
+    // 7563:01fc, through 8065:10fb): the number rolled, placed or not
+    const line = allies.count === 1 ? uidata.text(G.screen.ui, ALLY_GROUP, 0)
+                                    : fmt(uidata.text(G.screen.ui, ALLY_GROUP, 1), allies.count);
     searchUi.say(line, afterOffer);
     return;
   }
@@ -1006,10 +1022,15 @@ function acceptOffer() {
   afterOffer();
 }
 
-/** The turn's opening, once any hero offer is settled: on turn 1 the
- *  capital's dialog opens in Production. */
+/** The turn's opening, once any hero offer is settled (8cc6:04bd(1)): the
+ *  cities build -- or on turn 1 the capital's dialog opens in Production. */
 function afterOffer() {
-  if (G.g.turn === 1 && G.player.capital && !G.player.computer) cityUi.open(G.player.capital, cityUi.PRODUCTION);
+  if (G.player.computer) return;
+  game.humanProduction(G.g, G.player);
+  stratDirty();
+  const cap = capOf(G.player);
+  const city = game.cityAt(G.g, cap.x, cap.y);
+  if (G.g.turn === 1 && city) cityUi.open(city, cityUi.PRODUCTION);
 }
 
 function refuseOffer() {
@@ -1246,7 +1267,7 @@ function finishRound(side) {
   let humans = 0;
   for (const s of G.g.map.sides) if (s.inUse && s.alive !== false && !s.computer) humans++;
   G.centreAfterBanner = G.g.map.options.hiddenMap !== 0 && humans > 1;
-  if (!G.centreAfterBanner && side.capital) centreOn(side.capital.x, side.capital.y);
+  if (!G.centreAfterBanner) centreOn(capOf(side).x, capOf(side).y);
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income || 0);
   endingUi.show(G.g.ending, () => showBanner(side));
 }
@@ -1262,7 +1283,7 @@ function takeLoaded(loaded) {
   G.selection = null; G.route = null;
   stratDirty();
   G.player = loaded.sides[loaded.current];
-  centreOn(G.player.capital.x, G.player.capital.y);
+  centreOn(capOf(G.player).x, capOf(G.player).y);
   sound.music(cues.PLAY);               // 7721:02d3
 }
 G.takeLoaded = (g) => takeLoaded(g);
@@ -1819,7 +1840,7 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
     linePixels(x + a.x * 2 + 2, y + a.y * 2 + 2, x + b.x * 2 + 2, y + b.y * 2 + 2);
   };
   const mine = game.sideCities(G.g, G.player);
-  const building = (c) => (c.producing != null ? 0 : 3);
+  const building = (c) => (game.producing(c) ? 0 : 3);
   const [sx, sy] = game.standardAt(G.g, G.player);
   const toStandard = (c, colour) => {
     gfx.setColor(G.palette[colour]);
@@ -1834,12 +1855,12 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
         const incoming = game.vectoredTo(G.g, c);
         let k = building(c);
         if (c.vectorTo != null) k = 2;
-        if (incoming.length > 0) k = c.producing != null ? 1 : 5;
+        if (incoming.length > 0) k = game.producing(c) ? 1 : 5;
         marker(c, k);
         const dest = c.vectorTo != null && c.vectorTo >= 0 ? G.g.map.cities[c.vectorTo] : null;
         if (dest) {
           done.add(dest);
-          marker(dest, dest.producing != null ? 1 : 5);
+          marker(dest, game.producing(dest) ? 1 : 5);
           line(dest, c, 7);
         } else if (c.vectorTo === game.STANDARD && sx != null) {
           toStandard(c, 8);
@@ -1864,13 +1885,13 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
                 || (filter != null && filter >= 0 && n + filter > game.MAX_VECTORED_TO);
       if (c === city || !full) {
         let k = building(c);
-        if (c === city) k = c.producing != null ? 4 : 6;
+        if (c === city) k = game.producing(c) ? 4 : 6;
         marker(c, k);
       }
     }
     const dest = city.vectorTo != null && city.vectorTo >= 0 ? G.g.map.cities[city.vectorTo] : null;
     if (dest) {
-      marker(dest, dest.producing != null ? 1 : 5);
+      marker(dest, game.producing(dest) ? 1 : 5);
       line(city, dest, 7);
     } else if (city.vectorTo === game.STANDARD && sx != null) {
       toStandard(city, 7);
@@ -2165,7 +2186,10 @@ function pressAssault() {
   }
   G.closeAssault();
   const city = a.result.captured;
-  if (city && !a.computer) presentVictory(city, a.victor);
+  // a medal is told before the city's fate is asked (67cc:0000)
+  const then = () => { if (city && !a.computer) presentVictory(city, a.victor); };
+  if (a.result.medal && !a.computer) honours.medal(a.result.medal, then);
+  else then();
 }
 
 /** The cloud over the tile, drawn with the map, in map pixels. */
@@ -2234,10 +2258,25 @@ function presentVictory(city, victor) {
     where: fmt(uidata.text(ui, AS.vWhere, G.g.rng.dice(1, 3, -1)), city.name),
   };
   const v = G.victoryView;
+  // Pillage and Sack by the gold they would bring (63fa:0834, 63fa:07d0)
+  const pillageGold = city.slots.length >= 1 ? Math.floor(Math.abs(G.g.types.byId[city.slots[city.slots.length - 1].type].price) / 2) : 0;
+  const sackGold = aigroups.sackValue(G.g, city);
   v.state[AS.occupy] = uidata.NORMAL;
   v.state[AS.raze] = uidata.NORMAL;
-  v.state[AS.pillage] = city.slots.length >= 1 ? uidata.NORMAL : uidata.DISABLED;
-  v.state[AS.sack] = city.slots.length >= 2 ? uidata.NORMAL : uidata.DISABLED;
+  v.state[AS.pillage] = pillageGold !== 0 ? uidata.NORMAL : uidata.DISABLED;
+  v.state[AS.sack] = sackGold !== 0 ? uidata.NORMAL : uidata.DISABLED;
+  // Enter is Occupy -- unless the stack's hero is on a quest this answers:
+  // Raze for a raze quest on this city, Sack (or Pillage) for gold (63fa:0000)
+  G.victory.enter = AS.occupy;
+  const q = G.player.quest;
+  const stack = G.selection ? G.selection.stack : [];
+  if (G.g.map.options.quests !== 0 && q && stack.find((a) => a.type === armytype.HERO) === q.hero) {
+    if (q.type === quest.RAZE && q.target === city) G.victory.enter = AS.raze;
+    else if (q.type === quest.PILLAGE_GOLD) {
+      if (sackGold !== 0) G.victory.enter = AS.sack;
+      else if (pillageGold !== 0) G.victory.enter = AS.pillage;
+    }
+  }
 }
 
 function drawVictory(v) {
@@ -2668,7 +2707,6 @@ for (let id = 183; id <= 185; id++) ACTION[id] = () => diplomacyUi.action();
 // the pad's centre, 177, shares its handler with Home (8065:0f02)
 ACTION[177] = () => {
   if (G.selection) centreOn(G.selection.x, G.selection.y);
-  else centreOn(G.player.capital.x, G.player.capital.y);
 };
 
 /** Which buttons are live (8065:0174, the original's own refresh). A
@@ -2928,7 +2966,7 @@ function keypressed(k) {
   if (G.assault) { pressAssault(); return; }
   if (G.victory) {
     // Occupy heads both the default and the cancel lists
-    if (k === "return" || k === "kpenter" || k === "escape") takeCity(AS.occupy);
+    if (k === "return" || k === "kpenter" || k === "escape") takeCity(G.victory.enter || AS.occupy);
     return;
   }
   if (G.offer) {

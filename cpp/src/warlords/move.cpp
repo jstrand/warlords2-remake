@@ -243,6 +243,7 @@ struct Query {
   // the road builder (roadRoute): straight spreading, its own trace
   bool roads = false;
   std::function<bool(int, int)> isBridge;
+  int flood = NONE;          // a flood's range (flag 0x10), NONE for a route
 };
 
 // path_wavefront (1555:0373): sweeps squares ever wider round the
@@ -253,8 +254,9 @@ int wavefront(Query& q, int pass) {
   std::vector<int>& dist = q.dist;
   const std::vector<int>& grid = *q.grid;
   int mode = q.mode;
-  int margin = pass == 0 ? 6 : 50;
-  if (pass == 0) q.ring = 0;
+  // a flood (flag 0x10) spreads as far as its range, and as many rounds
+  int margin = q.flood != NONE ? q.flood : (pass == 0 ? 6 : 50);
+  if (pass == 0 || q.flood != NONE) q.ring = 0;
   int lox = std::min(sx, dx), loy = std::min(sy, dy);
   int hix = std::max(sx, dx), hiy = std::max(sy, dy);
   int bx0 = lox < margin ? 0 : lox - margin;
@@ -264,6 +266,7 @@ int wavefront(Query& q, int pass) {
   int found = 1;
   bool going = true;
   while (going) {
+    if (q.flood != NONE && q.ring == q.flood) break;
     bool any = false;
     int r = q.ring;
     int x0 = std::max({dx - r, 0, bx0}), x1 = std::min({dx + r, W - 1, bx1});
@@ -320,7 +323,7 @@ int wavefront(Query& q, int pass) {
               if (ok && nd + c < std::abs(nv)) dist[nk] = v - c;
             }
           }
-          if (x == sx && y == sy) going = false;
+          if (x == sx && y == sy && q.flood == NONE) going = false;
         }
       }
     }
@@ -433,6 +436,92 @@ bool singleStep(const Game& g, int mode, int sx, int sy, int dx, int dy) {
 }
 }  // namespace
 
+namespace {
+// A stack may always path *to* a city, just never through one it does not
+// own (path_mark_cities, 1555:0bde): when (x, y) is a city tile the grid
+// shuts, its four tiles are opened. Returns what to put back.
+std::vector<std::pair<int, int>> openCityAt(Game& g, std::vector<int>& grd, int x0, int y0) {
+  int W = g.map->width, H = g.map->height;
+  std::vector<std::pair<int, int>> restore;
+  int goal = y0 * W + x0;
+  int goalByte = grd[goal];
+  City* city = g.map->cityTile[goal];
+  if (city && goalByte % 8 == 0 && has(goalByte, CITY_F)) {
+    bool port = isPort(g, *city);
+    for (int ox = 0; ox <= 1; ox++) {
+      for (int oy = 0; oy <= 1; oy++) {
+        int x = city->x + ox, y = city->y + oy;
+        if (x < W && y < H) {
+          int k = y * W + x;
+          restore.emplace_back(k, grd[k]);
+          int byte = grd[k] - grd[k] % 8 + COST[CITY];
+          if (port) byte |= CROSS_F | WATER_F;
+          grd[k] = byte;
+        }
+      }
+    }
+  }
+  return restore;
+}
+
+// The request's flags (stack_movement_mode, 1c8c:0529): 8 at sea, else for
+// a land stack 1 for the hills bonus and 2 for the woods'.
+int routeFlags(int mode, bool woods, bool hills, bool atSea) {
+  if (atSea) return 8;
+  if (mode != LAND) return 0;
+  return (hills ? 1 : 0) | (woods ? 2 : 0);
+}
+
+bool stepDir(int& x, int& y, int dir, int W, int H) {
+  int nx = x + DIRS[dir][0], ny = y + DIRS[dir][1];
+  if (nx < 0 || ny < 0 || nx >= W || ny >= H) return false;
+  x = nx; y = ny;
+  return true;
+}
+
+int dirOf(int dx, int dy) {
+  for (int d = 0; d < 8; d++) if (DIRS[d][0] == dx && DIRS[d][1] == dy) return d;
+  return 0;
+}
+
+// A cached route the request can use (1555:1595 / 165c): same destination,
+// mode and flags, with the start somewhere on it before its end. Returns the
+// rest of it as directions, or none.
+std::optional<std::vector<int>> cacheHit(const Game& g, const std::optional<CachedRoute>& e, int sx, int sy,
+                                         int dx, int dy, int mode, int flags) {
+  if (!e || e->dx != dx || e->dy != dy || e->mode != mode || e->flags != flags) return std::nullopt;
+  int x = e->sx, y = e->sy;
+  for (size_t i = 0; i < e->dirs.size(); i++) {
+    if (x == sx && y == sy) return std::vector<int>(e->dirs.begin() + i, e->dirs.end());
+    if (!stepDir(x, y, e->dirs[i], g.map->width, g.map->height)) return std::nullopt;
+  }
+  return std::nullopt;
+}
+
+// Keep a route found (1555:16f0): a short one in slot 0; a long one in the
+// first free slot of 1-19, or over the one whose own route is shortest when
+// that is shorter than this one.
+void cacheStore(Game& g, int d, int sx, int sy, int dx, int dy, int mode, int flags, const std::vector<int>& dirs) {
+  auto& c = g.pathCache->slots;
+  int slot = -1;
+  if (d < 15) {
+    slot = 0;
+  } else {
+    int shortest = -1, least = 10000;
+    for (int i = 1; i < CACHE_SLOTS; i++) {
+      const auto& e = c[i];
+      if (!e) { slot = i; break; }
+      int ed = distance(e->dx, e->dy, e->sx, e->sy);
+      if (ed < least) { shortest = i; least = ed; }
+    }
+    if (slot == -1 && shortest != -1 && least < d) slot = shortest;
+  }
+  if (slot != -1) c[slot] = CachedRoute{mode, flags, sx, sy, dx, dy, dirs};
+}
+}  // namespace
+
+std::shared_ptr<PathCache> newPathCache() { return std::make_shared<PathCache>(); }
+
 std::optional<Path> findPath(Game& g, const Stack& stack, int sx, int sy, int dx, int dy) {
   if (sx == dx && sy == dy) return Path{};
   int W = g.map->width, H = g.map->height;
@@ -441,32 +530,29 @@ std::optional<Path> findPath(Game& g, const Stack& stack, int sx, int sy, int dx
   int side = stack.empty() ? NONE : stack[0]->owner;
   Mode m = stackMode(g, stack);
   std::vector<int>& grd = grid(g, side);
+  int flags = routeFlags(m.mode, m.woods, m.hills, m.atSea);
+  int d = distance(dx, dy, sx, sy);
 
   std::optional<Path> path;
-  std::vector<std::pair<int, int>> restore;
-  if (distance(dx, dy, sx, sy) == 1 && singleStep(g, m.mode, sx, sy, dx, dy)) {
+  std::optional<std::vector<int>> dirs;
+  if (g.pathCache) {
+    dirs = cacheHit(g, g.pathCache->slots[0], sx, sy, dx, dy, m.mode, flags);
+    for (int i = 1; !dirs && d > 14 && i < CACHE_SLOTS; i++) {
+      dirs = cacheHit(g, g.pathCache->slots[i], sx, sy, dx, dy, m.mode, flags);
+    }
+  }
+  if (dirs) {
+    path = Path{};
+    int x = sx, y = sy;
+    for (int dir : *dirs) {
+      stepDir(x, y, dir, W, H);
+      path->push_back(Step{x, y, 0});
+    }
+  } else if (d == 1 && singleStep(g, m.mode, sx, sy, dx, dy)) {
     path = Path{Step{dx, dy, 0}};
   } else {
-    // a stack may always path *to* a city, just never through one it does
-    // not own (path_mark_cities, 1555:0bde)
     int goal = dy * W + dx;
-    int goalByte = grd[goal];
-    City* city = g.map->cityTile[goal];
-    if (city && goalByte % 8 == 0 && has(goalByte, CITY_F)) {
-      bool port = isPort(g, *city);
-      for (int ox = 0; ox <= 1; ox++) {
-        for (int oy = 0; oy <= 1; oy++) {
-          int x = city->x + ox, y = city->y + oy;
-          if (x < W && y < H) {
-            int k = y * W + x;
-            restore.emplace_back(k, grd[k]);
-            int byte = grd[k] - grd[k] % 8 + COST[CITY];
-            if (port) byte |= CROSS_F | WATER_F;
-            grd[k] = byte;
-          }
-        }
-      }
-    }
+    auto restore = openCityAt(g, grd, dx, dy);
     int penalty = 0;
     if (m.mode == LAND) {
       int t = scn::terrainAt(*g.map, dx, dy);
@@ -481,7 +567,19 @@ std::optional<Path> findPath(Game& g, const Stack& stack, int sx, int sy, int dx
         if (found == 0) found = wavefront(q, pass);
       }
     }
-    if (found == 1) path = trace(q);
+    if (found == 1) {
+      path = trace(q);
+      if (g.pathCache) {
+        std::vector<int> ds;
+        int px = sx, py = sy;
+        for (const Step& st : *path) {
+          ds.push_back(dirOf(st.x - px, st.y - py));
+          px = st.x; py = st.y;
+        }
+        cacheStore(g, d, sx, sy, dx, dy, m.mode, flags, ds);
+      }
+    }
+    for (auto& [k, byte] : restore) grd[k] = byte;
   }
 
   // what the walk spends on each step (path_step_costs, 1555:18be)
@@ -497,9 +595,30 @@ std::optional<Path> findPath(Game& g, const Stack& stack, int sx, int sy, int dx
       }
     }
   }
-  for (auto& [k, byte] : restore) grd[k] = byte;
   if (path && path->empty()) path.reset();
   return path;
+}
+
+std::vector<int> flood(Game& g, int gridSide, int x, int y, int range, int mode, bool woods, bool hills,
+                       int fogSide) {
+  int W = g.map->width, H = g.map->height;
+  std::vector<int>& grd = grid(g, gridSide);
+  int goal = y * W + x;
+  auto restore = openCityAt(g, grd, x, y);
+  int penalty = 0;
+  if (mode == LAND) {
+    int t = scn::terrainAt(*g.map, x, y);
+    penalty = (t == WATER || t == SHORE) ? WATER_PENALTY_TO : WATER_PENALTY;
+  }
+  Query q{W, H, x, y, x, y, &grd, mode, woods, hills, penalty,
+          prepare(g, grd, fogSide, mode, x, y), 0, false, nullptr};
+  q.flood = range;
+  if (q.dist[goal] != SHUT || has(grd[goal], CITY_F)) {
+    q.dist[goal] = -1;
+    if (wavefront(q, 0) == 0) wavefront(q, 1);
+  }
+  for (auto& [k, byte] : restore) grd[k] = byte;
+  return q.dist;
 }
 
 std::string settleSea(Game& g, const Stack& stack, int x, int y, int mode, bool wasAtSea) {

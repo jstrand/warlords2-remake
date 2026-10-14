@@ -26,7 +26,7 @@ export const HERO_TABLE = [0, 0, 0, 0, 1, 1, 1, 2, 2, 3];
 export const HIT_POINTS = 2;
 export const MAX_STRENGTH = 15;
 export const DIE = 20, DIE_INTENSE = 24;
-export const STALEMATE = 10000;              // throws before the defender wins
+export const STALEMATE = 10000;              // throws in one duel before the attacker loses it
 
 /** The battle tile's terrain class (combat_terrain_class, 6a89:0000). */
 export function terrainClass(g, x, y) {
@@ -43,73 +43,63 @@ function fightOrder(g, ownerIndex) {
   return (a) => g.map.fightOrder[row][a.type] || 0;
 }
 
-/** Sort a line by its owner's fight order, lowest first, ties keeping stack
- *  order. */
-function sortLine(g, line, ownerIndex) {
+/** On water, shore and mountains a side holding a hero sends one flier to
+ *  the back, keeping the hero's carrier alive longest: the first flier in
+ *  the order the line was gathered that is not at sea gets 80 on its rank
+ *  (6a89:008b, before the sort). Returns the army, or null. */
+function heroCarrier(g, line, x, y) {
+  const t = scn.terrainAt(g.map, x, y);
+  if (t !== move.WATER && t !== move.SHORE && t !== move.MOUNTAINS) return null;
+  if (!line.some((a) => a.type === armytype.HERO)) return null;
+  for (const a of line) if (!a.atSea && g.types.byId[a.type].flies) return a;
+  return null;
+}
+
+/** Sort a line by its owner's fight order, lowest first, ties keeping the
+ *  order it was gathered in (an insertion sort, 6a89:05f1). */
+function sortLine(g, line, ownerIndex, carrier) {
   const rank = fightOrder(g, ownerIndex);
-  const order = new Map();
-  line.forEach((a, i) => order.set(a, i));
+  const key = new Map();
+  line.forEach((a, i) => key.set(a, [rank(a) + (a === carrier ? 80 : 0), i]));
   luaSort(line, (p, q) => {
-    const rp = rank(p), rq = rank(q);
-    if (rp !== rq) return rp < rq;
-    return order.get(p) < order.get(q);
+    const kp = key.get(p), kq = key.get(q);
+    if (kp[0] !== kq[0]) return kp[0] < kq[0];
+    return kp[1] < kq[1];
   });
   return line;
 }
 
-/** On water, shore and mountain tiles a side holding a hero sends one flier to
- *  the back, keeping the hero's carrier alive longest. */
-function protectHeroCarrier(g, line, x, y) {
-  const t = scn.terrainAt(g.map, x, y);
-  if (t !== move.WATER && t !== move.SHORE && t !== move.MOUNTAINS) return;
-  if (!line.some((a) => a.type === armytype.HERO)) return;
-  for (let i = 0; i < line.length; i++) {
-    const a = line[i];
-    if (g.types.byId[a.type].flies) {
-      line.splice(i, 1);
-      line.push(a);
-      return;
-    }
-  }
-}
-
 /** Build both battle lines for an attack on (x, y):
- *  [attackers, defenders, defOwner, city]. */
+ *  [attackers, defenders, defOwner, city]. The defenders are every other
+ *  side's army on the tile -- on a city, anywhere in its 2x2 -- gathered from
+ *  the top of the army table down (combat_setup, 6a89:008b). */
 export function lines(g, stack, x, y) {
   const attacker = stack[0] ? stack[0].owner : undefined;
   // only a standing city is fought for as one (its terrain is 10, which
   // combat_setup and after_battle test); ruins are open ground
   let city = g.map.cityTile[y * g.map.width + x];
   if (city && city.razed) city = undefined;
-  let tiles = [[x, y]];
-  if (city) {
-    tiles = [];
-    for (let dx = 0; dx <= 1; dx++) {
-      for (let dy = 0; dy <= 1; dy++) tiles.push([city.x + dx, city.y + dy]);
-    }
-  }
+  const x0 = city ? city.x : x, y0 = city ? city.y : y;
+  const x1 = city ? city.x + 1 : x, y1 = city ? city.y + 1 : y;
   const defenders = [];
   let defOwner;
-  for (const t of tiles) {
-    for (const a of game.armiesAt(g, t[0], t[1])) {
-      if (a.owner != attacker) {
-        defenders.push(a);
-        if (defOwner == null) defOwner = a.owner;
-      }
+  for (let i = g.armies.length - 1; i >= 0; i--) {
+    const a = g.armies[i];
+    if (!a.transit && a.owner != attacker && a.x >= x0 && a.x <= x1 && a.y >= y0 && a.y <= y1) {
+      defenders.push(a);
+      if (defOwner == null) defOwner = a.owner;
     }
   }
   const attackers = stack.slice();
-  sortLine(g, attackers, attacker);
-  sortLine(g, defenders, defOwner);
-  protectHeroCarrier(g, attackers, x, y);
-  protectHeroCarrier(g, defenders, x, y);
+  sortLine(g, attackers, attacker, heroCarrier(g, attackers, x, y));
+  sortLine(g, defenders, defOwner, heroCarrier(g, defenders, x, y));
   return [attackers, defenders, defOwner == null ? undefined : defOwner, city];
 }
 
 function itemTotal(army, itemType) {
   let total = 0;
   for (const it of army.items || []) {
-    if (it.type === itemType) total += Math.max(1, it.value);
+    if (it.type === itemType) total += it.value || 0;
   }
   return total;
 }
@@ -238,6 +228,12 @@ export function resolve(g, attackers, defenders, x, y) {
   }));
 
   const atk = prepare(attackers, attackMod), def = prepare(defenders, defendMod);
+  // an army at sea on water or shore fights as a boat, strength 4
+  // (DS:029c / DS:02a4); Triumphs counts it a navy
+  const boats = new Set();
+  for (const a of attackers.concat(defenders)) {
+    if (a.atSea && (terrain === move.WATER || terrain === move.SHORE)) boats.add(a);
+  }
   const log = [];
   let ai = 0, di = 0, throws = 0;
   while (atk[ai] && def[di]) {
@@ -245,8 +241,10 @@ export function resolve(g, attackers, defenders, x, y) {
     const ra = g.rng.dice(1, die, 0), rd = g.rng.dice(1, die, 0);
     let aHits = ra <= a.strength && rd > d.strength;
     let dHits = rd <= d.strength && ra > a.strength;
-    throws++;
+    // past 10,000 throws in one duel the attacker takes the hit; the count
+    // starts again with each army that falls (67cc:08a6)
     if (throws > STALEMATE) { aHits = false; dHits = true; }
+    throws++;
 
     // Tutorial: a human player's hero cannot die attacking a neutral defender.
     if (dHits && g.map.options.tutorial !== 0 && a.army.type === armytype.HERO
@@ -255,10 +253,10 @@ export function resolve(g, attackers, defenders, x, y) {
     }
     if (aHits) {
       d.hits--;
-      if (d.hits < 0) { d.dead = true; log.push(0); di++; }
+      if (d.hits < 0) { d.dead = true; log.push(0); di++; throws = 0; }
     } else if (dHits) {
       a.hits--;
-      if (a.hits < 0) { a.dead = true; log.push(1); ai++; }
+      if (a.hits < 0) { a.dead = true; log.push(1); ai++; throws = 0; }
     }
   }
 
@@ -271,7 +269,8 @@ export function resolve(g, attackers, defenders, x, y) {
     won: survivors(def).length === 0,
     deadByArmy,
     log,
-    attackMod, defendMod, class: cls,
+    attackMod, defendMod, class: cls, boats,
+    defStrength0: defenders[0] ? strength(g, defenders[0], defendMod, cls, terrain) : 0,
     attackers: survivors(atk), defenders: survivors(def),
     deadAttackers, deadDefenders,
   };

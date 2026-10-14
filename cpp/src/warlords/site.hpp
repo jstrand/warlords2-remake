@@ -30,6 +30,7 @@ struct SearchResult {
   int gold = 0;
   std::vector<Army*> armies;
   const ArmyType* type = nullptr;
+  int count = 0;                            // how many allies came, room or not
 };
 
 namespace site {
@@ -54,16 +55,19 @@ void fillItemPool(Game& g, int reserved);
 void markRich(Game& g);
 /** Roll what every site holds (setup_random_sites, 66d4:0000). */
 void setup(Game& g);
-/** Does the hero survive the ruin's guardian? */
-bool survivesGuardian(Game& g, const Army& h, const std::vector<Army*>& stack, int monsterStrength);
+/** Does the hero survive the ruin's guardian (6536:07ad)? 3 more in 100 for
+ *  every army on its tile, whoever's. */
+bool survivesGuardian(Game& g, const Army& h, int monsterStrength);
 /** The strength of a site's guardian, from the scenario's monster table. */
 int guardianStrength(const Game& g, const Site& s);
 /** Bless a stack at a temple: +1 strength (max 9), once per temple per army;
  *  only the first four temples can bless. */
 int bless(Game& g, const Site& s, const std::vector<Army*>& stack);
-/** Search the site under a stack (site_search, 6536:0000). A human chooses at
- *  a temple; a found item is left on the ground for Take to pick up. None
- *  when there is nothing to search. */
+/** Search the site under a stack (site_search, 6536:0000). The stack's first
+ *  army needs a move left. With no hero only a temple does anything: it
+ *  blesses at once. With one, a human chooses at a temple; a found item is
+ *  left on the ground for Take to pick up. None when there is nothing to
+ *  search. */
 std::shared_ptr<SearchResult> search(Game& g, const std::vector<Army*>& stack, int x, int y, bool human = false);
 
 // What a sage can tell a side, for its hero at (hx, hy) (6536:1610).

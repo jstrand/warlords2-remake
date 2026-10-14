@@ -17,6 +17,7 @@ struct Reward {
   std::string kind;   // "allies", "gold", "item", "revealed"
   std::vector<Army*> armies;
   const ArmyType* type = nullptr;
+  int count = 0;      // allies given, room or not
   int gold = 0;
   Item* item = nullptr;
   Site* site = nullptr;
@@ -38,13 +39,19 @@ constexpr int SLAUGHTER = 3, OCCUPY = 4, RAZE = 5, PILLAGE_GOLD = 6;
 // DS:00a0, rolled with 1d10: types 4, 5 and 6 come up twice as often.
 extern const std::vector<int> TYPE_TABLE;
 extern const char* const DESCRIPTIONS[7];
+// how far a target may be from the hero: a human's, a computer's
 constexpr int ITEM_RANGE = 50, CITY_RANGE = 60;
+constexpr int AI_ITEM_RANGE = 30, AI_CITY_RANGE = 40, RAZE_RANGE = 60;
 // what a quest's target *is*, so it can be saved and restored by reference
 extern const char* const TARGET_KIND[7];
 constexpr int EXPERIENCE = 10;
+// The allies a quest gives are always Archons (4976:1d5b pushes 19).
+constexpr int REWARD_ALLY = 19;
 
-/** Take a quest at a temple, or none (quest_assign, 4976:0d7a). */
-std::shared_ptr<Quest> assign(Game& g, Side& side, Army* h);
+/** Take a quest at a temple, or none (quest_assign, 4976:0d7a): tries until
+ *  a quest finds a target -- pillage gold always does. `computer` for a
+ *  computer player's (5ad0:15c3). */
+std::shared_ptr<Quest> assign(Game& g, Side& side, Army* h, bool computer = false);
 /** A line of prose for a quest. */
 std::string describe(const Quest& q);
 
@@ -59,7 +66,8 @@ struct Event {
 /** Tell the quest what just happened: "battle", "item", "pillage", "occupy",
  *  "raze" or "turn" (quest_check, 4976:1ded). */
 std::shared_ptr<QuestResult> event(Game& g, Side& side, const std::string& ev, const Event& data = Event());
-/** Choose and give the reward (quest_choose_reward, 4976:1909). */
+/** Choose and give the reward (quest_choose_reward, 4976:1909, and
+ *  quest_give_reward, 4976:1c02). */
 std::shared_ptr<Reward> reward(Game& g, Side& side, const Quest* q);
 
 }  // namespace quest

@@ -1,5 +1,6 @@
 #include "warlords/save.hpp"
 
+#include <algorithm>
 #include <map>
 #include <stdexcept>
 
@@ -187,9 +188,11 @@ std::string encode(const Game& g) {
   Json armies = Json::array();
   for (Army* a : g.armies) {
     Json o = Json::object();
+    o.set("slot", a->slot);
     o.set("x", optInt(a->x)); o.set("y", optInt(a->y)); o.set("owner", optInt(a->owner));
     o.set("type", a->type); o.set("name", a->name);
     if (a->female) o.set("female", true);
+    if (a->medals) o.set("medals", a->medals);
     o.set("strength", a->strength); o.set("moves", a->moves); o.set("maxMoves", a->maxMoves);
     o.set("upkeep", a->upkeep); o.set("homeCity", optInt(a->homeCity));
     if (a->atSea) o.set("atSea", true);
@@ -235,6 +238,13 @@ std::string encode(const Game& g) {
     Json o = Json::object();
     o.set("index", s->index); o.set("gold", s->gold); o.set("alive", s->alive); o.set("computer", s->computer);
     o.set("level", s->level); o.set("enhanced", s->enhanced); o.set("observe", s->observe);
+    if (s->capNowX != NONE) {
+      Json cn = Json::object();
+      cn.set("x", s->capNowX);
+      cn.set("y", s->capNowY);
+      o.set("capNow", cn);
+    }
+    if (s->productionDue) o.set("productionDue", true);
     o.set("diploScore", s->diploScore); o.set("income", s->income); o.set("upkeepTotal", s->upkeepTotal);
     o.set("aiSolidarity", s->aiSolidarity); o.set("card", s->card);
     Json adv = Json::object();
@@ -266,6 +276,7 @@ std::string encode(const Game& g) {
     if (c.razed) o.set("razed", true);
     o.set("defence", c.defence); o.set("income", c.income); o.set("claim", optInt(c.claim));
     o.set("razedBy", optInt(c.razedBy));
+    if (c.attacked) o.set("attacked", c.attacked);
     Json slots = Json::array();
     for (auto& s : c.slots) slots.push(slotJson(s));
     o.set("slots", slots);
@@ -358,6 +369,26 @@ std::string encode(const Game& g) {
   out.set("version", VERSION);
   out.set("scenario", g.map->name);
   out.set("turn", g.turn); out.set("current", g.current); out.set("seed", (double)g.rng.state);
+  {
+    Json order = Json::array();
+    for (int v : g.turnOrder) order.push(v);
+    out.set("turnOrder", order);
+    out.set("orderAt", g.orderAt);
+    if (g.aiNeighbours) {
+      Json nb = Json::object();
+      for (size_t i = 0; i < g.aiNeighbours->byCity.size(); i++) {
+        const auto& e = g.aiNeighbours->byCity[i];
+        Json o = Json::object();
+        Json cs = Json::array(), ds = Json::array();
+        for (int c : e.cities) cs.push(c);
+        for (int d : e.dist) ds.push(d);
+        o.set("cities", cs);
+        o.set("dist", ds);
+        nb.set(std::to_string(i), o);
+      }
+      out.set("aiNeighbours", nb);
+    }
+  }
   out.set("won", g.won); out.set("over", g.over); out.set("noHumansSaid", g.noHumansSaid);
   out.set("greatest", g.greatest); out.set("surrenderOffered", g.surrenderOffered);
   out.set("options", opts);
@@ -393,6 +424,20 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
   g.armies.clear();
   g.turn = (int)state["turn"].integer();
   g.current = (int)state["current"].integer();
+  if (state["turnOrder"].isArray()) {
+    for (size_t i = 0; i < 8 && i < state["turnOrder"].size(); i++) g.turnOrder[i] = (int)state["turnOrder"][i].integer();
+  }
+  if (state["aiNeighbours"].isObject()) {
+    auto nb = std::make_shared<Neighbours>();
+    nb->byCity.resize(g.map->cities.size());
+    for (auto& [k, e] : state["aiNeighbours"].entries()) {
+      size_t i = (size_t)std::stoi(k);
+      if (i >= nb->byCity.size()) continue;
+      for (auto& v : e["cities"].items()) nb->byCity[i].cities.push_back((int)v.integer());
+      for (auto& v : e["dist"].items()) nb->byCity[i].dist.push_back((int)v.integer());
+    }
+    g.aiNeighbours = nb;
+  }
   g.rng.state = (uint32_t)state["seed"].number();
   g.won = state["won"].boolean(); g.over = state["over"].boolean();
   g.surrenderOffered = state["surrenderOffered"].boolean();
@@ -431,6 +476,7 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
     for (auto& s : saved["slots"].items()) c->slots.push_back(readSlot(s));
     if (!saved["claim"].isNull()) c->claim = (int)saved["claim"].integer();
     c->razedBy = readOpt(saved["razedBy"]);
+    c->attacked = (int)saved["attacked"].integer();
     if (!saved["name"].str().empty()) c->name = saved["name"].str();
     // ruins belong to nobody; older saves can have them won in a fight
     if (c->razed) c->ownerIndex = NONE;
@@ -495,6 +541,7 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
     a.x = readOpt(saved["x"]); a.y = readOpt(saved["y"]); a.owner = readOpt(saved["owner"]);
     a.type = (int)saved["type"].integer(); a.name = saved["name"].str();
     a.female = saved["female"].boolean();
+    a.medals = (int)saved["medals"].integer();
     a.strength = (int)saved["strength"].integer(); a.moves = (int)saved["moves"].integer();
     a.maxMoves = (int)saved["maxMoves"].integer(); a.upkeep = (int)saved["upkeep"].integer();
     a.homeCity = readOpt(saved["homeCity"]);
@@ -517,8 +564,12 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
     a.aiExplore = saved["aiExplore"].boolean();
     a.aiNeutral = saved["aiNeutral"].boolean();
     a.aiParty = saved["aiParty"].boolean();
-    armies.push_back(g.add(a));
+    // the army table in slot order; older saves had none, and their order
+    a.slot = saved.has("slot") && !saved["slot"].isNull() ? (int)saved["slot"].integer() : (int)armies.size();
+    armies.push_back(g.make(a));
   }
+  g.armies = armies;
+  std::stable_sort(g.armies.begin(), g.armies.end(), [](Army* p, Army* q) { return p->slot < q->slot; });
 
   for (auto& saved : state["sides"].items()) {
     Side* s = g.map->side((int)saved["index"].integer());
@@ -527,6 +578,11 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
     s->computer = saved["computer"].boolean(); s->level = (int)saved["level"].integer();
     s->enhanced = saved["enhanced"].boolean(); s->diploScore = (int)saved["diploScore"].integer();
     s->observe = saved["observe"].boolean();
+    if (saved["capNow"].isObject()) {
+      s->capNowX = (int)saved["capNow"]["x"].integer();
+      s->capNowY = (int)saved["capNow"]["y"].integer();
+    }
+    s->productionDue = saved["productionDue"].boolean();
     s->income = (int)saved["income"].integer(); s->upkeepTotal = (int)saved["upkeepTotal"].integer();
     s->aiSolidarity = (int)saved["aiSolidarity"].integer(); s->card = (int)saved["card"].integer();
     s->advisor.dir = (int)saved["advisor"]["dir"].integer();
@@ -575,6 +631,15 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
   }
 
   g.side = g.current < (int)g.sides.size() ? g.sides[g.current] : nullptr;
+  // where the side to play stands in the turn order; older saves: the order
+  // as it is
+  if (state.has("orderAt") && !state["orderAt"].isNull()) {
+    g.orderAt = (int)state["orderAt"].integer();
+  } else {
+    int me = g.side ? g.side->index : 0;
+    g.orderAt = -1;
+    for (int i = 0; i < 8; i++) if (g.turnOrder[i] == me) { g.orderAt = i; break; }
+  }
   move::invalidate(g);
   return gp;
 }

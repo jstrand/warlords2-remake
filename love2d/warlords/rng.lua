@@ -36,9 +36,10 @@ function rng:dice(n, sides, bonus)
   return total
 end
 
---- True with probability `percent`/100, i.e. the game's `dice(1,100,0) < p`.
+--- The game's `dice(1,100,0) < percent`: true (percent - 1) times in 100,
+--- as WARLORD2.EXE writes its percentages (79fa:0a75).
 function rng:chance(percent)
-  return self:dice(1, 100, 0) <= percent
+  return self:dice(1, 100, 0) < percent
 end
 
 --- A random element of a list (1-based), or nil if it is empty.

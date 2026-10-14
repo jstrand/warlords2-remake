@@ -157,8 +157,8 @@ inline void clearCflag(AIData& d, const City& c, int bit) { d.flags[c.index] = c
 
 /** A city's neighbours: {cities, dists}. */
 std::pair<std::vector<City*>, std::vector<int>> neighbours(Game& g, const City& c);
-/** For every city: flood by land from it (radius 45, then 60) and keep six
- *  neighbours, spread over the four directions (623c:0749). */
+/** For every city: flood by land from it (45 rounds, or 60 when that finds
+ *  no city), as side 0 with every tile seen, and pick six (623c:0749). */
 std::shared_ptr<Neighbours> buildNeighbours(Game& g);
 
 /** The stack a computer has "selected". */
@@ -191,14 +191,20 @@ std::vector<Army*> collect(const Game& g, int sideIndex, int x, int y, int minMo
  *  `ord`, and a maximum move of at least `minMax` (623c:13b2). */
 std::vector<Army*> collectOrdered(const Game& g, int sideIndex, int x, int y, int grp, int ord, int minMax);
 
-/** A flood's path costs from its start. */
+/** A flood's grid (move::flood). */
 struct Flood {
-  std::vector<int> dist;   // -1 where it did not reach
+  std::vector<int> dist;
   int W = 0, H = 0;
 };
-/** Flood the map from (x, y) the way the selection moves (1555:1ab9). */
-Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, const Sel* sel);
-Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, int mode);
+/** floodFrom's `fogSide` for the flooding side's own hidden map. */
+constexpr int SAME_SIDE = -3;
+/** Flood the map from (x, y) the way the selection moves (1555:1ab9): the
+ *  original's bounded sweep (move::flood) over `sideIndex`'s cost grid, at
+ *  most `range` rounds. `fogSide` is whose hidden map counts, the flooding
+ *  side's by default (a computer's: none). */
+Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, const Sel* sel, int fogSide = SAME_SIDE);
+Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, int mode, int fogSide = SAME_SIDE);
+/** The flood's cost to (x, y), plus 1, or UNREACHED. */
 int floodAt(const Flood& flood, int x, int y);
 /** The flood's distance to a city: {best, bx, by}, the least over the twelve
  *  tiles round it, or 100 (1000 with `far`) when none is closer, bx NONE

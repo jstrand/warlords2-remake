@@ -74,6 +74,7 @@ struct Assault {
 struct Victory {
   w2::City* city = nullptr;
   std::string who, where;
+  int enter = 285;   // what Enter and Escape choose: Occupy (285), or what a quest wants
 };
 
 struct AiStatus {
@@ -98,6 +99,9 @@ struct App {
   std::array<gfx::ImageP, 9> armyImg;
   gfx::ImageP atransShields, fogImg, cursImg, abits, pointerImg;
   gfx::ImageP shieldsImg, cityBack, searchPic, templePic, scrollPic;
+  // a promotion's (popups 16-18, by level) and a medal's (popups 24-27) pictures
+  std::map<int, gfx::ImageP> levelPic;
+  std::array<gfx::ImageP, 4> medalPic;
   std::map<int, gfx::ImageP> moveBars;
   std::unique_ptr<screen::Screen> screen;
   FontP font, bigFont, titleFont;
@@ -135,6 +139,7 @@ struct App {
   // battles
   std::optional<Assault> assault;
   std::optional<Victory> victory, victoryUnder;
+  w2::Army* medal = nullptr;     // what the assault just closed gave a medal to
   std::optional<screen::View> victoryView;
 
   // the computer's turn

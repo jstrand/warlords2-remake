@@ -81,7 +81,9 @@ struct City {
   int vectorTo = NONE;         // a city index, or STANDARD
   bool razed = false;
   int razedBy = NONE;
-  int claim = NONE;            // the computer whose ground it is
+  int claim = NONE;            // the computer whose ground it is; after a
+                               // capture, the side it was taken from (+0x2f)
+  int attacked = 0;            // a bit per side that has attacked it (+0x30)
 };
 
 struct Item {
@@ -173,6 +175,12 @@ struct Advisor {
 
 struct HeroOffer;
 
+/** A hero promoted as the turn opened, and the strength it gained. */
+struct Promotion {
+  Army* hero = nullptr;
+  int gain = 0;
+};
+
 struct Side {
   int index = 0;
   std::string name;
@@ -198,6 +206,10 @@ struct Side {
   std::shared_ptr<AIData> ai;
   int aiSolidarity = 0;
   Advisor advisor;
+  // where the capital now stands (67cc:10d7); NONE until the first turn
+  int capNowX = NONE, capNowY = NONE;
+  bool productionDue = false;      // a human's cities build once the offer is settled
+  std::vector<Promotion> promoted; // for the interface to show
 };
 
 // ------------------------------------------------------------------ armies
@@ -208,6 +220,7 @@ struct Transit {
 };
 
 struct Army {
+  int slot = 0;                // its place in the army table (1b62:0309)
   int x = NONE, y = NONE;      // NONE while in transit
   int owner = NONE;            // NONE for neutral
   int type = 0;
@@ -217,6 +230,7 @@ struct Army {
   int moves = 0, maxMoves = 0;
   int upkeep = 0;
   int homeCity = NONE;
+  int medals = 0;
   bool atSea = false;
   int group = 0;
   std::optional<std::pair<int, int>> target;   // where it is walking to
@@ -299,6 +313,7 @@ struct Ending {
 };
 
 struct Grids;     // move.cpp's cached cost grids
+struct PathCache; // move.cpp's route cache (1555:1508)
 struct Neighbours;
 
 struct Diplomacy {
@@ -333,15 +348,18 @@ struct Game {
   std::map<int, std::vector<std::pair<std::string, bool>>> heroNames;
   std::shared_ptr<Grids> grids;
   std::shared_ptr<Neighbours> aiNeighbours;
+  std::shared_ptr<PathCache> pathCache;
+  // the turn order (.SCN 0x163), shuffled each round with Random Turns, and
+  // the place in it of the side to play
+  std::array<int, 8> turnOrder{0, 1, 2, 3, 4, 5, 6, 7};
+  int orderAt = -1;
 
   /** A new army, owned by the game but not yet in it. */
   Army* make(const Army& a);
-  /** A new army, in the game. */
-  Army* add(const Army& a) {
-    Army* p = make(a);
-    armies.push_back(p);
-    return p;
-  }
+  /** A new army, in the game, in the army table's lowest free slot
+   *  (1b62:0309); `armies` stays in slot order, so a scan from its end is the
+   *  original's from the top down. */
+  Army* add(const Army& a);
   bool alive(const Army* a) const;
   void remove(const Army* a);
 };

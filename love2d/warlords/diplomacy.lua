@@ -41,7 +41,7 @@ function diplomacy.init(g)
   g.diplomacy = { state = {}, proposal = {} }
   for a = 0, 7 do
     for b = 0, 7 do
-      local v = a == b and diplomacy.PEACE or start
+      local v = start           -- a side's pair with itself too (484e:11bd)
       g.diplomacy.state[key(a, b)] = v
       g.diplomacy.proposal[key(a, b)] = v
     end

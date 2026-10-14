@@ -32,13 +32,14 @@ export const RATING_RANKS = {
 
 const key = (a, b) => a * 8 + b;
 
-/** War everywhere if Diplomacy is off, peace if it is on (484e:11bd). */
+/** War everywhere if Diplomacy is off, peace if it is on (484e:11bd) -- a
+ *  side's pair with itself too. */
 export function init(g) {
   const start = g.map.options.diplomacy !== 0 ? PEACE : WAR;
   g.diplomacy = { state: {}, proposal: {} };
   for (let a = 0; a < 8; a++) {
     for (let b = 0; b < 8; b++) {
-      const v = a === b ? PEACE : start;
+      const v = start;
       g.diplomacy.state[key(a, b)] = v;
       g.diplomacy.proposal[key(a, b)] = v;
     }

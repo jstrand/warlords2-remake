@@ -217,84 +217,78 @@ export function setCflag(d, c, bit) { d.flags[c.index] = set(d.flags[c.index], b
 export function clearCflag(d, c, bit) { d.flags[c.index] = clear(d.flags[c.index], bit); }
 
 // The shared neighbour table (623c:0398): each city's six nearest cities by
-// land path, with the path length to each. It depends on the map alone, so
-// it is kept per scenario -- as city indices, since another game of the map
-// (or a loaded save) has city objects of its own.
-const neighbourCache = new Map();
+// land, with the distance to each. It is built once, as the game is set up,
+// over side 0's cost grid -- the cities as they are then -- and kept with
+// the game (g.aiNeighbours, city indices).
 
 /** [cities, dists] of a city's neighbours. */
 export function neighbours(g, c) {
-  if (!g.aiNeighbours) {
-    const parts = [g.map.name || ""];
-    for (const o of g.map.cities) parts.push(o.x + "," + o.y);
-    const k = parts.join(";");
-    const shared = neighbourCache.get(k);
-    if (shared) {
-      const t = {};
-      for (const [i, e] of Object.entries(shared)) {
-        t[i] = { cities: e.cities.map((index) => g.map.cities[index]), dist: e.dist };
-      }
-      g.aiNeighbours = t;
-    } else {
-      g.aiNeighbours = buildNeighbours(g);
-      const t = {};
-      for (const [i, e] of Object.entries(g.aiNeighbours)) {
-        t[i] = { cities: e.cities.map((o) => o.index), dist: e.dist };
-      }
-      neighbourCache.set(k, t);
-    }
-  }
+  if (!g.aiNeighbours) g.aiNeighbours = buildNeighbours(g);
   const e = g.aiNeighbours[c.index];
-  return [e ? e.cities : [], e ? e.dist : []];
+  if (!e) return [[], []];
+  return [e.cities.map((i) => g.map.cities[i]), e.dist];
 }
 
-/** For every city: flood by land from it (radius 45, then 60) and keep six
- *  neighbours, spread over the four directions (623c:0749). */
+/** For every city: flood by land from it (45 rounds, or 60 when that finds
+ *  no city), as side 0 with every tile seen, and pick six (623c:0749). */
 export function buildNeighbours(g) {
   const out = {};
-  const cities = g.map.cities;
-  for (const c of cities) {
-    const pick = (range) => {
-      const flood = floodFrom(g, -1, c.x, c.y, range, { mode: move.LAND });
-      const cand = [];
-      for (const o of cities) {
-        if (o !== c) {
-          const [d] = cityDistance(g, flood, o);
-          if (d < 100) cand.push({ city: o, d });
-        }
-      }
-      luaSort(cand, (p, q) => p.d < q.d);
-      while (cand.length > 50) cand.pop();
-      let left = 0, right = 0, up = 0, down = 0;
-      const picked = [], dists = [];
-      while (picked.length < 6) {
-        let best = -1, bestScore = null;
-        cand.forEach((e, i) => {
-          if (!e.taken) {
-            let score = e.d;
-            if ((e.city.x < c.x && left > 2) || (c.x < e.city.x && right > 2)
-                || (e.city.y < c.y && up > 2) || (c.y < e.city.y && down > 2)) {
-              score += 50;
-            }
-            if (bestScore === null || score < bestScore) { best = i; bestScore = score; }
-          }
-        });
-        if (best < 0) break;
-        const e = cand[best];
-        e.taken = true;
-        picked.push(e.city); dists.push(e.d);
-        if (e.city.x < c.x) left++;
-        if (c.x < e.city.x) right++;
-        if (e.city.y < c.y) up++;
-        if (c.y < e.city.y) down++;
-      }
-      return [picked, dists, cand.length];
-    };
-    let [picked, dists, found] = pick(45);
-    if (found === 0) [picked, dists] = pick(60);
+  for (const c of g.map.cities) {
+    let [picked, dists, found] = pickNeighbours(g, c, floodFrom(g, 0, c.x, c.y, 45, { mode: move.LAND }, null));
+    if (found === 0) [picked, dists] = pickNeighbours(g, c, floodFrom(g, 0, c.x, c.y, 60, { mode: move.LAND }, null));
     out[c.index] = { cities: picked, dist: dists };
   }
   return out;
+}
+
+/** 623c:0749: every other city under 100 away goes into a list of 50 -- the
+ *  first free place, or over the farthest one when this one is nearer --
+ *  walking the cities from the last; then six are taken, nearest first and
+ *  50 further off for a direction that has three already, the list read from
+ *  its end so a tie goes to the later place. [cities, dists, found]. */
+function pickNeighbours(g, c, flood) {
+  const slotCity = new Array(50).fill(-1), slotDist = new Array(50).fill(0);
+  let found = 0;
+  for (let i = g.map.cities.length - 1; i >= 0; i--) {
+    if (i === c.index) continue;
+    const [d, px] = cityDistance(g, flood, g.map.cities[i]);
+    if (px == null) continue;
+    found++;
+    let at = -1, worst = d;
+    let k = 0;
+    for (; k < 50 && slotCity[k] !== -1; k++) {
+      if (worst < slotDist[k]) { worst = slotDist[k]; at = k; }
+    }
+    if (k < 50) at = k;
+    if (at !== -1 && (slotCity[at] === -1 || d < slotDist[at])) {
+      slotCity[at] = i; slotDist[at] = d & 0xff;
+    }
+  }
+  let left = 0, right = 0, up = 0, down = 0;
+  const picked = [], dists = [];
+  while (picked.length < 6) {
+    let best = -1, bestScore = 10000;
+    for (let k = 49; k >= 0; k--) {
+      if (slotCity[k] !== -1) {
+        const o = g.map.cities[slotCity[k]];
+        let score = slotDist[k];
+        if ((o.x < c.x && left > 2) || (c.x < o.x && right > 2)
+            || (o.y < c.y && up > 2) || (c.y < o.y && down > 2)) {
+          score += 50;
+        }
+        if (score < bestScore) { bestScore = score; best = k; }
+      }
+    }
+    if (best === -1) break;
+    const o = g.map.cities[slotCity[best]];
+    picked.push(o.index); dists.push(slotDist[best]);
+    if (o.x < c.x) left++;
+    if (c.x < o.x) right++;
+    if (o.y < c.y) up++;
+    if (c.y < o.y) down++;
+    slotCity[best] = -1;
+  }
+  return [picked, dists, found];
 }
 
 /** The movement points a selection shares, and how it moves. */
@@ -430,83 +424,27 @@ export function collectOrdered(g, sideIndex, x, y, grp, ord, minMax) {
   return out;
 }
 
-// move.DIRS in the order Lua's pairs() walks the table the Lua keeps them in:
-// 1..7, then 0. Dijkstra's answer does not depend on it, but it is the same.
-const FLOOD_DIRS = [1, 2, 3, 4, 5, 6, 7, 0].map((i) => move.DIRS[i]);
-
-/** Flood the map from (x, y) the way the selection moves (1555:1ab9): every
- *  tile within `range` gets its path cost from the start. */
-export function floodFrom(g, sideIndex, x, y, range, sel) {
-  const W = g.map.width, H = g.map.height;
-  const grid = move.grid(g, sideIndex);
+/** Flood the map from (x, y) the way the selection moves (1555:1ab9): the
+ *  original's bounded sweep (move.flood) over `sideIndex`'s cost grid, at
+ *  most `range` rounds. `fogSide` is whose hidden map counts, the flooding
+ *  side's by default (a computer's: none). */
+export function floodFrom(g, sideIndex, x, y, range, sel, fogSide) {
   const mode = sel && sel.mode != null ? sel.mode : move.LAND;
   let wd = false, hl = false;
   if (sel && sel.armies) {
     const m = move.stackMode(g, sel.armies);
     wd = m[1]; hl = m[2];
   }
-  const x0 = Math.max(0, x - range), x1 = Math.min(W - 1, x + range);
-  const y0 = Math.max(0, y - range), y1 = Math.min(H - 1, y + range);
-  const distT = new Map(), done = new Set();
-  const start = y * W + x;
-  distT.set(start, 0);
-  // a binary heap of [key, distance], 1-based as the Lua's
-  const heap = [null, [start, 0]];
-  let n = 1;
-  const push = (k, d) => {
-    n++;
-    heap[n] = [k, d];
-    let i = n;
-    while (i > 1) {
-      const p = Math.floor(i / 2);
-      if (heap[p][1] <= heap[i][1]) break;
-      [heap[p], heap[i]] = [heap[i], heap[p]];
-      i = p;
-    }
-  };
-  const pop = () => {
-    const top = heap[1];
-    heap[1] = heap[n]; heap[n] = undefined; n--;
-    let i = 1;
-    for (;;) {
-      const l = i * 2, r = i * 2 + 1;
-      let best = i;
-      if (l <= n && heap[l][1] < heap[best][1]) best = l;
-      if (r <= n && heap[r][1] < heap[best][1]) best = r;
-      if (best === i) break;
-      [heap[best], heap[i]] = [heap[i], heap[best]];
-      i = best;
-    }
-    return top;
-  };
-  while (n > 0) {
-    const top = pop();
-    const k = top[0];
-    if (!done.has(k)) {
-      done.add(k);
-      const d = distT.get(k);
-      const kx = k % W, ky = Math.floor(k / W);
-      for (const dir of FLOOD_DIRS) {
-        const nx = kx + dir[0], ny = ky + dir[1];
-        if (nx >= x0 && ny >= y0 && nx <= x1 && ny <= y1) {
-          const nk = ny * W + nx;
-          if (!done.has(nk)) {
-            const c = move.stepCost(grid[k], grid[nk], mode, wd, hl, move.WATER_PENALTY);
-            if (c != null && (!distT.has(nk) || d + c < distT.get(nk))) {
-              distT.set(nk, d + c);
-              push(nk, d + c);
-            }
-          }
-        }
-      }
-    }
-  }
-  return { dist: distT, W, H };
+  const dist = move.flood(g, sideIndex, x, y, range, mode, wd, hl,
+                          fogSide === undefined ? sideIndex : fogSide);
+  return { dist, W: g.map.width };
 }
 
+/** The flood's cost to (x, y), plus 1, or UNREACHED. */
 export function floodAt(flood, x, y) {
-  const d = flood.dist.get(y * flood.W + x);
-  return d != null ? d + 1 : UNREACHED;
+  const v = flood.dist[y * flood.W + x];
+  if (v == null || v === 30000 || v === move.SHUT) return UNREACHED;
+  return Math.abs(v);
 }
 
 // the ring round a city's 2x2 footprint, as 59bf:0a85 walks it
@@ -589,8 +527,18 @@ function* step(g, sel, tx, ty) {
 
 /** Fight for (x, y) with the selection, for real. Returns the result. */
 export function* fight(g, sel, x, y) {
-  // decided, shown, and only then taken effect (after_battle, 67cc:0a6b)
+  // the computer's attack (67cc:124a): the lines are drawn up first; a city
+  // of a side it is not at war with is treachery -- war, and the score's
+  // penalty (67cc:20a8); then the attack is paid for and fought, shown, and
+  // only then taken effect (after_battle, 67cc:0a6b)
   const result = game.decideAttack(g, sel.armies, x, y);
+  const me = sel.armies[0] ? sel.armies[0].owner : undefined;
+  const city = result.lines.city;
+  if (city && city.ownerIndex != null && me != null && g.map.options.diplomacy !== 0
+      && diplomacy.state(g, me, city.ownerIndex) !== diplomacy.WAR) {
+    diplomacy.attackAnyway(g, me, city.ownerIndex);
+  }
+  game.chargeAttack(g, sel.armies, x, y);
   if (ai.hooks.onFight) yield* ai.hooks.onFight(g, sel.armies, x, y, result);
   game.applyAttack(g, result);
   const keep = sel.armies.filter((a) => alive(g, a));

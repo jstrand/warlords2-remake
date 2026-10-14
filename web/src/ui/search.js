@@ -81,7 +81,8 @@ function ruinLines(r) {
   } else if (r.kind === "gold") {
     lines.push(fmt(kit.text(0x35, 0), name, r.gold));
   } else if (r.kind === "allies") {
-    const n = r.armies.length;
+    // the number rolled (6536:01ab), placed or not
+    const n = r.count != null ? r.count : r.armies.length;
     const tname = r.type ? r.type.name : "";
     lines.push(n === 1 ? fmt(kit.text(0x36, 0), tname, name) : fmt(kit.text(0x36, 1), n, tname, name));
   }
@@ -149,6 +150,13 @@ function openRuin(r, after) {
 const TEMPLE = { x: 160, y: 60, w: 320, h: 280 }; // popup 9
 const TEMPLE_DIALOG = 15, BLESS = 328, QUEST = 329;
 
+/** How many a temple blessed (temple_bless, 6536:08a1). */
+function blessLine(n) {
+  if (n === 0) return kit.text(0x37, 0);
+  if (n === 1) return kit.text(0x38, 0);
+  return fmt(kit.text(0x38, 1), n);
+}
+
 function openTemple(r, stack) {
   const G = kit.G;
   sound.music(cues.TEMPLE);                       // 4976:0000
@@ -174,12 +182,7 @@ function openTemple(r, stack) {
     if (c.id === BLESS) {
       // temple_bless (6536:08a1): how many were blessed, and a parting line
       kit.pop(d);
-      const n = site.bless(G.g, r.site, stack);
-      let line;
-      if (n === 0) line = kit.text(0x37, 0);
-      else if (n === 1) line = kit.text(0x38, 0);
-      else line = fmt(kit.text(0x38, 1), n);
-      message(line, kit.text(0x38, 2));
+      message(blessLine(site.bless(G.g, r.site, stack)), kit.text(0x38, 2));
     } else if (c.id === QUEST) {
       kit.pop(d);
       quest.assign(G.g, G.player, r.hero);
@@ -304,6 +307,8 @@ export function open(stack) {
   if (!stack || stack.length === 0) return;
   const r = game.searchHere(G.g, stack, true);
   if (!r || r.kind === "no hero") return;
+  // with no hero a temple blesses at once, with only its message (6536:0000)
+  if (r.kind === "temple" && !r.hero) return message(blessLine(r.blessed), kit.text(0x38, 2));
   if (r.kind === "temple") return openTemple(r, stack);
   if (r.kind === "sage") {
     sound.music(cues.SAGE);

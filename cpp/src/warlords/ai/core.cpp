@@ -111,32 +111,12 @@ AIData& data(Game& g, Side& sd) {
 AIData& data(Game& g, int sideIndex) { return data(g, *g.map->side(sideIndex)); }
 
 // The shared neighbour table (623c:0398): each city's six nearest cities by
-// land path, with the path length to each. It depends on the map alone, so
-// it is kept per scenario. Not the Lua's: the table holds city indices, so a
-// second game of the same map (or a loaded save) reads its own cities rather
-// than the first game's.
-namespace {
-std::mutex neighbourLock;
-std::map<std::string, std::shared_ptr<Neighbours>> neighbourCache;
-}
+// land, with the distance to each. It is built once, as the game is set up,
+// over side 0's cost grid -- the cities as they are then -- and kept with
+// the game (g.aiNeighbours, city indices).
 
 std::pair<std::vector<City*>, std::vector<int>> neighbours(Game& g, const City& c) {
-  if (!g.aiNeighbours) {
-    std::string k = g.map->name;
-    for (auto& o : g.map->cities) k += ";" + std::to_string(o.x) + "," + std::to_string(o.y);
-    std::shared_ptr<Neighbours> found;
-    {
-      std::lock_guard<std::mutex> lock(neighbourLock);
-      auto it = neighbourCache.find(k);
-      if (it != neighbourCache.end()) found = it->second;
-    }
-    if (!found) {
-      found = buildNeighbours(g);
-      std::lock_guard<std::mutex> lock(neighbourLock);
-      neighbourCache[k] = found;
-    }
-    g.aiNeighbours = found;
-  }
+  if (!g.aiNeighbours) g.aiNeighbours = buildNeighbours(g);
   std::pair<std::vector<City*>, std::vector<int>> out;
   if (c.index >= 0 && c.index < (int)g.aiNeighbours->byCity.size()) {
     const auto& e = g.aiNeighbours->byCity[c.index];
@@ -146,55 +126,69 @@ std::pair<std::vector<City*>, std::vector<int>> neighbours(Game& g, const City& 
   return out;
 }
 
+namespace {
+// 623c:0749: every other city under 100 away goes into a list of 50 -- the
+// first free place, or over the farthest one when this one is nearer --
+// walking the cities from the last; then six are taken, nearest first and
+// 50 further off for a direction that has three already, the list read from
+// its end so a tie goes to the later place. Returns how many were found.
+int pickNeighbours(Game& g, const City& c, const Flood& flood, std::vector<int>& picked, std::vector<int>& dists) {
+  int slotCity[50], slotDist[50];
+  for (int k = 0; k < 50; k++) { slotCity[k] = -1; slotDist[k] = 0; }
+  int found = 0;
+  for (int i = (int)g.map->cities.size() - 1; i >= 0; i--) {
+    if (i == c.index) continue;
+    auto [d, px, py] = cityDistance(g, flood, g.map->cities[i]);
+    (void)py;
+    if (px == NONE) continue;
+    found++;
+    int at = -1, worst = d;
+    int k = 0;
+    for (; k < 50 && slotCity[k] != -1; k++) {
+      if (worst < slotDist[k]) { worst = slotDist[k]; at = k; }
+    }
+    if (k < 50) at = k;
+    if (at != -1 && (slotCity[at] == -1 || d < slotDist[at])) {
+      slotCity[at] = i;
+      slotDist[at] = d & 0xff;
+    }
+  }
+  int left = 0, right = 0, up = 0, down = 0;
+  picked.clear();
+  dists.clear();
+  while (picked.size() < 6) {
+    int best = -1, bestScore = 10000;
+    for (int k = 49; k >= 0; k--) {
+      if (slotCity[k] != -1) {
+        const City& o = g.map->cities[slotCity[k]];
+        int score = slotDist[k];
+        if ((o.x < c.x && left > 2) || (c.x < o.x && right > 2) || (o.y < c.y && up > 2) || (c.y < o.y && down > 2)) {
+          score += 50;
+        }
+        if (score < bestScore) { bestScore = score; best = k; }
+      }
+    }
+    if (best == -1) break;
+    const City& o = g.map->cities[slotCity[best]];
+    picked.push_back(o.index);
+    dists.push_back(slotDist[best]);
+    if (o.x < c.x) left++;
+    if (c.x < o.x) right++;
+    if (o.y < c.y) up++;
+    if (c.y < o.y) down++;
+    slotCity[best] = -1;
+  }
+  return found;
+}
+}  // namespace
+
 std::shared_ptr<Neighbours> buildNeighbours(Game& g) {
   auto out = std::make_shared<Neighbours>();
-  auto& cities = g.map->cities;
-  out->byCity.resize(cities.size());
-  for (auto& c : cities) {
-    struct Cand { City* city; int d; bool taken = false; };
-    auto pick = [&](int range, std::vector<int>& picked, std::vector<int>& dists) {
-      Flood flood = floodFrom(g, -1, c.x, c.y, range, move::LAND);
-      std::vector<Cand> cand;
-      for (auto& o : cities) {
-        if (&o != &c) {
-          int d = std::get<0>(cityDistance(g, flood, o));
-          if (d < 100) cand.push_back(Cand{&o, d});
-        }
-      }
-      luaSort(cand, [](const Cand& p, const Cand& q) { return p.d < q.d; });
-      while (cand.size() > 50) cand.pop_back();
-      int left = 0, right = 0, up = 0, down = 0;
-      picked.clear();
-      dists.clear();
-      while (picked.size() < 6) {
-        int best = -1, bestScore = 0;
-        bool any = false;
-        for (size_t i = 0; i < cand.size(); i++) {
-          Cand& e = cand[i];
-          if (!e.taken) {
-            int score = e.d;
-            if ((e.city->x < c.x && left > 2) || (c.x < e.city->x && right > 2) ||
-                (e.city->y < c.y && up > 2) || (c.y < e.city->y && down > 2)) {
-              score += 50;
-            }
-            if (!any || score < bestScore) { best = (int)i; bestScore = score; any = true; }
-          }
-        }
-        if (best < 0) break;
-        Cand& e = cand[best];
-        e.taken = true;
-        picked.push_back(e.city->index);
-        dists.push_back(e.d);
-        if (e.city->x < c.x) left++;
-        if (c.x < e.city->x) right++;
-        if (e.city->y < c.y) up++;
-        if (c.y < e.city->y) down++;
-      }
-      return (int)cand.size();
-    };
+  out->byCity.resize(g.map->cities.size());
+  for (auto& c : g.map->cities) {
     std::vector<int> picked, dists;
-    int found = pick(45, picked, dists);
-    if (found == 0) pick(60, picked, dists);
+    int found = pickNeighbours(g, c, floodFrom(g, 0, c.x, c.y, 45, move::LAND, NONE), picked, dists);
+    if (found == 0) pickNeighbours(g, c, floodFrom(g, 0, c.x, c.y, 60, move::LAND, NONE), picked, dists);
     out->byCity[c.index] = Neighbours::Entry{picked, dists};
   }
   return out;
@@ -322,51 +316,7 @@ std::vector<Army*> collectOrdered(const Game& g, int sideIndex, int x, int y, in
   return out;
 }
 
-// move::DIRS in the order Lua's pairs() walks the table the Lua keeps them in:
-// 1..7, then 0. Dijkstra's answer does not depend on it, but it is the same.
-static const int FLOOD_DIRS[8] = {1, 2, 3, 4, 5, 6, 7, 0};
-
-static Flood flood(Game& g, int sideIndex, int x, int y, int range, int mode, bool wd, bool hl) {
-  int W = g.map->width, H = g.map->height;
-  const std::vector<int> grid = move::grid(g, sideIndex);
-  int x0 = std::max(0, x - range), x1 = std::min(W - 1, x + range);
-  int y0 = std::max(0, y - range), y1 = std::min(H - 1, y + range);
-  Flood f;
-  f.W = W;
-  f.H = H;
-  f.dist.assign(W * H, -1);
-  std::vector<char> done(W * H, 0);
-  int start = y * W + x;
-  if (start < 0 || start >= W * H) return f;
-  f.dist[start] = 0;
-  using E = std::pair<int, int>;   // distance, key
-  std::priority_queue<E, std::vector<E>, std::greater<E>> heap;
-  heap.push({0, start});
-  while (!heap.empty()) {
-    int k = heap.top().second;
-    heap.pop();
-    if (done[k]) continue;
-    done[k] = 1;
-    int d = f.dist[k];
-    int kx = k % W, ky = k / W;
-    for (int di : FLOOD_DIRS) {
-      int nx = kx + move::DIRS[di][0], ny = ky + move::DIRS[di][1];
-      if (nx >= x0 && ny >= y0 && nx <= x1 && ny <= y1) {
-        int nk = ny * W + nx;
-        if (!done[nk]) {
-          auto c = move::stepCost(grid[k], grid[nk], mode, wd, hl, move::WATER_PENALTY);
-          if (c && (f.dist[nk] < 0 || d + *c < f.dist[nk])) {
-            f.dist[nk] = d + *c;
-            heap.push({d + *c, nk});
-          }
-        }
-      }
-    }
-  }
-  return f;
-}
-
-Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, const Sel* sel) {
+Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, const Sel* sel, int fogSide) {
   int mode = sel ? sel->mode : move::LAND;
   bool wd = false, hl = false;
   if (sel) {
@@ -374,17 +324,26 @@ Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, const Sel* sel)
     wd = m.woods;
     hl = m.hills;
   }
-  return flood(g, sideIndex, x, y, range, mode, wd, hl);
+  Flood f;
+  f.W = g.map->width;
+  f.H = g.map->height;
+  f.dist = move::flood(g, sideIndex, x, y, range, mode, wd, hl, fogSide == SAME_SIDE ? sideIndex : fogSide);
+  return f;
 }
 
-Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, int mode) {
-  return flood(g, sideIndex, x, y, range, mode, false, false);
+Flood floodFrom(Game& g, int sideIndex, int x, int y, int range, int mode, int fogSide) {
+  Flood f;
+  f.W = g.map->width;
+  f.H = g.map->height;
+  f.dist = move::flood(g, sideIndex, x, y, range, mode, false, false, fogSide == SAME_SIDE ? sideIndex : fogSide);
+  return f;
 }
 
 int floodAt(const Flood& f, int x, int y) {
   if (x < 0 || y < 0 || x >= f.W || y >= f.H) return UNREACHED;
-  int d = f.dist[y * f.W + x];
-  return d >= 0 ? d + 1 : UNREACHED;
+  int v = f.dist[y * f.W + x];
+  if (v == 30000 || v == move::SHUT) return UNREACHED;
+  return std::abs(v);
 }
 
 // the ring round a city's 2x2 footprint, as 59bf:0a85 walks it
@@ -473,8 +432,18 @@ StepResult step(Game& g, Sel& sel, int tx, int ty) {
 }  // namespace
 
 Battle fight(Game& g, Sel& sel, int x, int y) {
-  // decided, shown, and only then taken effect (after_battle, 67cc:0a6b)
+  // the computer's attack (67cc:124a): the lines are drawn up first; a city
+  // of a side it is not at war with is treachery -- war, and the score's
+  // penalty (67cc:20a8); then the attack is paid for and fought, shown, and
+  // only then taken effect (after_battle, 67cc:0a6b)
   Battle result = game::decideAttack(g, sel.armies, x, y);
+  int me = sel.armies.empty() ? NONE : sel.armies[0]->owner;
+  City* city = result.lines.city;
+  if (city && city->ownerIndex != NONE && me != NONE && g.map->options.diplomacy != 0 &&
+      diplomacy::state(g, me, city->ownerIndex) != diplomacy::WAR) {
+    diplomacy::attackAnyway(g, me, city->ownerIndex);
+  }
+  game::chargeAttack(g, sel.armies, x, y);
   if (hooks.onFight) hooks.onFight(g, sel.armies, x, y, result);
   game::applyAttack(g, result);
   std::vector<Army*> keep;

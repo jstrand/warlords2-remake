@@ -53,9 +53,10 @@ local function bump(g, side, opp, k, n)
 end
 
 --- An army of `loser`'s killed by `killer`'s: a hero, an unnatural creature
---- (ARMYTYPE +48 set), or an army; a navy as well when it was at sea; and
---- the standards a hero carried.
-function history.tally(g, army, killer)
+--- (ARMYTYPE +48 set), or an army; a navy as well when `boat`, it fought as a
+--- boat, at sea on water or shore (67cc:1aff); and the standards a hero
+--- carried.
+function history.tally(g, army, killer, boat)
   local armytype = require("warlords.armytype")
   local loser = army.owner
   local k
@@ -66,7 +67,7 @@ function history.tally(g, army, killer)
   for _, it in ipairs(army.items or {}) do if it.index < 8 then std = std + 1 end end
   for _, row in ipairs({ { loser, loser }, { killer, loser } }) do
     bump(g, row[1], row[2], k)
-    if army.atSea then bump(g, row[1], row[2], history.NAVIES) end
+    if boat then bump(g, row[1], row[2], history.NAVIES) end
     if std > 0 then bump(g, row[1], row[2], history.STANDARDS, std) end
   end
 end

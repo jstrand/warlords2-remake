@@ -126,6 +126,9 @@ void shareOutCities(Game& g) {
 // ai_turn_setup (5db9:0386).
 void turnSetup(Game& g, Side& side) {
   AIData& d = core::data(g, side);
+  // the side is at peace with itself, state and proposal (5db9:0000)
+  g.diplomacy.state[side.index * 9] = 0;
+  g.diplomacy.proposal[side.index * 9] = 0;
   side.aiSolidarity = d.solidarity;
   bool quick = g.map->options.quickStart != 0 && g.map->options.hiddenMap != 0;
   for (int i = (int)g.map->cities.size() - 1; i >= 0; i--) {
@@ -163,6 +166,8 @@ AIData& initSide(Game& g, Side& side) {
 }
 
 void startGame(Game& g) {
+  // the neighbour table, from the cities as the game begins (623c:0398)
+  g.aiNeighbours = core::buildNeighbours(g);
   for (auto& s : g.map->sides) initSide(g, s);
   shareOutCities(g);
   for (auto& s : g.map->sides) {
@@ -175,11 +180,6 @@ void playTurn(Game& g, Side& side, const std::function<void(const char*)>& pause
   auto p = [&](const char* name) { if (pause) pause(name); };
   bool hidden = g.map->options.hiddenMap != 0;
 
-  // the computer always hires an offered hero it can afford
-  if (side.heroOffer && side.gold >= side.heroOffer->price) {
-    hero::recruit(g, side, *side.heroOffer);
-    side.heroOffer.reset();
-  }
   for (Army* a : g.armies) if (a->owner == side.index) a->aiMoved = false;
 
   turnSetup(g, side);

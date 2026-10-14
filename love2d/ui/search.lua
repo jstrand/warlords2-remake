@@ -100,7 +100,8 @@ local function ruinLines(r)
   elseif r.kind == "gold" then
     lines[#lines + 1] = kit.text(0x35, 0):format(name, r.gold)
   elseif r.kind == "allies" then
-    local n = #r.armies
+    -- the number rolled (6536:01ab), placed or not
+    local n = r.count or #r.armies
     local tname = r.type and r.type.name or ""
     lines[#lines + 1] = n == 1 and kit.text(0x36, 0):format(tname, name)
                         or kit.text(0x36, 1):format(n, tname, name)
@@ -174,6 +175,13 @@ end
 local TEMPLE = { x = 160, y = 60, w = 320, h = 280 } -- popup 9
 local TEMPLE_DIALOG, BLESS, QUEST = 15, 328, 329
 
+--- How many a temple blessed (temple_bless, 6536:08a1).
+local function blessLine(n)
+  if n == 0 then return kit.text(0x37, 0) end
+  if n == 1 then return kit.text(0x38, 0) end
+  return kit.text(0x38, 1):format(n)
+end
+
 local function openTemple(r, stack)
   local G = kit.G
   sound.music(cues.TEMPLE)                       -- 4976:0000
@@ -199,12 +207,7 @@ local function openTemple(r, stack)
     if c.id == BLESS then
       -- temple_bless (6536:08a1): how many were blessed, and a parting line
       kit.pop(d)
-      local n = site.bless(G.g, r.site, stack)
-      local line
-      if n == 0 then line = kit.text(0x37, 0)
-      elseif n == 1 then line = kit.text(0x38, 0)
-      else line = kit.text(0x38, 1):format(n) end
-      M.message(line, kit.text(0x38, 2))
+      M.message(blessLine(site.bless(G.g, r.site, stack)), kit.text(0x38, 2))
     elseif c.id == QUEST then
       kit.pop(d)
       quest.assign(G.g, G.player, r.hero)
@@ -344,6 +347,10 @@ function M.open(stack)
   if not stack or #stack == 0 then return end
   local r = game.searchHere(G.g, stack, true)
   if not r or r.kind == "no hero" then return end
+  -- with no hero a temple blesses at once, with only its message (6536:0000)
+  if r.kind == "temple" and not r.hero then
+    return M.message(blessLine(r.blessed), kit.text(0x38, 2))
+  end
   if r.kind == "temple" then return openTemple(r, stack) end
   if r.kind == "sage" then
     -- sage_visit (6536:0aa0): the searching popup says who was found, then

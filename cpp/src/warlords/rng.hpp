@@ -37,8 +37,9 @@ class Rng {
     return total;
   }
 
-  /** True with probability percent/100, i.e. the game's dice(1,100,0) < p. */
-  bool chance(int percent) { return dice(1, 100, 0) <= percent; }
+  /** The game's `dice(1,100,0) < percent`: true (percent - 1) times in 100,
+   *  as WARLORD2.EXE writes its percentages (79fa:0a75). */
+  bool chance(int percent) { return dice(1, 100, 0) < percent; }
 
   /** A random index into a list of `n`, or -1 for an empty one (no draw). */
   int pickIndex(size_t n) { return n == 0 ? -1 : below((int)n); }

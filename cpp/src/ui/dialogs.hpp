@@ -44,6 +44,14 @@ void say(const std::string& line, kit::Done after = nullptr);
 void open(const std::vector<w2::Army*>& stack);
 }  // namespace search
 
+namespace honours {
+/** Show each hero promoted -- hero::checkPromotions's -- in its own popup,
+ *  then `after`. */
+void promotions(const std::vector<w2::Promotion>& list, kit::Done after);
+/** An army's new medal (game::applyAttack's Battle::medal), then `after`. */
+void medal(w2::Army* a, kit::Done after);
+}  // namespace honours
+
 namespace choose {
 /** The game's list chooser (796c:0000): pick one of `names`, entry `start`
  *  chosen; `after(index or NONE)` runs when it closes. */
