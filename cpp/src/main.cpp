@@ -714,6 +714,20 @@ static void moveSelection(int x, int y) {
     front::stratDirty();
     startWalk(walked, r.walked);
   }
+  // a walk that leaves the stack out of moves (walk_path's status 2) ends
+  // its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
+  // 1b62:08b3), with nothing selected; the walk still plays out
+  if (r.outOfMoves && G.selection) {
+    auto stack = G.selection->stack;
+    Army* lead = stack.empty() ? nullptr : stack[0];
+    bool arrived = lead && lead->target && lead->x == lead->target->first && lead->y == lead->target->second;
+    for (Army* a : stack) {
+      a->done = true;
+      if (arrived) a->target.reset();
+    }
+    G.selection.reset();
+    G.route.reset();
+  }
   if (G.selection && !G.selection->stack.empty()) {
     G.selection->x = G.selection->stack[0]->x;
     G.selection->y = G.selection->stack[0]->y;

@@ -156,6 +156,7 @@ struct WalkResult {
   std::string stopped;         // "arrived", "out of moves", "attack", "at peace", "blocked", "no route"
   std::optional<Attack> attack;
   std::vector<std::pair<int, int>> walked;
+  bool outOfMoves = false;     // walk_path's status 2: a human's stack is then put down
 };
 
 /** Going to sea and coming ashore, at the end of a walk (1a8b:04c8).

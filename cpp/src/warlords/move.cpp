@@ -648,6 +648,24 @@ std::string settleSea(Game& g, const Stack& stack, int x, int y, int mode, bool 
 }
 
 namespace {
+// Does the walk leave the stack out of moves (walk_path's status 2,
+// 1a8b:09d1)? With `m` the moves it has left: m below 2; or, having walked,
+// stopped by neither an enemy city nor a stack at war, m below the cost of
+// the route **from its start** to the step after where it stopped (the
+// table path_step_costs, 1555:18be, keeps, 255 at most; none past the
+// route's end). A human's stack out of moves is done for the turn and put
+// down (1c8c:01fd). `landed` counts the steps to where it stopped.
+bool outOfMoves(const Stack& stack, const Path& path, int landed, const std::string& stopped) {
+  int m = stackMoves(stack);
+  if (m < 2) return true;
+  if (landed == 0 || stopped == "attack" || stopped == "at peace") return false;
+  if (landed >= (int)path.size()) return false;
+  int total = 0;
+  for (int i = 0; i <= landed; i++) total += path[i].cost;
+  if (total >= 255) return false;
+  return m < total;
+}
+
 // Walk `stack` along `path`, stopping where the rules say to stop.
 WalkResult walkPath(Game& g, const Stack& stack, const Path& path) {
   int side = stack.empty() ? NONE : stack[0]->owner;
@@ -695,6 +713,7 @@ WalkResult walkPath(Game& g, const Stack& stack, const Path& path) {
 
   if (lastOk == 0) {
     if (result.stopped == "arrived") result.stopped = "blocked";
+    result.outOfMoves = outOfMoves(stack, path, 0, result.stopped);
     return result;
   }
 
@@ -731,6 +750,8 @@ WalkResult walkPath(Game& g, const Stack& stack, const Path& path) {
   result.spent = cost;
   for (int i = 0; i < lastOk; i++) result.walked.emplace_back(path[i].x, path[i].y);
   if (lastOk < (int)path.size() && result.stopped == "arrived") result.stopped = "blocked";
+  // going to sea or coming ashore ends the move as running out does
+  result.outOfMoves = !change.empty() || outOfMoves(stack, path, lastOk, result.stopped);
   return result;
 }
 }  // namespace

@@ -819,6 +819,20 @@ function moveSelection(x, y) {
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack));
     startWalk(walked, r.walked || []);
   }
+  // a walk that leaves the stack out of moves (walk_path's status 2) ends
+  // its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
+  // 1b62:08b3), with nothing selected; the walk still plays out
+  if (r.outOfMoves && G.selection) {
+    const stack = G.selection.stack;
+    const lead = stack[0];
+    const arrived = lead && lead.target && lead.x === lead.target.x && lead.y === lead.target.y;
+    for (const a of stack) {
+      a.done = true;
+      if (arrived) a.target = undefined;
+    }
+    G.selection = null;
+    G.route = null;
+  }
   if (G.selection && G.selection.stack.length > 0) {
     G.selection.x = G.selection.stack[0].x; G.selection.y = G.selection.stack[0].y;
     if (!G.walk) centreOn(G.selection.x, G.selection.y);

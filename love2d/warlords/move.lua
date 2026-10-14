@@ -778,10 +778,29 @@ local function stackAt(g, x, y)
   return armiesAt(g, x, y)
 end
 
+--- Does the walk leave the stack out of moves (walk_path's status 2,
+--- 1a8b:09d1)? With `m` the moves it has left: m below 2; or, having walked,
+--- stopped by neither an enemy city nor a stack at war, m below the cost of
+--- the route **from its start** to the step after where it stopped (the
+--- table path_step_costs, 1555:18be, keeps, 255 at most; none past the
+--- route's end). A human's stack out of moves is done for the turn and put
+--- down (1c8c:01fd).
+local function outOfMoves(stack, path, landed, stopped)
+  local m = move.stackMoves(stack)
+  if m < 2 then return true end
+  if landed == 0 or stopped == "attack" or stopped == "at peace" then return false end
+  local nxt = path[landed + 1]
+  if not nxt then return false end
+  local total = 0
+  for i = 1, landed + 1 do total = total + path[i].cost end
+  if total >= 255 then return false end
+  return m < total
+end
+
 --- Walk `stack` along `path`, stopping where the rules say to stop.
--- Returns { steps, spent, stopped, attack }. `stopped` is one of "arrived",
--- "out of moves", "blocked" or "attack"; on "attack" the caller resolves the
--- fight and may walk again. docs/rules.md > Moving a stack.
+-- Returns { steps, spent, stopped, attack, outOfMoves }. `stopped` is one of
+-- "arrived", "out of moves", "blocked" or "attack"; on "attack" the caller
+-- resolves the fight and may walk again. docs/rules.md > Moving a stack.
 local function walkPath(g, stack, path)
   local side = stack[1] and stack[1].owner
   local left = move.stackMoves(stack)
@@ -827,6 +846,7 @@ local function walkPath(g, stack, path)
 
   if lastOk == 0 then
     if result.stopped == "arrived" then result.stopped = "blocked" end
+    result.outOfMoves = outOfMoves(stack, path, 0, result.stopped)
     return result
   end
 
@@ -865,6 +885,8 @@ local function walkPath(g, stack, path)
   result.walked = {}
   for i = 1, lastOk do result.walked[i] = { x = path[i].x, y = path[i].y } end
   if lastOk < #path and result.stopped == "arrived" then result.stopped = "blocked" end
+  -- going to sea or coming ashore ends the move as running out does
+  result.outOfMoves = change ~= nil or outOfMoves(stack, path, lastOk, result.stopped)
   return result
 end
 

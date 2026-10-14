@@ -638,8 +638,26 @@ export function roadRoute(m, costs, W, H, sx, sy, dx, dy) {
   return trace(q).map((s) => ({ x: s.x, y: s.y }));
 }
 
+/** Does the walk leave the stack out of moves (walk_path's status 2,
+ *  1a8b:09d1)? With `m` the moves it has left: m below 2; or, having walked,
+ *  stopped by neither an enemy city nor a stack at war, m below the cost of
+ *  the route **from its start** to the step after where it stopped (the
+ *  table path_step_costs, 1555:18be, keeps, 255 at most; none past the
+ *  route's end). A human's stack out of moves is done for the turn and put
+ *  down (1c8c:01fd). `landed` counts the steps to where it stopped. */
+function outOfMoves(stack, path, landed, stopped) {
+  const m = stackMoves(stack);
+  if (m < 2) return true;
+  if (landed === 0 || stopped === "attack" || stopped === "at peace") return false;
+  if (landed >= path.length) return false;
+  let total = 0;
+  for (let i = 0; i <= landed; i++) total += path[i].cost;
+  if (total >= 255) return false;
+  return m < total;
+}
+
 /** Walk `stack` along `path`, stopping where the rules say to stop.
- *  Returns { steps, spent, stopped, attack, walked }. */
+ *  Returns { steps, spent, stopped, attack, walked, outOfMoves }. */
 function walkPath(g, stack, path) {
   const side = stack[0] ? stack[0].owner : undefined;
   let left = stackMoves(stack);
@@ -685,6 +703,7 @@ function walkPath(g, stack, path) {
 
   if (lastOk === 0) {
     if (result.stopped === "arrived") result.stopped = "blocked";
+    result.outOfMoves = outOfMoves(stack, path, 0, result.stopped);
     return result;
   }
 
@@ -721,6 +740,8 @@ function walkPath(g, stack, path) {
   result.walked = [];
   for (let i = 0; i < lastOk; i++) result.walked.push({ x: path[i].x, y: path[i].y });
   if (lastOk < path.length && result.stopped === "arrived") result.stopped = "blocked";
+  // going to sea or coming ashore ends the move as running out does
+  result.outOfMoves = !!change || outOfMoves(stack, path, lastOk, result.stopped);
   return result;
 }
 

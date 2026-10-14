@@ -2583,6 +2583,27 @@ function testVerified() {
     }
     ok(!beyond, "a flood of 5 rounds reaches no further than 5 (1555:0373)");
   }
+
+  // a walk that leaves fewer than 2 moves is out of moves (1a8b:09d1): the
+  // interface then puts the stack down
+  {
+    const g = newGame("ERYTHEA", { seed: 1 });
+    const side = game.begin(g);
+    let from = null, to = null;
+    for (let y = 1; y < g.map.height - 1 && !to; y++) {
+      for (let x = 1; x < g.map.width - 1 && !to; x++) {
+        const free = (tx, ty) => scn.terrainAt(g.map, tx, ty) === movement.PLAIN && !game.cityAt(g, tx, ty)
+          && game.armiesAt(g, tx, ty).length === 0 && scn.roadAt(g.map, tx, ty) % 32 === 0;
+        if (free(x, y) && free(x + 1, y)) { from = [x, y]; to = [x + 1, y]; }
+      }
+    }
+    const a = mk(g, from[0], from[1], side.index, 11);
+    const cost = movement.findPath(g, [a], a.x, a.y, to[0], to[1])[0].cost;
+    a.moves = cost + 1;
+    eq(movement.moveTo(g, [a], to[0], to[1]).outOfMoves, true, "one move left after the walk: out of moves");
+    a.moves = cost + 2;
+    eq(movement.moveTo(g, [a], from[0], from[1]).outOfMoves, false, "two left after arriving: not out of moves");
+  }
 }
 
 // --------------------------------------------------------------------- main

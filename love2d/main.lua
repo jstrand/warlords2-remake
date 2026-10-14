@@ -974,6 +974,19 @@ local function moveSelection(x, y)
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack))
     startWalk(walked, r.walked or {})
   end
+  -- a walk that leaves the stack out of moves (walk_path's status 2) ends
+  -- its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
+  -- 1b62:08b3), with nothing selected; the walk still plays out
+  if r.outOfMoves and G.selection then
+    local stack = G.selection.stack
+    local lead = stack[1]
+    local arrived = lead and lead.target and lead.x == lead.target.x and lead.y == lead.target.y
+    for _, a in ipairs(stack) do
+      a.done = true
+      if arrived then a.target = nil end
+    end
+    G.selection, G.route = nil, nil
+  end
   if G.selection and #G.selection.stack > 0 then
     G.selection.x, G.selection.y = G.selection.stack[1].x, G.selection.stack[1].y
     if not G.walk then centreOn(G.selection.x, G.selection.y) end

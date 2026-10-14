@@ -2984,6 +2984,28 @@ static void testVerified() {
     }
     ok(!beyond, "a flood of 5 rounds reaches no further than 5 (1555:0373)");
   }
+
+  // a walk that leaves fewer than 2 moves is out of moves (1a8b:09d1): the
+  // interface then puts the stack down
+  {
+    auto gp = newGame("ERYTHEA", seed(1));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    int fx = NONE, fy = NONE;
+    auto freeAt = [&](int tx, int ty) {
+      return scn::terrainAt(*g.map, tx, ty) == movement::PLAIN && !game::cityAt(g, tx, ty) &&
+             game::armiesAt(g, tx, ty).empty() && scn::roadAt(*g.map, tx, ty) % 32 == 0;
+    };
+    for (int y = 1; y < g.map->height - 1 && fx == NONE; y++)
+      for (int x = 1; x < g.map->width - 1 && fx == NONE; x++)
+        if (freeAt(x, y) && freeAt(x + 1, y)) { fx = x; fy = y; }
+    Army* a = mk(g, fx, fy, side->index, 11);
+    int cost = (*movement::findPath(g, {a}, a->x, a->y, fx + 1, fy))[0].cost;
+    a->moves = cost + 1;
+    eq(movement::moveTo(g, {a}, fx + 1, fy).outOfMoves, true, "one move left after the walk: out of moves");
+    a->moves = cost + 2;
+    eq(movement::moveTo(g, {a}, fx, fy).outOfMoves, false, "two left after arriving: not out of moves");
+  }
 }
 
 // What plays when. The OPL synthesis is checked in the sound step.

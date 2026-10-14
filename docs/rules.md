@@ -498,10 +498,17 @@ Walking the path, step by step:
   stack spends from its shared pool (the minimum of its armies' moves).
 - **Stopping:** the walk takes every step whose cumulative cost fits in the
   moves left (`path_step_costs`, `1555:18be`). There is no floor, so a stack
-  with **1** move left still takes a road, bridge or city step. The `< 2`
-  test at the end of `walk_path` only decides whether the walk reports itself
-  out of moves (status 2), after which the player's stack is put down
-  (`1b62:08b3`).
+  with **1** move left still takes a road, bridge or city step.
+- **Out of moves:** the end of `walk_path` (`1a8b:09d1`) reports the walk out
+  of moves (status 2) when the stack has **fewer than 2** moves left — or
+  when it walked, was not stopped by an enemy city or a stack at war, and
+  has fewer moves left than the route's cost **from its start** to the step
+  after where it stopped (`path_step_costs` keeps those totals, 255 at most).
+  Going to sea or coming ashore counts too. A human's stack (every move goes
+  through `1c8c:01fd`: a click, a keypad step, Move, Move All) is then marked
+  done for the turn (`8c07:08fb`) and **put down** (`1b62:08b3`): nothing is
+  selected, so Hero › Search and the other selection buttons grey out until
+  the stack is picked up again.
 
 ### Attacking
 

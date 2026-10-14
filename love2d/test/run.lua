@@ -3510,6 +3510,30 @@ local function testVerified()
     end
     ok(not beyond, "a flood of 5 rounds reaches no further than 5 (1555:0373)")
   end
+
+  -- a walk that leaves fewer than 2 moves is out of moves (1a8b:09d1): the
+  -- interface then puts the stack down
+  do
+    local scn = require("warlords.scn")
+    local g = game.new(DATA, "ERYTHEA", { seed = 1 })
+    local side = game.begin(g)
+    local function free(tx, ty)
+      return scn.terrainAt(g.map, tx, ty) == movement.PLAIN and not game.cityAt(g, tx, ty)
+        and #game.armiesAt(g, tx, ty) == 0 and (scn.roadAt(g.map, tx, ty) or 0) % 32 == 0
+    end
+    local fx, fy
+    for y = 1, g.map.height - 2 do
+      for x = 1, g.map.width - 2 do
+        if not fx and free(x, y) and free(x + 1, y) then fx, fy = x, y end
+      end
+    end
+    local a = mk(g, fx, fy, side.index, 11)
+    local cost = movement.findPath(g, { a }, a.x, a.y, fx + 1, fy)[1].cost
+    a.moves = cost + 1
+    eq(movement.moveTo(g, { a }, fx + 1, fy).outOfMoves, true, "one move left after the walk: out of moves")
+    a.moves = cost + 2
+    eq(movement.moveTo(g, { a }, fx, fy).outOfMoves, false, "two left after arriving: not out of moves")
+  end
 end
 
 -- The music and the advisor: docs/re/sound.md. The synthesis itself is only
