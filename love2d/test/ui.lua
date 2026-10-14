@@ -1604,6 +1604,60 @@ do
   print("  a computer's opening shows the human's hidden map")
 end
 
+-- Two humans on a hidden map: as each one's turn opens, neither the main map
+-- nor the strategic map is drawn until the banner is clicked away, so the
+-- one still at the screen sees nothing of the other's
+do
+  local game = require("warlords.game")
+  local kit = require("ui.kit")
+  for i = #G.modals, 1, -1 do G.modals[i] = nil end
+  G.starting, G.over, G.banner, G.aiRun, G.walk, G.offer = false, nil, nil, nil, nil, nil
+  G.g = game.new(G.dataDir, "ERYTHEA", { seed = 9, options = { hiddenMap = 1 } })
+  for i, s in ipairs(G.g.sides) do s.computer = i > 2 end
+  G.stratImage = nil
+  local realFog, realStrat = game.fogCell, G.drawStrategicMap
+  local shown
+  game.fogCell = function(...) shown = true return realFog(...) end
+  G.drawStrategicMap = function(...) shown = true return realStrat(...) end
+  local function frame(what)
+    shown = false
+    try(what, love.draw)
+    return shown
+  end
+  local function clear()
+    for _ = 1, 10 do
+      if not kit.top() then break end
+      try("put a dialog away", love.keypressed, "escape")
+    end
+  end
+  try("open a hotseat game", beginGame)
+  if not G.banner then fail("hotseat", "no banner for the first human")
+  elseif frame("draw the first hotseat banner") then
+    fail("hotseat", "a map shows under the first banner")
+  end
+  dismissBanner("dismiss the first hotseat banner")
+  dismissOffer()
+  clear()
+  if not frame("draw the first hotseat turn") then fail("hotseat", "the maps stay blank once the banner is gone") end
+  local second = G.g.sides[2]
+  try("end the first hotseat turn", endTurn)
+  if G.player ~= second or not G.banner then
+    fail("hotseat", "the second human's turn did not open with its banner")
+  elseif frame("draw the second hotseat banner") then
+    fail("hotseat", "a map shows under the second human's banner")
+  end
+  dismissBanner("dismiss the second hotseat banner")
+  if not frame("draw the second hotseat turn") then fail("hotseat", "the maps stay blank once the banner is gone") end
+  local cap, vw, vh = G.capOf(second), G.viewSize()
+  if cap.x < G.cx or cap.x >= G.cx + vw or cap.y < G.cy or cap.y >= G.cy + vh then
+    fail("hotseat", "the second human's turn did not open on its capital")
+  end
+  game.fogCell, G.drawStrategicMap = realFog, realStrat
+  dismissOffer()
+  clear()
+  print("  a hotseat turn shows no map until its banner is gone")
+end
+
 os.remove("warlords-save.lua")
 os.remove(prefsMod.FILE)
 

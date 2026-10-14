@@ -322,6 +322,20 @@ function G.capOf(side)
   return { x = side.capX or 0, y = side.capY or 0 }
 end
 
+--- Where the map is hidden and more than one human plays, the main map and
+--- the strategic map stay blank as a human's turn opens, until the banner is
+--- clicked away: each side has its own hidden map, and whoever is still at
+--- the screen is not to see the next one's. The original shares one seen bit
+--- among its humans and only holds back the re-centring (8cc6:0259).
+function hotseatHidden()
+  if G.g.map.options.hiddenMap == 0 then return false end
+  local humans = 0
+  for _, s in ipairs(G.g.map.sides) do
+    if s.inUse and s.alive ~= false and not s.computer then humans = humans + 1 end
+  end
+  return humans > 1
+end
+
 --- Start its first turn, and centre the view on the capital.
 function beginGame()
   local first = game.begin(G.g)
@@ -334,7 +348,10 @@ function beginGame()
   centreOn(cap.x, cap.y)
   -- the banner is a human's (8cc6:0259); a computer that opens the game goes
   -- straight to its turn, shown in the status bar (8cc6:0000)
-  if not first.computer then showBanner(G.player) end
+  if not first.computer then
+    G.mapAfterBanner = hotseatHidden()
+    showBanner(G.player)
+  end
 end
 
 --------------------------------------------------------------------- camera
@@ -1126,8 +1143,8 @@ end
 --- away and reaches the hero offer afterwards, so the two are never both up.
 function dismissBanner()
   G.banner = nil
-  if G.centreAfterBanner then centreOn(G.capOf(G.player).x, G.capOf(G.player).y) end
-  G.centreAfterBanner = nil
+  if G.mapAfterBanner then centreOn(G.capOf(G.player).x, G.capOf(G.player).y) end
+  G.mapAfterBanner = nil
   -- whoever is left on the water without a boat drowns (8cc6:0259) before
   -- the advisor has his say
   G.drownStranded(nil, nil, G.afterBanner)
@@ -1492,14 +1509,9 @@ function finishRound(side)
   cycleReset()
   -- 8cc6:0259 centres on the side's capital (its record's +6/+8) as the turn
   -- opens -- but where the map is hidden and more than one human plays,
-  -- only once the banner is gone, so one player's lands are not shown to
-  -- whoever is still at the screen
-  local humans = 0
-  for _, s in ipairs(G.g.map.sides) do
-    if s.inUse and s.alive ~= false and not s.computer then humans = humans + 1 end
-  end
-  G.centreAfterBanner = G.g.map.options.hiddenMap ~= 0 and humans > 1
-  if not G.centreAfterBanner then centreOn(G.capOf(side).x, G.capOf(side).y) end
+  -- only once the banner is gone, and until then neither map is shown
+  G.mapAfterBanner = hotseatHidden()
+  if not G.mapAfterBanner then centreOn(G.capOf(side).x, G.capOf(side).y) end
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income or 0)
   -- what the round's end found comes first, then the turn's banner
   ending.show(G.g.ending, function() showBanner(side) end)
@@ -1522,7 +1534,7 @@ end
 G.openCity = function(city) openCity(city) end
 
 local function takeLoaded(loaded)
-  G.g, G.selection, G.route = loaded, nil, nil
+  G.g, G.selection, G.route, G.mapAfterBanner = loaded, nil, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
   centreOn(G.capOf(G.player).x, G.capOf(G.player).y)
@@ -1536,7 +1548,7 @@ G.presentVictory = function(city, victor) presentVictory(city, victor) end
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
   if not ok then say("Nothing to load.") return end
-  G.g, G.selection, G.route = loaded, nil, nil
+  G.g, G.selection, G.route, G.mapAfterBanner = loaded, nil, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
   centreOn(G.capOf(G.player).x, G.capOf(G.player).y)
@@ -2945,15 +2957,24 @@ function love.draw()
   screen.drawBackground(G.screen, G.layout)
 
   local r = G.mapRect
-  love.graphics.setScissor(r.x, r.y, r.w, r.h)
-  local cx, cy = camDev()
-  display.pushMap(r.x, r.y, cx, cy, G.zoom)
-  drawMap()
-  if G.assault and G.assault.phase == "cloud" then drawCloud() end
-  love.graphics.pop()
-  love.graphics.setScissor()
+  if G.mapAfterBanner then
+    -- a hotseat turn not yet taken up: both maps blank (hotseatHidden)
+    local s = G.stratRect
+    love.graphics.setColor(0, 0, 0)
+    love.graphics.rectangle("fill", r.x, r.y, r.w, r.h)
+    love.graphics.rectangle("fill", s.x, s.y, s.w, s.h)
+    love.graphics.setColor(1, 1, 1)
+  else
+    love.graphics.setScissor(r.x, r.y, r.w, r.h)
+    local cx, cy = camDev()
+    display.pushMap(r.x, r.y, cx, cy, G.zoom)
+    drawMap()
+    if G.assault and G.assault.phase == "cloud" then drawCloud() end
+    love.graphics.pop()
+    love.graphics.setScissor()
 
-  drawStrategic()
+    drawStrategic()
+  end
   -- 8065:0a9d refills the control panel with marble before the controls go
   -- on, the rect at 4125:2a94 -- (400, 355) 224x114 -- from the marble's own
   -- origin, as 8065:0aeb does for the bottom bar

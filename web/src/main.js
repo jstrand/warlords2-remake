@@ -269,6 +269,18 @@ function capOf(side) {
   return side.capital ? { x: side.capital.x, y: side.capital.y } : { x: side.capX || 0, y: side.capY || 0 };
 }
 
+/** Where the map is hidden and more than one human plays, the main map and
+ *  the strategic map stay blank as a human's turn opens, until the banner is
+ *  clicked away: each side has its own hidden map, and whoever is still at
+ *  the screen is not to see the next one's. The original shares one seen bit
+ *  among its humans and only holds back the re-centring (8cc6:0259). */
+function hotseatHidden() {
+  if (G.g.map.options.hiddenMap === 0) return false;
+  let humans = 0;
+  for (const s of G.g.map.sides) if (s.inUse && s.alive !== false && !s.computer) humans++;
+  return humans > 1;
+}
+
 /** Start its first turn, and centre the view on the capital. */
 function beginGame() {
   const first = game.begin(G.g);
@@ -279,7 +291,10 @@ function beginGame() {
   G.selection = null;
   centreOn(capOf(G.player).x, capOf(G.player).y);
   // the banner is a human's (8cc6:0259)
-  if (!first.computer) showBanner(G.player);
+  if (!first.computer) {
+    G.mapAfterBanner = hotseatHidden();
+    showBanner(G.player);
+  }
 }
 
 // ------------------------------------------------------------------ camera
@@ -947,8 +962,8 @@ function showBanner(side) {
 /** Close the banner, and only then let the turn's first dialog through. */
 function dismissBanner() {
   G.banner = null;
-  if (G.centreAfterBanner) centreOn(capOf(G.player).x, capOf(G.player).y);
-  G.centreAfterBanner = null;
+  if (G.mapAfterBanner) centreOn(capOf(G.player).x, capOf(G.player).y);
+  G.mapAfterBanner = null;
   // whoever is left on the water without a boat drowns (8cc6:0259), and only
   // then does the advisor have his say
   drownStranded(null, null, afterBanner);
@@ -1280,11 +1295,10 @@ function finishRound(side) {
   stratDirty();
   cycleReset();
   // 8cc6:0259 centres on the side's capital -- but where the map is hidden
-  // and more than one human plays, only once the banner is gone
-  let humans = 0;
-  for (const s of G.g.map.sides) if (s.inUse && s.alive !== false && !s.computer) humans++;
-  G.centreAfterBanner = G.g.map.options.hiddenMap !== 0 && humans > 1;
-  if (!G.centreAfterBanner) centreOn(capOf(side).x, capOf(side).y);
+  // and more than one human plays, only once the banner is gone, and until
+  // then neither map is shown
+  G.mapAfterBanner = hotseatHidden();
+  if (!G.mapAfterBanner) centreOn(capOf(side).x, capOf(side).y);
   say("Turn %d. %d gold, income %d.", G.g.turn, side.gold, side.income || 0);
   endingUi.show(G.g.ending, () => showBanner(side));
 }
@@ -1297,7 +1311,7 @@ G.openCity = (city) => openCity(city);
 
 function takeLoaded(loaded) {
   G.g = loaded;
-  G.selection = null; G.route = null;
+  G.selection = null; G.route = null; G.mapAfterBanner = null;
   stratDirty();
   G.player = loaded.sides[loaded.current];
   centreOn(capOf(G.player).x, capOf(G.player).y);
@@ -2399,15 +2413,24 @@ function draw() {
   screen.drawBackground(G.screen, G.layout);
 
   const r = G.mapRect;
-  gfx.setScissor(r.x, r.y, r.w, r.h);
-  const [cx, cy] = camDev();
-  pushMap(r.x, r.y, cx, cy, G.zoom);
-  drawMap();
-  if (G.assault && G.assault.phase === "cloud") drawCloud();
-  gfx.pop();
-  gfx.setScissor();
+  if (G.mapAfterBanner) {
+    // a hotseat turn not yet taken up: both maps blank (hotseatHidden)
+    const s = G.stratRect;
+    gfx.setColor(0, 0, 0);
+    gfx.rectangle("fill", r.x, r.y, r.w, r.h);
+    gfx.rectangle("fill", s.x, s.y, s.w, s.h);
+    gfx.setColor(1, 1, 1);
+  } else {
+    gfx.setScissor(r.x, r.y, r.w, r.h);
+    const [cx, cy] = camDev();
+    pushMap(r.x, r.y, cx, cy, G.zoom);
+    drawMap();
+    if (G.assault && G.assault.phase === "cloud") drawCloud();
+    gfx.pop();
+    gfx.setScissor();
 
-  drawStrategic();
+    drawStrategic();
+  }
   // 8065:0a9d refills the control panel with marble before the controls go on
   inGroup("panel", () => {
     gfx.setColor(1, 1, 1);

@@ -851,11 +851,23 @@ static const size_t HERO_NAME_MAX = 19;
 static bool presentOffer(Side* side);
 static void afterOffer();
 
+// Where the map is hidden and more than one human plays, the main map and the
+// strategic map stay blank as a human's turn opens, until the banner is
+// clicked away: each side has its own hidden map, and whoever is still at the
+// screen is not to see the next one's. The original shares one seen bit among
+// its humans and only holds back the re-centring (8cc6:0259).
+static bool hotseatHidden() {
+  if (G.g->map->options.hiddenMap == 0) return false;
+  int humans = 0;
+  for (auto& s : G.g->map->sides) if (s.inUse && s.alive && !s.computer) humans++;
+  return humans > 1;
+}
+
 // Close the banner, and only then let the turn's first dialog through.
 static void dismissBanner() {
   G.banner.reset();
-  if (G.centreAfterBanner) centreOn(capOf(G.player).first, capOf(G.player).second);
-  G.centreAfterBanner = false;
+  if (G.mapAfterBanner) centreOn(capOf(G.player).first, capOf(G.player).second);
+  G.mapAfterBanner = false;
   // whoever is left on the water without a boat drowns (8cc6:0259), and only
   // then does the advisor have his say (6dda:026f(5)); 8cc6:04bd then puts on
   // the hero's music or the turn's
@@ -1197,11 +1209,10 @@ static void finishRound(Side* side) {
   front::stratDirty();
   cycleReset();
   // 8cc6:0259 centres on the side's capital -- but where the map is hidden
-  // and more than one human plays, only once the banner is gone
-  int humans = 0;
-  for (auto& s : G.g->map->sides) if (s.inUse && s.alive && !s.computer) humans++;
-  G.centreAfterBanner = G.g->map->options.hiddenMap != 0 && humans > 1;
-  if (!G.centreAfterBanner) centreOn(capOf(side).first, capOf(side).second);
+  // and more than one human plays, only once the banner is gone, and until
+  // then neither map is shown
+  G.mapAfterBanner = hotseatHidden();
+  if (!G.mapAfterBanner) centreOn(capOf(side).first, capOf(side).second);
   ending::show(G.g->ending, [side]() { showBanner(side); });
 }
 
@@ -1214,6 +1225,7 @@ void front::takeLoaded(std::unique_ptr<w2::Game> loaded) {
   G.route.reset();
   G.walk.reset();
   G.over = false;
+  G.mapAfterBanner = false;
   front::stratDirty();
   G.player = G.g->sides[G.g->current];
   centreOn(capOf(G.player).first, capOf(G.player).second);
@@ -2296,14 +2308,23 @@ static void draw() {
   refreshControls();
   screen::drawBackground(*G.screen, G.layout);
   const auto& r = G.mapRect;
-  gfx::setScissor(r.x, r.y, r.w, r.h);
-  auto [cx, cy] = camDev();
-  display::pushMap(r.x, r.y, cx, cy, G.zoom);
-  drawMap();
-  if (G.assault && G.assault->phase == "cloud") drawCloud();
-  gfx::pop();
-  gfx::setScissor();
-  drawStrategic();
+  if (G.mapAfterBanner) {
+    // a hotseat turn not yet taken up: both maps blank (hotseatHidden)
+    const auto& s = G.stratRect;
+    gfx::setColor(0, 0, 0);
+    gfx::rectangle(gfx::FILL, r.x, r.y, r.w, r.h);
+    gfx::rectangle(gfx::FILL, s.x, s.y, s.w, s.h);
+    gfx::setColor(1, 1, 1);
+  } else {
+    gfx::setScissor(r.x, r.y, r.w, r.h);
+    auto [cx, cy] = camDev();
+    display::pushMap(r.x, r.y, cx, cy, G.zoom);
+    drawMap();
+    if (G.assault && G.assault->phase == "cloud") drawCloud();
+    gfx::pop();
+    gfx::setScissor();
+    drawStrategic();
+  }
   // 8065:0a9d refills the control panel with marble before the controls go on
   inGroup(G.layout.panel, []() {
     gfx::setColor(1, 1, 1);
@@ -3014,7 +3035,10 @@ static void beginGame() {
   G.selection.reset();
   centreOn(capOf(G.player).first, capOf(G.player).second);
   // the banner is a human's (8cc6:0259)
-  if (!first->computer) showBanner(G.player);
+  if (!first->computer) {
+    G.mapAfterBanner = hotseatHidden();
+    showBanner(G.player);
+  }
 }
 
 void front::openStart() {

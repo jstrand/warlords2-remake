@@ -134,7 +134,7 @@ struct App {
   bool offerFemale = false;
   std::string offerName;
   std::optional<screen::View> heroView;
-  bool centreAfterBanner = false;
+  bool mapAfterBanner = false;
 
   // battles
   std::optional<Assault> assault;
