@@ -2421,8 +2421,9 @@ static void mousepressed(int x, int y, int button) {
     top->mousepressed(fx, fy, button);
     return;
   }
-  if (G.over || !G.g) return;
-  // the menu bar takes precedence over everything beneath it
+  if (G.over) return;
+  // the menu bar takes precedence over everything beneath it, the start
+  // screens' too, with no game yet
   int hit = menu::titleAt(G.menuLayout, x, y);
   if (hit >= 0) {
     G.openMenu = G.openMenu == hit ? -1 : hit;
@@ -2435,6 +2436,7 @@ static void mousepressed(int x, int y, int button) {
     if (!k.empty() && menuEnabled(k)) menuPick(k);
     return;
   }
+  if (!G.g) return;
   auto c = screen::controlAt(*G.screen, x, y);
   if (c && button == 2) {
     if (infobox::control(x, y, c->id)) return;
