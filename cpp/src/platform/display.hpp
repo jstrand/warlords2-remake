@@ -6,8 +6,10 @@
 //   device  the window's own pixels -- on a high-density display, more than
 //           the window's size in points, so nothing resamples them. On a
 //           screen no whole scale fits well (1280x800: 1x leaves a third of
-//           it over, 2x is 160 rows too tall) they are a canvas bigger than
-//           the window, drawn at the next scale up and smoothly shrunk onto it
+//           it over, 2x is 160 rows too tall) the smooth view is offered as
+//           well, and is the default: device pixels are then a canvas bigger
+//           than the window, drawn at the next scale up and smoothly shrunk
+//           onto it. A whole scale never goes through the canvas
 //   UI      the interface's pixels: every rect in the game's data. One UI
 //           pixel is `scale` device pixels across, a whole number
 //   map     the map's own pixels, 40 to a tile, drawn at `zoom` device
@@ -25,14 +27,17 @@ struct SDL_Window;
 namespace display {
 
 constexpr int W = 640, H = 480;   // the original's screen, and the smallest
+constexpr int SMOOTH = -1;        // the smooth view, as a chosen scale
 
 struct State {
   double dpi = 1;            // device pixels to a window point
   int pw = 640, ph = 480;    // the window, in device pixels
   double shrink = 1;         // the window's real pixels to a device pixel: under 1 on a canvas
-  int scale = 1;
-  int maxScale = 1;
-  int chosen = 0;            // a scale picked from the menu, 0 for none
+  int scale = 1;             // device pixels to a UI pixel
+  int maxScale = 1;          // the biggest whole scale that fits
+  double smoothScale = 0;    // the smooth view's size, in real pixels a UI pixel; 0 for none
+  bool smooth = false;       // drawn in the smooth view
+  int chosen = 0;            // picked from the menu: a whole scale, SMOOTH, or 0 for none
   bool windowed = false;     // in a window on the desktop, not full screen
   std::optional<std::pair<int, int>> wanted;   // the frame to keep to: View > 4:3
   int w = 640, h = 480;      // the frame being drawn, in UI pixels
@@ -47,14 +52,16 @@ extern State d;
 SDL_Window* open(const char* title, bool windowed, int sizeW = 0, int sizeH = 0);
 SDL_Window* window();
 /** Read the window's size, and pick the UI's scale: the one chosen from the
- *  menu, or else the biggest whole number that still fits 640x480 -- or one
- *  more than that, on a canvas, when that one leaves a quarter over. */
+ *  menu, or else the smooth view where there is one, and the biggest whole
+ *  number that still fits 640x480 where not. The smooth view is there when
+ *  that whole number leaves a quarter of the window over. */
 void measure();
 /** Start a frame: on the canvas, when the scale needs one. */
 void beginFrame();
 /** Show the frame, shrinking the canvas onto the window. */
 void present();
-/** Draw the UI at `n` device pixels a pixel from now on, as far as it fits. */
+/** Draw the UI at `n` device pixels a pixel from now on, as far as it fits,
+ *  or in the smooth view (SMOOTH) where there is one. */
 void choose(int n);
 /** How many UI pixels the game gets. */
 std::pair<int, int> uiSize();

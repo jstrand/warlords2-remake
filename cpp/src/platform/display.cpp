@@ -61,11 +61,13 @@ void measure() {
   // as the target, SDL2 gives the canvas's size for that
   if (win) SDL_GetWindowSizeInPixels(win, &rw, &rh);
   double fit = std::min((double)rw / W, (double)rh / H);
-  int whole = std::max(1, (int)fit);
-  // the next scale up, drawn whole and shrunk to fit, when this one leaves a quarter over
-  d.maxScale = !noCanvas && fit > 1 && whole / fit < 0.75 ? whole + 1 : whole;
-  d.scale = std::min(d.chosen ? d.chosen : d.maxScale, d.maxScale);
-  d.shrink = noCanvas ? 1 : std::min(1.0, fit / d.scale);
+  d.maxScale = std::max(1, (int)fit);
+  // the smooth view, the next scale up drawn whole and shrunk to fit, when
+  // the biggest whole one leaves a quarter over
+  d.smoothScale = !noCanvas && fit > 1 && d.maxScale / fit < 0.75 ? fit : 0;
+  d.smooth = d.smoothScale > 0 && (d.chosen == SMOOTH || d.chosen == 0);
+  d.scale = d.smooth ? d.maxScale + 1 : std::min(d.chosen > 0 ? d.chosen : d.maxScale, d.maxScale);
+  d.shrink = d.smooth ? fit / d.scale : 1;
   d.pw = d.shrink < 1 ? std::max(W * d.scale, (int)std::lround(rw / d.shrink)) : rw;
   d.ph = d.shrink < 1 ? std::max(H * d.scale, (int)std::lround(rh / d.shrink)) : rh;
   d.dpi = ww > 0 ? (double)d.pw / ww : 1;
@@ -112,7 +114,7 @@ void present() {
 }
 
 void choose(int n) {
-  d.chosen = std::max(1, n);
+  d.chosen = n == SMOOTH ? SMOOTH : std::max(1, n);
   measure();
 }
 

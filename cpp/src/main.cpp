@@ -241,7 +241,7 @@ void front::centreOn(int x, int y) {
 using front::centreOn;
 
 // The zoom the map may go to: up to two steps past the UI's biggest.
-static int maxZoom() { return display::d.maxScale + 2; }
+static int maxZoom() { return std::max(display::d.maxScale, display::d.scale) + 2; }
 
 // Zoom the map to `z`, keeping the map under the UI point (x, y) put.
 static void setZoomAt(int z, double x, double y, bool centre) {
@@ -277,7 +277,7 @@ static void applyLayout(const layout::Layout& L) {
   G.barRect = reg(screen::BOTTOMBAR);
   G.menuRect = reg(screen::MENUBAR);
   G.panelRect = reg(screen::MAPPANEL);
-  G.menuLayout = menu::layout(*G.font, L.w, menu::withZooms(display::d.maxScale, maxZoom()));
+  G.menuLayout = menu::layout(*G.font, L.w, menu::withZooms(display::d.maxScale, maxZoom(), display::d.smoothScale, display::d.shrink));
   G.zoom = std::max(1, std::min(maxZoom(), G.zoom ? G.zoom : display::d.scale));
   if (mid) {
     auto [vw, vh] = viewSize();
@@ -319,7 +319,8 @@ static void relayout(const std::function<void()>& change) {
 
 static void setUIScale(int n) {
   relayout([n]() { display::choose(n); });
-  prefs::set("scale", display::d.chosen);
+  if (display::d.chosen == display::SMOOTH) prefs::set("scale", "smooth");
+  else prefs::set("scale", display::d.chosen);
 }
 
 static void setOriginalSize(bool on) {
@@ -336,7 +337,7 @@ static void setScreen(bool window) {
 }
 
 static bool menuTicked(const std::string& k) {
-  return k == "map zoom " + std::to_string(G.zoom) || k == "ui scale " + std::to_string(display::d.scale) ||
+  return k == "map zoom " + std::to_string(G.zoom) || (display::d.smooth ? k == "ui scale smooth" : k == "ui scale " + std::to_string(display::d.scale)) ||
          k == std::string("screen ") + (display::d.windowed ? "window" : "full") ||
          (k == "screen 4:3" && display::d.wanted) || (k == "screen fit" && !display::d.wanted) ||
          k == "music " + sound::synth();
@@ -2853,6 +2854,7 @@ static std::map<std::string, std::function<void()>>& menuDoes() {
     M["map zoom " + std::to_string(n)] = [n]() { front::setZoom(n); };
     M["ui scale " + std::to_string(n)] = [n]() { setUIScale(n); };
   }
+  M["ui scale smooth"] = []() { setUIScale(display::SMOOTH); };
   M["screen full"] = []() { setScreen(false); };
   M["screen window"] = []() { setScreen(true); };
   M["screen 4:3"] = []() { setOriginalSize(true); };
@@ -3252,7 +3254,7 @@ int main(int argc, char** argv) {
     sound::init(G.dataDir, ui.files);
     // the screen: its real pixels, the UI's scale, and the map's zoom
     if (prefs::get("4:3") == "on") display::d.wanted = std::make_pair(layout::W, layout::H);
-    display::d.chosen = prefs::getInt("scale", 0);
+    display::d.chosen = prefs::get("scale") == "smooth" ? display::SMOOTH : prefs::getInt("scale", 0);
     display::measure();
     G.zoom = prefs::getInt("zoom", display::d.scale);
     if (scenario.empty()) {

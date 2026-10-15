@@ -1,6 +1,7 @@
 #include "front/menu.hpp"
 
 #include <algorithm>
+#include <cstdio>
 
 namespace menu {
 
@@ -23,7 +24,17 @@ const std::vector<Menu> MENUS = {
     {"Turn", {{"End Turn", "alt E", ""}}},
 };
 
-std::vector<Menu> withZooms(int maxUI, int maxMap) {
+// A scale as the menu shows it: 1.67, 1.6, 2.
+static std::string scaleName(double s) {
+  char b[16];
+  snprintf(b, sizeof b, "%.2f", s);
+  std::string t = b;
+  while (t.back() == '0') t.pop_back();
+  if (t.back() == '.') t.pop_back();
+  return t;
+}
+
+std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI, double mapShrink) {
   std::vector<Menu> out;
   for (const Menu& m : MENUS) {
     Menu n{m.title, {}};
@@ -40,9 +51,10 @@ std::vector<Menu> withZooms(int maxUI, int maxMap) {
     } else if (m.title == "View") {
       n.items = m.items;
       n.items.push_back({"-", "", ""});
-      for (int z = 1; z <= maxMap; z++) n.items.push_back({"Map " + std::to_string(z) + "x", "", "map zoom " + std::to_string(z)});
+      for (int z = 1; z <= maxMap; z++) n.items.push_back({"Map " + scaleName(z * mapShrink) + "x", "", "map zoom " + std::to_string(z)});
       n.items.push_back({"-", "", ""});
       for (int s = 1; s <= maxUI; s++) n.items.push_back({"Interface " + std::to_string(s) + "x", "", "ui scale " + std::to_string(s)});
+      if (smoothUI > 0) n.items.push_back({"Interface " + scaleName(smoothUI) + "x smooth", "", "ui scale smooth"});
       n.items.push_back({"-", "", ""});
       n.items.push_back({"Full screen", "", "screen full"});
       n.items.push_back({"Window", "", "screen window"});

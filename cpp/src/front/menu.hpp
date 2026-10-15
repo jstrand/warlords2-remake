@@ -28,8 +28,10 @@ struct Menu {
 extern const std::vector<Menu> MENUS;
 
 /** The menus with the screen's zooms added to View, and the music's
- *  synthesizer to Game -- not the original's. */
-std::vector<Menu> withZooms(int maxUI, int maxMap);
+ *  synthesizer to Game -- not the original's. `smoothUI`, when not 0, is the
+ *  smooth view's scale, offered after the whole ones. The map's zooms are
+ *  named for their size on the screen: `mapShrink` times their own. */
+std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI = 0, double mapShrink = 1);
 
 struct Row {
   std::string label, key, act;
