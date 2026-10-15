@@ -1,6 +1,8 @@
 # Build the C++ port for x86_64 Linux (any distribution, the Steam Deck among
 # them) with cpp/linux/build.sh, and keep the archive as the run's artifact.
-# A tag v* also puts it on a GitHub release.
+# A tag v* also puts it on a GitHub release. The archive is named for the
+# version: warlords2-v0.2-linux-x86_64.tar.gz for a tag, and for a commit
+# after one, git describe's v0.2-3-gabc1234.
 
 name: Linux
 
@@ -21,8 +23,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.name.outputs.name }}
     steps:
+      # the whole history and its tags, for git describe
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # SDL2's source and its build, kept until build.sh changes (it names
       # the version).
@@ -35,6 +42,13 @@ jobs:
 
       - run: sh cpp/linux/build.sh
 
+      - name: Name the archive for its version
+        id: name
+        run: |
+          name="warlords2-$(git describe --tags --always)-linux-x86_64"
+          mv cpp/build/linux/warlords2-linux-x86_64.tar.gz "cpp/build/linux/$name.tar.gz"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
       # The archive as a user unpacks it, started with no screen or sound:
       # the start screens, then a scenario.
       - name: Smoke test
@@ -44,7 +58,7 @@ jobs:
           SDL_AUDIODRIVER: dummy
         run: |
           mkdir -p "$RUNNER_TEMP/try"
-          tar -xzf cpp/build/linux/warlords2-linux-x86_64.tar.gz -C "$RUNNER_TEMP/try"
+          tar -xzf "cpp/build/linux/${{ steps.name.outputs.name }}.tar.gz" -C "$RUNNER_TEMP/try"
           printf 'wait 60\nquit\n' > "$RUNNER_TEMP/start.txt"
           printf 'wait 120\nkey return\nwait 60\nquit\n' > "$RUNNER_TEMP/game.txt"
           "$RUNNER_TEMP/try/Warlords2/warlords2.sh" --window --script "$RUNNER_TEMP/start.txt"
@@ -52,8 +66,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: warlords2-linux-x86_64
-          path: cpp/build/linux/warlords2-linux-x86_64.tar.gz
+          name: ${{ steps.name.outputs.name }}
+          path: cpp/build/linux/${{ steps.name.outputs.name }}.tar.gz
           compression-level: 0
 
   release:
@@ -65,7 +79,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: warlords2-linux-x86_64
-      - run: gh release create "$GITHUB_REF_NAME" warlords2-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY" --generate-notes
+          name: ${{ needs.build.outputs.name }}
+      - run: gh release create "$GITHUB_REF_NAME" "$NAME.tar.gz" --repo "$GITHUB_REPOSITORY" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+          NAME: ${{ needs.build.outputs.name }}
