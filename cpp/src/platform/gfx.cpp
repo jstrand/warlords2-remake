@@ -169,7 +169,8 @@ void draw(const Image* img, const Quad& q, double x, double y) {
 }
 
 std::vector<uint8_t> readPixels(int& w, int& h) {
-  SDL_GetRendererOutputSize(R, &w, &h);
+  if (SDL_Texture* target = SDL_GetRenderTarget(R)) SDL_QueryTexture(target, nullptr, nullptr, &w, &h);
+  else SDL_GetRendererOutputSize(R, &w, &h);
   std::vector<uint8_t> px((size_t)w * h * 4);
   SDL_RenderSetClipRect(R, nullptr);
   SDL_RenderReadPixels(R, nullptr, SDL_PIXELFORMAT_ABGR8888, px.data(), w * 4);

@@ -7,7 +7,10 @@
 // each control is cut from. docs/re/ui.md and docs/formats/screens.md.
 //
 //     warlords2 [--data DIR] [--scenario NAME] [--seed N] [--window]
-//               [--script FILE]
+//               [--size WxH] [--script FILE]
+//
+// --size opens a window of exactly W x H device pixels, to try a screen
+// other than this one (the Steam Deck's is 1280x800).
 //
 // Run from the repository root, or point --data at your copy of the game.
 #include <SDL.h>
@@ -3198,6 +3201,7 @@ static void stepScript() {
 int main(int argc, char** argv) {
   std::string scenario, scriptFile;
   double seed = 0;
+  int sizeW = 0, sizeH = 0;
   bool windowed = prefs::get("screen") == "window";
   G.dataDir = "original";
   for (int i = 1; i < argc; i++) {
@@ -3209,6 +3213,7 @@ int main(int argc, char** argv) {
     else if (a == "--window") windowed = true;
     else if (a == "--fullscreen") windowed = false;
     else if (a == "--script") scriptFile = next();
+    else if (a == "--size") sscanf(next().c_str(), "%dx%d", &sizeW, &sizeH);
   }
   if (!w2::fileExists(G.dataDir + "/TERRAIN0/ARMYTYPE.DAT")) {
     fprintf(stderr, "cannot find the game's files in '%s': run from the repository root, or pass --data DIR\n", G.dataDir.c_str());
@@ -3218,7 +3223,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "SDL: %s\n", SDL_GetError());
     return 1;
   }
-  SDL_Window* win = display::open("Warlords II", windowed);
+  SDL_Window* win = display::open("Warlords II", windowed, sizeW, sizeH);
   if (!win) {
     fprintf(stderr, "SDL window: %s\n", SDL_GetError());
     return 1;
@@ -3352,13 +3357,14 @@ int main(int argc, char** argv) {
     }
     try {
       display::measure();
+      display::beginFrame();
       stepScript();
       update();
       draw();
     } catch (const std::exception& ex) {
       fprintf(stderr, "error: %s\n", ex.what());
     }
-    SDL_RenderPresent(ren);
+    display::present();
   }
   G.aiRun.reset();
   G.modals.clear();

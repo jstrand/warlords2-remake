@@ -4,7 +4,10 @@
 // coordinate, as in the Lua remake:
 //
 //   device  the window's own pixels -- on a high-density display, more than
-//           the window's size in points, so nothing resamples them
+//           the window's size in points, so nothing resamples them. On a
+//           screen no whole scale fits well (1280x800: 1x leaves a third of
+//           it over, 2x is 160 rows too tall) they are a canvas bigger than
+//           the window, drawn at the next scale up and smoothly shrunk onto it
 //   UI      the interface's pixels: every rect in the game's data. One UI
 //           pixel is `scale` device pixels across, a whole number
 //   map     the map's own pixels, 40 to a tile, drawn at `zoom` device
@@ -26,6 +29,7 @@ constexpr int W = 640, H = 480;   // the original's screen, and the smallest
 struct State {
   double dpi = 1;            // device pixels to a window point
   int pw = 640, ph = 480;    // the window, in device pixels
+  double shrink = 1;         // the window's real pixels to a device pixel: under 1 on a canvas
   int scale = 1;
   int maxScale = 1;
   int chosen = 0;            // a scale picked from the menu, 0 for none
@@ -38,12 +42,18 @@ struct State {
 };
 extern State d;
 
-/** Open the game's window: full screen on the desktop, or a window. */
-SDL_Window* open(const char* title, bool windowed);
+/** Open the game's window: full screen on the desktop, or a window. With a
+ *  size, a window of exactly that many device pixels (--size). */
+SDL_Window* open(const char* title, bool windowed, int sizeW = 0, int sizeH = 0);
 SDL_Window* window();
 /** Read the window's size, and pick the UI's scale: the one chosen from the
- *  menu, or else the biggest whole number that still fits 640x480. */
+ *  menu, or else the biggest whole number that still fits 640x480 -- or one
+ *  more than that, on a canvas, when that one leaves a quarter over. */
 void measure();
+/** Start a frame: on the canvas, when the scale needs one. */
+void beginFrame();
+/** Show the frame, shrinking the canvas onto the window. */
+void present();
 /** Draw the UI at `n` device pixels a pixel from now on, as far as it fits. */
 void choose(int n);
 /** How many UI pixels the game gets. */

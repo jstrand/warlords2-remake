@@ -13,9 +13,11 @@ State d;
 
 namespace {
 SDL_Window* win = nullptr;
+SDL_Texture* canvas = nullptr;   // the frame, when it is bigger than the window
+bool noCanvas = false;           // the renderer cannot draw to one
 }
 
-SDL_Window* open(const char* title, bool windowed) {
+SDL_Window* open(const char* title, bool windowed, int sizeW, int sizeH) {
   Uint32 flags = SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE;
   SDL_DisplayMode dm;
   int w = 1280, h = 960;
@@ -23,9 +25,28 @@ SDL_Window* open(const char* title, bool windowed) {
     w = std::max(W, dm.w * 4 / 5);
     h = std::max(H, dm.h * 4 / 5);
   }
+  bool sized = sizeW > 0 && sizeH > 0;
+  if (sized) {
+    windowed = true;
+    w = sizeW;
+    h = sizeH;
+  }
   if (!windowed) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
   win = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags);
-  if (win) SDL_SetWindowMinimumSize(win, W, H);
+  if (win && sized) {
+    // the size is in device pixels: on a high-density display, fewer points
+    int ww, wh, pw, ph;
+    SDL_GetWindowSize(win, &ww, &wh);
+    SDL_GetWindowSizeInPixels(win, &pw, &ph);
+    double k = ww > 0 ? (double)pw / ww : 1;
+    w = (int)std::lround(sizeW / k);
+    h = (int)std::lround(sizeH / k);
+    SDL_SetWindowMinimumSize(win, std::min(W, w), std::min(H, h));
+    SDL_SetWindowSize(win, w, h);
+    SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+  } else if (win) {
+    SDL_SetWindowMinimumSize(win, W, H);
+  }
   d.windowed = windowed;
   return win;
 }
@@ -35,13 +56,57 @@ SDL_Window* window() { return win; }
 void measure() {
   int ww = W, wh = H;
   if (win) SDL_GetWindowSize(win, &ww, &wh);
-  int pw = ww, ph = wh;
-  if (gfx::renderer()) SDL_GetRendererOutputSize(gfx::renderer(), &pw, &ph);
-  d.dpi = ww > 0 ? (double)pw / ww : 1;
-  d.pw = pw;
-  d.ph = ph;
-  d.maxScale = std::max(1, std::min(d.pw / W, d.ph / H));
+  int rw = ww, rh = wh;
+  if (gfx::renderer()) SDL_GetRendererOutputSize(gfx::renderer(), &rw, &rh);
+  double fit = std::min((double)rw / W, (double)rh / H);
+  int whole = std::max(1, (int)fit);
+  // the next scale up, drawn whole and shrunk to fit, when this one leaves a quarter over
+  d.maxScale = !noCanvas && fit > 1 && whole / fit < 0.75 ? whole + 1 : whole;
   d.scale = std::min(d.chosen ? d.chosen : d.maxScale, d.maxScale);
+  d.shrink = noCanvas ? 1 : std::min(1.0, fit / d.scale);
+  d.pw = d.shrink < 1 ? std::max(W * d.scale, (int)std::lround(rw / d.shrink)) : rw;
+  d.ph = d.shrink < 1 ? std::max(H * d.scale, (int)std::lround(rh / d.shrink)) : rh;
+  d.dpi = ww > 0 ? (double)d.pw / ww : 1;
+}
+
+void beginFrame() {
+  SDL_Renderer* r = gfx::renderer();
+  if (!r) return;
+  int cw = 0, ch = 0;
+  if (canvas) SDL_QueryTexture(canvas, nullptr, nullptr, &cw, &ch);
+  if (canvas && (d.shrink >= 1 || cw != d.pw || ch != d.ph)) {
+    SDL_SetRenderTarget(r, nullptr);
+    SDL_DestroyTexture(canvas);
+    canvas = nullptr;
+  }
+  if (d.shrink >= 1) return;
+  if (!canvas) {
+    canvas = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, d.pw, d.ph);
+    if (canvas) SDL_SetTextureScaleMode(canvas, SDL_ScaleModeLinear);
+  }
+  if (!canvas || SDL_SetRenderTarget(r, canvas) != 0) {
+    if (canvas) SDL_DestroyTexture(canvas);
+    canvas = nullptr;
+    noCanvas = true;
+    measure();
+  }
+}
+
+void present() {
+  SDL_Renderer* r = gfx::renderer();
+  if (!r) return;
+  if (!canvas || SDL_GetRenderTarget(r) != canvas) {
+    SDL_RenderPresent(r);
+    return;
+  }
+  SDL_SetRenderTarget(r, nullptr);
+  SDL_RenderSetClipRect(r, nullptr);
+  SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+  SDL_RenderClear(r);
+  SDL_RenderCopy(r, canvas, nullptr, nullptr);
+  SDL_RenderPresent(r);
+  // left on the canvas, so a script's shot between frames reads it
+  SDL_SetRenderTarget(r, canvas);
 }
 
 void choose(int n) {
