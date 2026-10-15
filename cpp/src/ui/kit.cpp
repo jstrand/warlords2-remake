@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/util.hpp"
+#include "warlords/game.hpp"
 
 namespace kit {
 
@@ -125,8 +126,13 @@ void line(int c, int x0, int y0, int x1, int y1) {
 }
 
 void mapTarget(int mx, int my, int hx, int hy, int tx, int ty) {
+  // with the hidden map nothing is drawn over ground the player has not
+  // seen: the line needs both its ends seen (828e:0a3f), the box and its
+  // frame the target's tile (828e:08cd, 828e:099e)
+  auto seen = [](int x, int y) { return w2::game::seen(*G.g, G.player->index, x, y); };
+  if (!seen(tx, ty)) return;
   gfx::setScissor(mx, my, 224, 312);
-  line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2);
+  if (seen(hx, hy)) line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2);
   setPal(8);
   int bx = mx + tx * 2, by = my + ty * 2 - 1;
   gfx::rectangle(gfx::FILL, bx, by, 4, 5);

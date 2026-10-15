@@ -38,7 +38,7 @@ const dist = (x1, y1, x2, y2) => Math.floor(Math.sqrt((x1 - x2) ** 2 + (y1 - y2)
 
 /** Pick a target for a quest of this type (quest_assign, 4976:0d7a), or null
  *  if there is none. `computer` is quest_assign(1): shorter ranges. */
-export function pickTarget(g, side, type, h, computer) {
+export function pickTarget(g, side, type, h, computer, flying) {
   if (type === SLAY_HERO) {
     // another side's hero, counted from the top of the army table down
     const heroes = [];
@@ -60,9 +60,10 @@ export function pickTarget(g, side, type, h, computer) {
     }
     if (choices.length === 0) return null;
     const pick = choices[g.rng.dice(1, choices.length, -1)];
-    // the priests show the side where it lies
+    // the priests show the side where it lies, uncovering round it as
+    // 8611:1298 does: two tiles out when the searching stack flies (DS:1e9c)
     pick.site.revealed = (pick.site.revealed || 0) | (1 << side.index);
-    game.reveal(g, side.index, pick.site.x, pick.site.y, false);
+    game.reveal(g, side.index, pick.site.x, pick.site.y, !!flying);
     return pick.item;
   } else if (type === SLAY_TYPE) {
     // up to five magical types, one of which some other army on the map is
@@ -113,13 +114,13 @@ function questType(g, n, computer) {
 /** Take a quest at a temple, or null (quest_assign, 4976:0d7a): tries until
  *  a quest finds a target -- pillage gold always does. `computer` for a
  *  computer player's (5ad0:15c3). */
-export function assign(g, side, h, computer) {
+export function assign(g, side, h, computer, flying) {
   if (side.quest) return null;                    // one at a time
   if (g.map.options.quests === 0) return null;
   history.deed(g, side, history.QUEST_GIVEN, 0, 0, h && h.name);   // 4976:0dae
   for (let n = 1; ; n++) {
     const type = questType(g, n, computer);
-    const target = pickTarget(g, side, type, h, computer);
+    const target = pickTarget(g, side, type, h, computer, flying);
     if (target) {
       const q = { type, hero: h, target, done: 0, targetKind: TARGET_KIND[type] };
       if (type === SLAUGHTER) q.required = g.rng.dice(1, 12, 10);

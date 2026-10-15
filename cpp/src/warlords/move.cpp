@@ -672,6 +672,7 @@ WalkResult walkPath(Game& g, const Stack& stack, const Path& path) {
   int left = stackMoves(stack);
   WalkResult result;
   result.stopped = "arrived";
+  for (Army* a : stack) if (a->atSea) result.seaBefore = true;
   int lastOk = 0, cumulative = 0;
   std::map<int, int> costTo;
 

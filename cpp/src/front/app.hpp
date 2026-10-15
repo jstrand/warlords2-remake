@@ -43,6 +43,7 @@ struct Walk {
   double at = 0;
   w2::Army* top = nullptr;
   bool computer = false;
+  bool seaBefore = false;    // at sea as it set off: shown so to the walk's end
 };
 
 struct Banner {

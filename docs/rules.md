@@ -440,7 +440,9 @@ A land stack goes to sea by stepping from a crossing (a bridge, its own port
 city or a marked tile) onto water or shore that is not a crossing, and comes
 ashore the same way round. That step is the last one: `1555:19e4` charges
 **0x80** for every step after it, so the walk stops there. At the end of the
-walk (`place_stack_at_step`, `1a8b:04c8`):
+walk (`place_stack_at_step`, `1a8b:04c8`, which first draws the stack at
+every step of the walk, so it is shown as it set off — on land as a land
+army, onto the water too, and at sea as a boat — until the walk is over):
 
 - A land stack ending on **water or shore** puts to sea: every army that
   cannot fly, and a hero too unless a flier goes with it and nothing else
@@ -1010,7 +1012,7 @@ If a type finds no valid target, the type is rolled again.
 | type | how the target is picked |
 |---|---|
 | 0 | a random hero belonging to any other side, counted from the top of the army table down |
-| 1 | a random non-reserved item (records up to 21) still hidden in a ruin less than 50 tiles from the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side, and uncovered on its map. |
+| 1 | a random non-reserved item (records up to 21) still hidden in a ruin less than 50 tiles from the hero (30 from the second entry point), by both x and y distance. That ruin is marked as revealed to the side, and uncovered on its map (`8611:1298`): one tile round it, two when the searching stack flies (`DS:1e9c`). |
 | 2 | up to 5 tries: a random magical army type (`random_magical_type`) that some army not the side's has on the map — neutral ones included |
 | 3 | a random other side that's still alive (up to 200 tries); **n = 1d12+10** armies |
 | 4 | a random city not owned by the side, within map distance 60 (40 from the second entry point); after 100 failed tries any such city will do |
@@ -1019,6 +1021,16 @@ If a type finds no valid target, the type is rolled again.
 
 Types 3, 4 and 5 are skipped once the game has been won (`.SCN` `0x15b`, see
 End of the game).
+
+**The quest screen** (Report › Quest, `4976:0320`) shows the target on the
+strategic map: a line from the hero (`828e:0a3f`) and a box round the target
+(`828e:08cd`, `828e:099e`). With *Hidden Map* on, each is drawn only over
+ground the player has seen — the line needs both its ends seen, the box the
+target's tile — so a target in unexplored land is not shown. An occupy or
+raze target none of whose tiles (x,y), (x+1,y+1) and (x,y+1) the player has
+seen — the code tests (x,y) twice and never (x+1,y) — is called "the fabled
+city of …" (string 2 of groups 25 and 26, not 1). Only the item quest's
+target is ever uncovered, as it is given (above).
 
 ### Completion and failure (`quest_check`, `4976:1ded`)
 

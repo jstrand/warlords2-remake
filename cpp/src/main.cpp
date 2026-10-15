@@ -391,9 +391,14 @@ static void planRoute(int x, int y) {
 }
 
 // Play the walk back a tile at a time, centring on the stack as it goes.
-static void startWalk(const std::vector<Army*>& armies, const std::vector<std::pair<int, int>>& tiles) {
+// `seaBefore`: the stack was at sea as it set off, and is shown so to the end
+// of the walk -- the original puts it to sea or ashore only after its last
+// step (place_stack_at_step, 1a8b:04c8).
+static void startWalk(const std::vector<Army*>& armies, const std::vector<std::pair<int, int>>& tiles,
+                      bool seaBefore) {
   if (tiles.empty()) return;
   Walk w;
+  w.seaBefore = seaBefore;
   w.armies = std::set<Army*>(armies.begin(), armies.end());
   w.tiles = tiles;
   w.i = 0;
@@ -716,7 +721,7 @@ static void moveSelection(int x, int y) {
     sel.y = sel.stack[0]->y;
     reslot(selectableAt(sel.x, sel.y));
     front::stratDirty();
-    startWalk(walked, r.walked);
+    startWalk(walked, r.walked, r.seaBefore);
   }
   // a walk that leaves the stack out of moves (walk_path's status 2) ends
   // its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
@@ -1013,6 +1018,7 @@ static void installHooks() {
       y.what = "walk";
       y.armies = stack;
       y.tiles = r.walked;
+      y.seaBefore = r.seaBefore;
       aiCo->yield(y);
     }
   };
@@ -1138,7 +1144,7 @@ static void resumeComputer() {
     G.aiResumeAt = w2::now() + y.ticks / 18.2;
     G.aiWait = true;
   } else if (y.what == "walk") {
-    startWalk(y.armies, y.tiles);
+    startWalk(y.armies, y.tiles, y.seaBefore);
     if (G.walk) G.walk->computer = true;
     else G.aiWait = true;
   } else if (y.what == "nohumans") {
@@ -1376,7 +1382,9 @@ static void drawMap() {
     Army* a = G.walk->top;
     if (a && shown(at->first, at->second)) {
       std::vector<Army*> walking(G.walk->armies.begin(), G.walk->armies.end());
-      drawStack(ownerOr8(a->owner), stackFigure(walking), (int)walking.size(), at->first * TILE, at->second * TILE);
+      Army* top = topArmy(walking);
+      int figure = G.walk->seaBefore ? NAVY : (top ? top->type : NONE);
+      drawStack(ownerOr8(a->owner), figure, (int)walking.size(), at->first * TILE, at->second * TILE);
     }
   }
   // the selection box, which follows the walk

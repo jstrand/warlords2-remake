@@ -33,7 +33,7 @@ int dist(int x1, int y1, int x2, int y2) {
 
 // Pick a target for a quest of this type into q (quest_assign, 4976:0d7a);
 // false if there is none. `computer` is quest_assign(1): shorter ranges.
-bool pickTarget(Game& g, const Side& side, int type, Army* h, Quest& q, bool computer) {
+bool pickTarget(Game& g, const Side& side, int type, Army* h, Quest& q, bool computer, bool flying) {
   if (type == SLAY_HERO) {
     // another side's hero, counted from the top of the army table down
     std::vector<Army*> heroes;
@@ -59,9 +59,10 @@ bool pickTarget(Game& g, const Side& side, int type, Army* h, Quest& q, bool com
     }
     if (choices.empty()) return false;
     auto& pick = choices[g.rng.dice(1, (int)choices.size(), -1)];
-    // the priests show the side where it lies
+    // the priests show the side where it lies, uncovering round it as
+    // 8611:1298 does: two tiles out when the searching stack flies (DS:1e9c)
     pick.second->revealed |= 1 << side.index;
-    game::reveal(g, side.index, pick.second->x, pick.second->y, false);
+    game::reveal(g, side.index, pick.second->x, pick.second->y, flying);
     q.item = pick.first;
     return true;
   } else if (type == SLAY_TYPE) {
@@ -141,14 +142,14 @@ std::shared_ptr<QuestResult> finish(Game& g, Side& side, const std::string& reas
 }
 }  // namespace
 
-std::shared_ptr<Quest> assign(Game& g, Side& side, Army* h, bool computer) {
+std::shared_ptr<Quest> assign(Game& g, Side& side, Army* h, bool computer, bool flying) {
   if (side.quest) return nullptr;                    // one at a time
   if (g.map->options.quests == 0) return nullptr;
   history::deed(g, &side, history::QUEST_GIVEN, 0, 0, h ? h->name : "");   // 4976:0dae
   for (int n = 1;; n++) {
     int type = questType(g, n, computer);
     Quest q;
-    if (pickTarget(g, side, type, h, q, computer)) {
+    if (pickTarget(g, side, type, h, q, computer, flying)) {
       q.type = type;
       q.hero = h;
       q.done = 0;

@@ -24,6 +24,7 @@ import * as cues from "../warlords/cues.js";
 import * as chooseUi from "./choose.js";
 import * as game from "../warlords/game.js";
 import * as hero from "../warlords/hero.js";
+import * as move from "../warlords/move.js";
 import * as quest from "../warlords/quest.js";
 import * as site from "../warlords/site.js";
 import * as uidata from "../warlords/uidata.js";
@@ -185,7 +186,8 @@ function openTemple(r, stack) {
       message(blessLine(site.bless(G.g, r.site, stack)), kit.text(0x38, 2));
     } else if (c.id === QUEST) {
       kit.pop(d);
-      quest.assign(G.g, G.player, r.hero);
+      // the searching stack's mode decides how far the target is uncovered
+      quest.assign(G.g, G.player, r.hero, false, move.modeOf(G.g, stack) === move.FLYING);
       if (G.openQuest) G.openQuest();
     }
   };

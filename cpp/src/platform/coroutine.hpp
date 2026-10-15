@@ -23,6 +23,7 @@ struct Yield {
   std::string text;          // "fallen": the line to say
   std::vector<w2::Army*> armies;   // "walk": the stack
   std::vector<std::pair<int, int>> tiles;   // "walk": the tiles it covered
+  bool seaBefore = false;                   // "walk": at sea as it set off
 };
 
 class Coroutine {

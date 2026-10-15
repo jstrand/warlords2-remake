@@ -798,13 +798,20 @@ local function outOfMoves(stack, path, landed, stopped)
 end
 
 --- Walk `stack` along `path`, stopping where the rules say to stop.
--- Returns { steps, spent, stopped, attack, outOfMoves }. `stopped` is one of
--- "arrived", "out of moves", "blocked" or "attack"; on "attack" the caller
--- resolves the fight and may walk again. docs/rules.md > Moving a stack.
+-- Returns { steps, spent, stopped, attack, outOfMoves, seaBefore }. `stopped`
+-- is one of "arrived", "out of moves", "blocked" or "attack"; on "attack"
+-- the caller resolves the fight and may walk again. `seaBefore` is whether
+-- the stack was at sea as it set off, which is how the walk is shown:
+-- place_stack_at_step (1a8b:04c8) draws every step, and only after the last
+-- puts the stack to sea or ashore. docs/rules.md > Moving a stack.
 local function walkPath(g, stack, path)
   local side = stack[1] and stack[1].owner
   local left = move.stackMoves(stack)
-  local result = { steps = 0, spent = 0, stopped = "arrived" }
+  local seaBefore = false
+  for _, a in ipairs(stack) do
+    if a.atSea then seaBefore = true end
+  end
+  local result = { steps = 0, spent = 0, stopped = "arrived", seaBefore = seaBefore }
   local lastOk, cumulative, costTo = 0, 0, {}
 
   for i, step in ipairs(path) do

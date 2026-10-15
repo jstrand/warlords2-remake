@@ -55,7 +55,12 @@ QuestText questText(const w2::Game& g, const w2::Side& side, const w2::Quest& q)
   QuestText out;
   auto add = [&](int y, const std::string& s) { out.lines.emplace_back(y, s); };
   w2::Army* h = q.hero;
-  auto fabled = [&](const w2::City* c) { return g.map->options.hiddenMap != 0 && !w2::game::seen(g, side.index, c->x, c->y); };
+  // a city the side has not seen is told of as one only heard of: 4976:0850
+  // tests (x,y) twice -- (x+1,y) never -- then (x+1,y+1) and (x,y+1)
+  auto fabled = [&](const w2::City* c) {
+    auto seen = [&](int x, int y) { return w2::game::seen(g, side.index, x, y); };
+    return g.map->options.hiddenMap != 0 && !seen(c->x, c->y) && !seen(c->x + 1, c->y + 1) && !seen(c->x, c->y + 1);
+  };
   using namespace w2::quest;
   if (q.type == SLAY_HERO && q.army) {
     w2::Army* foe = q.army;

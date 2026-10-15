@@ -45,7 +45,7 @@ end
 --- Pick a target for a quest of this type (quest_assign, 4976:0d7a), or nil
 --- if there is none. `computer` is quest_assign(1): shorter ranges.
 -- Read from raw disassembly; Ghidra mis-disassembles the switch.
-function quest.pickTarget(g, side, type, h, computer)
+function quest.pickTarget(g, side, type, h, computer, flying)
   if type == quest.SLAY_HERO then
     -- another side's hero, counted from the top of the army table down
     local heroes = {}
@@ -76,11 +76,12 @@ function quest.pickTarget(g, side, type, h, computer)
     end
     if #choices == 0 then return nil end
     local pick = choices[g.rng:dice(1, #choices, 0)]
-    -- the priests show the side where it lies
+    -- the priests show the side where it lies, uncovering round it as
+    -- 8611:1298 does: two tiles out when the searching stack flies (DS:1e9c)
     if not site.shownTo(pick.site, side) then
       pick.site.revealed = (pick.site.revealed or 0) + math.floor(2 ^ side.index)
     end
-    require("warlords.game").reveal(g, side.index, pick.site.x, pick.site.y, false)
+    require("warlords.game").reveal(g, side.index, pick.site.x, pick.site.y, flying and true or false)
     return pick.item
 
   elseif type == quest.SLAY_TYPE then
@@ -139,7 +140,7 @@ end
 --- Take a quest at a temple. Returns the quest, or nil if none could be made
 --- (quest_assign, Ghidra 4976:0d7a): tries until a quest finds a target --
 --- pillage gold always does. `computer` for a computer player's (5ad0:15c3).
-function quest.assign(g, side, h, computer)
+function quest.assign(g, side, h, computer, flying)
   if side.quest then return nil end              -- one at a time
   if g.map.options.quests == 0 then return nil end
   local history = require("warlords.history")
@@ -148,7 +149,7 @@ function quest.assign(g, side, h, computer)
   while true do
     n = n + 1
     local type = questType(g, n, computer)
-    local target = quest.pickTarget(g, side, type, h, computer)
+    local target = quest.pickTarget(g, side, type, h, computer, flying)
     if target then
       local q = { type = type, hero = h, target = target, done = 0,
                   targetKind = quest.TARGET_KIND[type] }

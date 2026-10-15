@@ -51,7 +51,7 @@ constexpr int REWARD_ALLY = 19;
 /** Take a quest at a temple, or none (quest_assign, 4976:0d7a): tries until
  *  a quest finds a target -- pillage gold always does. `computer` for a
  *  computer player's (5ad0:15c3). */
-std::shared_ptr<Quest> assign(Game& g, Side& side, Army* h, bool computer = false);
+std::shared_ptr<Quest> assign(Game& g, Side& side, Army* h, bool computer = false, bool flying = false);
 /** A line of prose for a quest. */
 std::string describe(const Quest& q);
 

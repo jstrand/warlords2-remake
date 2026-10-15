@@ -76,7 +76,8 @@ function moves.searchSite(g, sel, h, s)
     -- at a temple the computer takes a quest, by its own rules (quest_assign(1))
     if s.content == siteMod.TEMPLE and g.map.options.quests ~= 0 and not side.quest
        and core.isHero(h) then
-      require("warlords.quest").assign(g, side, h, true)
+      local move = require("warlords.move")
+      require("warlords.quest").assign(g, side, h, true, move.stackMode(g, stack) == move.FLYING)
     end
     if not core.isHero(h) then return 0 end
     for _, a in ipairs(stack) do a.done = nil end

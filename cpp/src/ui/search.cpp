@@ -198,8 +198,10 @@ struct Temple : kit::Modal {
       message(blessLine(w2::site::bless(*G.g, *res->site, st)), kit::text(0x38, 2));
     } else if (c->id == QUEST) {
       auto res = r;
+      auto st = stack;
       kit::pop(this);
-      w2::quest::assign(*G.g, *G.player, res->hero);
+      // the searching stack's mode decides how far the target is uncovered
+      w2::quest::assign(*G.g, *G.player, res->hero, false, w2::move::modeOf(*G.g, st) == w2::move::FLYING);
       front::openQuest();
     }
   }

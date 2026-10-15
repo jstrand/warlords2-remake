@@ -187,8 +187,16 @@ function kit.line(c, x0, y0, x1, y1)
 end
 
 function kit.mapTarget(mx, my, hx, hy, tx, ty)
+  -- with the hidden map nothing is drawn over ground the player has not
+  -- seen: the line needs both its ends seen (828e:0a3f), the box and its
+  -- frame the target's tile (828e:08cd, 828e:099e)
+  local game = require("warlords.game")
+  local function seen(x, y) return game.seen(G.g, G.player, x, y) end
+  if not seen(tx, ty) then return end
   love.graphics.setScissor(mx, my, 224, 312)
-  kit.line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2)
+  if seen(hx, hy) then
+    kit.line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2)
+  end
   kit.setPal(8)
   local bx, by = mx + tx * 2, my + ty * 2 - 1
   love.graphics.rectangle("fill", bx, by, 4, 5)

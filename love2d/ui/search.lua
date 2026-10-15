@@ -210,7 +210,9 @@ local function openTemple(r, stack)
       M.message(blessLine(site.bless(G.g, r.site, stack)), kit.text(0x38, 2))
     elseif c.id == QUEST then
       kit.pop(d)
-      quest.assign(G.g, G.player, r.hero)
+      -- the searching stack's mode decides how far the target is uncovered
+      local move = require("warlords.move")
+      quest.assign(G.g, G.player, r.hero, false, move.stackMode(G.g, stack) == move.FLYING)
       if G.openQuest then G.openQuest() end
     end
   end

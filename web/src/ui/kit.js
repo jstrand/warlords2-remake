@@ -10,6 +10,7 @@
 // puts one on top; the front end sends input to the top one only.
 
 import * as gfx from "../gfx.js";
+import * as game from "../warlords/game.js";
 import * as screen from "../warlords/screen.js";
 import * as uidata from "../warlords/uidata.js";
 
@@ -149,8 +150,13 @@ export function line(c, x0, y0, x1, y1) {
 
 /** The way to a place on a strategic map drawn at (mx, my) (828e:0a3f). */
 export function mapTarget(mx, my, hx, hy, tx, ty) {
+  // with the hidden map nothing is drawn over ground the player has not
+  // seen: the line needs both its ends seen (828e:0a3f), the box and its
+  // frame the target's tile (828e:08cd, 828e:099e)
+  const seen = (x, y) => game.seen(G.g, G.player, x, y);
+  if (!seen(tx, ty)) return;
   gfx.setScissor(mx, my, 224, 312);
-  line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2);
+  if (seen(hx, hy)) line(8, mx + hx * 2 - 2, my + hy * 2 - 2, mx + tx * 2 - 2, my + ty * 2 - 2);
   setPal(8);
   const bx = mx + tx * 2, by = my + ty * 2 - 1;
   gfx.rectangle("fill", bx, by, 4, 5);

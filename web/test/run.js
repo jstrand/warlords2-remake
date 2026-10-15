@@ -2612,6 +2612,37 @@ function testVerified() {
     a.moves = cost + 2;
     eq(movement.moveTo(g, [a], from[0], from[1]).outOfMoves, false, "two left after arriving: not out of moves");
   }
+
+  // a walk to sea is shown as it set off, on land, to its end (1a8b:04c8)
+  {
+    const g = newGame("ERYTHEA", { seed: 1 });
+    const side = game.begin(g);
+    const a = mk(g, 71, 11, side.index, 4);
+    a.moves = 40;
+    const r = movement.moveTo(g, [a], 70, 14);
+    eq([a.x, a.y].join(), "70,14", "over the bridge to the shore");
+    eq(r.seaBefore, false, "it set off on land, and is shown so");
+    eq(a.atSea, true, "and is at sea once the walk is done");
+    a.moves = 40;
+    eq(movement.moveTo(g, [a], 71, 11).seaBefore, true, "coming ashore it is shown at sea");
+  }
+
+  // the item quest uncovers round its ruin two tiles out when the searching
+  // stack flies (8611:1298, DS:1e9c), one otherwise
+  for (const flying of [false, true]) {
+    const g = newGame("ERYTHEA", { seed: 2, options: { quests: 1, hiddenMap: 1 } });
+    const side = game.begin(g);
+    const s = g.map.sites.find((x) => x.content === site.ITEM && !site.itemReserved(g.map.items.find((it) => it.index === x.item)));
+    const h = mk(g, s.x, s.y, side.index, armytype.HERO);
+    const it = quest.pickTarget(g, side, quest.RETRIEVE_ITEM, h, false, flying);
+    const at = g.map.sites.find((x) => x.content === site.ITEM && x.item === it.index);
+    let ring = 0, seen = 0;
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) === 2) { ring++; if (game.seen(g, side, at.x + dx, at.y + dy)) seen++; }
+    }
+    if (flying) eq(seen, ring, "a flier's quest uncovers two tiles round the ruin");
+    else ok(game.seen(g, side, at.x + 1, at.y + 1), "a walker's uncovers one");
+  }
 }
 
 // --------------------------------------------------------------------- main

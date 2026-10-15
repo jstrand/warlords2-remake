@@ -56,8 +56,11 @@ local function questText(g, side, q)
   local t = function(grp, i) return kit.text(grp, i) end
   local h, lines, tx, ty = q.hero, {}, nil, nil
   local function add(y, s) lines[#lines + 1] = { y, s } end
+  -- a city the side has not seen is told of as one only heard of: 4976:0850
+  -- tests (x,y) twice -- (x+1,y) never -- then (x+1,y+1) and (x,y+1)
   local function fabled(c)
     return g.map.options.hiddenMap ~= 0 and not game.seen(g, side, c.x, c.y)
+      and not game.seen(g, side, c.x + 1, c.y + 1) and not game.seen(g, side, c.x, c.y + 1)
   end
   if q.type == quest.SLAY_HERO then
     local foe = q.target

@@ -73,7 +73,7 @@ int searchSite(Game& g, Sel* sel, Army* h, Site& s) {
     if (r && r->kind == "sage") sage(g, side);
     // at a temple the computer takes a quest, by its own rules (quest_assign(1))
     if (s.content == site::TEMPLE && g.map->options.quests != 0 && !side.quest && isHero(h)) {
-      quest::assign(g, side, h, true);
+      quest::assign(g, side, h, true, move::modeOf(g, stack) == move::FLYING);
     }
     if (!isHero(h)) return 0;
     for (Army* a : stack) a->done = false;

@@ -657,11 +657,14 @@ function outOfMoves(stack, path, landed, stopped) {
 }
 
 /** Walk `stack` along `path`, stopping where the rules say to stop.
- *  Returns { steps, spent, stopped, attack, walked, outOfMoves }. */
+ *  Returns { steps, spent, stopped, attack, walked, outOfMoves, seaBefore }:
+ *  `seaBefore` is whether the stack was at sea as it set off, which is how
+ *  the walk is shown -- place_stack_at_step (1a8b:04c8) draws every step,
+ *  and only after the last does it put the stack to sea or ashore. */
 function walkPath(g, stack, path) {
   const side = stack[0] ? stack[0].owner : undefined;
   let left = stackMoves(stack);
-  const result = { steps: 0, spent: 0, stopped: "arrived" };
+  const result = { steps: 0, spent: 0, stopped: "arrived", seaBefore: stack.some((a) => a.atSea) };
   let lastOk = 0, cumulative = 0;
   const costTo = {};
 

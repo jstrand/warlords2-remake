@@ -157,6 +157,9 @@ struct WalkResult {
   std::optional<Attack> attack;
   std::vector<std::pair<int, int>> walked;
   bool outOfMoves = false;     // walk_path's status 2: a human's stack is then put down
+  // at sea as it set off, which is how the walk is shown: place_stack_at_step
+  // (1a8b:04c8) draws every step, and only after the last puts it to sea or ashore
+  bool seaBefore = false;
 };
 
 /** Going to sea and coming ashore, at the end of a walk (1a8b:04c8).

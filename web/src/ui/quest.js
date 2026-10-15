@@ -49,7 +49,10 @@ function questText(g, side, q) {
   const h = q.hero, lines = [];
   let tx = null, ty = null;
   const add = (y, s) => lines.push([y, s]);
-  const fabled = (c) => g.map.options.hiddenMap !== 0 && !game.seen(g, side, c.x, c.y);
+  // a city the side has not seen is told of as one only heard of: 4976:0850
+  // tests (x,y) twice -- (x+1,y) never -- then (x+1,y+1) and (x,y+1)
+  const fabled = (c) => g.map.options.hiddenMap !== 0 && !game.seen(g, side, c.x, c.y)
+    && !game.seen(g, side, c.x + 1, c.y + 1) && !game.seen(g, side, c.x, c.y + 1);
   if (q.type === quest.SLAY_HERO) {
     const foe = q.target;
     add(175, t(0x15, 0)); add(195, t(0x15, 1));

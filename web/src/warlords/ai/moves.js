@@ -68,7 +68,7 @@ export function* searchSite(g, sel, h, s) {
     if (r && r.kind === "sage") sage(g, side);
     // at a temple the computer takes a quest, by its own rules (quest_assign(1))
     if (s.content === siteMod.TEMPLE && g.map.options.quests !== 0 && !side.quest && core.isHero(h)) {
-      quest.assign(g, side, h, true);
+      quest.assign(g, side, h, true, move.modeOf(g, stack) === move.FLYING);
     }
     if (!core.isHero(h)) return 0;
     for (const a of stack) a.done = undefined;

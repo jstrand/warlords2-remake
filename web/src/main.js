@@ -519,10 +519,13 @@ function planRoute(x, y) {
   if (!G.route) sound.effect("chord");
 }
 
-/** Play the walk back a tile at a time, centring on the stack as it goes. */
-function startWalk(armies, tiles) {
+/** Play the walk back a tile at a time, centring on the stack as it goes.
+ *  `seaBefore`: the stack was at sea as it set off, and is shown so to the
+ *  end of the walk -- the original puts it to sea or ashore only after its
+ *  last step (place_stack_at_step, 1a8b:04c8). */
+function startWalk(armies, tiles, seaBefore) {
   if (!tiles || tiles.length === 0) return;
-  G.walk = { armies: new Set(armies), tiles, i: 0, at: now(), top: armies[0] };
+  G.walk = { armies: new Set(armies), tiles, i: 0, at: now(), top: armies[0], seaBefore: !!seaBefore };
   centreOn(tiles[0].x, tiles[0].y);
 }
 
@@ -835,7 +838,7 @@ function moveSelection(x, y) {
     reslot(selectableAt(sel.x, sel.y));
     stratDirty();
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack));
-    startWalk(walked, r.walked || []);
+    startWalk(walked, r.walked || [], r.seaBefore);
   }
   // a walk that leaves the stack out of moves (walk_path's status 2) ends
   // its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
@@ -1096,7 +1099,7 @@ ai.hooks.onWalk = function* (g, stack, r) {
     if (seen) break;
     if (game.seen(g, G.player, t.x, t.y)) seen = true;
   }
-  if (seen) yield ["walk", stack.slice(), r.walked];
+  if (seen) yield ["walk", stack.slice(), r.walked, r.seaBefore];
 };
 
 // A line in the status bar, and the time 8065:11d1 then waits, in BIOS ticks
@@ -1172,12 +1175,12 @@ function resumeComputer() {
     return;
   }
   stratDirty();
-  const [what, a, b] = r.value || [];
+  const [what, a, b, c] = r.value || [];
   if (what === "pause") {
     G.aiResumeAt = now() + a / 18.2;
     G.aiWait = true;
   } else if (what === "walk") {
-    startWalk(a, b);
+    startWalk(a, b, c);
     if (G.walk) G.walk.computer = true; else G.aiWait = true;
   } else if (what === "nohumans") {
     // 8065:1c6f: the last human is gone, and the war goes on
@@ -1450,7 +1453,9 @@ function drawMap() {
     const a = G.walk.top;
     if (a && G.shown(at.x, at.y)) {
       const walking = [...G.walk.armies];
-      drawStack(a.owner ?? 8, stackFigure(walking), walking.length, at.x * TILE, at.y * TILE);
+      const top = topArmy(walking);
+      const figure = G.walk.seaBefore ? NAVY : (top ? top.type : null);
+      drawStack(a.owner ?? 8, figure, walking.length, at.x * TILE, at.y * TILE);
     }
   }
 

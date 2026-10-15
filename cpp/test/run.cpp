@@ -3015,6 +3015,51 @@ static void testVerified() {
     a->moves = cost + 2;
     eq(movement::moveTo(g, {a}, fx, fy).outOfMoves, false, "two left after arriving: not out of moves");
   }
+
+  // a walk to sea is shown as it set off, on land, to its end (1a8b:04c8)
+  {
+    auto gp = newGame("ERYTHEA", seed(1));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    Army* a = mk(g, 71, 11, side->index, 4);
+    a->moves = 40;
+    auto r = movement::moveTo(g, {a}, 70, 14);
+    ok(a->x == 70 && a->y == 14, "over the bridge to the shore");
+    eq(r.seaBefore, false, "it set off on land, and is shown so");
+    eq(a->atSea, true, "and is at sea once the walk is done");
+    a->moves = 40;
+    eq(movement::moveTo(g, {a}, 71, 11).seaBefore, true, "coming ashore it is shown at sea");
+  }
+
+  // the item quest uncovers round its ruin two tiles out when the searching
+  // stack flies (8611:1298, DS:1e9c), one otherwise
+  for (bool flying : {false, true}) {
+    auto gp = newGame("ERYTHEA", seedWith(2, {{"quests", 1}, {"hiddenMap", 1}}));
+    Game& g = *gp;
+    Side* side = game::begin(g);
+    Site* s = nullptr;
+    for (auto& x : g.map->sites) {
+      if (s || x.content != site::ITEM) continue;
+      for (auto& it : g.map->items) if (it.index == x.item && !site::itemReserved(it)) s = &x;
+    }
+    Army* h = mk(g, s->x, s->y, side->index, armytype::HERO);
+    side->quest.reset();
+    auto q = quest::assign(g, *side, h, false, flying);
+    // a retrieve quest is not certain; take the first try that is one
+    for (int i = 0; i < 200 && q && q->type != quest::RETRIEVE_ITEM; i++) {
+      side->quest.reset();
+      q = quest::assign(g, *side, h, false, flying);
+    }
+    if (!q || q->type != quest::RETRIEVE_ITEM) { ok(false, "an item quest was given"); continue; }
+    Site* at = nullptr;
+    for (auto& x : g.map->sites) if (x.content == site::ITEM && x.item == q->item->index) at = &x;
+    int ring = 0, seen = 0;
+    for (int dx = -2; dx <= 2; dx++)
+      for (int dy = -2; dy <= 2; dy++)
+        if (std::max(std::abs(dx), std::abs(dy)) == 2) { ring++; if (game::seen(g, side->index, at->x + dx, at->y + dy)) seen++; }
+    if (flying) eq(seen, ring, "a flier's quest uncovers two tiles round the ruin");
+    else ok(game::seen(g, side->index, at->x + 1, at->y + 1), "a walker's uncovers one");
+  }
 }
 
 // What plays when. The OPL synthesis is checked in the sound step.

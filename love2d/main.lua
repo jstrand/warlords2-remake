@@ -617,10 +617,13 @@ end
 
 --- Play the walk back a tile at a time, centring on the stack as it goes.
 --- The armies are already where they finished -- this only decides where they
---- are drawn until it catches up.
-local function startWalk(armies, tiles)
+--- are drawn until it catches up. `seaBefore`: the stack was at sea as it set
+--- off, and is shown so to the end of the walk -- the original puts it to sea
+--- or ashore only after its last step (place_stack_at_step, 1a8b:04c8).
+local function startWalk(armies, tiles, seaBefore)
   if #tiles == 0 then return end
-  G.walk = { armies = {}, tiles = tiles, i = 1, at = now(), top = armies[1] }
+  G.walk = { armies = {}, tiles = tiles, i = 1, at = now(), top = armies[1],
+             seaBefore = seaBefore and true or false }
   for _, a in ipairs(armies) do G.walk.armies[a] = true end
   centreOn(tiles[1].x, tiles[1].y)
 end
@@ -992,7 +995,7 @@ local function moveSelection(x, y)
     reslot(selectableAt(sel.x, sel.y))
     stratDirty()
     say("Moved %d for %d. %d left.", r.steps, r.spent, move.stackMoves(sel.stack))
-    startWalk(walked, r.walked or {})
+    startWalk(walked, r.walked or {}, r.seaBefore)
   end
   -- a walk that leaves the stack out of moves (walk_path's status 2) ends
   -- its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
@@ -1307,7 +1310,7 @@ ai.onWalk = function(g, stack, r)
     if seen then break end
     if game.seen(g, G.player, t.x, t.y) then seen = true end
   end
-  if seen then coroutine.yield("walk", stack, r.walked) end
+  if seen then coroutine.yield("walk", stack, r.walked, r.seaBefore) end
 end
 
 -- A line in the status bar, and the time 8065:11d1 then waits, in BIOS
@@ -1385,7 +1388,7 @@ function resumeComputer()
   local co = G.aiRun
   if not co then return end
   G.aiWait = nil
-  local ok, what, a, b = coroutine.resume(co)
+  local ok, what, a, b, c = coroutine.resume(co)
   if not ok then G.aiRun = nil error(what) end
   if coroutine.status(co) == "dead" then
     G.aiRun, G.aiSkip, G.aiSide = nil, nil, nil
@@ -1399,7 +1402,7 @@ function resumeComputer()
   elseif what == "walk" then
     local armies = {}
     for _, army in ipairs(a) do armies[#armies + 1] = army end
-    startWalk(armies, b)
+    startWalk(armies, b, c)
     G.walk.computer = true
   elseif what == "nohumans" then
     -- 8065:1c6f: the last human is gone, and the war goes on
@@ -1714,7 +1717,9 @@ local function drawMap()
     if a and G.shown(at.x, at.y) then
       local n, walking = 0, {}
       for w in pairs(G.walk.armies) do n = n + 1; walking[#walking + 1] = w end
-      drawStack(a.owner or 8, stackFigure(walking), n, at.x * TILE, at.y * TILE)
+      local top = topArmy(walking)
+      local figure = G.walk.seaBefore and NAVY or (top and top.type)
+      drawStack(a.owner or 8, figure, n, at.x * TILE, at.y * TILE)
     end
   end
 
