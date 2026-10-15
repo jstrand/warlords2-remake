@@ -57,7 +57,9 @@ void measure() {
   int ww = W, wh = H;
   if (win) SDL_GetWindowSize(win, &ww, &wh);
   int rw = ww, rh = wh;
-  if (gfx::renderer()) SDL_GetRendererOutputSize(gfx::renderer(), &rw, &rh);
+  // the window's own pixels, not the renderer's output: with the canvas set
+  // as the target, SDL2 gives the canvas's size for that
+  if (win) SDL_GetWindowSizeInPixels(win, &rw, &rh);
   double fit = std::min((double)rw / W, (double)rh / H);
   int whole = std::max(1, (int)fit);
   // the next scale up, drawn whole and shrunk to fit, when this one leaves a quarter over
