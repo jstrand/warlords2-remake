@@ -628,6 +628,19 @@ local function startWalk(armies, tiles, seaBefore)
   centreOn(tiles[1].x, tiles[1].y)
 end
 
+--- A stack out of moves after its walk: done for the turn (8c07:08fb) and
+--- put down (1b62:08b3), with nothing selected. A goal it has reached is
+--- forgotten (1c8c:01fd).
+function G.putDown(stack)
+  local lead = stack[1]
+  local arrived = lead and lead.target and lead.x == lead.target.x and lead.y == lead.target.y
+  for _, a in ipairs(stack) do
+    a.done = true
+    if arrived then a.target = nil end
+  end
+  G.selection, G.route = nil, nil
+end
+
 local function advanceWalk()
   local w = G.walk
   if not w then return end
@@ -639,6 +652,7 @@ local function advanceWalk()
   end
   if w.i >= #w.tiles and t - w.at >= WALK.stepTime then
     G.walk = nil
+    if w.putDown then G.putDown(w.putDown) end
     refreshRoute()
     -- a computer's walk shown, the computer goes on; Move All, to the next
     if w.computer and G.resumeComputer then G.resumeComputer() end
@@ -998,17 +1012,15 @@ local function moveSelection(x, y)
     startWalk(walked, r.walked or {}, r.seaBefore)
   end
   -- a walk that leaves the stack out of moves (walk_path's status 2) ends
-  -- its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
-  -- 1b62:08b3), with nothing selected; the walk still plays out
+  -- its turn: done for the turn and put down (1c8c:01fd) -- once the walk
+  -- has played out, as the original draws every step first (1a8b:04c8)
   if r.outOfMoves and G.selection then
-    local stack = G.selection.stack
-    local lead = stack[1]
-    local arrived = lead and lead.target and lead.x == lead.target.x and lead.y == lead.target.y
-    for _, a in ipairs(stack) do
-      a.done = true
-      if arrived then a.target = nil end
+    if G.walk then
+      G.walk.putDown = {}
+      for i, a in ipairs(G.selection.stack) do G.walk.putDown[i] = a end
+    else
+      G.putDown(G.selection.stack)
     end
-    G.selection, G.route = nil, nil
   end
   if G.selection and #G.selection.stack > 0 then
     G.selection.x, G.selection.y = G.selection.stack[1].x, G.selection.stack[1].y

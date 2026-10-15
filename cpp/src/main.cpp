@@ -411,6 +411,20 @@ static void startWalk(const std::vector<Army*>& armies, const std::vector<std::p
 static void moveAllStep();
 static void flushKeys();
 
+// A stack out of moves after its walk: done for the turn (8c07:08fb) and put
+// down (1b62:08b3), with nothing selected. A goal it has reached is forgotten
+// (1c8c:01fd).
+static void putDown(const std::vector<Army*>& stack) {
+  Army* lead = stack.empty() ? nullptr : stack[0];
+  bool arrived = lead && lead->target && lead->x == lead->target->first && lead->y == lead->target->second;
+  for (Army* a : stack) {
+    a->done = true;
+    if (arrived) a->target.reset();
+  }
+  G.selection.reset();
+  G.route.reset();
+}
+
 static void advanceWalk() {
   if (!G.walk) return;
   Walk& w = *G.walk;
@@ -422,7 +436,9 @@ static void advanceWalk() {
   }
   if (w.i >= w.tiles.size() - 1 && t - w.at >= WALK_STEP) {
     bool computer = w.computer;
+    auto down = w.putDown;
     G.walk.reset();
+    if (!down.empty()) putDown(down);
     refreshRoute();
     if (computer && G.aiRun) resumeComputer();
     if (G.moveAll) moveAllStep();
@@ -724,18 +740,11 @@ static void moveSelection(int x, int y) {
     startWalk(walked, r.walked, r.seaBefore);
   }
   // a walk that leaves the stack out of moves (walk_path's status 2) ends
-  // its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
-  // 1b62:08b3), with nothing selected; the walk still plays out
+  // its turn: done for the turn and put down (1c8c:01fd) -- once the walk
+  // has played out, as the original draws every step first (1a8b:04c8)
   if (r.outOfMoves && G.selection) {
-    auto stack = G.selection->stack;
-    Army* lead = stack.empty() ? nullptr : stack[0];
-    bool arrived = lead && lead->target && lead->x == lead->target->first && lead->y == lead->target->second;
-    for (Army* a : stack) {
-      a->done = true;
-      if (arrived) a->target.reset();
-    }
-    G.selection.reset();
-    G.route.reset();
+    if (G.walk) G.walk->putDown = G.selection->stack;
+    else putDown(G.selection->stack);
   }
   if (G.selection && !G.selection->stack.empty()) {
     G.selection->x = G.selection->stack[0]->x;

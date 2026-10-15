@@ -529,6 +529,20 @@ function startWalk(armies, tiles, seaBefore) {
   centreOn(tiles[0].x, tiles[0].y);
 }
 
+/** A stack out of moves after its walk: done for the turn (8c07:08fb) and put
+ *  down (1b62:08b3), with nothing selected. A goal it has reached is
+ *  forgotten (1c8c:01fd). */
+function putDown(stack) {
+  const lead = stack[0];
+  const arrived = lead && lead.target && lead.x === lead.target.x && lead.y === lead.target.y;
+  for (const a of stack) {
+    a.done = true;
+    if (arrived) a.target = undefined;
+  }
+  G.selection = null;
+  G.route = null;
+}
+
 function advanceWalk() {
   const w = G.walk;
   if (!w) return;
@@ -540,6 +554,7 @@ function advanceWalk() {
   }
   if (w.i >= w.tiles.length - 1 && t - w.at >= WALK.stepTime) {
     G.walk = null;
+    if (w.putDown) putDown(w.putDown);
     refreshRoute();
     if (w.computer && G.resumeComputer) G.resumeComputer();
     if (G.moveAll && G.moveAllStep) G.moveAllStep();
@@ -841,18 +856,11 @@ function moveSelection(x, y) {
     startWalk(walked, r.walked || [], r.seaBefore);
   }
   // a walk that leaves the stack out of moves (walk_path's status 2) ends
-  // its turn: done for the turn and put down (1c8c:01fd -> 8c07:08fb,
-  // 1b62:08b3), with nothing selected; the walk still plays out
+  // its turn: done for the turn and put down (1c8c:01fd) -- once the walk
+  // has played out, as the original draws every step first (1a8b:04c8)
   if (r.outOfMoves && G.selection) {
-    const stack = G.selection.stack;
-    const lead = stack[0];
-    const arrived = lead && lead.target && lead.x === lead.target.x && lead.y === lead.target.y;
-    for (const a of stack) {
-      a.done = true;
-      if (arrived) a.target = undefined;
-    }
-    G.selection = null;
-    G.route = null;
+    if (G.walk) G.walk.putDown = G.selection.stack.slice();
+    else putDown(G.selection.stack);
   }
   if (G.selection && G.selection.stack.length > 0) {
     G.selection.x = G.selection.stack[0].x; G.selection.y = G.selection.stack[0].y;

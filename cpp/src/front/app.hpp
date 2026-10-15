@@ -44,6 +44,7 @@ struct Walk {
   w2::Army* top = nullptr;
   bool computer = false;
   bool seaBefore = false;    // at sea as it set off: shown so to the walk's end
+  std::vector<w2::Army*> putDown;   // out of moves: put down once the walk has played out
 };
 
 struct Banner {
