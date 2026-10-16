@@ -69,6 +69,8 @@ export function withZooms(maxUI, maxMap) {
       items.push(["-"]);
       items.push(["4:3 (original)", null, "screen 4:3"]);
       items.push(["Fit available space", null, "screen fit"]);
+      items.push(["-"]);
+      items.push(["CRT screen", null, "screen crt"]);
     }
     return { title: m.title, items };
   });

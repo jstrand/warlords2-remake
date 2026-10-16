@@ -13,6 +13,7 @@
 // Handlers and hit tests all work in UI pixels: the mouse is brought down to
 // them before main.js sees it.
 
+import * as crt from "./crt.js";
 import * as gfx from "./gfx.js";
 
 export const W = 640, H = 480;
@@ -27,6 +28,7 @@ export const display = {
   chosen: null,           // a scale picked from the menu, if any
   windowed: true,         // not in the browser's full screen
   wanted: null,           // { w, h } to keep to: View > 4:3
+  crt: false,             // through an old monitor's tube: View > CRT screen
   w: 640, h: 480,         // the frame being drawn, in UI pixels
   ox: 0, oy: 0,           // where its (0, 0) sits, in device pixels
   canvas: null,
@@ -99,8 +101,10 @@ export function pushMap(x, y, camX, camY, zoom) {
 /** A page position (CSS pixels) as a UI point, held to the frame. */
 export function toUI(clientX, clientY) {
   const s = display.scale;
-  const x = Math.floor((clientX * display.dpi - display.ox) / s);
-  const y = Math.floor((clientY * display.dpi - display.oy) / s);
+  let px = clientX * display.dpi, py = clientY * display.dpi;
+  if (crt.shown()) [px, py] = crt.unwarp(px, py);
+  const x = Math.floor((px - display.ox) / s);
+  const y = Math.floor((py - display.oy) / s);
   return [Math.max(0, Math.min(display.w - 1, x)), Math.max(0, Math.min(display.h - 1, y))];
 }
 

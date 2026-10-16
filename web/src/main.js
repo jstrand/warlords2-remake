@@ -15,6 +15,7 @@ import * as keys from "./keys.js";
 import * as prefs from "./prefs.js";
 import * as sound from "./sound.js";
 import { display, fitCanvas, measure, uiSize, setFrame, pushUI, pushMap, toUI, onFrame } from "./display.js";
+import * as crt from "./crt.js";
 import * as displayMod from "./display.js";
 import * as pal from "./warlords/pal.js";
 import * as pck from "./warlords/pck.js";
@@ -191,6 +192,7 @@ function load(params) {
 
   // the screen: its real pixels, the UI's scale, and the map's zoom
   if (prefs.get("4:3") === "on") display.wanted = { w: layoutMod.W, h: layoutMod.H };
+  display.crt = prefs.get("crt") === "on";
   display.chosen = Number(prefs.get("scale")) || null;
   measure();
   G.zoom = Number(prefs.get("zoom")) || display.scale;
@@ -461,11 +463,18 @@ G.setOriginalSize = (on) => {
   prefs.set("4:3", on ? "on" : "off");
 };
 
+/** The screen through an old monitor's tube, or plain (View > CRT screen). */
+G.toggleCRT = () => {
+  display.crt = !display.crt;
+  prefs.set("crt", display.crt ? "on" : "off");
+};
+
 /** Is this menu item the setting in use? */
 G.menuTicked = (k) => k === "map zoom " + G.zoom || k === "ui scale " + display.scale
   || k === "screen " + G.screenMode()
   || (k === "screen 4:3" && display.wanted != null)
   || (k === "screen fit" && display.wanted == null)
+  || (k === "screen crt" && display.crt)
   || k === "music " + sound.synth();
 
 // ------------------------------------------------------------------ walking
@@ -2951,6 +2960,7 @@ MENU_DOES["screen full"] = () => G.setScreen("full");
 MENU_DOES["screen window"] = () => G.setScreen("window");
 MENU_DOES["screen 4:3"] = () => G.setOriginalSize(true);
 MENU_DOES["screen fit"] = () => G.setOriginalSize(false);
+MENU_DOES["screen crt"] = () => G.toggleCRT();
 for (const synth of sound.SYNTHS) MENU_DOES["music " + synth] = () => sound.setSynth(synth);
 
 // What greys a menu item (8065:0519, the table at 4125:1798).
@@ -3117,6 +3127,7 @@ function frame() {
   try {
     update();
     draw();
+    crt.present();
   } catch (e) {
     console.error(e);
     showError(e);
