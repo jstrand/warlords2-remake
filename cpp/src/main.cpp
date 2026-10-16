@@ -336,10 +336,16 @@ static void setScreen(bool window) {
   prefs::set("screen", window ? "window" : "full");
 }
 
+static void toggleCRT() {
+  display::d.crt = !display::d.crt;
+  prefs::set("crt", display::d.crt ? "on" : "off");
+}
+
 static bool menuTicked(const std::string& k) {
   return k == "map zoom " + std::to_string(G.zoom) || (display::d.smooth ? k == "ui scale smooth" : k == "ui scale " + std::to_string(display::d.scale)) ||
          k == std::string("screen ") + (display::d.windowed ? "window" : "full") ||
          (k == "screen 4:3" && display::d.wanted) || (k == "screen fit" && !display::d.wanted) ||
+         (k == "screen crt" && display::d.crt) ||
          k == "music " + sound::synth();
 }
 
@@ -2876,6 +2882,7 @@ static std::map<std::string, std::function<void()>>& menuDoes() {
   M["screen window"] = []() { setScreen(true); };
   M["screen 4:3"] = []() { setOriginalSize(true); };
   M["screen fit"] = []() { setOriginalSize(false); };
+  M["screen crt"] = toggleCRT;
   for (const char* s : {"fm", "mt32", "sc55"}) {
     std::string synth = s;
     M["music " + synth] = [synth]() { sound::setSynth(synth); };
@@ -3271,6 +3278,7 @@ int main(int argc, char** argv) {
     sound::init(G.dataDir, ui.files);
     // the screen: its real pixels, the UI's scale, and the map's zoom
     if (prefs::get("4:3") == "on") display::d.wanted = std::make_pair(layout::W, layout::H);
+    display::d.crt = prefs::get("crt") == "on";
     display::d.chosen = prefs::get("scale") == "smooth" ? display::SMOOTH : prefs::getInt("scale", 0);
     display::measure();
     G.zoom = prefs::getInt("zoom", display::d.scale);

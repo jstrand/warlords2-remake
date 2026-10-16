@@ -61,6 +61,8 @@ std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI, double mapSh
       n.items.push_back({"-", "", ""});
       n.items.push_back({"4:3 (original)", "", "screen 4:3"});
       n.items.push_back({"Fit available space", "", "screen fit"});
+      n.items.push_back({"-", "", ""});
+      n.items.push_back({"CRT screen", "", "screen crt"});
     } else {
       n.items = m.items;
     }

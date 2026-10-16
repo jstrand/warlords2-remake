@@ -1,8 +1,8 @@
 // The remake's own settings, none of them the original's: the interface's
-// scale, the map's zoom, full screen or a window, 4:3, the synthesizer the
-// music plays on, the button shortcuts. Kept in w2-prefs.json, beside the
-// saves in the player's own folder for the game (SDL_GetPrefPath); a setting
-// never changed is left to its default.
+// scale, the map's zoom, full screen or a window, 4:3, the CRT screen, the
+// synthesizer the music plays on, the button shortcuts. Kept in
+// w2-prefs.json, beside the saves in the player's own folder for the game
+// (SDL_GetPrefPath); a setting never changed is left to its default.
 #pragma once
 
 #include <string>

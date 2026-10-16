@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
+#include "platform/crt.hpp"
 #include "platform/gfx.hpp"
 
 namespace display {
@@ -13,8 +15,12 @@ State d;
 
 namespace {
 SDL_Window* win = nullptr;
-SDL_Texture* canvas = nullptr;   // the frame, when it is bigger than the window
+SDL_Texture* canvas = nullptr;   // the frame, when it is bigger than the window or goes through the tube
 bool noCanvas = false;           // the renderer cannot draw to one
+
+// Drawn on the canvas: always through the tube, else only to shrink it.
+bool tube() { return d.crt && !noCanvas; }
+bool onCanvas() { return d.shrink < 1 || tube(); }
 }
 
 SDL_Window* open(const char* title, bool windowed, int sizeW, int sizeH) {
@@ -78,12 +84,12 @@ void beginFrame() {
   if (!r) return;
   int cw = 0, ch = 0;
   if (canvas) SDL_QueryTexture(canvas, nullptr, nullptr, &cw, &ch);
-  if (canvas && (d.shrink >= 1 || cw != d.pw || ch != d.ph)) {
+  if (canvas && (!onCanvas() || cw != d.pw || ch != d.ph)) {
     SDL_SetRenderTarget(r, nullptr);
     SDL_DestroyTexture(canvas);
     canvas = nullptr;
   }
-  if (d.shrink >= 1) return;
+  if (!onCanvas()) return;
   if (!canvas) {
     canvas = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, d.pw, d.ph);
     if (canvas) SDL_SetTextureScaleMode(canvas, SDL_ScaleModeLinear);
@@ -103,11 +109,15 @@ void present() {
     SDL_RenderPresent(r);
     return;
   }
-  SDL_SetRenderTarget(r, nullptr);
-  SDL_RenderSetClipRect(r, nullptr);
-  SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
-  SDL_RenderClear(r);
-  SDL_RenderCopy(r, canvas, nullptr, nullptr);
+  if (tube()) {
+    crt::present(r, canvas);
+  } else {
+    SDL_SetRenderTarget(r, nullptr);
+    SDL_RenderSetClipRect(r, nullptr);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+    SDL_RenderCopy(r, canvas, nullptr, nullptr);
+  }
   SDL_RenderPresent(r);
   // left on the canvas, so a script's shot between frames reads it
   SDL_SetRenderTarget(r, canvas);
@@ -149,8 +159,10 @@ void pushMap(int x, int y, int camX, int camY, int zoom) {
 }
 
 std::pair<int, int> toUI(double x, double y) {
-  int ux = (int)std::floor((x * d.dpi - d.ox) / d.scale);
-  int uy = (int)std::floor((y * d.dpi - d.oy) / d.scale);
+  double px = x * d.dpi, py = y * d.dpi;
+  if (tube()) std::tie(px, py) = crt::unwarp(px, py);
+  int ux = (int)std::floor((px - d.ox) / d.scale);
+  int uy = (int)std::floor((py - d.oy) / d.scale);
   return {std::clamp(ux, 0, d.w - 1), std::clamp(uy, 0, d.h - 1)};
 }
 

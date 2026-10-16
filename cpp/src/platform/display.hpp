@@ -9,7 +9,8 @@
 //           it over, 2x is 160 rows too tall) the smooth view is offered as
 //           well, and is the default: device pixels are then a canvas bigger
 //           than the window, drawn at the next scale up and smoothly shrunk
-//           onto it. A whole scale never goes through the canvas
+//           onto it. A whole scale goes through the canvas only for
+//           the CRT screen (platform/crt.hpp)
 //   UI      the interface's pixels: every rect in the game's data. One UI
 //           pixel is `scale` device pixels across, a whole number
 //   map     the map's own pixels, 40 to a tile, drawn at `zoom` device
@@ -39,6 +40,7 @@ struct State {
   bool smooth = false;       // drawn in the smooth view
   int chosen = 0;            // picked from the menu: a whole scale, SMOOTH, or 0 for none
   bool windowed = false;     // in a window on the desktop, not full screen
+  bool crt = false;          // through an old monitor's tube (View > CRT screen): plain where there is no canvas
   std::optional<std::pair<int, int>> wanted;   // the frame to keep to: View > 4:3
   int w = 640, h = 480;      // the frame being drawn, in UI pixels
   int ox = 0, oy = 0;        // where its (0, 0) sits, in device pixels
@@ -56,9 +58,10 @@ SDL_Window* window();
  *  number that still fits 640x480 where not. The smooth view is there when
  *  that whole number leaves a quarter of the window over. */
 void measure();
-/** Start a frame: on the canvas, when the scale needs one. */
+/** Start a frame: on the canvas, when the scale or the CRT needs one. */
 void beginFrame();
-/** Show the frame, shrinking the canvas onto the window. */
+/** Show the frame, shrinking the canvas onto the window, or through the
+ *  CRT's tube. */
 void present();
 /** Draw the UI at `n` device pixels a pixel from now on, as far as it fits,
  *  or in the smooth view (SMOOTH) where there is one. */
