@@ -1279,7 +1279,8 @@ name, font 1 centred on (432, 62) in every mode:
 | Vector: up to four armies in each row | x 400 + 40n, y 149 / 182 |
 
 Info shows a **picture** instead of the list when the city is razed, or when
-*View Production* (`.SCN` `0x132`) is on and the city is not yours: a black
+the *View Production* flag (`.SCN` `0x132`) is set — which Edit Options
+shows as *Off* — and the city is not yours: a black
 outline at (311, 169) 242 × 88, a (4, 2) bevel round it, `CITYBACK.PCK`'s
 240 × 86 at (312, 170), and the city's own four map tiles at (392, 176) 40
 apart.
@@ -2022,8 +2023,10 @@ Difficulty* (groups 9 and 10) on rules at y = 111 and 250 (white, and black
 a pixel down and right); the ten options of group 4 in the order of
 `4125:23b4` two to a row, names from x = 128 and 320, 30 apart from y = 131
 and y = 270, their values in colour 7 128 to the right — Neutral Cities
-*Average*/*Strong*/*Active* (group 5), the rest *On*/*Off*. 159–168 change
-one, 169–171 the presets, Done (172).
+*Average*/*Strong*/*Active* (group 5), the rest *On* when set and *Off*
+when clear — except View Production, the other way round (`7bab:1567`:
+`DS:25a5` "Off" for set, `25a9` "On" for clear), since its flag hides
+production. 159–168 change one, 169–171 the presets, Done (172).
 
 The options are not the scenario's. They are a table of ten u16s
 (`4125:23b4`), the Beginner preset to begin with, and coming from the start

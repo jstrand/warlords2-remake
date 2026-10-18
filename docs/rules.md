@@ -86,6 +86,13 @@ menu order):
 
 `0x12e` is the separate tutorial flag, and `0x130` is cleared on start.
 
+View Production's word is **the other way round**: the `0x132` flag *hides*
+other sides' production (City Info shows a picture of their cities instead,
+`7204:06de`), and Edit Options shows it set as *Off* and clear as *On*
+(`7bab:1567`). Every other option reads *On* when set. So the difficulty
+rating's `+ ViewProduction` below counts View Production *off*, and the
+Advanced preset (flag 1) turns it off.
+
 ### Difficulty rating (`difficulty_rating`, `7bab:0bab`)
 
 ```
