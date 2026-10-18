@@ -14,7 +14,7 @@ namespace {
 
 // How far the glass bows: at a corner of the frame the canvas shows from this
 // much further out, across and down, as a share of half the frame.
-constexpr double BOW_X = 1.0 / 44, BOW_Y = 1.0 / 32;
+constexpr double BOW_X = 1.0 / 64, BOW_Y = 1.0 / 48;
 constexpr int GRID_X = 64, GRID_Y = 48;   // the mesh's cells
 constexpr double SCANLINE = 0.45;         // how dark between rows, at full strength
 constexpr double MASK = 0.2;              // how much of the other colours a stripe holds back
