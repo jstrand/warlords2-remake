@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 struct SDL_Renderer;
@@ -85,5 +86,7 @@ inline void draw(const ImageP& img, const Quad& q, double x, double y) { draw(im
 
 /** The frame drawn so far, as RGBA rows: for screenshots. */
 std::vector<uint8_t> readPixels(int& w, int& h);
+/** Write the frame drawn so far as a .bmp. */
+void saveShot(const std::string& file);
 
 }  // namespace gfx

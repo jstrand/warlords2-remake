@@ -178,4 +178,14 @@ std::vector<uint8_t> readPixels(int& w, int& h) {
   return px;
 }
 
+void saveShot(const std::string& file) {
+  int w, h;
+  auto px = readPixels(w, h);
+  SDL_Surface* s = SDL_CreateRGBSurfaceWithFormatFrom(px.data(), w, h, 32, w * 4, SDL_PIXELFORMAT_ABGR8888);
+  if (s) {
+    SDL_SaveBMP(s, file.c_str());
+    SDL_FreeSurface(s);
+  }
+}
+
 }  // namespace gfx

@@ -3121,6 +3121,8 @@ void front::openStart() {
 //   move X Y        move the pointer
 //   text STRING     type
 //   shot FILE       write the frame as a .bmp
+//   glass FILE      write the window as the next frame shows it, the CRT's
+//                   tube and all, as a .bmp
 //   eval            print the game's state (turn, side, modals)
 //   select TX TY    pick up the stack on a tile
 //   attack TX TY    send the selection at a tile, fighting if it must
@@ -3132,16 +3134,6 @@ struct Script {
   int wait = 0;
 };
 static std::optional<Script> script;
-
-static void saveShot(const std::string& file) {
-  int w, h;
-  auto px = gfx::readPixels(w, h);
-  SDL_Surface* s = SDL_CreateRGBSurfaceWithFormatFrom(px.data(), w, h, 32, w * 4, SDL_PIXELFORMAT_ABGR8888);
-  if (s) {
-    SDL_SaveBMP(s, file.c_str());
-    SDL_FreeSurface(s);
-  }
-}
 
 static void stepScript() {
   if (!script) return;
@@ -3189,7 +3181,9 @@ static void stepScript() {
     } else if (cmd == "shot") {
       std::string f;
       in >> f;
-      saveShot(f);
+      gfx::saveShot(f);
+    } else if (cmd == "glass") {
+      in >> display::d.glassShot;
     } else if (cmd == "eval") {
       printf("turn=%d player=%s modals=%d banner=%d offer=%d ai=%d over=%d walk=%d assault=%d status=%s\n",
              G.g ? G.g->turn : 0, G.player ? G.player->name.c_str() : "-", (int)G.modals.size(), (bool)G.banner,

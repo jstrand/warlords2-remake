@@ -106,7 +106,9 @@ SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software SDL_AUDIODRIVER=dummy \
 
 A script has one command per line: `wait N` (frames), `key NAME`,
 `hold NAME`, `release NAME`, `click X Y [BUTTON]`, `move X Y`, `text STRING`,
-`select TX TY`, `attack TX TY`, `near`, `shot FILE.bmp`, `eval` and `quit`.
+`select TX TY`, `attack TX TY`, `near`, `shot FILE.bmp`, `glass FILE.bmp`,
+`eval` and `quit`. `shot` writes the frame as drawn; `glass` writes the
+window as shown, through the CRT screen's tube when that is on.
 Keys go by LÖVE's names for them. Points are in the 640x480 interface's
 pixels, and tiles in map coordinates. With `SDL_AUDIODRIVER=disk` the mix is
 written to a file.

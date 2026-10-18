@@ -21,6 +21,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 #include <utility>
 
 struct SDL_Window;
@@ -46,6 +47,7 @@ struct State {
   int ox = 0, oy = 0;        // where its (0, 0) sits, in device pixels
   bool mouseInside = true;   // over the window at all
   std::optional<std::pair<int, int>> off;   // over the black round the frame: where, in UI pixels
+  std::string glassShot;     // a .bmp to write the window to as the next frame shows it (a script's glass)
 };
 extern State d;
 

@@ -21,6 +21,13 @@ bool noCanvas = false;           // the renderer cannot draw to one
 // Drawn on the canvas: always through the tube, else only to shrink it.
 bool tube() { return d.crt && !noCanvas; }
 bool onCanvas() { return d.shrink < 1 || tube(); }
+
+// The window as it is about to be shown, for a script's glass.
+void shoot() {
+  if (d.glassShot.empty()) return;
+  gfx::saveShot(d.glassShot);
+  d.glassShot.clear();
+}
 }
 
 SDL_Window* open(const char* title, bool windowed, int sizeW, int sizeH) {
@@ -106,6 +113,7 @@ void present() {
   SDL_Renderer* r = gfx::renderer();
   if (!r) return;
   if (!canvas || SDL_GetRenderTarget(r) != canvas) {
+    shoot();
     SDL_RenderPresent(r);
     return;
   }
@@ -118,6 +126,7 @@ void present() {
     SDL_RenderClear(r);
     SDL_RenderCopy(r, canvas, nullptr, nullptr);
   }
+  shoot();
   SDL_RenderPresent(r);
   // left on the canvas, so a script's shot between frames reads it
   SDL_SetRenderTarget(r, canvas);
