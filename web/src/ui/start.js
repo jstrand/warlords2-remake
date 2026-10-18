@@ -201,7 +201,10 @@ function openOptions(G, st, after) {
       gfx.setColor(1, 1, 1);
       f.draw(kit.text(4, i), x, y);
       const v = st.options[i];
-      const word = i === 0 ? kit.text(5, v) : (v !== 0 ? "On" : "Off");
+      // View Production's word is the other way round (7bab:1567): its flag
+      // hides other sides' production, so set it reads "Off"
+      const on = i === 5 ? v === 0 : v !== 0;
+      const word = i === 0 ? kit.text(5, v) : (on ? "On" : "Off");
       f.colours(7, 0).draw(word, x + 128, y);
     }
     kit.drawControls(d.view);
