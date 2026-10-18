@@ -240,8 +240,12 @@ local function openOptions(G, st, after)
       f.draw(kit.text(4, i), x, y)
       local v = st.options[i]
       local word
+      -- View Production's word is the other way round (7bab:1567): its flag
+      -- hides other sides' production, so set it reads "Off"
+      local on = v ~= 0
+      if i == 5 then on = v == 0 end
       if i == 0 then word = kit.text(5, v)
-      else word = (v ~= 0) and "On" or "Off" end
+      else word = on and "On" or "Off" end
       f.colours(7, 0).draw(word, x + 128, y)
     end
     kit.drawControls(d.view)
