@@ -217,7 +217,10 @@ struct Options : kit::Modal {
       gfx::setColor(1, 1, 1);
       f.draw(kit::text(4, i), x, y);
       int val = st->options[i];
-      std::string word = i == 0 ? kit::text(5, val) : (val != 0 ? "On" : "Off");
+      // View Production's word is the other way round (7bab:1567): its flag
+      // hides other sides' production, so set it reads "Off"
+      bool on = i == 5 ? val == 0 : val != 0;
+      std::string word = i == 0 ? kit::text(5, val) : (on ? "On" : "Off");
       f.colours(7, 0).draw(word, x + 128, y);
     }
     kit::drawControls(v);
