@@ -236,7 +236,7 @@ std::string encode(const Game& g) {
   Json sides = Json::array();
   for (Side* s : g.sides) {
     Json o = Json::object();
-    o.set("index", s->index); o.set("gold", s->gold); o.set("alive", s->alive); o.set("computer", s->computer);
+    o.set("index", s->index); o.set("name", s->name); o.set("gold", s->gold); o.set("alive", s->alive); o.set("computer", s->computer);
     o.set("level", s->level); o.set("enhanced", s->enhanced); o.set("observe", s->observe);
     if (s->capNowX != NONE) {
       Json cn = Json::object();
@@ -419,6 +419,18 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
 
   game::NewGameOptions opts;
   for (auto& [k, v] : state["options"].entries()) opts.options.emplace_back(k, (int)v.integer());
+  // the setup the game began with: who plays each side, its name, and the
+  // sides turned Off, which are the ones the save leaves out -- as the
+  // original's save keeps the .SCN image it was set up in (0x137, in play)
+  for (int i = 0; i < 8; i++) opts.sides[i].off = true;
+  for (auto& saved : state["sides"].items()) {
+    game::SideSetup& o = opts.sides[(int)saved["index"].integer()];
+    o.off = false;
+    o.name = saved["name"].str("");
+    o.computer = saved["computer"].boolean();
+    o.level = (int)saved["level"].integer();
+    o.card = (int)saved["card"].integer();
+  }
   auto gp = game::newGame(dataDir, state["scenario"].str(), opts);
   Game& g = *gp;
   g.armies.clear();

@@ -555,6 +555,16 @@ static void testSetup() {
   City* cap = g.map->sides[2].capital;
   eq(cap ? cap->ownerIndex : NONE, NONE, "and its capital neutral");
   for (Side* s : g.sides) ok(s->index != 2, "not among the sides in play");
+  // a save keeps the setup, as the original's keeps the .SCN image it was
+  // made in (block 2, docs/formats/save.md): a side Off stays out, and a
+  // retyped name stays retyped
+  g.map->sides[0].name = "Ozymandias";
+  auto back = save::decode(save::encode(g), DATA);
+  ok(!back->map->sides[2].inUse && !back->map->sides[2].alive, "a side Off stays out once loaded");
+  eq((int)back->sides.size(), (int)g.sides.size(), "as many sides in play once loaded");
+  for (Side* s : back->sides) ok(s->index != 2, "the side Off not among them");
+  eq(back->map->sides[0].name, std::string("Ozymandias"), "a retyped name kept once loaded");
+  eq(back->map->sides[1].level, 2, "and a computer's level");
   GameOpts q = seedWith(5, {{"quickStart", 1}});
   q.sides[2] = sideSetup(false, NONE, true);
   auto quick = newGame("ERYTHEA", q);
