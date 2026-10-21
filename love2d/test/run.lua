@@ -597,6 +597,18 @@ local function testSetup()
   eq(cap and cap.ownerIndex, nil, "and its capital neutral")
   for _, s in ipairs(g.sides) do ok(s.index ~= 2, "not among the sides in play") end
 
+  -- a save keeps the setup, as the original's keeps the .SCN image it was
+  -- made in (block 2, docs/formats/save.md): a side Off stays out, and a
+  -- retyped name stays retyped
+  g.map.sides[1].name = "Ozymandias"
+  local saveMod = require("warlords.save")
+  local back = saveMod.decode(saveMod.encode(g), DATA)
+  ok(not back.map.sides[3].inUse and not back.map.sides[3].alive, "a side Off stays out once loaded")
+  eq(#back.sides, #g.sides, "as many sides in play once loaded")
+  for _, s in ipairs(back.sides) do ok(s.index ~= 2, "the side Off not among them") end
+  eq(back.map.sides[1].name, "Ozymandias", "a retyped name kept once loaded")
+  eq(back.map.sides[2].level, 2, "and a computer's level")
+
   -- Quick Start deals every neutral city out, round the sides (79fa:07ca)
   local quick = game.new(DATA, "ERYTHEA", { seed = 5, options = { quickStart = 1 },
     sides = { [2] = { off = true } } })

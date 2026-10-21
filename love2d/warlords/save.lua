@@ -151,7 +151,7 @@ function save.encode(g)
   local sides = {}
   for _, s in ipairs(g.sides) do
     sides[#sides + 1] = {
-      index = s.index, gold = s.gold, alive = s.alive, computer = s.computer,
+      index = s.index, name = s.name, gold = s.gold, alive = s.alive, computer = s.computer,
       level = s.level, enhanced = s.enhanced, observe = s.observe or nil,
       -- where its capital now stands (67cc:10d7), and whether a human's
       -- cities have still to build this turn
@@ -254,7 +254,16 @@ function save.decode(text, dataDir)
     randommap.install(dataDir, files)
   end
 
-  local g = game.new(dataDir, state.scenario, { seed = 0, options = state.options })
+  -- the setup the game began with: who plays each side, its name, and the
+  -- sides turned Off, which are the ones the save leaves out -- as the
+  -- original's save keeps the .SCN image it was set up in (0x137, in play)
+  local setup = {}
+  for i = 0, 7 do setup[i] = { off = true } end
+  for _, saved in ipairs(state.sides) do
+    setup[saved.index] = { name = saved.name, computer = saved.computer,
+                           level = saved.level, card = saved.card }
+  end
+  local g = game.new(dataDir, state.scenario, { seed = 0, options = state.options, sides = setup })
   g.armies = {}
   g.turn, g.current = state.turn, state.current
   if state.turnOrder then g.turnOrder = state.turnOrder end
