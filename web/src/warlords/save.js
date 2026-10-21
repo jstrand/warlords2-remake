@@ -91,7 +91,7 @@ export function encode(g) {
                 targetKind: q.targetKind, target };
     }
     return {
-      index: s.index, gold: s.gold, alive: s.alive, computer: s.computer,
+      index: s.index, name: s.name, gold: s.gold, alive: s.alive, computer: s.computer,
       level: s.level, enhanced: s.enhanced, observe: s.observe || undefined,
       capNow: s.capNow, productionDue: s.productionDue || undefined,
       diploScore: s.diploScore,
@@ -168,7 +168,16 @@ export function decode(text, dataDir) {
   if (state.version !== VERSION) throw new Error("unsupported save version");
   if (state.randomWorld) randommap.install(dataDir, unpackWorld(state.randomWorld));
 
-  const g = game.newGame(dataDir, state.scenario, { seed: 0, options: state.options });
+  // the setup the game began with: who plays each side, its name, and the
+  // sides turned Off, which are the ones the save leaves out -- as the
+  // original's save keeps the .SCN image it was set up in (0x137, in play)
+  const setup = {};
+  for (let i = 0; i < 8; i++) setup[i] = { off: true };
+  for (const saved of state.sides) {
+    setup[saved.index] = { name: saved.name, computer: saved.computer,
+                           level: saved.level, card: saved.card };
+  }
+  const g = game.newGame(dataDir, state.scenario, { seed: 0, options: state.options, sides: setup });
   g.armies = [];
   g.turn = state.turn; g.current = state.current;
   if (state.turnOrder) g.turnOrder = state.turnOrder;

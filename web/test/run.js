@@ -459,6 +459,16 @@ function testSetup() {
   const cap = g.map.sides[2].capital;
   eq(cap ? cap.ownerIndex : null, null, "and its capital neutral");
   for (const s of g.sides) ok(s.index !== 2, "not among the sides in play");
+  // a save keeps the setup, as the original's keeps the .SCN image it was
+  // made in (block 2, docs/formats/save.md): a side Off stays out, and a
+  // retyped name stays retyped
+  g.map.sides[0].name = "Ozymandias";
+  const back = saveMod.decode(saveMod.encode(g), DATA);
+  ok(!back.map.sides[2].inUse && !back.map.sides[2].alive, "a side Off stays out once loaded");
+  eq(back.sides.length, g.sides.length, "as many sides in play once loaded");
+  for (const s of back.sides) ok(s.index !== 2, "the side Off not among them");
+  eq(back.map.sides[0].name, "Ozymandias", "a retyped name kept once loaded");
+  eq(back.map.sides[1].level, 2, "and a computer's level");
   const quick = newGame("ERYTHEA", { seed: 5, options: { quickStart: 1 }, sides: { 2: { off: true } } });
   const counts = {};
   let neutral = 0;
