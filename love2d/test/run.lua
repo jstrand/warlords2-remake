@@ -608,6 +608,22 @@ local function testSetup()
   for _, s in ipairs(back.sides) do ok(s.index ~= 2, "the side Off not among them") end
   eq(back.map.sides[1].name, "Ozymandias", "a retyped name kept once loaded")
   eq(back.map.sides[2].level, 2, "and a computer's level")
+  -- and the rest of the setup: every option, a computer's character, I am
+  -- the Greatest, and what the hidden map has uncovered
+  local options = { neutralCities = 2, diplomacy = 0, quests = 0, hiddenMap = 1, viewEnemies = 0,
+                    viewProduction = 1, intenseCombat = 1, quickStart = 1, militaryAdvisor = 0,
+                    randomTurns = 1 }
+  local full = game.new(DATA, "ERYTHEA", { seed = 5, options = options, greatest = true,
+    sides = { [1] = { computer = true, level = 1, card = 3 } } })
+  game.reveal(full, 0, 50, 80, true)
+  back = saveMod.decode(saveMod.encode(full), DATA)
+  for k, v in pairs(options) do eq(back.map.options[k], v, "option " .. k .. " kept once loaded") end
+  ok(back.greatest, "I am the Greatest kept once loaded")
+  eq(back.map.sides[2].card, 3, "a computer's character kept once loaded")
+  eq(back.map.sides[2].level, 1, "and its level")
+  ok(back.map.sides[2].computer, "and that it is a computer")
+  ok(game.seen(back, 0, 50, 80), "the hidden map's uncovered tiles kept once loaded")
+  ok(not game.seen(back, 0, 90, 20), "and the covered ones covered")
 
   -- Quick Start deals every neutral city out, round the sides (79fa:07ca)
   local quick = game.new(DATA, "ERYTHEA", { seed = 5, options = { quickStart = 1 },

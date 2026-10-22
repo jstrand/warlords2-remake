@@ -90,6 +90,28 @@ local function serialise(v, out)
   end
 end
 
+-- the hidden map, a side's mask as runs of seen and unseen tiles, unseen
+-- first
+local function packMask(mask, size)
+  local runs, cur, n = {}, false, 0
+  for k = 0, size - 1 do
+    local v = mask[k] and true or false
+    if v == cur then n = n + 1
+    else runs[#runs + 1] = n; cur, n = v, 1 end
+  end
+  runs[#runs + 1] = n
+  return runs
+end
+
+local function unpackMask(runs)
+  local mask, k, v = {}, 0, false
+  for _, n in ipairs(runs) do
+    if v then for i = k, k + n - 1 do mask[i] = true end end
+    k, v = k + n, not v
+  end
+  return mask
+end
+
 --- Turn a game into a string. Armies are written with an id so that the
 --- references between them (a quest's hero, a city's vector) survive.
 -- A side's AI data is plain numbers and tables, but for the armies its
@@ -210,6 +232,13 @@ function save.encode(g)
   for k in pairs(g.towerAt or {}) do towers[#towers + 1] = k end
   table.sort(towers)
 
+  -- the tiles each side has seen, as the original's save keeps flag 0x20
+  -- of the overlay byte (block 4, docs/formats/save.md)
+  local explored = {}
+  for k, mask in pairs(g.explored or {}) do
+    explored[k] = packMask(mask, g.map.width * g.map.height)
+  end
+
   local state = {
     version = save.VERSION,
     scenario = g.map.name,
@@ -223,7 +252,7 @@ function save.encode(g)
     options = g.map.options,
     diplomacy = g.diplomacy,
     sides = sides, cities = cities, sites = sites, items = items, armies = armies,
-    signs = signs, fightOrder = g.map.fightOrder, towers = towers,
+    signs = signs, fightOrder = g.map.fightOrder, towers = towers, explored = explored,
     history = g.history, deeds = g.deeds, triumphs = g.triumphs,
     tutorialSeen = g.tutorialSeen,
     log = g.log,
@@ -317,6 +346,11 @@ function save.decode(text, dataDir)
   for i, saved in ipairs(state.signs or {}) do    -- older saves lack them
     local sg = g.map.signs[i]
     if sg then sg[1], sg[2] = saved[1], saved[2] end
+  end
+
+  if state.explored then                         -- older saves lack it
+    g.explored = {}
+    for k, runs in pairs(state.explored) do g.explored[k] = unpackMask(runs) end
   end
 
   g.map.siteAt = {}
