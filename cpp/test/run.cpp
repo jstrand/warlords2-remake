@@ -565,6 +565,26 @@ static void testSetup() {
   for (Side* s : back->sides) ok(s->index != 2, "the side Off not among them");
   eq(back->map->sides[0].name, std::string("Ozymandias"), "a retyped name kept once loaded");
   eq(back->map->sides[1].level, 2, "and a computer's level");
+  // and the rest of the setup: every option, a computer's character, I am
+  // the Greatest, and what the hidden map has uncovered
+  std::vector<std::pair<std::string, int>> options = {
+    {"neutralCities", 2}, {"diplomacy", 0}, {"quests", 0}, {"hiddenMap", 1}, {"viewEnemies", 0},
+    {"viewProduction", 1}, {"intenseCombat", 1}, {"quickStart", 1}, {"militaryAdvisor", 0},
+    {"randomTurns", 1}};
+  GameOpts f = seedWith(5, options);
+  f.greatest = true;
+  f.sides[1] = sideSetup(true, 1);
+  f.sides[1].card = 3;
+  auto full = newGame("ERYTHEA", f);
+  game::reveal(*full, 0, 50, 80, true);
+  auto loaded = save::decode(save::encode(*full), DATA);
+  for (auto& [k, v] : options) eq(*loaded->map->options.field(k), v, "option " + k + " kept once loaded");
+  ok(loaded->greatest, "I am the Greatest kept once loaded");
+  eq(loaded->map->sides[1].card, 3, "a computer's character kept once loaded");
+  eq(loaded->map->sides[1].level, 1, "and its level");
+  ok(loaded->map->sides[1].computer, "and that it is a computer");
+  ok(game::seen(*loaded, 0, 50, 80), "the hidden map's uncovered tiles kept once loaded");
+  ok(!game::seen(*loaded, 0, 90, 20), "and the covered ones covered");
   GameOpts q = seedWith(5, {{"quickStart", 1}});
   q.sides[2] = sideSetup(false, NONE, true);
   auto quick = newGame("ERYTHEA", q);
