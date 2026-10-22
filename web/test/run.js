@@ -469,6 +469,22 @@ function testSetup() {
   for (const s of back.sides) ok(s.index !== 2, "the side Off not among them");
   eq(back.map.sides[0].name, "Ozymandias", "a retyped name kept once loaded");
   eq(back.map.sides[1].level, 2, "and a computer's level");
+  // and the rest of the setup: every option, a computer's character, I am
+  // the Greatest, and what the hidden map has uncovered
+  const options = { neutralCities: 2, diplomacy: 0, quests: 0, hiddenMap: 1, viewEnemies: 0,
+                    viewProduction: 1, intenseCombat: 1, quickStart: 1, militaryAdvisor: 0,
+                    randomTurns: 1 };
+  const full = newGame("ERYTHEA", { seed: 5, options, greatest: true,
+    sides: { 1: { computer: true, level: 1, card: 3 } } });
+  game.reveal(full, 0, 50, 80, true);
+  const loaded = saveMod.decode(saveMod.encode(full), DATA);
+  for (const k in options) eq(loaded.map.options[k], options[k], `option ${k} kept once loaded`);
+  ok(loaded.greatest, "I am the Greatest kept once loaded");
+  eq(loaded.map.sides[1].card, 3, "a computer's character kept once loaded");
+  eq(loaded.map.sides[1].level, 1, "and its level");
+  ok(loaded.map.sides[1].computer, "and that it is a computer");
+  ok(game.seen(loaded, 0, 50, 80), "the hidden map's uncovered tiles kept once loaded");
+  ok(!game.seen(loaded, 0, 90, 20), "and the covered ones covered");
   const quick = newGame("ERYTHEA", { seed: 5, options: { quickStart: 1 }, sides: { 2: { off: true } } });
   const counts = {};
   let neutral = 0;
