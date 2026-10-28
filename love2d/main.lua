@@ -175,6 +175,7 @@ function love.load(arg)
   G.atransShields = pck.toImage(dataDir .. "/TERRAIN0/ATRANS2.PCK", palette, 1)
   G.heroMark = love.graphics.newQuad(96, 0, 16, 15, 144, 246)     -- 4125:2cb6, figure 1: outlined in white
   G.heroMarkDark = love.graphics.newQuad(96, 15, 16, 15, 144, 246) -- 4125:2cae, figure 0: dark
+  G.anchorQuad = love.graphics.newQuad(0, 0, 32, 29, 144, 246)
   G.bagQuad = love.graphics.newQuad(64, 0, 32, 29, 144, 246)
   G.blastQuad = love.graphics.newQuad(32, 0, 32, 29, 144, 246)   -- 6a35:0000
   -- HIDDEN.PCK: the hidden map's edges, fourteen 40 x 40 cells 48 apart in
@@ -1654,6 +1655,12 @@ local function drawMap()
           love.graphics.draw(G.sheets[sheet], G.tileQuads[sheet][t % 96], sx, sy)
           local rd = scn.roadAt(G.g.map, mx, my)
           if rd ~= 0 then love.graphics.draw(G.roadImg, G.roadQuads[rd - 1], sx, sy) end
+          -- A port -- a crossing, map word bit 15 -- takes the anchor,
+          -- ATRANS2.PCK's (0, 0) 32x29 at the tile's corner (8611:1a79,
+          -- flagged by 8611:2756), after the roads and before the items.
+          if scn.isCrossing(G.g.map, mx, my) then
+            love.graphics.draw(G.atransShields, G.anchorQuad, sx, sy)
+          end
           -- Items on the ground (8611:2d7c, drawn by 8611:1a79 before the
           -- stacks, at the tile's corner): a planted standard as its side's
           -- flag, army cell 29 of the side's sheet; anything else as the bag,
