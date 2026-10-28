@@ -1350,6 +1350,9 @@ static void drawMap() {
       gfx::draw(G.sheets[sheet], tileQuad(t), sx, sy);
       int rd = w2::scn::roadAt(*G.g->map, mx, my);
       if (rd != 0) gfx::draw(G.roadImg, roadQuad(rd - 1), sx, sy);
+      // a port -- a crossing, map word bit 15 -- takes the anchor, at the
+      // tile's corner after the roads (8611:1a79)
+      if (w2::scn::isCrossing(*G.g->map, mx, my)) gfx::draw(G.atransShields, gfx::newQuad(0, 0, 32, 29), sx, sy);
       // items on the ground (8611:2d7c): a planted standard as its side's
       // flag, army cell 29; anything else as the bag
       auto here = itemsOnTile.find(mx + my * 1000);
