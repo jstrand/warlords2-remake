@@ -148,6 +148,7 @@ function load(params) {
   G.atransShields = img("/TERRAIN0/ATRANS2.PCK", 1);
   G.heroMark = gfx.newQuad(96, 0, 16, 15);     // 4125:2cb6, figure 1: outlined in white
   G.heroMarkDark = gfx.newQuad(96, 15, 16, 15); // 4125:2cae, figure 0: dark
+  G.anchorQuad = gfx.newQuad(0, 0, 32, 29);
   G.bagQuad = gfx.newQuad(64, 0, 32, 29);
   G.blastQuad = gfx.newQuad(32, 0, 32, 29);    // 6a35:0000
   // HIDDEN.PCK: the hidden map's edges, fourteen 40 x 40 cells 48 apart in
@@ -1419,6 +1420,9 @@ function drawMap() {
       gfx.draw(G.sheets[sheet], G.tileQuads[sheet][t % 96], sx, sy);
       const rd = scn.roadAt(G.g.map, mx, my);
       if (rd !== 0) gfx.draw(G.roadImg, G.roadQuads[rd - 1], sx, sy);
+      // a port -- a crossing, map word bit 15 -- takes the anchor, at the
+      // tile's corner after the roads (8611:1a79)
+      if (scn.isCrossing(G.g.map, mx, my)) gfx.draw(G.atransShields, G.anchorQuad, sx, sy);
       // items on the ground (8611:2d7c): a planted standard as its side's
       // flag, army cell 29; anything else as the bag
       const here = G.itemsOnTile.get(mx + my * 1000);
