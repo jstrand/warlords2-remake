@@ -1469,7 +1469,8 @@ than to any city means the flag (`828e:0651`), the city's panel says
 two turns more. Taking the standard up again unplants it.
 
 On the main map (`8611:2d7c`, drawn by `8611:1a79` before the stacks, at the
-tile's corner) an item on the ground shows as a bag, `ATRANS2.PCK`'s (64, 0)
+tile's corner — after a port's anchor, `ATRANS2.PCK`'s (0, 0) 32 × 29 on any
+tile whose map word has bit 15) an item on the ground shows as a bag, `ATRANS2.PCK`'s (64, 0)
 32 × 29, and a planted standard as its side's flag, army cell 29 of the side's
 sheet.
 

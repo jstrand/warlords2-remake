@@ -8,7 +8,7 @@ Renderer: `tools/mapren.py`. Every shipped scenario decodes and renders.
 header. All six shipped maps are exactly this size (34944 bytes).
 
 - low 15 bits — tile index into the terrain sheets
-- bit 15 (`0x8000`) — a flag, **meaning unknown** (see below)
+- bit 15 (`0x8000`) — a **crossing**, drawn as a port (see below)
 
 ### How the width was determined
 
@@ -88,8 +88,12 @@ Rare and absent from Erythea entirely:
 | Sorcery | 17 |
 
 Low bits stay in range `0..152` whether flagged or not, so it is a genuine
-per-tile boolean, not part of the index. Counts this small suggest a
-scenario-specific marker rather than a terrain property.
+per-tile boolean, not part of the index. It marks a **crossing**, a hand-placed
+tile where a stack may change between land and sea (`docs/rules.md`,
+Movement). The map shows it as a port: `8611:2756` flags the tile, and
+`8611:1a79` blits `ATRANS2.PCK`'s anchor, (0, 0) 32 × 29 through the mask on
+colour 1, at the tile's corner — after the roads, before the items and the
+stacks. The tile popup reads *Port*.
 
 ## Tile sheets
 
@@ -157,7 +161,6 @@ The `.RD` overlay is drawn automatically when the sibling file exists.
 
 ## Open questions
 
-- What `0x8000` marks.
 - How sites (ruins, temples) are placed — `ROAD.PCK` holds the art but `.RD`
   does not reference those cells, so positions are probably in `.SPC` (2728
   bytes) or `.SGN` (11858 bytes, "signs").
