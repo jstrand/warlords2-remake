@@ -20,13 +20,12 @@ concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: msys2 {0}
-
 jobs:
   build:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     outputs:
       name: ${{ steps.name.outputs.name }}
     steps:
