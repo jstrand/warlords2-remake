@@ -79,6 +79,9 @@ void pushUI();
 void pushMap(int x, int y, int camX, int camY, int zoom);
 /** A window position (in points) as a UI point, held to the frame. */
 std::pair<int, int> toUI(double x, double y);
+/** Where a UI point shows on the window, in points: toUI's way back, for
+ *  putting the mouse where a controller's pointer is. */
+std::pair<double, double> fromUI(double x, double y);
 /** A window position off the frame as a UI point, not held to it; none
  *  when it is on the frame. */
 std::optional<std::pair<int, int>> offFrame(double x, double y);

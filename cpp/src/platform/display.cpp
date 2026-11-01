@@ -175,6 +175,22 @@ std::pair<int, int> toUI(double x, double y) {
   return {std::clamp(ux, 0, d.w - 1), std::clamp(uy, 0, d.h - 1)};
 }
 
+std::pair<double, double> fromUI(double x, double y) {
+  double px = d.ox + x * d.scale, py = d.oy + y * d.scale;
+  if (tube()) {
+    // the window point the bow carries onto this one, a few steps closer each time
+    double wx = px, wy = py;
+    for (int i = 0; i < 8; i++) {
+      auto [cx, cy] = crt::unwarp(wx, wy);
+      wx += px - cx;
+      wy += py - cy;
+    }
+    px = wx;
+    py = wy;
+  }
+  return {px / d.dpi, py / d.dpi};
+}
+
 std::optional<std::pair<int, int>> offFrame(double x, double y) {
   double px = x * d.dpi, py = y * d.dpi;
   if (px >= d.ox && py >= d.oy && px < d.ox + d.w * d.scale && py < d.oy + d.h * d.scale) return std::nullopt;

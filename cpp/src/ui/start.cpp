@@ -459,6 +459,7 @@ struct SideDialog : kit::Modal {
   void textinput(const std::string& t) override {
     if (editing) editing->input(t);
   }
+  bool typing() const override { return editing.has_value(); }
 };
 
 void openSide(std::shared_ptr<Setup> st, int index, kit::Done after) {

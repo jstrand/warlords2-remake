@@ -68,6 +68,7 @@ struct Sign : kit::Modal {
   void textinput(const std::string& t) override {
     if (editing) editing->input(t);
   }
+  bool typing() const override { return editing.has_value(); }
 };
 }  // namespace
 

@@ -52,21 +52,31 @@ Back in Gaming Mode it is in the library under Non-Steam. Launch options
 
 ### Controls
 
-The game is played with the mouse and a few keys. The touchscreen works
-as the mouse straight away (a tap is a left click). For the controller, open
-the game's Controller Settings in Gaming Mode and pick the **Keyboard
-(WASD) and Mouse** template, then adjust:
+The touchscreen is the mouse (a tap is a left click), and the game reads the
+controller itself, through Steam Input's gamepad: leave the controller layout
+on Steam's **Gamepad** default.
 
-| Deck | as | does |
-|---|---|---|
-| right trackpad | mouse | point |
-| R2 / right trackpad click | left click | pick up, move, press buttons |
-| L2 | right click (hold) | what is on a tile, an army's numbers |
-| left stick or D-pad | arrow keys | move the view |
-| right stick, scroll | mouse wheel | zoom the map |
-| A / B | Enter / Esc | next army / quit army, OK / Cancel |
-| X | Space | group the whole stack |
-| Y | Alt+E (a key chord) | end the turn |
-| L1 / R1 | F5 / F9 | quick save / quick load |
+| Deck | does |
+|---|---|
+| left stick | move the pointer: the further over, the faster |
+| right stick | slide the map |
+| A or R2 | left click: pick up, move, press buttons; hold to drag the map |
+| X or L2 | right click, held: what is on a tile, an army's numbers, a button's help |
+| B / Y | Esc / Enter: quit army / next army, Cancel / OK |
+| L1 / R1 | zoom the map out / in, about the pointer |
+| D-pad | step the stack one tile, as 8 2 4 6 do |
+| hold View (⧉) | Shift, for a Shift-click (the Military Advisor's verdict) |
+| hold Menu (☰) | Alt, for an Alt-click (plan a route) with R2 |
+| L3 / R3 | group the whole stack / centre on it |
 
-Steam + X brings up the on-screen keyboard for naming cities and saves.
+The menus, End Turn and everything else are on the screen, under the
+pointer. To use the right trackpad as a mouse as well, pick the **Gamepad
+with Mouse Trackpad** layout in the game's Controller Settings: the stick and
+the trackpad then take turns at the pointer.
+
+Clicking into a name field (a city, a save, a hero) brings up Steam's
+keyboard; Enter on it keeps the name. Steam + X brings it up anywhere.
+
+With Steam running, Steam has the Deck's controls and the game sees only the
+gamepad Steam makes of them. Run from Konsole in Desktop Mode, the trackpads
+stay the mouse they are on the desktop.

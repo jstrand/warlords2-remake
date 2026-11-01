@@ -38,6 +38,7 @@
 #include "platform/display.hpp"
 #include "platform/gfx.hpp"
 #include "platform/keys.hpp"
+#include "platform/pad.hpp"
 #include "platform/sound.hpp"
 #include "ui/dialogs.hpp"
 #include "ui/kit.hpp"
@@ -874,6 +875,8 @@ static const size_t HERO_NAME_MAX = 19;
 
 static bool presentOffer(Side* side);
 static void afterOffer();
+// the name field clicked: the Steam Deck's on-screen keyboard comes up for it
+static bool offerTyping = false;
 
 // Where the map is hidden and more than one human plays, the main map and the
 // strategic map stay blank as a human's turn opens, until the banner is
@@ -2429,7 +2432,8 @@ static void mousepressed(int x, int y, int button) {
   if (G.offer) {
     auto c = screen::dialogControlAt(*G.heroView, fx, fy);
     if (!c) return;
-    if (c->id == HERO_MALE) G.offerFemale = false;
+    if (c->id == HERO_FIELD) offerTyping = true;
+    else if (c->id == HERO_MALE) G.offerFemale = false;
     else if (c->id == HERO_FEMALE) G.offerFemale = true;
     else if (c->id == HERO_OK) acceptOffer();
     else if (c->id == HERO_CANCEL && !G.offer->first) refuseOffer();
@@ -3055,6 +3059,140 @@ static void textinput(const std::string& text) {
   if (G.offerName.size() < HERO_NAME_MAX && std::regex_match(text, ok)) G.offerName += text;
 }
 
+// ------------------------------------------------------------------ controller
+
+// Not the original's: a game controller plays as the mouse and a few keys,
+// so that the Steam Deck plays with Steam's gamepad layout in Gaming Mode
+// (cpp/linux/README.md has the table). The left stick is the pointer, the
+// right one slides the map; the touchscreen and a trackpad set to the mouse
+// go on working beside them.
+static const double POINTER_SPEED = 1.2;   // the frame's height a second, the stick all the way over
+static const double SLIDE_SPEED = 600;     // UI pixels a second, likewise
+
+static double lastX = 0, lastY = 0;        // the mouse, in window points, as last seen
+static std::vector<std::pair<int, int>> warps;   // where the mouse was put, its motion not yet back
+static double padX = 0, padY = 0;          // the pointer as the stick has it, in UI pixels
+static int padLeft = 0, padRight = 0;      // the controls holding each mouse button down
+static int typingNow = 0;                  // text input: 0 off, 1 on, 2 on with the Deck's keyboard up
+
+// The pointer to a UI point, dragging the map if a drag is on, and the
+// mouse along with it, so that a trackpad or a mouse goes on from there.
+static void pointTo(double x, double y) {
+  x = std::clamp(x, 0.0, display::d.w - 0.001);
+  y = std::clamp(y, 0.0, display::d.h - 0.001);
+  double dx = x - padX, dy = y - padY;
+  padX = x;
+  padY = y;
+  display::d.mouseInside = true;
+  display::d.off.reset();
+  mousemoved(dx, dy);
+  if ((int)x == G.mouseX && (int)y == G.mouseY) return;
+  G.mouseX = (int)x;
+  G.mouseY = (int)y;
+  SDL_Window* win = display::window();
+  if (win && SDL_GetKeyboardFocus() == win) {
+    auto [wx, wy] = display::fromUI(G.mouseX + 0.5, G.mouseY + 0.5);
+    lastX = std::round(wx);
+    lastY = std::round(wy);
+    if (warps.size() >= 16) warps.erase(warps.begin());
+    warps.push_back({(int)lastX, (int)lastY});
+    SDL_WarpMouseInWindow(win, (int)lastX, (int)lastY);
+  }
+}
+
+// A mouse button, held while any of the controls for it is.
+static void padMouse(int& held, int button, bool down) {
+  if (down && held++ == 0) mousepressed(G.mouseX, G.mouseY, button);
+  else if (!down && held > 0 && --held == 0) mousereleased(G.mouseX, G.mouseY, button);
+}
+
+static void padKey(const std::string& k, bool down) {
+  if (!down) {
+    keys::release(k);
+    return;
+  }
+  keys::press(k);
+  keypressed(k);
+}
+
+static void padButton(int b, bool down) {
+  switch (b) {
+    case SDL_CONTROLLER_BUTTON_A:
+    case pad::RIGHT_TRIGGER: padMouse(padLeft, 1, down); break;
+    case SDL_CONTROLLER_BUTTON_X:
+    case pad::LEFT_TRIGGER: padMouse(padRight, 2, down); break;
+    case SDL_CONTROLLER_BUTTON_B: padKey("escape", down); break;
+    case SDL_CONTROLLER_BUTTON_Y: padKey("return", down); break;
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: if (down) wheelmoved(-1); break;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: if (down) wheelmoved(1); break;
+    // the D-pad steps the stack, as 8 2 4 6 do
+    case SDL_CONTROLLER_BUTTON_DPAD_UP: padKey("8", down); break;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: padKey("2", down); break;
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: padKey("4", down); break;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: padKey("6", down); break;
+    // held, as the keys are held for a Shift-click or an Alt-click
+    case SDL_CONTROLLER_BUTTON_BACK: down ? keys::press("lshift") : keys::release("lshift"); break;
+    case SDL_CONTROLLER_BUTTON_START: down ? keys::press("lalt") : keys::release("lalt"); break;
+    case SDL_CONTROLLER_BUTTON_LEFTSTICK: padKey("space", down); break;
+    case SDL_CONTROLLER_BUTTON_RIGHTSTICK: padKey("home", down); break;
+  }
+}
+
+// A pad gone, or the window left: nothing stays held.
+static void padLetGo() {
+  if (padLeft) mousereleased(G.mouseX, G.mouseY, 1);
+  if (padRight) mousereleased(G.mouseX, G.mouseY, 2);
+  padLeft = padRight = 0;
+}
+
+// Once a frame: the triggers, the pointer and the map's slide, by the
+// time gone since the last.
+static void padUpdate() {
+  static Uint64 then = SDL_GetPerformanceCounter();
+  Uint64 now = SDL_GetPerformanceCounter();
+  double dt = std::min(0.1, (double)(now - then) / SDL_GetPerformanceFrequency());
+  then = now;
+  int b;
+  bool down;
+  while (pad::trigger(b, down)) padButton(b, down);
+  // the speed goes as the square of the push: slow for aiming, quick across
+  auto s = pad::sticks();
+  if (s.lx != 0 || s.ly != 0) {
+    // the mouse or a touch moved it since
+    if ((int)padX != G.mouseX || (int)padY != G.mouseY) {
+      padX = G.mouseX + 0.5;
+      padY = G.mouseY + 0.5;
+    }
+    double v = POINTER_SPEED * display::d.h * std::hypot(s.lx, s.ly) * dt;
+    pointTo(padX + s.lx * v, padY + s.ly * v);
+  }
+  if ((s.rx != 0 || s.ry != 0) && !(G.starting || !G.g || G.over || kit::top() || G.banner || G.offer || G.victory || G.drag)) {
+    double k = SLIDE_SPEED * std::hypot(s.rx, s.ry) * dt * display::d.scale / (TILE * G.zoom);
+    G.cx += s.rx * k;
+    G.cy += s.ry * k;
+    clampCamera();
+  }
+}
+
+// Text input is on while a field is being typed into, and only then: on the
+// Steam Deck, SDL brings Steam's on-screen keyboard up with it. The hero's
+// name is typed with no click on its field first, so the keyboard waits for
+// one.
+static void syncTyping() {
+  if (!G.offer) offerTyping = false;
+  auto top = kit::top();
+  int want = G.offer ? (offerTyping ? 2 : 1) : top && top->typing() ? 2 : 0;
+  if (want == typingNow) return;
+  if (want == 0 || typingNow == 2) SDL_StopTextInput();
+  typingNow = want;
+  if (want == 0) return;
+  // as SDL starts it at first: text, but no keyboard, unless asked for
+  const char* hint = SDL_GetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD);
+  if (want == 1 && !hint) SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD, "0");
+  SDL_StartTextInput();
+  if (want == 1 && !hint) SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD, nullptr);
+}
+
 // ------------------------------------------------------------------ starting
 
 // A fresh game: its first turn, the view on the capital.
@@ -3126,6 +3264,10 @@ void front::openStart() {
 //   shot FILE       write the frame as a .bmp
 //   glass FILE      write the window as the next frame shows it, the CRT's
 //                   tube and all, as a .bmp
+//   pad NAME        press and release a controller's button, by SDL's name
+//                   for it (a, b, dpup, leftshoulder, lefttrigger ...)
+//   padhold NAME / padrelease NAME
+//   stick LX LY RX RY   hold the sticks there, -1..1; all 0 lets go
 //   eval            print the game's state (turn, side, modals)
 //   select TX TY    pick up the stack on a tile
 //   attack TX TY    send the selection at a tile, fighting if it must
@@ -3177,6 +3319,17 @@ static void stepScript() {
       in >> G.mouseX >> G.mouseY;
       display::d.mouseInside = true;
       display::d.off.reset();
+    } else if (cmd == "pad" || cmd == "padhold" || cmd == "padrelease") {
+      std::string k;
+      in >> k;
+      int b = pad::fromName(k);
+      if (b < 0) continue;
+      if (cmd != "padrelease") padButton(b, true);
+      if (cmd != "padhold") padButton(b, false);
+    } else if (cmd == "stick") {
+      pad::Sticks st;
+      in >> st.lx >> st.ly >> st.rx >> st.ry;
+      pad::script(st);
     } else if (cmd == "text") {
       std::string t;
       std::getline(in, t);
@@ -3192,8 +3345,8 @@ static void stepScript() {
              G.g ? G.g->turn : 0, G.player ? G.player->name.c_str() : "-", (int)G.modals.size(), (bool)G.banner,
              (bool)G.offer, (bool)G.aiRun, G.over, (bool)G.walk, (bool)G.assault, G.aiStatus ? G.aiStatus->text.c_str() : "");
       if (G.g && G.player && G.player->capital)
-        printf("  cam=%.2f,%.2f zoom=%d map=%d,%d,%d,%d capital=%d,%d\n", G.cx, G.cy, G.zoom, G.mapRect.x, G.mapRect.y,
-               G.mapRect.w, G.mapRect.h, G.player->capital->x, G.player->capital->y);
+        printf("  cam=%.2f,%.2f zoom=%d map=%d,%d,%d,%d capital=%d,%d pointer=%d,%d\n", G.cx, G.cy, G.zoom, G.mapRect.x,
+               G.mapRect.y, G.mapRect.w, G.mapRect.h, G.player->capital->x, G.player->capital->y, G.mouseX, G.mouseY);
       fflush(stdout);
     } else if (cmd == "select") {
       int x, y;
@@ -3244,7 +3397,8 @@ int main(int argc, char** argv) {
     fprintf(stderr, "cannot find the game's files in '%s': run from the repository root, or pass --data DIR\n", G.dataDir.c_str());
     return 1;
   }
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
+  pad::hints();
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
     fprintf(stderr, "SDL: %s\n", SDL_GetError());
     return 1;
   }
@@ -3264,6 +3418,8 @@ int main(int argc, char** argv) {
   }
   gfx::init(ren);
   SDL_ShowCursor(SDL_DISABLE);
+  // SDL starts with text input on; it waits here for a field (syncTyping)
+  SDL_StopTextInput();
   if (!scriptFile.empty()) {
     Script s;
     std::ifstream in(scriptFile);
@@ -3311,7 +3467,6 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  double lastX = 0, lastY = 0;
   {
     int mx, my;
     SDL_GetMouseState(&mx, &my);
@@ -3320,6 +3475,8 @@ int main(int argc, char** argv) {
     display::d.mouseInside = (SDL_GetWindowFlags(win) & SDL_WINDOW_MOUSE_FOCUS) != 0;
     display::d.off = display::offFrame(mx, my);
     std::tie(G.mouseX, G.mouseY) = display::toUI(mx, my);
+    padX = G.mouseX + 0.5;
+    padY = G.mouseY + 0.5;
   }
   while (!G.quitRequested) {
     SDL_Event e;
@@ -3335,6 +3492,7 @@ int main(int argc, char** argv) {
               display::d.mouseInside = false;
             } else if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
               keys::clear();
+              padLetGo();
             }
             break;
           case SDL_KEYDOWN: {
@@ -3365,6 +3523,12 @@ int main(int argc, char** argv) {
             break;
           }
           case SDL_MOUSEMOTION: {
+            // a warp's own motion comes back late, when the stick has gone on
+            auto w = std::find(warps.begin(), warps.end(), std::make_pair(e.motion.x, e.motion.y));
+            if (w != warps.end()) {
+              warps.erase(warps.begin(), w + 1);
+              break;
+            }
             auto [x, y] = display::toUI(e.motion.x, e.motion.y);
             G.mouseX = x;
             G.mouseY = y;
@@ -3379,6 +3543,16 @@ int main(int argc, char** argv) {
           case SDL_MOUSEWHEEL:
             if (e.wheel.y != 0) wheelmoved(e.wheel.y > 0 ? 1 : -1);
             break;
+          case SDL_CONTROLLERDEVICEADDED:
+          case SDL_CONTROLLERDEVICEREMOVED:
+          case SDL_CONTROLLERBUTTONDOWN:
+          case SDL_CONTROLLERBUTTONUP: {
+            int b;
+            bool down;
+            if (pad::event(e, b, down)) padButton(b, down);
+            else if (e.type == SDL_CONTROLLERDEVICEREMOVED) padLetGo();
+            break;
+          }
         }
       } catch (const std::exception& ex) {
         fprintf(stderr, "error: %s\n", ex.what());
@@ -3387,6 +3561,8 @@ int main(int argc, char** argv) {
     try {
       display::measure();
       display::beginFrame();
+      padUpdate();
+      syncTyping();
       stepScript();
       update();
       draw();

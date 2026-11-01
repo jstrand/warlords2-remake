@@ -56,6 +56,11 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
 - The AdLib music is synthesized live by the port of the remake's OPL2
   emulator and AIL driver. The MT-32 and SC-55 music items in the Game menu need
   libvorbisfile and the recordings.
+- A game controller plays as well: the left stick is the pointer, A and X
+  are the left and right buttons, the right stick slides the map
+  (`cpp/linux/README.md` has the whole table, made for the Steam Deck). Text
+  input is on only while a name field is typed into, so that on the Deck it
+  brings up Steam's on-screen keyboard.
 
 ## Layout
 
@@ -64,7 +69,7 @@ src/util/         printf-style formatting, Lua 5.1's sort, JSON, files found ign
 src/warlords/     the rules core, plus XMI, the OPL2 and the AIL driver (no SDL)
 src/warlords/ai/  the computer player
 src/platform/     the slim layer over SDL2: gfx (a love.graphics-alike over
-                  SDL_Renderer), display, keys, the coroutine, the sound mixer
+                  SDL_Renderer), display, keys, pads, the coroutine, the sound mixer
 src/front/        fonts, images, the screen layout, the menus, prefs, shared state
 src/ui/           one file per dialog (love2d/ui/)
 src/main.cpp      the front end (love2d/main.lua): map, bars, input, menus, the computer's turn
@@ -106,9 +111,12 @@ SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software SDL_AUDIODRIVER=dummy \
 
 A script has one command per line: `wait N` (frames), `key NAME`,
 `hold NAME`, `release NAME`, `click X Y [BUTTON]`, `move X Y`, `text STRING`,
+`pad NAME`, `padhold NAME`, `padrelease NAME`, `stick LX LY RX RY`,
 `select TX TY`, `attack TX TY`, `near`, `shot FILE.bmp`, `glass FILE.bmp`,
 `eval` and `quit`. `shot` writes the frame as drawn; `glass` writes the
 window as shown, through the CRT screen's tube when that is on.
-Keys go by LÖVE's names for them. Points are in the 640x480 interface's
-pixels, and tiles in map coordinates. With `SDL_AUDIODRIVER=disk` the mix is
+Keys go by LÖVE's names for them, a controller's buttons by SDL's (`a`,
+`dpup`, `leftshoulder`, and `lefttrigger`, `righttrigger`); the sticks are
+held where `stick` puts them, -1 to 1, until it sets them all to 0. Points
+are in the 640x480 interface's pixels, and tiles in map coordinates. With `SDL_AUDIODRIVER=disk` the mix is
 written to a file.

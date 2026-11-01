@@ -33,6 +33,8 @@ struct Modal : std::enable_shared_from_this<Modal> {
   virtual bool mousereleased(int x, int y, int button) { return false; }
   virtual void keypressed(const std::string& key) {}
   virtual void textinput(const std::string& text) {}
+  /** A field is being typed into: the Steam Deck's on-screen keyboard comes up. */
+  virtual bool typing() const { return false; }
   /** The right button on the dialog, where no control's help answered. */
   virtual void rightpressed(int fx, int fy, int sx, int sy) {}
   /** A help record's sub-id that stands for something on this dialog
