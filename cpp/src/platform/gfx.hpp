@@ -46,6 +46,8 @@ struct Quad {
 inline Quad newQuad(double x, double y, double w, double h) { return Quad{x, y, w, h}; }
 
 void init(SDL_Renderer* r);
+/** Before the renderer is destroyed: images still held keep their hands off it. */
+void shutdown();
 SDL_Renderer* renderer();
 
 /** An image from w * h RGBA bytes. */

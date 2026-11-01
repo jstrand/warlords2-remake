@@ -3580,6 +3580,7 @@ int main(int argc, char** argv) {
   G.aiRun.reset();
   G.modals.clear();
   sound::shutdown();
+  gfx::shutdown();
   SDL_DestroyRenderer(ren);
   SDL_DestroyWindow(win);
   SDL_Quit();

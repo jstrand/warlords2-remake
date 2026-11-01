@@ -50,14 +50,18 @@ void blit(const Image* img, int sx, int sy, int sw, int sh, double dx, double dy
 }
 }  // namespace
 
+// Once the renderer is gone its textures went with it: an image let go
+// later (a global's, at exit) has nothing left to destroy.
 Image::~Image() {
-  if (tex) SDL_DestroyTexture(tex);
+  if (tex && R) SDL_DestroyTexture(tex);
 }
 
 void init(SDL_Renderer* r) {
   R = r;
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 }
+
+void shutdown() { R = nullptr; }
 
 SDL_Renderer* renderer() { return R; }
 
