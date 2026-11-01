@@ -78,8 +78,13 @@ void measure() {
   // the smooth view, the next scale up drawn whole and shrunk to fit, when
   // the biggest whole one leaves a quarter over
   d.smoothScale = !noCanvas && fit > 1 && d.maxScale / fit < 0.75 ? fit : 0;
-  d.smooth = d.smoothScale > 0 && (d.chosen == SMOOTH || d.chosen == 0);
-  d.scale = d.smooth ? d.maxScale + 1 : std::min(d.chosen > 0 ? d.chosen : d.maxScale, d.maxScale);
+  // a scale too big for 480 rows: only the main screen, which gives up the
+  // strategic map's foot for them, fits
+  d.maxShort = std::max(d.maxScale, (int)std::min((double)rw / W, (double)rh / SHORT_H));
+  int fits = std::max(d.maxScale, (int)std::min((double)rw / W, (double)rh / d.minH));
+  int pick = d.chosen > d.maxScale && d.chosen > fits ? 0 : d.chosen;
+  d.smooth = d.smoothScale > 0 && (pick == SMOOTH || pick == 0);
+  d.scale = d.smooth ? d.maxScale + 1 : std::min(pick > 0 ? pick : d.maxScale, fits);
   d.shrink = d.smooth ? fit / d.scale : 1;
   d.pw = d.shrink < 1 ? std::max(W * d.scale, (int)std::lround(rw / d.shrink)) : rw;
   d.ph = d.shrink < 1 ? std::max(H * d.scale, (int)std::lround(rh / d.shrink)) : rh;

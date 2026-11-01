@@ -75,6 +75,12 @@ right stick, so the thumb on the trackpad steers the pointer as the stick
 does, and R2 clicks. For the trackpad as a true mouse instead, pick the
 **Gamepad with Mouse Trackpad** layout in the game's Controller Settings.
 
+On the Deck's screen the interface is drawn 1.67 times its size, smoothed.
+View › Interface 2x draws it twice its size in whole pixels instead, for
+bigger menus and buttons under a finger: the map and the strategic map give
+up the rows for it, and the strategic map scrolls with the view. The start
+screens, which need all their rows, stay at 1.67.
+
 Clicking into a name field (a city, a save, a hero) brings up Steam's
 keyboard; Enter on it keeps the name. Steam + X brings it up anywhere.
 

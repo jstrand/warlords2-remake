@@ -29,6 +29,7 @@ struct SDL_Window;
 namespace display {
 
 constexpr int W = 640, H = 480;   // the original's screen, and the smallest
+constexpr int SHORT_H = 400;      // the fewest rows the main screen fits in (front/layout)
 constexpr int SMOOTH = -1;        // the smooth view, as a chosen scale
 
 struct State {
@@ -37,6 +38,8 @@ struct State {
   double shrink = 1;         // the window's real pixels to a device pixel: under 1 on a canvas
   int scale = 1;             // device pixels to a UI pixel
   int maxScale = 1;          // the biggest whole scale that fits
+  int maxShort = 1;          // the biggest that fits the main screen, cut down to SHORT_H rows
+  int minH = H;              // the rows the screen in use needs: H for the start screens
   double smoothScale = 0;    // the smooth view's size, in real pixels a UI pixel; 0 for none
   bool smooth = false;       // drawn in the smooth view
   int chosen = 0;            // picked from the menu: a whole scale, SMOOTH, or 0 for none
@@ -58,7 +61,10 @@ SDL_Window* window();
 /** Read the window's size, and pick the UI's scale: the one chosen from the
  *  menu, or else the smooth view where there is one, and the biggest whole
  *  number that still fits 640x480 where not. The smooth view is there when
- *  that whole number leaves a quarter of the window over. */
+ *  that whole number leaves a quarter of the window over. A whole scale
+ *  bigger than that leaves fewer than 480 rows, and is kept only where the
+ *  screen in use needs no more than that (`minH`); elsewhere the scale is
+ *  the one there would be with none chosen. */
 void measure();
 /** Start a frame: on the canvas, when the scale or the CRT needs one. */
 void beginFrame();

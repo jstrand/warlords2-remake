@@ -19,9 +19,10 @@ const Offset& Layout::offset(const std::string& g) const {
 Layout compute(int w, int h) {
   Layout L;
   L.w = std::max(W, w);
-  L.h = std::max(H, h);
+  L.h = std::max(SHORT_H, h);
   L.ex = L.w - W;
   L.ey = L.h - H;
+  L.cut = std::max(0, -L.ey);
   L.classic = L.ex == 0 && L.ey == 0;
   L.strat = {L.ex, 0};
   L.panel = {L.ex, L.ey};
@@ -30,7 +31,7 @@ Layout compute(int w, int h) {
   L.dialog = {L.ex / 2, L.ey / 2};
   L.mapRect = Rect{MAP.x, MAP.y, MAP.w + L.ex, MAP.h + L.ey, 2};
   L.panelRect = Rect{PANEL.x, PANEL.y, PANEL.w + L.ex, PANEL.h + L.ey, 13};
-  L.stratRect = move(L, "strat", STRAT);
+  L.stratRect = region(L, STRAT);
   L.barRect = move(L, "bar", BAR);
   return L;
 }
@@ -53,6 +54,7 @@ Rect region(const Layout& L, Rect r) {
   if (r.id == 2) { out = L.mapRect; out.id = 2; }
   else if (r.id == 13) { out = L.panelRect; out.id = 13; }
   else if (r.id == 3) { out.x = r.x; out.y = r.y; out.w = L.w; }
+  else if (r.id == 1) out.h = std::max(0, r.h - L.cut);
   return out;
 }
 

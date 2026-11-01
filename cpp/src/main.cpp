@@ -278,7 +278,7 @@ static void applyLayout(const layout::Layout& L) {
   G.barRect = reg(screen::BOTTOMBAR);
   G.menuRect = reg(screen::MENUBAR);
   G.panelRect = reg(screen::MAPPANEL);
-  G.menuLayout = menu::layout(*G.font, L.w, menu::withZooms(display::d.maxScale, maxZoom(), display::d.smoothScale, display::d.shrink));
+  G.menuLayout = menu::layout(*G.font, L.w, menu::withZooms(display::d.maxShort, maxZoom(), display::d.smoothScale, display::d.shrink));
   G.zoom = std::max(1, std::min(maxZoom(), G.zoom ? G.zoom : display::d.scale));
   if (mid) {
     auto [vw, vh] = viewSize();
@@ -289,11 +289,11 @@ static void applyLayout(const layout::Layout& L) {
 }
 
 // The start screens are the original's 640x480, centred; the game has the
-// whole screen. Run each frame, and each input.
+// whole screen, down to SHORT_H rows. Run each frame, and each input.
 void front::syncLayout() {
   int w = layout::W, h = layout::H;
   if (!G.starting) std::tie(w, h) = display::uiSize();
-  display::setFrame(std::max(w, layout::W), std::max(h, layout::H));
+  display::setFrame(std::max(w, layout::W), std::max(h, G.starting ? layout::H : layout::SHORT_H));
   if (!G.haveLayout || G.layout.w != display::d.w || G.layout.h != display::d.h) {
     applyLayout(layout::compute(display::d.w, display::d.h));
   }
@@ -342,8 +342,16 @@ static void toggleCRT() {
   prefs::set("crt", display::d.crt ? "on" : "off");
 }
 
+// The interface's scale in use; a short one stays ticked on the start
+// screens, which are drawn as with none chosen.
+static std::string uiScaleKey() {
+  const auto& d = display::d;
+  if (d.chosen > d.maxScale && d.chosen <= d.maxShort) return "ui scale " + std::to_string(d.chosen);
+  return d.smooth ? "ui scale smooth" : "ui scale " + std::to_string(d.scale);
+}
+
 static bool menuTicked(const std::string& k) {
-  return k == "map zoom " + std::to_string(G.zoom) || (display::d.smooth ? k == "ui scale smooth" : k == "ui scale " + std::to_string(display::d.scale)) ||
+  return k == "map zoom " + std::to_string(G.zoom) || k == uiScaleKey() ||
          k == std::string("screen ") + (display::d.windowed ? "window" : "full") ||
          (k == "screen 4:3" && display::d.wanted) || (k == "screen fit" && !display::d.wanted) ||
          (k == "screen crt" && display::d.crt) ||
@@ -1420,9 +1428,11 @@ static void drawMap() {
   }
 }
 
-void front::drawStrategicMap(int x, int y, const City* mark, bool noCities, const std::vector<int>* owners) {
+void front::drawStrategicMap(int x, int y, const City* mark, bool noCities, const std::vector<int>* owners, int scroll,
+                             int rows) {
   if (!G.stratImage) G.stratImage = screen::strategicImage(*G.screen, *G.g, G.player->index);
-  gfx::setScissor(x, y, 224, 312);
+  gfx::setScissor(x, y, 224, rows);
+  y -= scroll;
   gfx::setColor(1, 1, 1);
   gfx::draw(G.stratImage, x, y);
   if (!noCities) {
@@ -1469,16 +1479,31 @@ void front::drawSiteMarkers(int x, int y, const w2::Site* highlight) {
   gfx::setScissor();
 }
 
+// Not the original's: on a short screen the strategic map's frame shows
+// only some of it, scrolled to keep the view's box in the middle, so that a
+// click towards an edge brings more of the world in from that side.
+static int stratScroll = 0;
+
+static void followView() {
+  const auto& r = G.stratRect;
+  int full = G.g->map->height * 2;
+  auto [vw, vh] = viewSize();
+  // a whole tile at a time
+  int s = (int)std::lround(G.cy + vh / 2 - r.h / 4.0) * 2;
+  stratScroll = std::clamp(s, 0, std::max(0, full - r.h));
+}
+
 static void drawStrategic() {
   const auto& r = G.stratRect;
-  front::drawStrategicMap(r.x, r.y);
+  followView();
+  front::drawStrategicMap(r.x, r.y, nullptr, false, nullptr, stratScroll, r.h);
   gfx::setScissor(r.x, r.y, r.w, r.h);
   // the view box (8961:0698): whatever the view covers, to the device pixel
   palColour(15);
   double s = display::d.scale;
   auto snap = [s](double v) { return std::floor(v * s + 0.5) / s; };
   auto [vw, vh] = viewSize();
-  double bx = r.x + snap(G.cx * 2), by = r.y + snap(G.cy * 2);
+  double bx = r.x + snap(G.cx * 2), by = r.y - stratScroll + snap(G.cy * 2);
   double w = snap(vw * 2), h = snap(vh * 2);
   gfx::rectangle(gfx::FILL, bx, by, w, 2);
   gfx::rectangle(gfx::FILL, bx, by + h - 2, w, 2);
@@ -2504,7 +2529,7 @@ static void mousepressed(int x, int y, int button) {
       refreshControls();
     }
   } else if (r->id == screen::STRATEGIC) {
-    int tx = (x - r->x) / 2, ty = (y - r->y) / 2;
+    int tx = (x - r->x) / 2, ty = (y - r->y + stratScroll) / 2;
     if (button != 1) return;
     if (held({"lalt", "ralt"})) {
       planRoute(tx, ty);
@@ -3566,6 +3591,7 @@ int main(int argc, char** argv) {
       }
     }
     try {
+      display::d.minH = G.starting || !G.g ? layout::H : layout::SHORT_H;
       display::measure();
       display::beginFrame();
       padUpdate();

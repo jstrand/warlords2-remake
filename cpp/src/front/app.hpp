@@ -172,9 +172,10 @@ constexpr int NONE = w2::NONE;
 void stratDirty();
 /** The strategic map as the original paints it anywhere it appears, every
  *  city it can see as an 8x8 shield (834b:0ed7). `mark` gets a white box;
- *  `owners` is who held each city, for History (834b:12d3). */
+ *  `owners` is who held each city, for History (834b:12d3). Only `rows` of
+ *  it show, from `scroll` rows down (the main screen's, on a short screen). */
 void drawStrategicMap(int x, int y, const w2::City* mark = nullptr, bool noCities = false,
-                      const std::vector<int>* owners = nullptr);
+                      const std::vector<int>* owners = nullptr, int scroll = 0, int rows = 312);
 /** Every site shown to the side, marked on a strategic map (834b:05e4). */
 void drawSiteMarkers(int x, int y, const w2::Site* highlight = nullptr);
 /** The map as the city dialog's Vector mode shows it. `filter` hides the

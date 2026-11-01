@@ -205,9 +205,11 @@ void drawBackground(Screen& s, const layout::Layout& L) {
   gfx::rectangle(gfx::FILL, m.x + m.w, m.y - 1, 1, m.h + 2);
   for (const Panel& p : PANELS) {
     layout::Rect at = layout::move(L, p.group, layout::Rect{p.x, p.y, p.w, p.h});
-    bevel(s, at.x, at.y, p.w, p.h);
+    // on a short screen the strategic map's frame stops above the panel
+    int h = std::string(p.group) == "strat" ? p.h - L.cut : p.h;
+    bevel(s, at.x, at.y, p.w, h);
     gfx::setColor(1, 1, 1);
-    gfx::draw(s.bgImage, gfx::newQuad(p.x, p.y, p.w, p.h), at.x, at.y);
+    gfx::draw(s.bgImage, gfx::newQuad(p.x, p.y, p.w, h), at.x, at.y);
   }
 }
 
