@@ -25,6 +25,8 @@ cmake --build cpp/build -j
 
 A self-contained x86_64 Linux build, for any distribution and the Steam
 Deck, is made in a container by `cpp/linux/build.sh` (`cpp/linux/README.md`).
+A Windows build, with its DLLs beside it, is made in MSYS2 by
+`cpp/windows/build.sh` (`cpp/windows/README.md`).
 
 ## Running
 

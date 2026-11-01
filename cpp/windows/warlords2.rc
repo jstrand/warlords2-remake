@@ -1,0 +1,2 @@
+// The manifest (resource type 24, RT_MANIFEST), in place of MinGW's default.
+1 24 "warlords2.manifest"

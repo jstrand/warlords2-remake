@@ -80,7 +80,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.name }}
-      - run: gh release create "$GITHUB_REF_NAME" "$NAME.tar.gz" --repo "$GITHUB_REPOSITORY" --generate-notes
+      # The Windows workflow may have made the release already.
+      - run: |
+          gh release create "$GITHUB_REF_NAME" "$NAME.tar.gz" --repo "$GITHUB_REPOSITORY" --generate-notes ||
+            gh release upload "$GITHUB_REF_NAME" "$NAME.tar.gz" --repo "$GITHUB_REPOSITORY" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
           NAME: ${{ needs.build.outputs.name }}

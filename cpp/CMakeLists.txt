@@ -32,6 +32,17 @@ else()
   target_link_libraries(warlords2 PRIVATE PkgConfig::SDL2)
 endif()
 
+# Windows: a windowed program, with no console; main() as it is, not SDL2main's;
+# and a manifest that makes the narrow file calls take UTF-8, so a user folder
+# named C:\Users\Åsa holds the saves as well as any other.
+if(WIN32)
+  enable_language(RC)
+  target_sources(warlords2 PRIVATE windows/warlords2.rc)
+  set_property(SOURCE windows/warlords2.rc APPEND PROPERTY INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/windows)
+  set_target_properties(warlords2 PROPERTIES WIN32_EXECUTABLE ON)
+  target_compile_definitions(warlords2 PRIVATE SDL_MAIN_HANDLED)
+endif()
+
 # The Roland recordings are Ogg Vorbis: without libvorbisfile the game still
 # builds, and plays the AdLib music only.
 find_package(PkgConfig QUIET)

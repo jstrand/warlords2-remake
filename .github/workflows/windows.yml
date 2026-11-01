@@ -1,0 +1,100 @@
+# Build the C++ port for x86_64 Windows with cpp/windows/build.sh, in MSYS2's
+# UCRT64 environment, and keep the zip as the run's artifact. A tag v* also
+# puts it on the GitHub release, beside the Linux archive. The zip is named
+# for the version: warlords2-v0.2-windows-x86_64.zip for a tag, and for a
+# commit after one, git describe's v0.2-3-gabc1234.
+
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["cpp/src/**", "cpp/CMakeLists.txt", "cpp/test/**", "cpp/windows/**", ".github/workflows/windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: msys2 {0}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      name: ${{ steps.name.outputs.name }}
+    steps:
+      # The game's files as committed, byte for byte: no CRLF in the checkout.
+      - run: git config --global core.autocrlf false
+        shell: pwsh
+
+      # the whole history and its tags, for git describe
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: git zip unzip
+          pacboy: gcc:p cmake:p ninja:p pkgconf:p SDL2:p libvorbis:p
+
+      # MSYS2's git may take the checkout for someone else's.
+      - run: |
+          git config --global --add safe.directory "$(pwd)"
+          sh cpp/windows/build.sh
+
+      - name: Name the zip for its version
+        id: name
+        run: |
+          name="warlords2-$(git describe --tags --always)-windows-x86_64"
+          mv cpp/build/windows/warlords2-windows-x86_64.zip "cpp/build/windows/$name.zip"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # The zip as a user unpacks it, started with no screen or sound: the
+      # start screens, then a scenario.
+      - name: Smoke test
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+          SDL_AUDIODRIVER: dummy
+        run: |
+          try="$(cygpath -u "$RUNNER_TEMP")/try"
+          mkdir -p "$try"
+          unzip -q "cpp/build/windows/${{ steps.name.outputs.name }}.zip" -d "$try"
+          cd "$try/Warlords2"
+          printf 'wait 60\nquit\n' > start.txt
+          printf 'wait 120\nkey return\nwait 60\nquit\n' > game.txt
+          ./warlords2.exe --window --script start.txt
+          ./warlords2.exe --window --scenario ERYTHEA --seed 1 --script game.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.name }}
+          path: cpp/build/windows/${{ steps.name.outputs.name }}.zip
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.name }}
+      # The Linux workflow may have made the release already.
+      - run: |
+          gh release create "$GITHUB_REF_NAME" "$NAME.zip" --repo "$GITHUB_REPOSITORY" --generate-notes ||
+            gh release upload "$GITHUB_REF_NAME" "$NAME.zip" --repo "$GITHUB_REPOSITORY" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ needs.build.outputs.name }}

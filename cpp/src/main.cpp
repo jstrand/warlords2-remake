@@ -3376,6 +3376,14 @@ static void stepScript() {
 
 // ------------------------------------------------------------------ main
 
+// Why the game cannot start, on stderr and in a box: on Windows the game has
+// no console to print to.
+static int fail(const std::string& msg) {
+  fprintf(stderr, "%s\n", msg.c_str());
+  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Warlords II", msg.c_str(), nullptr);
+  return 1;
+}
+
 int main(int argc, char** argv) {
   std::string scenario, scriptFile;
   double seed = 0;
@@ -3393,19 +3401,18 @@ int main(int argc, char** argv) {
     else if (a == "--script") scriptFile = next();
     else if (a == "--size") sscanf(next().c_str(), "%dx%d", &sizeW, &sizeH);
   }
-  if (!w2::fileExists(G.dataDir + "/TERRAIN0/ARMYTYPE.DAT")) {
-    fprintf(stderr, "cannot find the game's files in '%s': run from the repository root, or pass --data DIR\n", G.dataDir.c_str());
-    return 1;
-  }
+  if (!w2::fileExists(G.dataDir + "/TERRAIN0/ARMYTYPE.DAT"))
+    return fail("cannot find the game's files in '" + G.dataDir + "': run from the repository root, or pass --data DIR");
   pad::hints();
+  // Windows: the window sized in points and drawn in pixels, as on a Mac,
+  // rather than Windows stretching a blurred 100% picture
+  SDL_SetHint(SDL_HINT_WINDOWS_DPI_SCALING, "1");
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
-    fprintf(stderr, "SDL: %s\n", SDL_GetError());
-    return 1;
+    return fail(std::string("SDL: ") + SDL_GetError());
   }
   SDL_Window* win = display::open("Warlords II", windowed, sizeW, sizeH);
   if (!win) {
-    fprintf(stderr, "SDL window: %s\n", SDL_GetError());
-    return 1;
+    return fail(std::string("SDL window: ") + SDL_GetError());
   }
   // OpenGL, where the CRT screen's tube is a shader (platform/crt.hpp); SDL
   // goes on down its list where there is none, and SDL_RENDER_DRIVER wins
@@ -3413,8 +3420,7 @@ int main(int argc, char** argv) {
   SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (!ren) ren = SDL_CreateRenderer(win, -1, 0);
   if (!ren) {
-    fprintf(stderr, "SDL renderer: %s\n", SDL_GetError());
-    return 1;
+    return fail(std::string("SDL renderer: ") + SDL_GetError());
   }
   gfx::init(ren);
   SDL_ShowCursor(SDL_DISABLE);
