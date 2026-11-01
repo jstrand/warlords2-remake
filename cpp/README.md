@@ -58,8 +58,8 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
 - The AdLib music is synthesized live by the port of the remake's OPL2
   emulator and AIL driver. The MT-32 and SC-55 music items in the Game menu need
   libvorbisfile and the recordings.
-- A game controller plays as well: the left stick is the pointer, A and X
-  are the left and right buttons, the right stick slides the map
+- A game controller plays as well: the right stick is the pointer, R2 or A
+  and L2 or X are the left and right buttons, the left stick slides the map
   (`cpp/linux/README.md` has the whole table, made for the Steam Deck). Text
   input is on only while a name field is typed into, so that on the Deck it
   brings up Steam's on-screen keyboard.

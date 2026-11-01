@@ -58,10 +58,10 @@ on Steam's **Gamepad** default.
 
 | Deck | does |
 |---|---|
-| left stick | move the pointer: the further over, the faster |
-| right stick | slide the map |
-| A or R2 | left click: pick up, move, press buttons; hold to drag the map |
-| X or L2 | right click, held: what is on a tile, an army's numbers, a button's help |
+| right trackpad or right stick | move the pointer: the further over, the faster |
+| left stick | slide the map |
+| R2 or A | left click: pick up, move, press buttons; hold to drag the map |
+| L2 or X | right click, held: what is on a tile, an army's numbers, a button's help |
 | B / Y | Esc / Enter: quit army / next army, Cancel / OK |
 | L1 / R1 | zoom the map out / in, about the pointer |
 | D-pad | step the stack one tile, as 8 2 4 6 do |
@@ -70,9 +70,10 @@ on Steam's **Gamepad** default.
 | L3 / R3 | group the whole stack / centre on it |
 
 The menus, End Turn and everything else are on the screen, under the
-pointer. To use the right trackpad as a mouse as well, pick the **Gamepad
-with Mouse Trackpad** layout in the game's Controller Settings: the stick and
-the trackpad then take turns at the pointer.
+pointer. Steam's Gamepad layout hands the game the right trackpad as the
+right stick, so the thumb on the trackpad steers the pointer as the stick
+does, and R2 clicks. For the trackpad as a true mouse instead, pick the
+**Gamepad with Mouse Trackpad** layout in the game's Controller Settings.
 
 Clicking into a name field (a city, a save, a hero) brings up Steam's
 keyboard; Enter on it keeps the name. Steam + X brings it up anywhere.

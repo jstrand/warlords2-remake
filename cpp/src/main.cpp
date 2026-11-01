@@ -3063,9 +3063,10 @@ static void textinput(const std::string& text) {
 
 // Not the original's: a game controller plays as the mouse and a few keys,
 // so that the Steam Deck plays with Steam's gamepad layout in Gaming Mode
-// (cpp/linux/README.md has the table). The left stick is the pointer, the
-// right one slides the map; the touchscreen and a trackpad set to the mouse
-// go on working beside them.
+// (cpp/linux/README.md has the table). The right stick is the pointer, and
+// the right trackpad with it, as that layout makes the trackpad the right
+// stick; the left stick slides the map. The touchscreen and a trackpad set
+// to the mouse go on working beside them.
 static const double POINTER_SPEED = 1.2;   // the frame's height a second, the stick all the way over
 static const double SLIDE_SPEED = 600;     // UI pixels a second, likewise
 
@@ -3157,19 +3158,19 @@ static void padUpdate() {
   while (pad::trigger(b, down)) padButton(b, down);
   // the speed goes as the square of the push: slow for aiming, quick across
   auto s = pad::sticks();
-  if (s.lx != 0 || s.ly != 0) {
+  if (s.rx != 0 || s.ry != 0) {
     // the mouse or a touch moved it since
     if ((int)padX != G.mouseX || (int)padY != G.mouseY) {
       padX = G.mouseX + 0.5;
       padY = G.mouseY + 0.5;
     }
-    double v = POINTER_SPEED * display::d.h * std::hypot(s.lx, s.ly) * dt;
-    pointTo(padX + s.lx * v, padY + s.ly * v);
+    double v = POINTER_SPEED * display::d.h * std::hypot(s.rx, s.ry) * dt;
+    pointTo(padX + s.rx * v, padY + s.ry * v);
   }
-  if ((s.rx != 0 || s.ry != 0) && !(G.starting || !G.g || G.over || kit::top() || G.banner || G.offer || G.victory || G.drag)) {
-    double k = SLIDE_SPEED * std::hypot(s.rx, s.ry) * dt * display::d.scale / (TILE * G.zoom);
-    G.cx += s.rx * k;
-    G.cy += s.ry * k;
+  if ((s.lx != 0 || s.ly != 0) && !(G.starting || !G.g || G.over || kit::top() || G.banner || G.offer || G.victory || G.drag)) {
+    double k = SLIDE_SPEED * std::hypot(s.lx, s.ly) * dt * display::d.scale / (TILE * G.zoom);
+    G.cx += s.lx * k;
+    G.cy += s.ly * k;
     clampCamera();
   }
 }
