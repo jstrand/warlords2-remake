@@ -391,6 +391,7 @@ std::string encode(const Game& g) {
   }
   out.set("won", g.won); out.set("over", g.over); out.set("noHumansSaid", g.noHumansSaid);
   out.set("greatest", g.greatest); out.set("surrenderOffered", g.surrenderOffered);
+  out.set("surrenderShown", g.surrenderShown);
   out.set("options", opts);
   out.set("diplomacy", dip);
   out.set("sides", sides); out.set("cities", cities); out.set("sites", sites); out.set("items", items);
@@ -453,6 +454,7 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
   g.rng.state = (uint32_t)state["seed"].number();
   g.won = state["won"].boolean(); g.over = state["over"].boolean();
   g.surrenderOffered = state["surrenderOffered"].boolean();
+  g.surrenderShown = state["surrenderShown"].boolean();
   g.noHumansSaid = state["noHumansSaid"].boolean();
   g.greatest = state["greatest"].boolean();
   readIntArray(state["diplomacy"]["state"], g.diplomacy.state);

@@ -616,7 +616,9 @@ local function testSetup()
   local full = game.new(DATA, "ERYTHEA", { seed = 5, options = options, greatest = true,
     sides = { [1] = { computer = true, level = 1, card = 3 } } })
   game.reveal(full, 0, 50, 80, true)
+  full.surrenderOffered = true
   back = saveMod.decode(saveMod.encode(full), DATA)
+  ok(game.surrenderPending(back), "a surrender not yet put to the player kept once loaded")
   for k, v in pairs(options) do eq(back.map.options[k], v, "option " .. k .. " kept once loaded") end
   ok(back.greatest, "I am the Greatest kept once loaded")
   eq(back.map.sides[2].card, 3, "a computer's character kept once loaded")
@@ -2585,6 +2587,11 @@ local function testEndGame()
   ok(not r4.over, "but the game is not over")
   ok(g4.surrenderOffered, "and the flag is set")
   ok(not game.checkEnd(g4).surrender, "the offer is made once")
+  g4.ending = nil
+  ok(game.surrenderPending(g4), "the offer waits through the computer turns that clear the round's finding")
+  g4.surrenderShown = true
+  ok(not game.surrenderPending(g4), "and is put to the player once")
+  g4.surrenderShown = nil
 
   -- razed cities do not count towards the total
   local g5 = game.new(DATA, "ERYTHEA", { seed = 85 })

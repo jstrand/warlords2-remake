@@ -1131,6 +1131,13 @@ export function acceptSurrender(g, side) {
   history.deed(g, side, history.VICTORIOUS, side.index, 0, "");
 }
 
+/** Is a surrender offered and not yet put to the player? Asked as the human's
+ *  turn opens (8cc6:04bd), not kept on g.ending, which the computer turns in
+ *  between would clear. */
+export function surrenderPending(g) {
+  return !!g.surrenderOffered && !g.surrenderShown && !g.won;
+}
+
 /** The round's end (8065:17f6): the sides left without a city are put out
  *  of the game, then the end is looked for, then the neutral cities build.
  *  `last` is the side that played last: its gold and Enhanced flag are the

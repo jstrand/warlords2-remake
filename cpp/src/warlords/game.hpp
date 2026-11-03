@@ -177,6 +177,10 @@ void revealStart(Game& g, const Side& side);
 
 /** The surrender offer taken (8065:1e4e). */
 void acceptSurrender(Game& g, Side& side);
+/** Is a surrender offered and not yet put to the player? Asked as the human's
+ *  turn opens (8cc6:04bd), not kept on the round's Ending, which the computer
+ *  turns in between would clear. */
+bool surrenderPending(const Game& g);
 /** STRING.DAT group 11 holds five ways of saying a side is gone. */
 constexpr int FALLEN_LINES = 5;
 /** Every side in the game left without a city is put out of it, in side

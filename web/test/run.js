@@ -477,7 +477,9 @@ function testSetup() {
   const full = newGame("ERYTHEA", { seed: 5, options, greatest: true,
     sides: { 1: { computer: true, level: 1, card: 3 } } });
   game.reveal(full, 0, 50, 80, true);
+  full.surrenderOffered = true;
   const loaded = saveMod.decode(saveMod.encode(full), DATA);
+  ok(game.surrenderPending(loaded), "a surrender not yet put to the player kept once loaded");
   for (const k in options) eq(loaded.map.options[k], options[k], `option ${k} kept once loaded`);
   ok(loaded.greatest, "I am the Greatest kept once loaded");
   eq(loaded.map.sides[1].card, 3, "a computer's character kept once loaded");
@@ -1896,6 +1898,11 @@ function testEndGame() {
   ok(!r4.over, "but the game is not over");
   ok(g4.surrenderOffered, "and the flag is set");
   ok(!game.checkEnd(g4).surrender, "the offer is made once");
+  g4.ending = null;
+  ok(game.surrenderPending(g4), "the offer waits through the computer turns that clear the round's finding");
+  g4.surrenderShown = true;
+  ok(!game.surrenderPending(g4), "and is put to the player once");
+  g4.surrenderShown = false;
   const g5 = newGame("ERYTHEA", { seed: 85 });
   const side5 = g5.sides[0];
   for (let i = 1; i < g5.sides.length; i++) g5.sides[i].alive = false;

@@ -1884,7 +1884,9 @@ ticks. What `8065:1aed` finds, and what the player sees:
   lines, then the Congratulations picture, and lets play go on.
 - **surrender** (`2c04:015d`, offered once): a human with more than half the
   cities, and more than the biggest computer side by an eighth of all the
-  cities. `8065:1f68` shows popup 20, `RESIGN.PCK`, with dialog 30 — Reject
+  cities. The round's end only sets the flag; the offer is made as the
+  human's next turn opens (`8cc6:04bd`), however many computer turns come
+  first, and `2c04:015f` marks it made. `8065:1f68` shows popup 20, `RESIGN.PCK`, with dialog 30 — Reject
   (486) and Accept (485). Accept (`8065:1e4e`) puts every computer side out,
   sets the won flag with a deed, and shows popup 22, `RESIGNYE.PCK`
   (*Congratulations!*, dialog 32, Done 483). Done there (`8065:2004`) turns

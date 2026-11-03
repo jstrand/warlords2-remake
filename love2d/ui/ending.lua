@@ -121,8 +121,10 @@ function M.show(ending, after)
     ending.shown = true
     return searchUi.say(t(0xf, 0):format(G.player.name or ""), after)
   end
-  if ending.surrender and not ending.shown then
-    ending.shown = true
+  -- the offer waits on the game, not on the round's finding: computer
+  -- turns may have come between (8cc6:04bd)
+  if game.surrenderPending(G.g) then
+    G.g.surrenderShown = true                    -- 2c04:015f
     sound.music(cues.SURRENDER)                  -- 8065:1f68
     return picture(20, 30, { 485, 486 }, 485, 486, function(id)
       if id == 485 then

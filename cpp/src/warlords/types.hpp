@@ -340,6 +340,9 @@ struct Game {
   std::map<int, std::vector<uint8_t>> explored;
   std::set<int> towers;
   bool won = false, over = false, noHumansSaid = false, surrenderOffered = false;
+  // the offer put to the player (2c04:015f): it waits for the human's turn,
+  // however many computer turns come between
+  bool surrenderShown = false;
   Ending ending;
   std::vector<HistoryRecord> history;
   std::map<int, std::vector<Deed>> deeds;

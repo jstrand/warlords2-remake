@@ -116,8 +116,10 @@ void show(w2::Ending& e, kit::Done after) {
     search::say(w2::format(t(0xf, 0), G.player->name), done);
     return;
   }
-  if (e.surrender && !e.shown) {
-    e.shown = true;
+  // the offer waits on the game, not on the round's finding: computer
+  // turns may have come between (8cc6:04bd)
+  if (w2::game::surrenderPending(*G.g)) {
+    G.g->surrenderShown = true;                         // 2c04:015f
     sound::music(w2::cues::SURRENDER);                  // 8065:1f68
     showPicture(20, 30, {485, 486}, 485, 486, [after, done](int id) {
       if (id == 485) {

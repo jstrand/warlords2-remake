@@ -91,8 +91,10 @@ export function show(ending, after) {
     ending.shown = true;
     return searchUi.say(fmt(t(0xf, 0), G.player.name || ""), after);
   }
-  if (ending.surrender && !ending.shown) {
-    ending.shown = true;
+  // the offer waits on the game, not on the round's finding: computer
+  // turns may have come between (8cc6:04bd)
+  if (game.surrenderPending(G.g)) {
+    G.g.surrenderShown = true;                    // 2c04:015f
     sound.music(cues.SURRENDER);                  // 8065:1f68
     return picture(20, 30, [485, 486], 485, 486, (id) => {
       if (id === 485) {

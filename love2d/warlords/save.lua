@@ -249,6 +249,7 @@ function save.encode(g)
     won = g.won or nil, over = g.over or nil, noHumansSaid = g.noHumansSaid or nil,
     greatest = g.greatest or nil,
     surrenderOffered = g.surrenderOffered or nil,
+    surrenderShown = g.surrenderShown or nil,
     options = g.map.options,
     diplomacy = g.diplomacy,
     sides = sides, cities = cities, sites = sites, items = items, armies = armies,
@@ -299,6 +300,7 @@ function save.decode(text, dataDir)
   if state.aiNeighbours then g.aiNeighbours = state.aiNeighbours end
   g.rng.state = state.seed
   g.won, g.over, g.surrenderOffered = state.won, state.over, state.surrenderOffered
+  g.surrenderShown = state.surrenderShown
   g.noHumansSaid = state.noHumansSaid
   g.greatest = state.greatest
   g.diplomacy, g.log = state.diplomacy, state.log or {}

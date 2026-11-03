@@ -1083,6 +1083,8 @@ void acceptSurrender(Game& g, Side& side) {
   history::deed(g, &side, history::VICTORIOUS, side.index, 0, "");
 }
 
+bool surrenderPending(const Game& g) { return g.surrenderOffered && !g.surrenderShown && !g.won; }
+
 Ending endRound(Game& g, Side* last) {
   auto fallen = eliminateFallen(g);
   Ending ending = checkEnd(g);

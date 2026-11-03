@@ -133,6 +133,7 @@ export function encode(g) {
     won: g.won || undefined, over: g.over || undefined, noHumansSaid: g.noHumansSaid || undefined,
     greatest: g.greatest || undefined,
     surrenderOffered: g.surrenderOffered || undefined,
+    surrenderShown: g.surrenderShown || undefined,
     options: g.map.options,
     diplomacy: g.diplomacy,
     sides, cities, sites, items, armies,
@@ -184,6 +185,7 @@ export function decode(text, dataDir) {
   if (state.aiNeighbours) g.aiNeighbours = state.aiNeighbours;
   g.rng.state = state.seed;
   g.won = state.won; g.over = state.over; g.surrenderOffered = state.surrenderOffered;
+  g.surrenderShown = state.surrenderShown;
   g.noHumansSaid = state.noHumansSaid;
   g.greatest = state.greatest;
   g.diplomacy = state.diplomacy;

@@ -577,7 +577,9 @@ static void testSetup() {
   f.sides[1].card = 3;
   auto full = newGame("ERYTHEA", f);
   game::reveal(*full, 0, 50, 80, true);
+  full->surrenderOffered = true;
   auto loaded = save::decode(save::encode(*full), DATA);
+  ok(game::surrenderPending(*loaded), "a surrender not yet put to the player kept once loaded");
   for (auto& [k, v] : options) eq(*loaded->map->options.field(k), v, "option " + k + " kept once loaded");
   ok(loaded->greatest, "I am the Greatest kept once loaded");
   eq(loaded->map->sides[1].card, 3, "a computer's character kept once loaded");
@@ -2206,6 +2208,11 @@ static void testEndGame() {
   ok(!r4.over, "but the game is not over");
   ok(g4.surrenderOffered, "and the flag is set");
   ok(!game::checkEnd(g4).surrender, "the offer is made once");
+  g4.ending = Ending{};
+  ok(game::surrenderPending(g4), "the offer waits through the computer turns that clear the round's finding");
+  g4.surrenderShown = true;
+  ok(!game::surrenderPending(g4), "and is put to the player once");
+  g4.surrenderShown = false;
   auto g5p = newGame("ERYTHEA", seed(85));
   Game& g5 = *g5p;
   Side* side5 = g5.sides[0];
