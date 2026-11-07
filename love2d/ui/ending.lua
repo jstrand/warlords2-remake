@@ -112,7 +112,9 @@ end
 function M.show(ending, after)
   local G = kit.G
   after = after or function() end
-  if not ending then return after() end
+  -- a computer's turn since the round's end has cleared g.ending, but a
+  -- surrender offer may still wait to be made
+  ending = ending or {}
   if not ending.told then
     return tell(ending, function() M.show(ending, after) end)
   end

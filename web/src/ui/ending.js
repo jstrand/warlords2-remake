@@ -84,7 +84,9 @@ function tell(ending, after) {
 export function show(ending, after) {
   const G = kit.G;
   after = after || (() => {});
-  if (!ending) return after();
+  // a computer's turn since the round's end has cleared g.ending, but a
+  // surrender offer may still wait to be made
+  ending = ending || {};
   if (!ending.told) return tell(ending, () => show(ending, after));
   // the last computer side has triumphed, and is the player's now
   if (ending.triumph && ending.winner === G.player && !ending.shown) {
