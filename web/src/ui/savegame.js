@@ -6,6 +6,10 @@
 // characters, 160 pixels -- and is written (7721:0995). Load lists the slots
 // in use (group 47) and tells the side whose turn it is that "thy turn
 // continues!". The web port keeps the slots in the browser's localStorage.
+//
+// Not the original's: Export game downloads the game as a file, in the
+// remake's own save format, and Import game loads one -- so a game can move
+// from one browser to another.
 
 import * as kit from "./kit.js";
 import * as chooseUi from "./choose.js";
@@ -99,4 +103,51 @@ export function load(loaded) {
     const side = g.sides[g.current];
     searchUi.say(fmt(kit.text(0x2f, 1), side ? side.name : ""));
   });
+}
+
+/** The name an exported game is downloaded under: the scenario, the side to
+ *  play and the turn, as ERYTHEA-Lich-King-turn-3.json. */
+export function exportName(g) {
+  const side = g.sides[g.current];
+  const words = [g.map.name, side ? side.name : "", "turn", g.turn].join(" ");
+  return words.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + ".json";
+}
+
+/** Download the game being played as a file. */
+export function exportGame() {
+  const g = kit.G.g;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([saveMod.encode(g)], { type: "application/json" }));
+  a.download = exportName(g);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+/** Ask for a file an export made and load it: `loaded(g)` takes the game
+ *  read back, and its side is told its turn continues, as Load game does.
+ *  Must run inside a click: the browser opens a file picker for no less. */
+export function importGame(loaded) {
+  const pick = document.createElement("input");
+  pick.type = "file";
+  pick.accept = ".json,application/json";
+  pick.onchange = async () => {
+    const file = pick.files && pick.files[0];
+    if (!file) return;
+    let g = null;
+    try {
+      g = saveMod.decode(await file.text(), kit.G.dataDir);
+    } catch (e) {
+      console.error(e);
+    }
+    if (!g) {
+      searchUi.message("The game could not be loaded:", "the file is not a saved game.");
+      return;
+    }
+    loaded(g);
+    const side = g.sides[g.current];
+    searchUi.say(fmt(kit.text(0x2f, 1), side ? side.name : ""));
+  };
+  pick.click();
 }

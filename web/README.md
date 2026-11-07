@@ -40,6 +40,10 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
   settings live in the browser's `localStorage` (keys `w2:*`), so they stay with
   that browser. So do the files the game writes, `OPTIONS.DAT` and
   `OPTIONS.SND` (keys `w2file:*`).
+- Game › Export game downloads the game in play as a file, in the remake's
+  own save format, named for the scenario, the side to play and the turn
+  (`ERYTHEA-Lich-King-turn-3.json`). Game › Import game loads one, from the
+  start screens too. Not the original's: it moves a game between browsers.
 - View › Full screen uses the browser's Fullscreen API. The browser decides
   when to leave it (`Esc`).
 - View › CRT screen draws the frame through a WebGL2 shader, the same tube as
@@ -70,7 +74,7 @@ ignores `_headers` and caches longer, an update takes that long to reach
 everyone.
 
 Saves live in the browser under the site's address: if the site moves, its
-players' saves stay behind.
+players' saves stay behind, unless they export them first.
 
 GitHub Pages publishes the site on every push to `main` that touches `web/`
 (`.github/workflows/pages.yml`). It ignores `_headers` and caches every file

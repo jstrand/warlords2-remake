@@ -1342,6 +1342,16 @@ G.takeLoaded = (g) => takeLoaded(g);
 G.startAssault = (x, y, result) => startAssault(x, y, result);
 G.presentVictory = (city, victor) => presentVictory(city, victor);
 
+/** A game Load game or Import game read back, taken up -- off the start
+ *  screens too. */
+function takeFromMenu(g) {
+  if (G.starting) {
+    G.modals.length = 0;
+    G.starting = false;
+  }
+  takeLoaded(g);
+}
+
 function loadQuick() {
   const loaded = savegame.readSlot("w2:quick", G.dataDir);
   if (!loaded) { say("Nothing to load."); return; }
@@ -2895,15 +2905,7 @@ MENU_DOES = {
     } });
   },
   "alt S": () => savegame.save(),
-  "alt L": () => {
-    savegame.load((g) => {
-      if (G.starting) {
-        G.modals.length = 0;
-        G.starting = false;
-      }
-      takeLoaded(g);
-    });
-  },
+  "alt L": () => savegame.load(takeFromMenu),
   "z": () => search(),
   "c": () => viewCity(cityUi.INFO),
   "b": () => viewCity(cityUi.CITY),
@@ -2965,6 +2967,8 @@ MENU_DOES["screen window"] = () => G.setScreen("window");
 MENU_DOES["screen 4:3"] = () => G.setOriginalSize(true);
 MENU_DOES["screen fit"] = () => G.setOriginalSize(false);
 MENU_DOES["screen crt"] = () => G.toggleCRT();
+MENU_DOES["game export"] = () => savegame.exportGame();
+MENU_DOES["game import"] = () => savegame.importGame(takeFromMenu);
 for (const synth of sound.SYNTHS) MENU_DOES["music " + synth] = () => sound.setSynth(synth);
 
 // What greys a menu item (8065:0519, the table at 4125:1798).
@@ -3015,7 +3019,7 @@ G.menuEnabled = (k) => {
   if (m && !sound.synthAvailable(m[1])) return false;
   // 7f77:0200: on the start screens every menu is greyed but Quit and Load
   if (G.starting) {
-    return k === "^Q" || (k === "alt L" && savegame.used() > 0)
+    return k === "^Q" || (k === "alt L" && savegame.used() > 0) || k === "game import"
       || k.startsWith("ui scale ") || k.startsWith("screen ") || m != null;
   }
   const live = MENU_LIVE[k];

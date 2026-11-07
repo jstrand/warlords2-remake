@@ -42,7 +42,8 @@ export const MENUS = [
 ];
 
 /** The menus with the screen's zooms added to View, and the music's
- *  synthesizer to Game -- not the original's. */
+ *  synthesizer and a game's export and import to Game -- not the
+ *  original's. */
 export function withZooms(maxUI, maxMap) {
   return MENUS.map((m) => {
     let items = m.items;
@@ -55,6 +56,9 @@ export function withZooms(maxUI, maxMap) {
           items.push(["AdLib music", null, "music fm"]);
           items.push(["MT-32 music", null, "music mt32"]);
           items.push(["SC-55 music", null, "music sc55"]);
+        } else if (it[1] === "alt L") {
+          items.push(["Export game", null, "game export"]);
+          items.push(["Import game", null, "game import"]);
         }
       });
     } else if (m.title === "View") {
