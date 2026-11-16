@@ -126,7 +126,10 @@ const Art* Screen::artFor(int bitmapId) {
     std::string path = findArt(dataDir, nm->second, terrain);
     if (!path.empty()) {
       auto px = w2::pck::decode(path);
-      a.image = pckimage::fromPixels(*px, palette);
+      // HELPGFX.PCK, the help pages' pointers and keys, lies on colour 10, which is clear
+      std::set<int> keys;
+      if (w2::upper(nm->second).rfind("HELPGFX", 0) == 0) keys.insert(10);
+      a.image = pckimage::fromPixels(*px, palette, {}, keys);
       a.w = px->w;
       a.h = px->h;
     }
