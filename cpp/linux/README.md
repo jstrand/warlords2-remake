@@ -71,6 +71,23 @@ on Steam's **Gamepad** default.
 | L4 / L5 | hold Shift / hold Alt |
 | R4 / R5 | walk the planned route / centre on the stack |
 
+That is how the buttons start out. **Game › Controller** changes them: it
+shows the Deck with each button where it lies, and what each does now. Pick
+a button there, by a click on it or by pressing it (a button that clicks
+goes on clicking, so the dialog can be worked from the controller alone;
+the last button that clicks keeps its click), then pick what it is to do
+from the list underneath: any row of the table above, the other buttons of
+the main screen (defend, deselect, see or forget the destination), End
+Turn, Move All, Search and a dozen more of the menus' items, a quick save,
+or nothing. *Left stick is the pointer* swaps the sticks, and *Defaults*
+puts everything back. The settings are kept with the game's other
+preferences.
+
+*Symbols on screen*, there too, draws each button's symbol on the corner
+of the screen's button that does the same, and beside the menu item it
+carries: Y on Next Army, R4 on the walk-on arrow, and so on. It is on by
+itself while a controller is there.
+
 The menus, End Turn and everything else are on the screen, under the
 pointer. Steam's Gamepad layout hands the game the right trackpad as the
 right stick and a press on it as R3, so the thumb on the trackpad steers

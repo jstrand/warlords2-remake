@@ -31,6 +31,7 @@
 #include "front/font.hpp"
 #include "front/layout.hpp"
 #include "front/menu.hpp"
+#include "front/padglyph.hpp"
 #include "front/padmap.hpp"
 #include "front/pckimage.hpp"
 #include "front/prefs.hpp"
@@ -261,6 +262,16 @@ static void setZoomAt(int z, double x, double y, bool centre) {
 }
 void front::setZoom(int z) { setZoomAt(z, 0, 0, true); }
 
+// The menu items a controller's button carries, while its symbols are shown
+// (Game > Controller): each gets the symbol in its menu.
+static std::set<std::string> padMenuItems() {
+  std::set<std::string> out;
+  if (!padmap::hints()) return out;
+  for (const auto& a : padmap::actions())
+    if (a.kind == padmap::MENU && padmap::buttonFor(a.id) >= 0) out.insert(a.arg);
+  return out;
+}
+
 static void applyLayout(const layout::Layout& L) {
   std::optional<std::pair<double, double>> mid;
   if (G.g && G.haveLayout) {
@@ -279,7 +290,8 @@ static void applyLayout(const layout::Layout& L) {
   G.barRect = reg(screen::BOTTOMBAR);
   G.menuRect = reg(screen::MENUBAR);
   G.panelRect = reg(screen::MAPPANEL);
-  G.menuLayout = menu::layout(*G.font, L.w, menu::withZooms(display::d.maxShort, maxZoom(), display::d.smoothScale, display::d.shrink));
+  G.menuLayout = menu::layout(*G.font, L.w, menu::withZooms(display::d.maxShort, maxZoom(), display::d.smoothScale, display::d.shrink),
+                              padMenuItems(), 13);
   G.zoom = std::max(1, std::min(maxZoom(), G.zoom ? G.zoom : display::d.scale));
   if (mid) {
     auto [vw, vh] = viewSize();
@@ -1538,6 +1550,32 @@ static void drawShortcutIcons() {
   }
 }
 
+// Not the original's: a controller's buttons shown by what they do, each
+// one's symbol on the corner of the main screen's button that does the same
+// -- the five above the pad, the route's two, Grp, and whichever of the four
+// shortcut buttons carries a menu item a button is set to. Greyed with its
+// button. Game > Controller turns them on and off.
+static std::string shortcutKey(int n);
+static void drawPadHints() {
+  if (!padmap::hints()) return;
+  bool grouped = G.selection && slotsMod::grouped(G.selection->slots);
+  for (const auto& a : padmap::actions()) {
+    int b = a.kind == padmap::NOTHING ? -1 : padmap::buttonFor(a.id);
+    if (b < 0) continue;
+    int id = a.control;
+    if (id == 240 && !G.selection) continue;   // the bar shows the side's standing instead
+    if (id == 240 && grouped) id = 241;
+    if (a.kind == padmap::MENU) {
+      for (int i = 0; i < w2::uidata::SHORTCUT_COUNT; i++)
+        if (shortcutKey(i) == a.arg) id = w2::uidata::SHORTCUT_FIRST + i;
+    }
+    auto c = id ? screen::control(*G.screen, id) : nullptr;
+    if (!c || c->w <= 0 || c->h <= 0) continue;
+    bool grey = G.screen->stateOf(id) == DISABLED;
+    padglyph::draw(b, c->x + c->w - padglyph::width(b) + 3, c->y - 4, grey ? 3 : 0, grey ? 1 : 15);
+  }
+}
+
 // Turn and the sides still in it, at the right of the bar (8cc6:0952).
 static void drawTurnStrip() {
   palColour(15);
@@ -1612,6 +1650,14 @@ static void drawMenuBar() {
     gfx::setColor(1, 1, 1);
     f.draw(r.label, r.x + 3, r.y);
     if (!r.key.empty()) f.draw(r.key, r.x + d.keyCol, r.y);
+    // the controller's button that does the same (not the original's)
+    if (d.markCol && padmap::hints()) {
+      for (const auto& a : padmap::actions()) {
+        int b = a.kind == padmap::MENU && k == a.arg ? padmap::buttonFor(a.id) : -1;
+        if (b < 0) continue;
+        padglyph::draw(b, r.x + d.markCol + (13 - padglyph::width(b)) / 2, r.y + (r.h - padglyph::H) / 2, grey ? 3 : 0, 15);
+      }
+    }
     // the setting in use (not the original's): a diamond in the key column
     if (menuTicked(k)) {
       palColour(glyph);
@@ -2392,6 +2438,7 @@ static void draw() {
   screen::drawControls(*G.screen);
   drawShortcutIcons();
   inGroup(G.layout.bar, drawBottomBar);
+  drawPadHints();
   inDialogFrame([]() {
     if (G.victoryUnder) drawVictory(*G.victoryUnder);
     drawModals();
@@ -2894,6 +2941,7 @@ static std::map<std::string, std::function<void()>>& menuDoes() {
   M["j"] = []() { historyui::open(2); };
   M["y"] = []() { historyui::open(3); };
   M["alt U"] = shortcuts::open;
+  M["controller"] = padconfig::open;
   M["alt X"] = []() { settings::open(); };
   M["?"] = about::open;
   M["l"] = historyui::triumphs;
@@ -2937,7 +2985,7 @@ static bool menuEnabled(const std::string& k) {
   if (music && !sound::synthAvailable(k.substr(6))) return false;
   // 7f77:0200: on the start screens every menu is greyed but Quit and Load
   if (G.starting || !G.g) {
-    return k == "^Q" || (k == "alt L" && savegame::used() > 0) || w2::startsWith(k, "ui scale ") ||
+    return k == "^Q" || k == "controller" || (k == "alt L" && savegame::used() > 0) || w2::startsWith(k, "ui scale ") ||
            w2::startsWith(k, "screen ") || music;
   }
   w2::Game& g = *G.g;
@@ -3722,6 +3770,8 @@ int main(int argc, char** argv) {
             bool down;
             if (pad::event(e, b, down)) padButton(b, down);
             else if (e.type == SDL_CONTROLLERDEVICEREMOVED) padLetGo();
+            // the symbols come and go with the controller, the menus' too
+            if (e.type == SDL_CONTROLLERDEVICEADDED || e.type == SDL_CONTROLLERDEVICEREMOVED) G.haveLayout = false;
             break;
           }
         }

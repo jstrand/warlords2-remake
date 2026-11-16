@@ -165,6 +165,7 @@ namespace settings {
 void open(kit::Done after = nullptr);
 }
 namespace shortcuts { void open(); }
+namespace padconfig { void open(); }
 namespace tileinfo { void open(int tx, int ty); }
 namespace start {
 /** The start screens (7f77:0000): a new game set up there, or a saved one. */

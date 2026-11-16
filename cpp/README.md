@@ -61,7 +61,9 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
 - A game controller plays as well: the right stick is the pointer, R2 or A
   and L2 or X are the left and right buttons, the left stick slides the map,
   View asks the Military Advisor and Menu plans a route
-  (`cpp/linux/README.md` has the whole table, made for the Steam Deck). Text
+  (`cpp/linux/README.md` has the whole table, made for the Steam Deck).
+  Game › Controller sets what each button does, and shows the buttons'
+  symbols on the screen's own. Text
   input is on only while a name field is typed into, so that on the Deck it
   brings up Steam's on-screen keyboard.
 
@@ -73,7 +75,8 @@ src/warlords/     the rules core, plus XMI, the OPL2 and the AIL driver (no SDL)
 src/warlords/ai/  the computer player
 src/platform/     the slim layer over SDL2: gfx (a love.graphics-alike over
                   SDL_Renderer), display, keys, pads, the coroutine, the sound mixer
-src/front/        fonts, images, the screen layout, the menus, prefs, shared state
+src/front/        fonts, images, the screen layout, the menus, prefs, shared state,
+                  what a controller's buttons do and their symbols
 src/ui/           one file per dialog (love2d/ui/)
 src/main.cpp      the front end (love2d/main.lua): map, bars, input, menus, the computer's turn
 test/             the rules suite, and the Lua comparisons

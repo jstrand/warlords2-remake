@@ -42,6 +42,7 @@ std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI, double mapSh
       for (size_t j = 0; j < m.items.size(); j++) {
         n.items.push_back(m.items[j]);
         if (j == 1) {
+          n.items.push_back({"Controller", "", "controller"});
           n.items.push_back({"-", "", ""});
           n.items.push_back({"AdLib music", "", "music fm"});
           n.items.push_back({"MT-32 music", "", "music mt32"});
@@ -80,7 +81,8 @@ static bool tickable(const std::string& act) {
   return false;
 }
 
-Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus) {
+Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus, const std::set<std::string>& marked,
+              int markWidth) {
   Layout out;
   int x = BAR_X;
   int lh = font.lineHeight;
@@ -104,6 +106,11 @@ Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus)
       }
     }
     if (ticked) w = std::max(w, keyCol + std::max(keyW, TICK_W) + 5);
+    int markCol = 0;
+    for (const Item& it : m.items) {
+      if (it.label != "-" && marked.count(it.key.empty() ? it.act : it.key)) markCol = w;
+    }
+    if (markCol) w += markWidth + 3;
     int y = BAR_H + 1;
     Title t;
     t.title = m.title;
@@ -122,6 +129,7 @@ Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus)
     t.drop.w = w;
     t.drop.h = at + 1;
     t.drop.keyCol = keyCol;
+    t.drop.markCol = markCol;
     out.push_back(t);
     x += tw + 16;
   }

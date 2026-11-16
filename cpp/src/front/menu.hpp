@@ -5,6 +5,7 @@
 // 2372:049b; nothing is hard-coded, so the bar measures itself for its font.
 #pragma once
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -39,6 +40,7 @@ struct Row {
 };
 struct Drop {
   int x = 0, y = 0, w = 0, h = 0, keyCol = 0;
+  int markCol = 0;   // where a controller's symbol goes, 0 with none in the menu
   std::vector<Row> rows;
 };
 struct Title {
@@ -48,8 +50,11 @@ struct Title {
 };
 using Layout = std::vector<Title>;
 
-/** Measure the bar and every dropdown for a font (7ae8:0052, 2372:049b). */
-Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus);
+/** Measure the bar and every dropdown for a font (7ae8:0052, 2372:049b). A
+ *  menu with an item in `marked` (by key, or by act) is widened by a column
+ *  `markWidth` wide: a controller's symbols go there (not the original's). */
+Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus,
+              const std::set<std::string>& marked = {}, int markWidth = 0);
 /** Which menu title is at this point (an index from 0), or -1. */
 int titleAt(const Layout& lay, int x, int y);
 /** Which row of an open menu is at this point, or null. */
