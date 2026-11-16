@@ -59,7 +59,8 @@ The controls are the Lua remake's (`love2d/README.md`). The differences:
   emulator and AIL driver. The MT-32 and SC-55 music items in the Game menu need
   libvorbisfile and the recordings.
 - A game controller plays as well: the right stick is the pointer, R2 or A
-  and L2 or X are the left and right buttons, the left stick slides the map
+  and L2 or X are the left and right buttons, the left stick slides the map,
+  View asks the Military Advisor and Menu plans a route
   (`cpp/linux/README.md` has the whole table, made for the Steam Deck). Text
   input is on only while a name field is typed into, so that on the Deck it
   brings up Steam's on-screen keyboard.
@@ -114,11 +115,12 @@ SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software SDL_AUDIODRIVER=dummy \
 A script has one command per line: `wait N` (frames), `key NAME`,
 `hold NAME`, `release NAME`, `click X Y [BUTTON]`, `move X Y`, `text STRING`,
 `pad NAME`, `padhold NAME`, `padrelease NAME`, `stick LX LY RX RY`,
-`select TX TY`, `attack TX TY`, `near`, `shot FILE.bmp`, `glass FILE.bmp`,
+`tile TX TY` (the pointer onto a tile), `option NAME N` (one of the game's
+options), `select TX TY`, `attack TX TY`, `near`, `shot FILE.bmp`, `glass FILE.bmp`,
 `eval` and `quit`. `shot` writes the frame as drawn; `glass` writes the
 window as shown, through the CRT screen's tube when that is on.
 Keys go by LÖVE's names for them, a controller's buttons by SDL's (`a`,
-`dpup`, `leftshoulder`, and `lefttrigger`, `righttrigger`); the sticks are
+`dpup`, `leftshoulder`, `paddle1`, and `lefttrigger`, `righttrigger`); the sticks are
 held where `stick` puts them, -1 to 1, until it sets them all to 0. Points
 are in the 640x480 interface's pixels, and tiles in map coordinates. With `SDL_AUDIODRIVER=disk` the mix is
 written to a file.

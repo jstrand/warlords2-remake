@@ -31,6 +31,7 @@
 #include "front/font.hpp"
 #include "front/layout.hpp"
 #include "front/menu.hpp"
+#include "front/padmap.hpp"
 #include "front/pckimage.hpp"
 #include "front/prefs.hpp"
 #include "front/screen.hpp"
@@ -3141,31 +3142,149 @@ static void padKey(const std::string& k, bool down) {
   keypressed(k);
 }
 
-static void padButton(int b, bool down) {
-  switch (b) {
-    case SDL_CONTROLLER_BUTTON_A:
-    case pad::RIGHT_TRIGGER: padMouse(padLeft, 1, down); break;
-    case SDL_CONTROLLER_BUTTON_X:
-    case pad::LEFT_TRIGGER: padMouse(padRight, 2, down); break;
-    case SDL_CONTROLLER_BUTTON_B: padKey("escape", down); break;
-    case SDL_CONTROLLER_BUTTON_Y: padKey("return", down); break;
-    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: if (down) wheelmoved(-1); break;
-    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: if (down) wheelmoved(1); break;
-    // the D-pad steps the stack, as 8 2 4 6 do
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: padKey("8", down); break;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: padKey("2", down); break;
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: padKey("4", down); break;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: padKey("6", down); break;
-    // held, as the keys are held for a Shift-click or an Alt-click
-    case SDL_CONTROLLER_BUTTON_BACK: down ? keys::press("lshift") : keys::release("lshift"); break;
-    case SDL_CONTROLLER_BUTTON_START: down ? keys::press("lalt") : keys::release("lalt"); break;
-    case SDL_CONTROLLER_BUTTON_LEFTSTICK: padKey("space", down); break;
-    case SDL_CONTROLLER_BUTTON_RIGHTSTICK: padKey("home", down); break;
+// The pointer a key held would make of the one at a point.
+static int pointerKindWith(const char* mod, int x, int y) {
+  bool was = keys::isDown(mod);
+  keys::press(mod);
+  int k = pointerKind(x, y);
+  if (!was) keys::release(mod);
+  return k;
+}
+
+// A press for the main screen alone, when the screen is the player's. Under
+// a dialog, a banner or the computer's turn it is any key, as it would be on
+// the keyboard; while a stack walks it is lost, as a click is.
+static bool padScreen() {
+  if (busyWalking()) return false;
+  if (G.starting || !G.g || G.over || G.aiRun || G.banner || G.assault || G.victory || G.offer || kit::top() ||
+      G.openMenu >= 0) {
+    keypressed("pad");
+    return false;
   }
+  return true;
+}
+
+// Whose tile it is to the Military Advisor (18a9:0896): an enemy's or a
+// neutral's stack or city, in sight.
+static bool enemyAt(int tx, int ty) {
+  w2::Game& g = *G.g;
+  int me = G.player->index;
+  if (tx < 0 || ty < 0 || tx >= g.map->width || ty >= g.map->height || !game::seen(g, me, tx, ty)) return false;
+  auto here = game::armiesAt(g, tx, ty);
+  City* city = game::cityAt(g, tx, ty);
+  if (!here.empty()) return here[0]->owner != me;
+  return city && !city->razed && city->ownerIndex != me;
+}
+
+// The Military Advisor in one press: on the enemy under the pointer, as a
+// Shift-click asks (67cc:1f19), or with the pointer elsewhere on the one
+// enemy there is beside the selected stack.
+static void padAdvise() {
+  if (!padScreen()) return;
+  const std::vector<Army*>* sel = G.selection && !G.selection->stack.empty() ? &G.selection->stack : nullptr;
+  // the game's own option, set as it began (Edit Options): said, as the
+  // press would else seem dead
+  if (G.g->map->options.militaryAdvisor == 0) {
+    search::message("This game has no", "Military Advisor");
+    return;
+  }
+  if (!sel || G.player->computer) {
+    sound::effect("chord");
+    return;
+  }
+  auto tile = tileAtPoint(G.mouseX, G.mouseY);
+  if (tile && pointerKindWith("lshift", G.mouseX, G.mouseY) == ADVISE) {
+    miladvisor::open(sel, tile->first, tile->second);
+    return;
+  }
+  std::optional<std::pair<int, int>> found;
+  const City* foundCity = nullptr;
+  int foes = 0;
+  for (int dy = -1; dy <= 1; dy++) {
+    for (int dx = -1; dx <= 1; dx++) {
+      int tx = (*sel)[0]->x + dx, ty = (*sel)[0]->y + dy;
+      if (!enemyAt(tx, ty)) continue;
+      // a city is one enemy, however many of its tiles the stack touches
+      const City* city = game::cityAt(*G.g, tx, ty);
+      if (found && city && city == foundCity) continue;
+      foes++;
+      found = std::make_pair(tx, ty);
+      foundCity = city;
+    }
+  }
+  if (foes == 1) miladvisor::open(sel, found->first, found->second);
+  else sound::effect("chord");
+}
+
+// A route planned in one press: the Alt-click (1c8c:0007) on the tile under
+// the pointer, on the map or the strategic map, where Alt would show its
+// pointer.
+static void padPlan() {
+  if (!padScreen()) return;
+  if (!G.selection || G.selection->stack.empty() || pointerKindWith("lalt", G.mouseX, G.mouseY) != ALT) {
+    sound::effect("chord");
+    return;
+  }
+  bool was = keys::isDown("lalt");
+  keys::press("lalt");
+  mousepressed(G.mouseX, G.mouseY, 1);
+  mousereleased(G.mouseX, G.mouseY, 1);
+  if (!was) keys::release("lalt");
+}
+
+static void pressControl(int id) {
+  auto& A = actions();
+  if (G.screen->stateOf(id) != DISABLED && A.count(id)) A[id]();
+  refreshControls();
+}
+
+// What each button held down was doing when it went down: let go, it stops
+// that, whatever it has been set to since.
+static std::map<int, const padmap::Action*> padDown;
+
+static void padAct(const padmap::Action& a, bool down) {
+  switch (a.kind) {
+    case padmap::NOTHING: break;
+    case padmap::MOUSE: padMouse(a.n == 2 ? padRight : padLeft, a.n, down); break;
+    case padmap::HOLD: down ? keys::press(a.arg) : keys::release(a.arg); break;
+    case padmap::KEY: padKey(a.arg, down); break;
+    case padmap::WHEEL: if (down) wheelmoved(a.n); break;
+    case padmap::CONTROL: if (down && padScreen()) pressControl(a.n); break;
+    case padmap::MENU:
+      if (down && padScreen() && menuEnabled(a.arg)) {
+        menuDoes()[a.arg]();
+        if (G.g) refreshControls();
+      }
+      break;
+    case padmap::ADVISE: if (down) padAdvise(); break;
+    case padmap::PLAN: if (down) padPlan(); break;
+  }
+}
+
+static void padButton(int b, bool down) {
+  if (!down) {
+    auto was = padDown.find(b);
+    if (was == padDown.end()) return;
+    const padmap::Action* a = was->second;
+    padDown.erase(was);
+    padAct(*a, false);
+    return;
+  }
+  if (padDown.count(b)) return;
+  // a dialog may take the press for itself: Game > Controller asks which button
+  if (auto top = kit::topShared(); top && top->padpressed(b)) return;
+  const padmap::Action& a = padmap::bound(b);
+  padDown[b] = &a;
+  padAct(a, true);
 }
 
 // A pad gone, or the window left: nothing stays held.
 static void padLetGo() {
+  auto held = padDown;
+  padDown.clear();
+  for (auto& [b, a] : held) {
+    if (a->kind == padmap::HOLD || a->kind == padmap::KEY) keys::release(a->arg);
+  }
   if (padLeft) mousereleased(G.mouseX, G.mouseY, 1);
   if (padRight) mousereleased(G.mouseX, G.mouseY, 2);
   padLeft = padRight = 0;
@@ -3183,6 +3302,10 @@ static void padUpdate() {
   while (pad::trigger(b, down)) padButton(b, down);
   // the speed goes as the square of the push: slow for aiming, quick across
   auto s = pad::sticks();
+  if (padmap::swapped()) {
+    std::swap(s.lx, s.rx);
+    std::swap(s.ly, s.ry);
+  }
   if (s.rx != 0 || s.ry != 0) {
     // the mouse or a touch moved it since
     if ((int)padX != G.mouseX || (int)padY != G.mouseY) {
@@ -3286,6 +3409,8 @@ void front::openStart() {
 //   hold NAME / release NAME
 //   click X Y [B]   press and release a mouse button (1 left, 2 right)
 //   move X Y        move the pointer
+//   tile TX TY      move the pointer onto a tile of the map
+//   option NAME N   set one of the game's options (militaryAdvisor 1)
 //   text STRING     type
 //   shot FILE       write the frame as a .bmp
 //   glass FILE      write the window as the next frame shows it, the CRT's
@@ -3345,6 +3470,19 @@ static void stepScript() {
       in >> G.mouseX >> G.mouseY;
       display::d.mouseInside = true;
       display::d.off.reset();
+    } else if (cmd == "option" && G.g) {
+      std::string name;
+      int value = 0;
+      in >> name >> value;
+      if (int* f = G.g->map->options.field(name)) *f = value;
+    } else if (cmd == "tile") {
+      int tx, ty;
+      in >> tx >> ty;
+      auto [ux, uy] = front::mapToUI(tx + 0.5, ty + 0.5);
+      G.mouseX = (int)ux;
+      G.mouseY = (int)uy;
+      display::d.mouseInside = true;
+      display::d.off.reset();
     } else if (cmd == "pad" || cmd == "padhold" || cmd == "padrelease") {
       std::string k;
       in >> k;
@@ -3373,6 +3511,7 @@ static void stepScript() {
       if (G.g && G.player && G.player->capital)
         printf("  cam=%.2f,%.2f zoom=%d map=%d,%d,%d,%d capital=%d,%d pointer=%d,%d\n", G.cx, G.cy, G.zoom, G.mapRect.x,
                G.mapRect.y, G.mapRect.w, G.mapRect.h, G.player->capital->x, G.player->capital->y, G.mouseX, G.mouseY);
+      if (G.selection) printf("  selection=%d,%d of %d\n", G.selection->x, G.selection->y, (int)G.selection->stack.size());
       fflush(stdout);
     } else if (cmd == "select") {
       int x, y;

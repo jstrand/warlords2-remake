@@ -60,20 +60,27 @@ on Steam's **Gamepad** default.
 |---|---|
 | right trackpad or right stick | move the pointer: the further over, the faster |
 | left stick | slide the map |
-| R2 or A | left click: pick up, move, press buttons; hold to drag the map |
+| R2, A, or a press on the right trackpad (R3) | left click: pick up, move, press buttons; hold to drag the map |
 | L2 or X | right click, held: what is on a tile, an army's numbers, a button's help |
 | B / Y | Esc / Enter: quit army / next army, Cancel / OK |
 | L1 / R1 | zoom the map out / in, about the pointer |
 | D-pad | step the stack one tile, as 8 2 4 6 do |
-| hold View (⧉) | Shift, for a Shift-click (the Military Advisor's verdict) |
-| hold Menu (☰) | Alt, for an Alt-click (plan a route) with R2 |
-| L3 / R3 | group the whole stack / centre on it |
+| View (⧉) | ask the Military Advisor about the enemy under the pointer, as a Shift-click does; with the pointer elsewhere, about the one enemy beside the selected stack |
+| Menu (☰) | plan a route to the tile under the pointer, on the map or the strategic map, without setting off, as an Alt-click does |
+| L3 | group the whole stack |
+| L4 / L5 | hold Shift / hold Alt |
+| R4 / R5 | walk the planned route / centre on the stack |
 
 The menus, End Turn and everything else are on the screen, under the
 pointer. Steam's Gamepad layout hands the game the right trackpad as the
-right stick, so the thumb on the trackpad steers the pointer as the stick
-does, and R2 clicks. For the trackpad as a true mouse instead, pick the
+right stick and a press on it as R3, so the thumb on the trackpad steers
+the pointer and clicks. For the trackpad as a true mouse instead, pick the
 **Gamepad with Mouse Trackpad** layout in the game's Controller Settings.
+The back grips reach the game only where Steam hands them on; where it
+does not, give them a button in Steam's Controller Settings.
+
+The Military Advisor answers only in a game begun with that option on (Edit
+Options, on the way into a new game), as in the original.
 
 On the Deck's screen the interface is drawn 1.67 times its size, smoothed.
 View › Interface 2x draws it twice its size in whole pixels instead, for

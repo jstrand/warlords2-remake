@@ -33,6 +33,9 @@ struct Modal : std::enable_shared_from_this<Modal> {
   virtual bool mousereleased(int x, int y, int button) { return false; }
   virtual void keypressed(const std::string& key) {}
   virtual void textinput(const std::string& text) {}
+  /** A controller's button (pad::Button) went down: true when the dialog took
+   *  it, and it is not to do what it is set to. */
+  virtual bool padpressed(int button) { return false; }
   /** A field is being typed into: the Steam Deck's on-screen keyboard comes up. */
   virtual bool typing() const { return false; }
   /** The right button on the dialog, where no control's help answered. */

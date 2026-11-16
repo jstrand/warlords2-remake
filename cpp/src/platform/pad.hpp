@@ -15,8 +15,13 @@ union SDL_Event;
 namespace pad {
 
 // SDL's buttons (SDL_GameControllerButton) by position, the bottom face
-// button A, and the triggers after them
-constexpr int LEFT_TRIGGER = 100, RIGHT_TRIGGER = 101;
+// button A, and the triggers after them. The paddles are the Steam Deck's
+// back grips, where Steam hands them on: R4, L4, R5, L5.
+enum Button {
+  A = 0, B, X, Y, BACK, GUIDE, START, LEFT_STICK, RIGHT_STICK, LEFT_SHOULDER, RIGHT_SHOULDER,
+  DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, MISC1, PADDLE1, PADDLE2, PADDLE3, PADDLE4,
+  LEFT_TRIGGER = 100, RIGHT_TRIGGER = 101
+};
 
 /** SDL's hints, set before SDL_Init: left to the environment where it sets
  *  them. */
@@ -42,5 +47,9 @@ void script(const Sticks& s);
 /** A button by SDL's name for it ("a", "dpup", "leftshoulder"), or
  *  "lefttrigger" and "righttrigger"; -1 for none. */
 int fromName(const std::string& name);
+/** SDL's name for a button, as fromName reads it; "" for none. */
+std::string name(int button);
+/** Is a pad there to play with? */
+bool connected();
 
 }  // namespace pad

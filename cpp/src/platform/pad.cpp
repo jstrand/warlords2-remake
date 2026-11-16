@@ -17,6 +17,9 @@ struct Pad {
 std::map<SDL_JoystickID, Pad> pads;
 std::optional<Sticks> scripted;
 
+static_assert(A == (int)SDL_CONTROLLER_BUTTON_A && DPAD_RIGHT == (int)SDL_CONTROLLER_BUTTON_DPAD_RIGHT &&
+              PADDLE4 == (int)SDL_CONTROLLER_BUTTON_PADDLE4, "the buttons are SDL's");
+
 const double DEAD = 0.15;                      // of the stick's travel, all round
 const double PULL = 0.5, LET_GO = 0.3;         // a trigger's press, and its release
 
@@ -108,5 +111,14 @@ int fromName(const std::string& name) {
   if (name == "righttrigger") return RIGHT_TRIGGER;
   return SDL_GameControllerGetButtonFromString(name.c_str());
 }
+
+std::string name(int button) {
+  if (button == LEFT_TRIGGER) return "lefttrigger";
+  if (button == RIGHT_TRIGGER) return "righttrigger";
+  const char* n = SDL_GameControllerGetStringForButton((SDL_GameControllerButton)button);
+  return n ? n : "";
+}
+
+bool connected() { return !pads.empty(); }
 
 }  // namespace pad
