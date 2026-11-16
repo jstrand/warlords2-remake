@@ -54,7 +54,9 @@ export function load(dataDir, palette, dialogId, terrain) {
     if (!name) return null;
     const path = findArt(dataDir, name, terrain);
     if (!path) return null;
-    const [img, w, h] = pck.toImage(path, palette);
+    // HELPGFX.PCK, the help pages' pointers and keys, lies on colour 10, which is clear
+    const key = name.toUpperCase().startsWith("HELPGFX") ? 10 : undefined;
+    const [img, w, h] = pck.toImage(path, palette, key);
     self.art[bitmapId] = { image: img, w, h };
     return self.art[bitmapId];
   };

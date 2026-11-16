@@ -61,7 +61,9 @@ function screen.load(dataDir, palette, dialogId, terrain)
     local path = findArt(dataDir, name, terrain)
     if not path then return nil end
     -- Colour 3 is the sheets' background; keep it, the controls are opaque.
-    local img, w, h = pck.toImage(path, palette)
+    -- HELPGFX.PCK, the help pages' pointers and keys, lies on colour 10, which is clear.
+    local key = name:upper():find("^HELPGFX") and 10 or nil
+    local img, w, h = pck.toImage(path, palette, key)
     self.art[bitmapId] = { image = img, w = w, h = h }
     return self.art[bitmapId]
   end
