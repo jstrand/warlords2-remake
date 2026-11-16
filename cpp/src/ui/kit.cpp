@@ -52,6 +52,11 @@ void popup(const Rect& R) {
   // past the marble's 480 columns the blit reads on into the next row
   int mw = G.marble->w, mh = G.marble->h;
   if (R.w > mw) gfx::draw(G.marble, gfx::newQuad(0, 1, R.w - mw, std::min(R.h, mh - 1)), R.x + mw, R.y);
+  // a popup taller than the marble's rows (none of the original's is) goes on with the marble again
+  for (int y = mh; y < R.h; y += mh) gfx::draw(G.marble, gfx::newQuad(0, 0, mw, std::min(mh, R.h - y)), R.x, R.y + y);
+  if (R.w > mw)
+    for (int y = mh - 1; y < R.h; y += mh)
+      gfx::draw(G.marble, gfx::newQuad(0, 0, R.w - mw, std::min(mh, R.h - y)), R.x + mw, R.y + y);
   gfx::setScissor();
 }
 
