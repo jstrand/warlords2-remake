@@ -24,7 +24,8 @@ enum Kind {
   CONTROL,   // one of the main screen's buttons, by its id
   MENU,      // a menu item, by its accelerator
   ADVISE,    // the Military Advisor, on the enemy under the pointer
-  PLAN       // a route to the tile under the pointer, drawn and not walked
+  PLAN,      // a route to the tile under the pointer, drawn and not walked
+  PREVIOUS   // the army before this one, Next Army's order backwards
 };
 
 struct Action {

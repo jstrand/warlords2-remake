@@ -605,8 +605,19 @@ static std::pair<int, int> capOf(const Side* side) {
   return {side->capX == NONE ? 0 : side->capX, side->capY == NONE ? 0 : side->capY};
 }
 
+// The stacks Next Army has offered, oldest first, for Previous Army to walk
+// back through (not the original's).
+static std::vector<Army*> cycleTrail;
+
 static void cycleReset() {
   G.cursor = capOf(G.player);       // 8c07:0113
+  cycleTrail.clear();
+}
+
+static bool cycles(const Army* a) {
+  // the trail may hold armies since fallen, or another game's
+  return std::find(G.g->armies.begin(), G.g->armies.end(), a) != G.g->armies.end() && a->owner == G.player->index &&
+         !a->transit && !a->fortified && !a->done && a->x != NONE;
 }
 
 static int cycleRank(const Army* a) {
@@ -648,6 +659,51 @@ static void selectNext() {
   sound::effect("ding");
   select(a->x, a->y, a);
   centreOn(a->x, a->y);
+  cycleTrail.erase(std::remove(cycleTrail.begin(), cycleTrail.end(), a), cycleTrail.end());
+  cycleTrail.push_back(a);
+}
+
+// Previous Army (not the original's): back along the stacks Next Army has
+// offered. With none behind, it goes backwards round the stacks in the order
+// Next Army would take them from the capital.
+static void selectPrevious() {
+  auto here = [](const Army* a) { return G.selection && a->x == G.selection->x && a->y == G.selection->y; };
+  // the stack in hand goes back among those Next Army has yet to offer
+  while (!cycleTrail.empty() && (!cycles(cycleTrail.back()) || here(cycleTrail.back()))) {
+    if (here(cycleTrail.back()) && G.selection)
+      for (Army* a : G.selection->stack) a->offered = false;
+    cycleTrail.pop_back();
+  }
+  Army* a = nullptr;
+  if (!cycleTrail.empty()) {
+    a = cycleTrail.back();
+  } else {
+    // nothing behind: Next Army's round from the capital played out, the
+    // nearest and then the nearest to that, and the stack before this one in it
+    std::vector<Army*> left, round;
+    for (Army* b : G.g->armies) if (cycles(b)) left.push_back(b);
+    auto at = capOf(G.player);
+    while (!left.empty()) {
+      auto far = [&](const Army* b) { return std::abs(b->x - at.first) + std::abs(b->y - at.second); };
+      Army* best = left[0];
+      for (Army* b : left) if (far(b) < far(best)) best = b;
+      round.push_back(best);
+      at = {best->x, best->y};
+      left.erase(std::remove_if(left.begin(), left.end(), [&](Army* b) { return b->x == at.first && b->y == at.second; }),
+                 left.end());
+    }
+    size_t now = round.size();
+    for (size_t i = 0; i < round.size(); i++) if (here(round[i])) now = i;
+    if (round.size() > (now < round.size() ? 1u : 0u)) a = round[(now + round.size() - 1) % round.size()];
+    if (!a) {
+      sound::effect("chord");
+      return;
+    }
+  }
+  sound::effect("ding");
+  select(a->x, a->y, a);
+  centreOn(a->x, a->y);
+  G.cursor = std::make_pair(a->x, a->y);
 }
 
 // Out of the cycle for the rest of this turn (control 175, 8c07:0393).
@@ -1277,6 +1333,7 @@ void front::takeLoaded(std::unique_ptr<w2::Game> loaded) {
   G.mapAfterBanner = false;
   front::stratDirty();
   G.player = G.g->sides[G.g->current];
+  cycleReset();
   centreOn(capOf(G.player).first, capOf(G.player).second);
   sound::music(w2::cues::PLAY);               // 7721:02d3
 }
@@ -3306,6 +3363,12 @@ static void padAct(const padmap::Action& a, bool down) {
       break;
     case padmap::ADVISE: if (down) padAdvise(); break;
     case padmap::PLAN: if (down) padPlan(); break;
+    case padmap::PREVIOUS:
+      if (down && padScreen()) {
+        selectPrevious();
+        refreshControls();
+      }
+      break;
   }
 }
 

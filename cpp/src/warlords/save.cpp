@@ -204,6 +204,8 @@ std::string encode(const Game& g) {
       o.set("target", t);
     }
     if (a->fortified) o.set("fortified", true);
+    // quit for this turn: a game loaded in mid-turn does not offer it again
+    if (a->done) o.set("done", true);
     if (a->level) o.set("level", a->level);
     if (a->experience) o.set("experience", a->experience);
     if (!a->title.empty()) o.set("title", a->title);
@@ -563,6 +565,7 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
     a.group = (int)saved["group"].integer();
     if (saved["target"].isArray()) a.target = std::make_pair((int)saved["target"][0].integer(), (int)saved["target"][1].integer());
     a.fortified = saved["fortified"].boolean();
+    a.done = saved["done"].boolean();
     a.level = (int)saved["level"].integer(); a.experience = (int)saved["experience"].integer();
     a.title = saved["title"].str("");
     for (auto& idx : saved["items"].items()) {

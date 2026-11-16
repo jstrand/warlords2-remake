@@ -68,6 +68,8 @@ export function encode(g) {
     group: (a.group || 0) !== 0 ? a.group : undefined,
     target: a.target ? { x: a.target.x, y: a.target.y } : undefined,
     fortified: a.fortified || undefined,
+    // quit for this turn: a game loaded in mid-turn does not offer it again
+    done: a.done || undefined,
     level: a.level, experience: a.experience, title: a.title,
     items: a.items && a.items.length > 0 ? a.items.map((it) => it.index) : undefined,
     blessings: a.blessings,

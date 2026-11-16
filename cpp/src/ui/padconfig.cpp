@@ -41,7 +41,7 @@ const int VIEW_X = 228, VIEW_Y = 131, GRIP_X = 188, GRIP_Y = 243, GRIP_STEP = 16
 
 // the lists and the actions
 const int LIST_Y = 102, ROW = 15, LEFT_X = 46, RIGHT_X = 466, LIST_W = 130;
-const int GRID_X = 48, GRID_Y = 260, GRID_ROWS = 9, GRID_W = 136;
+const int GRID_X = 48, GRID_Y = 258, GRID_ROWS = 10, GRID_ROW = 14, GRID_W = 136;
 const int FOOT_Y = 404;
 const kit::Rect HINTS_BOX{48, FOOT_Y, 24, 20}, SWAP_BOX{210, FOOT_Y, 24, 20}, DEFAULTS{434, FOOT_Y - 1, 70, 22};
 
@@ -238,7 +238,7 @@ struct Config : kit::Modal {
     const auto& all = padmap::actions();
     const padmap::Action* now = picked >= 0 ? &padmap::bound(picked) : nullptr;
     for (size_t i = 0; i < all.size(); i++) {
-      int x = GRID_X + GRID_W * ((int)i / GRID_ROWS), y = GRID_Y + ROW * ((int)i % GRID_ROWS);
+      int x = GRID_X + GRID_W * ((int)i / GRID_ROWS), y = GRID_Y + GRID_ROW * ((int)i % GRID_ROWS);
       gfx::setColor(1, 1, 1);
       (&all[i] == now ? f.colours(YELLOW, BLACK) : f).draw(all[i].label, x + 16, y);
       int b = all[i].kind == padmap::NOTHING ? -1 : padmap::buttonFor(all[i].id);
@@ -326,8 +326,8 @@ struct Config : kit::Modal {
       else if (x >= RIGHT_X && x < RIGHT_X + LIST_W) picked = RIGHT_HAND[i];
     }
     const auto& all = padmap::actions();
-    if (x >= GRID_X && y >= GRID_Y && y < GRID_Y + ROW * GRID_ROWS) {
-      size_t i = (size_t)((x - GRID_X) / GRID_W * GRID_ROWS + (y - GRID_Y) / ROW);
+    if (x >= GRID_X && y >= GRID_Y && y < GRID_Y + GRID_ROW * GRID_ROWS) {
+      size_t i = (size_t)((x - GRID_X) / GRID_W * GRID_ROWS + (y - GRID_Y) / GRID_ROW);
       if (i < all.size()) give(all[i]);
     }
   }

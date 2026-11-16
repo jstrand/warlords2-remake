@@ -17,6 +17,7 @@ const std::vector<Action>& actions() {
       {"plan", "Plan a route", PLAN, "", 0, 0},
       {"walk", "Walk the route", KEY, "end", 0, 173},
       {"next", "Next / OK", KEY, "return", 0, 174},
+      {"previous", "Previous army", PREVIOUS, "", 0, 0},
       {"done", "Leave / Cancel", KEY, "escape", 0, 175},
       {"defend", "Defend", CONTROL, "", 176, 176},
       {"deselect", "Deselect", KEY, "delete", 0, 178},

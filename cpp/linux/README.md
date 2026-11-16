@@ -77,7 +77,9 @@ a button there, by a click on it or by pressing it (a button that clicks
 goes on clicking, so the dialog can be worked from the controller alone;
 the last button that clicks keeps its click), then pick what it is to do
 from the list underneath: any row of the table above, the other buttons of
-the main screen (defend, deselect, see or forget the destination), End
+the main screen (defend, deselect, see or forget the destination), the
+previous army (no button has it at the start: it goes back through the
+stacks Next Army has shown, and then on backwards round the rest), End
 Turn, Move All, Search and a dozen more of the menus' items, a quick save,
 or nothing. *Left stick is the pointer* swaps the sticks, and *Defaults*
 puts everything back. The settings are kept with the game's other
