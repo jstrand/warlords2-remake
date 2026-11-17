@@ -17,9 +17,9 @@ undefined2 __cdecl16far hero_offer_check(void)
   if (surrender_offered == 0) {
     iVar1 = game_turn();
     if (iVar1 == 1) {
-      DAT_451b_058a = *(undefined2 *)(current_player * 0x14 + 0x189);
-      DAT_451b_0588 = *(undefined2 *)(current_player * 0x14 + 0x18b);
-      DAT_451b_058c = FUN_828e_044a(DAT_451b_058a,DAT_451b_0588);
+      DAT_451b_058a = *(int *)(current_player * 0x14 + 0x189);
+      DAT_451b_0588 = *(int *)(current_player * 0x14 + 0x18b);
+      DAT_451b_058c = city_at(DAT_451b_058a,DAT_451b_0588);
       return 1;
     }
     local_6 = 5;

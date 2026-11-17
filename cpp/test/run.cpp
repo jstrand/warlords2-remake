@@ -381,6 +381,171 @@ static void testVectoring(const std::string& scenario) {
   eq(game::nearestCity(g, dest->x + 1, dest->y - 1, side), dest, "and a click next to it too");
 }
 
+// Changing where a city sends its armies, and what the Vector mode shows of
+// the road meanwhile (7087:028b, 6f8c:0000, 7204:06de mode 3, 7563:0bd9).
+static void testVectorRoad(const std::string& scenario) {
+  printf("vectoring, the road: %s\n", scenario.c_str());
+  auto gp = newGame(scenario, seed(9));
+  Game& g = *gp;
+  Side* side = game::begin(g);
+  City* home = side->capital;
+  City* b = nullptr;
+  City* c = nullptr;
+  for (auto& city : g.map->cities) {
+    if (city.ownerIndex == NONE && !city.slots.empty()) {
+      if (!b) b = &city;
+      else if (!c) c = &city;
+    }
+  }
+  ok(b && c, "found two neutral cities to take");
+  if (!b || !c) return;
+  for (City* city : {b, c}) {
+    city->ownerIndex = side->index;
+    for (Army* a : game::armiesAt(g, city->x, city->y)) a->owner = side->index;
+  }
+  auto round = [&]() { for (size_t i = 0; i < g.sides.size(); i++) endTurn(g); };
+  auto setOff = [&](City* from, int dest) -> Army* {
+    for (int n = 0; n < 12; n++) {
+      round();
+      for (Army* a : g.armies) {
+        if (a->transit && a->homeCity == from->index && a->transit->dest == dest && a->transit->turns == 2) return a;
+      }
+    }
+    return nullptr;
+  };
+
+  game::setProduction(g, *home, 0);
+  game::vector(g, *home, b);
+  Army* sent = setOff(home, b->index);
+  ok(sent != nullptr, "an army sets off for the destination");
+  if (!sent) return;
+  auto road = game::vectorRoad(g, *b, *side);
+  eq(road.after.empty() ? nullptr : road.after[0], sent, "the destination shows it coming the turn after next");
+  eq((int)road.next.size(), 0, "and nothing due next turn");
+  eq(game::vectorRoad(g, *home, *side).out, sent, "home shows it sent out this turn");
+
+  // the destination changes while it is on the road
+  ok(game::vector(g, *home, c), "home sends to another city now");
+  eq(sent->transit->dest, b->index, "the army on the road keeps its destination (6f8c:0dd7)");
+  road = game::vectorRoad(g, *b, *side);
+  eq((int)(road.next.size() + road.after.size()), 0,
+     "the old destination no longer shows it coming: its home sends elsewhere (7204:06de)");
+  eq(game::vectorRoad(g, *home, *side).out, (Army*)nullptr, "nor does home: it is not going where home sends now");
+  eq((int)game::vectorRoad(g, *c, *side).after.size(), 0, "and the new destination expects nothing yet");
+  round();
+  ok(sent->transit && sent->transit->turns == 1, "a turn on it is still on the road");
+  eq((int)game::vectorRoad(g, *b, *side).next.size(), 0, "unshown at the old destination though due there next turn");
+  round();
+  ok(!sent->transit && sent->x != NONE && game::cityAt(g, sent->x, sent->y) == b,
+     "and it arrives where it was sent, not where home sends now");
+
+  // the standard, planted by hand on open ground near c
+  int fx = NONE, fy = NONE;
+  for (int dy = -4; dy <= 5; dy++) {
+    for (int dx = -4; dx <= 5; dx++) {
+      int x = c->x + dx, y = c->y + dy;
+      int t = scn::terrainAt(*g.map, x, y);
+      if (fx == NONE && (t == movement::PLAIN || t == movement::ROAD) && !game::cityAt(g, x, y)) { fx = x; fy = y; }
+    }
+  }
+  ok(fx != NONE, "found open ground near a city");
+  if (fx == NONE) return;
+  Item& flag = g.map->items[side->index];
+  flag.status = 1; flag.x = fx; flag.y = fy; flag.planted = true;
+  game::setProduction(g, *c, 0);
+  ok(game::vectorToStandard(g, *c, *side), "a city sends to the standard");
+  Army* toStd = setOff(c, game::STANDARD);
+  ok(toStd != nullptr, "an army sets off for the standard");
+  if (toStd) {
+    eq(game::vectorRoad(g, *c, *side).out, toStd, "home shows it on its way");
+    game::vector(g, *c, b);
+    eq(game::vectorRoad(g, *c, *side).out, toStd,
+       "and still does once home sends to a city: any army bound for the standard shows (7204:06de)");
+  }
+
+  // the standard taken up: when the side's cities next build, those sending
+  // there stop and build at home (7563:0bd9)
+  ok(game::vectorToStandard(g, *c, *side), "the city sends to the standard again");
+  flag.status = 3; flag.x = NONE; flag.y = NONE; flag.planted = false;
+  c->countdown = 1;
+  side->gold = 1000;
+  round();
+  eq(c->vectorTo, NONE, "a standard no longer planted takes no more: the city stops sending there");
+  bool atHome = false;
+  for (auto& e : side->produced) if (e.city == c->index && e.kind == "built") atHome = true;
+  ok(atHome, "and builds at home instead of sending an army off to nowhere");
+
+  // the rows: the cities sending here in city order, each one's armies from
+  // the top of the army table down, both rows stopping once either has four
+  auto g2p = newGame(scenario, seed(9));
+  Game& g2 = *g2p;
+  Side* side2 = game::begin(g2);
+  City* d = nullptr;
+  City* s1 = nullptr;
+  City* s2 = nullptr;
+  for (auto& city : g2.map->cities) {
+    if (city.ownerIndex == NONE && !city.slots.empty()) {
+      if (!d) d = &city;
+      else if (!s1) s1 = &city;
+      else if (!s2) s2 = &city;
+    }
+  }
+  for (City* city : {d, s1, s2}) city->ownerIndex = side2->index;
+  ok(s1->index < s2->index, "two senders, in city order");
+  game::setProduction(g2, *s1, 0);
+  game::setProduction(g2, *s2, 0);
+  game::vector(g2, *s1, d);
+  game::vector(g2, *s2, d);
+  auto onRoad = [&](City* from, int turns) {
+    Army a = rules::armyFromSlot(from->slots[0], false);
+    a.owner = side2->index; a.homeCity = from->index; a.moves = a.maxMoves;
+    a.x = NONE; a.y = NONE;
+    a.transit = Transit{turns, d->index};
+    return g2.add(a);
+  };
+  Army* late = onRoad(s2, 2);
+  Army* early = onRoad(s1, 2);
+  road = game::vectorRoad(g2, *d, *side2);
+  eq(road.after.size() > 0 ? road.after[0] : nullptr, early, "the lower city's army first, though in the higher army slot");
+  eq(road.after.size() > 1 ? road.after[1] : nullptr, late, "then the next city's");
+  Army* more[4];
+  for (int i = 0; i < 4; i++) more[i] = onRoad(s1, 2);
+  Army* due = onRoad(s2, 1);
+  road = game::vectorRoad(g2, *d, *side2);
+  eq((int)road.after.size(), 4, "four at most to a row");
+  eq(road.after.empty() ? nullptr : road.after[0], more[3], "a city's armies from the top of the army table down");
+  eq((int)road.next.size(), 0, "and once a row is full the other takes no more either");
+  ok(due->transit.has_value(), "(though that army is on its way)");
+}
+
+// A click on the city dialog's map, picking where armies go, means the side's
+// nearest city or its planted standard, whichever is nearer as the crow flies
+// -- map_distance, both of them (828e:0651).
+static void testVectorTarget(const std::string& scenario) {
+  printf("vectoring, the click: %s\n", scenario.c_str());
+  auto gp = newGame(scenario, seed(9));
+  Game& g = *gp;
+  Side* side = game::begin(g);
+  City* cap = side->capital;
+  int dx = cap->x < g.map->width / 2 ? 1 : -1;
+  int dy = cap->y < g.map->height / 2 ? 1 : -1;
+  Item& flag = g.map->items[side->index];
+  auto plant = [&](int x, int y) { flag.status = 1; flag.x = x; flag.y = y; flag.planted = true; };
+
+  eq(game::vectorTarget(g, cap->x + 3 * dx, cap->y, *side), cap->index, "with no standard planted, the city");
+  // a click 3 tiles off the city each way is 4 from it as the crow flies
+  int px = cap->x + 3 * dx, py = cap->y + 3 * dy;
+  plant(px + 3 * dx, py);
+  eq(game::vectorTarget(g, px, py, *side), game::STANDARD, "a standard 3 off is nearer, though no nearer by the longer axis");
+  // a click 4 tiles off the city in a line is 4 from it; a standard 3 and 3
+  // off that click is 4 from it too, and not nearer
+  px = cap->x + 4 * dx; py = cap->y;
+  plant(px - 3 * dx, py + 3 * dy);
+  eq(game::vectorTarget(g, px, py, *side), cap->index, "a standard only as near leaves the city");
+  flag.planted = false;
+  eq(game::vectorTarget(g, px - 3 * dx, py + 3 * dy, *side), cap->index, "nor does one taken up count");
+}
+
 static void testBuyProduction(const std::string& scenario) {
   printf("buying production: %s\n", scenario.c_str());
   auto gp = newGame(scenario, seed(17));
@@ -3150,6 +3315,8 @@ int main() {
   for (auto& s : SCENARIOS) if (fileExists(DATA + "/" + s + "/" + s + ".SCN")) testGame(s);
   testTurnLoop("ERYTHEA");
   testVectoring("ERYTHEA");
+  testVectorRoad("ERYTHEA");
+  testVectorTarget("ERYTHEA");
   testBuyProduction("ERYTHEA");
   testReports("ERYTHEA");
   testHeroItems("ERYTHEA");

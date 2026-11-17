@@ -1329,6 +1329,15 @@ and lines between the cities' (2x + 2, 2y + 2) — colour 7 to the destination,
 colour 8 from each city sending here. See All marks every city by what it is
 doing and draws every vector, and boxes the dialog's city in white.
 
+A planted standard is drawn with `834b:1f5f`: figure 0 of `4125:2cae`, the dark
+one at `ATRANS2.PCK` (96, 15) — or figure 1, the white one at (96, 0), when it
+is where the armies shown go. Then it goes down first and the lines (colour 7
+from the dialog's city, colour 8 in See All) run from (2x + 2, 2y + 2) to the
+standard's (2x, 2y) over it. See All notes a city sending to the standard only
+as its walk comes to that city, not one it has already marked as another's
+destination; if it finds one, it lights the figure and then draws a line from
+**every** city of the side sending there.
+
 The mode has three states (`4125:0e94`), each with its buttons and the two
 lines of help beside them (`7087:0638`, groups 155 and 156, at (368, 221) and
 (368, 272)):
@@ -1341,17 +1350,43 @@ lines of help beside them (`7087:0638`, groups 155 and 156, at (368, 221) and
 - **moving the incoming** — 215 lit in 211's place; the map shows only the
   cities that could take them all.
 
-A click on the map (`7087:072e`) means the side's city **nearest** the click
-(`828e:04fa`, by map distance). With Shift, or while choosing a destination,
-that city becomes the destination (`7087:028b`): only if this city is building,
-clicking the city itself lifts the vector, and **no city takes more than four**.
-While moving the incoming, every city sending here is redirected to it, if it
-could take them all. Otherwise — and after any click but a send — the dialog
-moves to the city clicked, still in Vector mode.
+`7204:0000`, every way into the dialog, puts the state back to idle; so does
+any click on the map. See All (`7087:050e`(2)) leaves the state alone and
+redraws the map with `7087:08e4`, plainly or as See All, so after it a waiting
+state's filtered map is gone — the remakes keep showing the filtered map
+while they wait.
 
-The **Current** row shows the city's two armies on the road: the one sent out
-this turn at (432, 103), the one arriving next turn at (472, 103). The rows
-below are armies coming here from other cities.
+A click on the map (`7087:072e`, the left button) with **Shift** sends this
+city's armies there whatever the state (`7087:028b`), puts the state back to
+idle and stays. Any other click means the side's city nearest the click, or
+its **planted standard** if that is strictly nearer — both by `map_distance`,
+the straight line rounded down (`828e:0651`). While choosing a destination it
+becomes the destination (`7087:028b`): only if this city is building, clicking
+the city itself lifts the vector, and **no city or standard takes more than
+four**. While moving the incoming, every city sending here sends there instead
+— the standard too — if it could take them all and is not one of them. Then,
+unless it was a send, the dialog moves to the city clicked, still in Vector
+mode; a click that meant the standard leaves it where it is.
+
+Changing a vector changes where the **next** army goes. One already on the
+road keeps the destination it set off with (`6f8c:0dd7` writes it into the
+army) and arrives there.
+
+The **Current** row (`7204:06de`, case 3) shows what the city builds and its
+countdown, then — only while its vector is on — two of its armies on the
+road: the one sent out this turn at (432, 103), the one arriving next turn at
+(472, 103). An army counts if it is going where the city sends now, or to the
+standard at all: one sent to the standard still shows after the city is sent
+to a city. Of two alike, the lowest army slot shows.
+
+The rows below, *Next turn* and *Turn after*, are armies coming here. They go
+by the vectors as they stand, not by where each army is going: the code takes
+the cities **sending here now** (`7087:0410`) in city order, and for each the
+armies from the top of the army table down that are its own and on their way
+here, and stops both rows as soon as either holds four. So when a city is sent
+elsewhere — by its own Vector mode, or by 211 here — or stops building, its
+armies already on the way here drop out of these rows, though they still
+arrive.
 
 ### Build Production
 
@@ -1464,9 +1499,11 @@ tile is not water, shore, a city or a ruin or temple and has no flag already.
 A city can then vector to it: in Vector mode a click nearer the planted flag
 than to any city means the flag (`828e:0651`), the city's panel says
 *Standard!* (*Nowhere!* once it is gone), and the map draws the flag —
-`ATRANS2.PCK`'s (96, 15) — with a line to it. An army sent there
-(`6f8c:0000`) stands on the flag's tile if it has room, and otherwise goes home,
-two turns more. Taking the standard up again unplants it.
+`ATRANS2.PCK`'s (96, 15), or (96, 0) when it is the destination (*Vector
+mode*) — with a line to it. An army sent there (`6f8c:0000`) stands on the
+flag's tile if it has room, and otherwise goes home, two turns more. Taking
+the standard up again unplants it, and the side's next production stops its
+cities vectoring there (`7563:0bd9`).
 
 On the main map (`8611:2d7c`, drawn by `8611:1a79` before the stacks, at the
 tile's corner — after a port's anchor, `ATRANS2.PCK`'s (0, 0) 32 × 29 on any

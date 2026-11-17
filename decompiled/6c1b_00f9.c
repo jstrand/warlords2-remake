@@ -23,8 +23,8 @@ void __cdecl16far auto_ui_army_info_labels(void)
   iVar3 = *(int *)(((undefined2 *)&DAT_451b_04ae)[DAT_4125_0d6a] * 0x16 + -0x7780);
   iVar4 = *(int *)(((undefined2 *)&DAT_451b_04ae)[DAT_4125_0d6a] * 0x16 + -0x777e);
   armies_at_tile(iVar3,iVar4,(int *)CONCAT22(unaff_SS,&local_4));
-  local_8 = FUN_828e_044a(iVar3,iVar4);
-  local_6 = FUN_828e_04fa(iVar3,iVar4,0xe,1);
+  local_8 = city_at(iVar3,iVar4);
+  local_6 = nearest_city(iVar3,iVar4,0xe,1);
   if (DAT_4125_166a == 0) {
     DAT_4125_166a = 1;
     FUN_54f6_0000(2);

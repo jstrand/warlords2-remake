@@ -24,9 +24,8 @@ void __cdecl16far auto_tutorial_hook_6(int param_1)
         }
       }
       if ((param_1 < 2) && (iVar1 == 1)) {
-        auto_tutorial_hook_3
-                  (2,*(undefined2 *)(current_player * 0x14 + 0x189),
-                   *(undefined2 *)(current_player * 0x14 + 0x18b));
+        city_dialog_show(2,*(int *)(current_player * 0x14 + 0x189),
+                         *(int *)(current_player * 0x14 + 0x18b));
       }
       else {
         if ((param_1 < 3) && (iVar2 = city_production_turn(), iVar2 != 0)) {

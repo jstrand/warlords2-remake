@@ -26,7 +26,7 @@ void __cdecl16far start_game_from_setup(void)
         *(undefined2 *)(iVar1 * 2 + 0x137) = 0;
         *(undefined2 *)(iVar1 * 2 + 0xd0) = 1;
         *(undefined2 *)(iVar1 * 2 + 0xc0) = 0;
-        iVar2 = FUN_828e_044a(*(undefined2 *)(iVar1 * 0x14 + 0x189));
+        iVar2 = city_at(*(int *)(iVar1 * 0x14 + 0x189),*(int *)(iVar1 * 0x14 + 0x18b));
         if (-1 < iVar2) {
           *(undefined1 *)(iVar2 * 0x41 + 0x1592) = 0xf;
         }

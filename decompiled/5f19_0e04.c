@@ -36,7 +36,8 @@ int __cdecl16far ai_pick_enemy(void)
   local_4 = 2;
   local_6 = 4;
   local_c = -1;
-  local_e = FUN_828e_044a(*(undefined2 *)(current_player * 0x14 + 0x193));
+  local_e = city_at(*(int *)(current_player * 0x14 + 0x193),*(int *)(current_player * 0x14 + 0x195))
+  ;
   local_10 = *(int *)(current_player * 2 + 0x10e3);
   iVar2 = 8;
   while (iVar5 = iVar2 + -1, iVar8 = city_count, iVar2 != 0) {
@@ -105,7 +106,7 @@ int __cdecl16far ai_pick_enemy(void)
       if (current_player != uVar7) {
         local_a = local_a + 1;
       }
-      local_1e = FUN_828e_044a(*(undefined2 *)(uVar7 * 0x14 + 0x193));
+      local_1e = city_at(*(int *)(uVar7 * 0x14 + 0x193),*(int *)(uVar7 * 0x14 + 0x195));
       if ((int)*(char *)(local_1e * 0x41 + 0x1592) == current_player) {
         local_90[uVar7] = 1;
       }

@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_7087_028b(undefined2 param_1,undefined2 param_2,int param_3)
+void __cdecl16far ui_vector_set_destination(int x,int y,int button)
 
 {
   int iVar1;
@@ -7,18 +7,18 @@ void __cdecl16far FUN_7087_028b(undefined2 param_1,undefined2 param_2,int param_
   int local_6;
   int iStack_4;
   
-  if (((param_3 == 1) && ((bRam00000417 & 3) == 0)) && (DAT_4125_0e94 == 0)) {
-    iStack_4 = FUN_828e_04fa(param_1,param_2,current_player,0);
+  if (((button == 1) && ((bRam00000417 & 3) == 0)) && (DAT_4125_0e94 == 0)) {
+    iStack_4 = nearest_city(x,y,current_player,0);
     if (iStack_4 != DAT_4125_0e98) {
-      auto_tutorial_hook_3();
+      city_dialog_show(2,x,y);
     }
   }
   else {
     if (*(char *)(DAT_4125_0e98 * 0x41 + 0x15aa) < '\x01') {
       return;
     }
-    iVar1 = FUN_828e_0651(param_1,param_2);
-    FUN_7087_0410(iVar1,local_e);
+    iVar1 = nearest_vector_target(x,y);
+    cities_vectoring_to(iVar1,local_e);
     if (iVar1 == DAT_4125_0e98) {
       *(undefined2 *)((undefined1 *)&LAB_4125_15ad_1 + DAT_4125_0e98 * 0x41) = 0;
       *(undefined2 *)((undefined1 *)&LAB_4125_15b0 + DAT_4125_0e98 * 0x41) = 0xffff;
@@ -39,10 +39,10 @@ void __cdecl16far FUN_7087_028b(undefined2 param_1,undefined2 param_2,int param_
     }
     FUN_54f6_07e4(0x280000,0x320000);
     auto_ui_city_info();
-    auto_ui_city_info();
+    city_dialog_draw_map();
   }
 LAB_7087_0407:
-  FUN_7204_03a9();
+  city_dialog_buttons();
   return;
 }
 

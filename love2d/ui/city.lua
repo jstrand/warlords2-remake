@@ -240,9 +240,10 @@ end
 -- 3: Vector (7204:12b7). What is being built and its countdown, and the two
 -- armies of it already on the road -- the one out this turn at (432, 103),
 -- the one arriving next turn at (472, 103) -- then two rows of what is on
--- its way here from other cities, next turn and the turn after, four at
--- most in each. Below them the two buttons each say what they do
--- (7087:0638), and say it differently while a click on the map is awaited.
+-- its way here from the cities sending here, next turn and the turn after,
+-- four at most in each (game.vectorRoad says which). Below them the two
+-- buttons each say what they do (7087:0638), and say it differently while a
+-- click on the map is awaited.
 local function drawVector(d)
   local G, city = kit.G, d.city
   local f = kit.font(2)
@@ -254,28 +255,17 @@ local function drawVector(d)
   love.graphics.setColor(1, 1, 1)
   f.draw(game.producing(city) and kit.text(S_VECTOR, 1):format(city.countdown or 0) or "-", 408, 109)
 
-  local out, onRoad, next, after = nil, nil, {}, {}
-  for _, a in ipairs(G.g.armies) do
-    if a.transit and a.owner == G.player.index then
-      if a.homeCity == city.index and a.transit.dest == city.vectorTo then
-        if a.transit.turns >= 2 then out = a else onRoad = a end
-      end
-      if a.transit.dest == city.index and a.homeCity ~= city.index then
-        local row = a.transit.turns >= 2 and after or next
-        if #row < 4 then row[#row + 1] = a end
-      end
-    end
-  end
-  kit.army(out and out.type, owner, 432, 103, 1)
-  kit.army(onRoad and onRoad.type, owner, 472, 103, 1)
+  local road = game.vectorRoad(G.g, city, G.player)
+  kit.army(road.out and road.out.type, owner, 432, 103, 1)
+  kit.army(road.due and road.due.type, owner, 472, 103, 1)
 
   love.graphics.setColor(1, 1, 1)
   kit.right(f, kit.text(S_VECTOR, 2), 392, 155)
   kit.right(f, kit.text(S_VECTOR, 3), 392, 188)
   for i = 1, 4 do
     local x = 400 + (i - 1) * 40
-    kit.army(next[i] and next[i].type, G.player.index, x, 149, 1)
-    kit.army(after[i] and after[i].type, G.player.index, x, 182, 1)
+    kit.army(road.next[i] and road.next[i].type, G.player.index, x, 149, 1)
+    kit.army(road.after[i] and road.after[i].type, G.player.index, x, 182, 1)
   end
 
   love.graphics.setColor(1, 1, 1)
@@ -488,46 +478,53 @@ function M.open(city, mode)
   --- Send what this city builds to the side's city nearest (mx, my), or to
   --- its planted standard if that is nearer (828e:0651): only while it is
   --- building, four to a city at most, and this city itself lifts the
-  --- vector (7087:028b).
+  --- vector (7087:028b). The armies already on the road keep going where
+  --- they were sent; only the next one goes to the new destination.
   function d.sendTo(mx, my)
     if not game.producing(city) then return end
-    local target = game.nearestCity(G.g, mx, my, G.player)
-    if not target then return end
-    local sx, sy = game.standardAt(G.g, G.player)
-    local toStandard = sx and math.max(math.abs(sx - mx), math.abs(sy - my))
-                       < math.max(math.abs(target.x - mx), math.abs(target.y - my))
-    if toStandard then game.vectorToStandard(G.g, city, G.player)
-    else game.vector(G.g, city, target) end
+    local target = game.vectorTarget(G.g, mx, my, G.player)
+    if target == game.STANDARD then game.vectorToStandard(G.g, city, G.player)
+    elseif target then game.vector(G.g, city, target) end
   end
 
-  --- A click on the map in Vector mode (7087:072e, 7087:028b). It means the
-  --- side's city nearest the click. With Shift held, or while waiting to
-  --- send this city's armies somewhere, that city becomes the destination --
-  --- if this city is building, and the destination takes fewer than four,
-  --- and clicking this city itself lifts the vector. While waiting to move
-  --- the armies coming here, every city sending them is redirected to it, if
-  --- it could take them all. Otherwise -- and afterwards, unless it was a
-  --- send -- the dialog moves to the city clicked.
+  --- A click on the map in Vector mode (7087:072e, 7087:028b). With Shift
+  --- held it sends this city's armies there, whatever the dialog is waiting
+  --- for, and the dialog stays. Otherwise it means the side's city nearest
+  --- the click, or its planted standard if that is nearer (828e:0651). While
+  --- waiting to send this city's armies somewhere, that becomes the
+  --- destination -- if this city is building, and the destination takes
+  --- fewer than four, and clicking this city itself lifts the vector. While
+  --- waiting to move the armies coming here, every city sending them sends
+  --- them there instead -- the standard too -- if it could take them all
+  --- and is not one of them. Then, unless it was a send, the dialog moves to
+  --- the city clicked; a click that meant the standard leaves it where it is.
   function d.mapClick(mx, my)
-    local target = game.nearestCity(G.g, mx, my, G.player)
-    if not target then return end
     local shift = love.keyboard and love.keyboard.isDown
                   and love.keyboard.isDown("lshift", "rshift")
-    local sub = d.sub
-    if shift or sub == 1 then
+    if shift then
       d.sendTo(mx, my)
-      if shift then d.sub = 0 refresh(d) return end
-    elseif sub == 2 then
+      d.sub = 0
+      refresh(d)
+      return
+    end
+    local target = game.vectorTarget(G.g, mx, my, G.player)
+    if not target then return end
+    local std = target == game.STANDARD
+    local sub = d.sub
+    if sub == 2 then
       local incoming = game.vectoredTo(G.g, city)
-      local there = game.vectoredTo(G.g, target)
+      local there = std and game.vectoredTo(G.g, game.STANDARD, G.player)
+                    or game.vectoredTo(G.g, target)
       local ok = #incoming > 0 and #incoming + #there <= game.MAX_VECTORED_TO
       for _, c in ipairs(incoming) do if c == target then ok = false end end
       if ok then
-        for _, c in ipairs(incoming) do c.vectorTo = target.index end
+        for _, c in ipairs(incoming) do c.vectorTo = std and game.STANDARD or target.index end
       end
+    elseif sub == 1 then
+      d.sendTo(mx, my)
     end
     d.sub = 0
-    if sub ~= 1 and target ~= city then
+    if sub ~= 1 and not std and target ~= city then
       d.switchTo(target, M.VECTOR)
       return
     end

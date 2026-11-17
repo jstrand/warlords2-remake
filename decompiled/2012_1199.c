@@ -1,5 +1,5 @@
 
-char * __cdecl16far FUN_2012_1199(int param_1,int param_2,int param_3,int param_4)
+char * __cdecl16far map_distance_impl(int param_1,int param_2,int param_3,int param_4)
 
 {
   double dVar1;

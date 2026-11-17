@@ -10,7 +10,7 @@ city_produce_army(int param_1,undefined2 param_2,undefined2 param_3,int param_4)
   undefined4 local_8;
   
   cVar1 = *(char *)(param_1 * 0x41 + 0x15a9);
-  iVar2 = FUN_7087_0000(param_1,(int)cVar1);
+  iVar2 = city_slot_of_type(param_1,(int)cVar1);
   puVar3 = (undefined2 *)FUN_1b62_0309();
   local_8 = (undefined2 *)CONCAT22(in_DX,puVar3);
   if (puVar3 != (undefined2 *)0x0 || in_DX != 0) {

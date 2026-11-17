@@ -214,8 +214,26 @@ void setProduction(Game& g, City& city, int slotIndex);
 /** The cities sending what they build to `dest` (7087:0410) -- a city, or
  *  (dest null) the cities of `side` sending theirs to its standard. */
 std::vector<City*> vectoredTo(Game& g, const City* dest, const Side* side = nullptr);
+/** What the city dialog's Vector mode shows of the road (7204:06de, mode 3):
+ *  `out` and `due`, the city's own armies on their way to where it sends
+ *  them, set off this turn and arriving next turn; `next` and `after`, the
+ *  armies on their way here, arriving next turn and the turn after, four at
+ *  most to a row. It goes by the vectors as they stand: an army shows coming
+ *  here only while its home city still sends here, though it arrives where
+ *  it was sent either way. See love2d/warlords/game.lua. */
+struct VectorRoad {
+  Army* out = nullptr;
+  Army* due = nullptr;
+  std::vector<Army*> next, after;
+};
+VectorRoad vectorRoad(Game& g, const City& city, const Side& side);
 /** Where the side's standard is planted, or {NONE, NONE} (7563:0b47). */
 std::pair<int, int> standardAt(const Game& g, const Side& side);
+/** What a click at (x, y) on the city dialog's map means when it picks where
+ *  armies go (828e:0651): the index of the side's city nearest the click, or
+ *  STANDARD when its planted standard is strictly nearer, both measured by
+ *  map_distance; NONE when the side has no city. */
+int vectorTarget(Game& g, int x, int y, const Side& side);
 /** Hero > Plant Flag (7563:09f7). True if it was planted. */
 bool plantFlag(Game& g, Side& side, Army* h);
 /** Send what a city builds to its side's planted standard. */

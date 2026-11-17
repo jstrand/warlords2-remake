@@ -27,7 +27,7 @@ undefined2 __cdecl16far FUN_5ad0_05ff(void)
   local_a = ((int *)DAT_451b_1f02)[1];
   local_c = 100;
   local_e = FUN_558d_0851(uVar2);
-  iVar3 = FUN_828e_044a(local_8,local_a);
+  iVar3 = city_at(local_8,local_a);
   if (*(char *)(uVar2 * 0x41 + 0x1592) != current_player) {
     if (local_e != 0) {
       return 1;

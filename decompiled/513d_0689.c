@@ -28,10 +28,9 @@ LAB_513d_0696:
   do {
     if (7 < local_4) {
       for (local_4 = 0; local_4 < 8; local_4 = local_4 + 1) {
-        iVar2 = FUN_828e_044a(*(undefined2 *)(local_4 * 0x14 + 0x189),
-                              *(undefined2 *)(local_4 * 0x14 + 0x18b));
+        iVar2 = city_at(*(int *)(local_4 * 0x14 + 0x189),*(int *)(local_4 * 0x14 + 0x18b));
         *(undefined1 *)(iVar2 * 0x41 + 0x1592) = (undefined1)local_4;
-        FUN_513d_09b3(iVar2 * 0x41 + 0x157d);
+        FUN_513d_09b3(iVar2 * 0x41 + 0x157d,0x3c04);
       }
       return;
     }

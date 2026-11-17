@@ -64,7 +64,7 @@ void __cdecl16far auto_ui_reports_menu(int param_1)
     goto LAB_6ef3_0185;
   case 0x6f114:
     FUN_834b_0000(0,1,0,0);
-    FUN_834b_1817(0,0,0xffff);
+    draw_vector_map_all((int *)0x0,-1);
     FUN_834b_04d3(0,0);
     index_00 = (uint)(index == 1);
     iVar2 = 0x4e;

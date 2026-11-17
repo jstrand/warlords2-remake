@@ -346,6 +346,16 @@ function deliver(g, army, city) {
  *  army has its full move (6f8c:0dd7). Whether the city starts the next one
  *  is the caller's: a human's do (6f8c:06bd), a computer's wait for its AI. */
 function runProduction(g, side) {
+  // First of all (7563:0bd9): a standard no longer planted -- taken up again,
+  // say -- takes no more armies. The side's cities sending theirs there stop
+  // vectoring and build at home again; those already on the road find it
+  // gone and turn back, below.
+  if (standardAt(g, side)[0] == null) {
+    for (const c of g.map.cities) {
+      if (c.ownerIndex === side.index && c.vectorTo === STANDARD_DEST) c.vectorTo = undefined;
+    }
+  }
+
   const arrived = [], built = [];
   for (let i = g.armies.length - 1; i >= 0; i--) {
     const a = g.armies[i];
@@ -1315,11 +1325,59 @@ export function vectoredTo(g, dest, side) {
   return out;
 }
 
+/** What the city dialog's Vector mode shows of the road (7204:06de, mode 3):
+ *  `out` and `due`, the city's own armies on their way to where it sends
+ *  them, set off this turn and arriving next turn; `next` and `after`, the
+ *  armies on their way here, arriving next turn and the turn after, four at
+ *  most to a row. It goes by the vectors as they stand: an army shows coming
+ *  here only while its home city still sends here, though it arrives where
+ *  it was sent either way. The cities sending here are taken in city order,
+ *  each one's armies from the top of the army table down, and both rows stop
+ *  as soon as either holds four. The city's own armies show while the vector
+ *  is on, if they go where it sends them now -- or to the standard, any of
+ *  them; the lowest army slot shows. */
+export function vectorRoad(g, city, side) {
+  const road = { out: null, due: null, next: [], after: [] };
+  if (city.vectorTo != null) {
+    const dest = city.vectorTo >= 0 ? city.vectorTo : null;   // none for the standard
+    for (let i = g.armies.length - 1; i >= 0; i--) {
+      const a = g.armies[i];
+      if (a.transit && a.homeCity === city.index && a.owner === side.index
+          && (a.transit.dest === dest || a.transit.dest === STANDARD_DEST)) {
+        if (a.transit.turns >= TRANSIT_TURNS) road.out = a; else road.due = a;
+      }
+    }
+  }
+  for (const src of vectoredTo(g, city)) {
+    for (let i = g.armies.length - 1; i >= 0; i--) {
+      if (road.next.length >= 4 || road.after.length >= 4) break;
+      const a = g.armies[i];
+      if (a.transit && a.homeCity === src.index && a.transit.dest === city.index
+          && a.owner === side.index) {
+        (a.transit.turns >= TRANSIT_TURNS ? road.after : road.next).push(a);
+      }
+    }
+  }
+  return road;
+}
+
 /** Where the side's standard is planted: [x, y], or [null, null] (7563:0b47). */
 export function standardAt(g, side) {
   const it = g.map.items[side.index];
   if (it && it.status === 1 && it.planted && it.x != null) return [it.x, it.y];
   return [null, null];
+}
+
+/** What a click at (x, y) on the city dialog's map means when it picks where
+ *  armies go (828e:0651): the side's city nearest the click, or its planted
+ *  standard -- STANDARD -- when that is strictly nearer, both measured by
+ *  map_distance. null when the side has no city. */
+export function vectorTarget(g, x, y, side) {
+  const c = nearestCity(g, x, y, side);
+  if (!c) return null;
+  const [sx, sy] = standardAt(g, side);
+  if (sx != null && move.distance(x, y, sx, sy) < move.distance(x, y, c.x, c.y)) return STANDARD_DEST;
+  return c;
 }
 
 /** Hero > Plant Flag (7563:09f7). True if it was planted. */

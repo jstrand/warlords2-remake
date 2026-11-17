@@ -36,7 +36,7 @@ void __cdecl16far setup_garrisons(void)
           bVar2 = true;
         }
         else {
-          iVar3 = FUN_7087_0000(city,(int)*(char *)(city * 0x41 + 0x15a9));
+          iVar3 = city_slot_of_type(city,(int)*(char *)(city * 0x41 + 0x15a9));
           uVar1 = *(undefined1 *)(city * 0x41 + iVar3 + 0x1593);
           in_DX = CONCAT11(0x3c,uVar1);
           *(undefined1 *)(city * 0x41 + 0x15a9) = uVar1;

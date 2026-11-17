@@ -199,8 +199,8 @@ LAB_7204_090f:
     local_1a = 0;
     if (*(int *)((undefined1 *)&LAB_4125_15ad_1 + DAT_4125_0e98 * 0x41) != 0) {
       local_1a = 1;
-      unaff_DI = FUN_828e_044a(*(undefined2 *)((undefined1 *)&LAB_4125_15b0 + DAT_4125_0e98 * 0x41),
-                               *(undefined2 *)(DAT_4125_0e98 * 0x41 + 0x15b2));
+      unaff_DI = city_at(*(int *)((undefined1 *)&LAB_4125_15b0 + DAT_4125_0e98 * 0x41),
+                         *(int *)(DAT_4125_0e98 * 0x41 + 0x15b2));
     }
     for (iVar8 = 0; iVar8 < 8; iVar8 = iVar8 + 1) {
       if ((*(int *)(DAT_4125_0e98 * 0x41 + 0x157d) == *(int *)(iVar8 * 0x14 + 0x193)) &&
@@ -224,7 +224,7 @@ LAB_7204_090f:
       pcVar9 = get_string(0x75,1);
       strcat((char *)CONCAT22(unaff_SS,local_6c),pcVar9);
       if (*(int *)((undefined1 *)&LAB_4125_15b0 + DAT_4125_0e98 * 0x41) == -2) {
-        local_18 = FUN_7563_0b47(current_player,local_8);
+        local_18 = standard_planted_at(current_player,local_8);
         if (local_18 == 0) {
           iVar4 = 3;
         }
@@ -288,11 +288,11 @@ LAB_7204_090f:
     iVar4 = -1;
     if (*(int *)((undefined1 *)&LAB_4125_15ad_1 + DAT_4125_0e98 * 0x41) != 0) {
       iVar8 = -1;
-      uVar3 = FUN_828e_044a(*(undefined2 *)((undefined1 *)&LAB_4125_15b0 + DAT_4125_0e98 * 0x41),
-                            *(undefined2 *)(DAT_4125_0e98 * 0x41 + 0x15b2),uVar13,0xffff,0xffff);
+      uVar3 = city_at(*(int *)((undefined1 *)&LAB_4125_15b0 + DAT_4125_0e98 * 0x41),
+                      *(int *)(DAT_4125_0e98 * 0x41 + 0x15b2));
       iVar5 = army_count;
       if ((int)uVar3 < 0) {
-        FUN_7563_0b47(current_player,local_8);
+        standard_planted_at(current_player,local_8);
         iVar5 = army_count;
       }
       while (iVar6 = iVar5 + -1, iVar5 != 0) {
@@ -330,7 +330,7 @@ LAB_7204_090f:
                   ,0,1,0,0);
     FUN_8611_08be(iVar8,(int)*(char *)(DAT_4125_0e98 * 0x41 + 0x1592),0x342a,0x4125,0x1d8,0x67,0,0,0
                   ,0,1,0,0);
-    FUN_7087_0410(DAT_4125_0e98,local_12);
+    cities_vectoring_to(DAT_4125_0e98,local_12);
     local_3a = 0;
     local_38 = 0;
     local_36[7] = 0xffff;
@@ -371,8 +371,8 @@ LAB_7204_090f:
       FUN_8611_08be(local_36[iVar8],current_player,0x342a,0x4125,iVar8 * 0x28 + 400,0xb6,0,0,0,0,1,0
                     ,0);
     }
-    auto_ui_vector_help(0);
-    auto_ui_vector_help(1);
+    ui_vector_help(0);
+    ui_vector_help(1);
     break;
   case 0x737a9:
     FUN_78a8_06ae(1,0xf,0,3);

@@ -396,6 +396,162 @@ local function testVectoring(scenario)
   eq(game.nearestCity(g, dest.x + 1, dest.y - 1, side), dest, "and a click next to it too")
 end
 
+-- Changing where a city sends its armies, and what the Vector mode shows of
+-- the road meanwhile (7087:028b, 6f8c:0000, 7204:06de mode 3, 7563:0bd9).
+local function testVectorRoad(scenario)
+  print("vectoring, the road: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 9 })
+  local side = game.begin(g)
+  local home = side.capital
+  local b, c
+  for _, city in ipairs(g.map.cities) do
+    if city.ownerIndex == nil and #city.slots > 0 then
+      if not b then b = city elseif not c then c = city break end
+    end
+  end
+  ok(b ~= nil and c ~= nil, "found two neutral cities to take")
+  if not (b and c) then return end
+  for _, city in ipairs({ b, c }) do
+    city.ownerIndex = side.index
+    for _, a in ipairs(game.armiesAt(g, city.x, city.y)) do a.owner = side.index end
+  end
+  local function round() for _ = 1, #g.sides do endTurn(g) end end
+  local function setOff(from, dest)
+    for _ = 1, 12 do
+      round()
+      for _, a in ipairs(g.armies) do
+        if a.transit and a.homeCity == from.index and a.transit.dest == dest
+           and a.transit.turns == 2 then return a end
+      end
+    end
+  end
+
+  game.setProduction(g, home, 1)
+  game.vector(g, home, b)
+  local sent = setOff(home, b.index)
+  ok(sent ~= nil, "an army sets off for the destination")
+  if not sent then return end
+  local road = game.vectorRoad(g, b, side)
+  eq(road.after[1], sent, "the destination shows it coming the turn after next")
+  eq(#road.next, 0, "and nothing due next turn")
+  eq(game.vectorRoad(g, home, side).out, sent, "home shows it sent out this turn")
+
+  -- the destination changes while it is on the road
+  ok(game.vector(g, home, c), "home sends to another city now")
+  eq(sent.transit.dest, b.index, "the army on the road keeps its destination (6f8c:0dd7)")
+  road = game.vectorRoad(g, b, side)
+  eq(#road.next + #road.after, 0,
+     "the old destination no longer shows it coming: its home sends elsewhere (7204:06de)")
+  eq(game.vectorRoad(g, home, side).out, nil, "nor does home: it is not going where home sends now")
+  eq(#game.vectorRoad(g, c, side).after, 0, "and the new destination expects nothing yet")
+  round()
+  ok(sent.transit ~= nil and sent.transit.turns == 1, "a turn on it is still on the road")
+  eq(#game.vectorRoad(g, b, side).next, 0, "unshown at the old destination though due there next turn")
+  round()
+  ok(sent.transit == nil and sent.x ~= nil and game.cityAt(g, sent.x, sent.y) == b,
+     "and it arrives where it was sent, not where home sends now")
+
+  -- the standard, planted by hand on open ground near c
+  local move, scn = require("warlords.move"), require("warlords.scn")
+  local fx, fy
+  for dy = -4, 5 do for dx = -4, 5 do
+    local x, y = c.x + dx, c.y + dy
+    local t = scn.terrainAt(g.map, x, y)
+    if not fx and (t == move.PLAIN or t == move.ROAD) and not game.cityAt(g, x, y) then fx, fy = x, y end
+  end end
+  ok(fx ~= nil, "found open ground near a city")
+  if not fx then return end
+  local std = g.map.items[side.index + 1]
+  std.status, std.x, std.y, std.planted = 1, fx, fy, true
+  game.setProduction(g, c, 1)
+  ok(game.vectorToStandard(g, c, side), "a city sends to the standard")
+  local toStd = setOff(c, game.STANDARD)
+  ok(toStd ~= nil, "an army sets off for the standard")
+  if toStd then
+    eq(game.vectorRoad(g, c, side).out, toStd, "home shows it on its way")
+    game.vector(g, c, b)
+    eq(game.vectorRoad(g, c, side).out, toStd,
+       "and still does once home sends to a city: any army bound for the standard shows (7204:06de)")
+  end
+
+  -- the standard taken up: when the side's cities next build, those sending
+  -- there stop and build at home (7563:0bd9)
+  ok(game.vectorToStandard(g, c, side), "the city sends to the standard again")
+  std.status, std.x, std.y, std.planted = 3, nil, nil, nil
+  c.countdown, side.gold = 1, 1000
+  round()
+  eq(c.vectorTo, nil, "a standard no longer planted takes no more: the city stops sending there")
+  local atHome = false
+  for _, e in ipairs(side.produced or {}) do
+    if e.city == c.index and e.kind == "built" then atHome = true end
+  end
+  ok(atHome, "and builds at home instead of sending an army off to nowhere")
+
+  -- the rows: the cities sending here in city order, each one's armies from
+  -- the top of the army table down, both rows stopping once either has four
+  local g2 = game.new(DATA, scenario, { seed = 9 })
+  local side2 = game.begin(g2)
+  local d, s1, s2
+  for _, city in ipairs(g2.map.cities) do
+    if city.ownerIndex == nil and #city.slots > 0 then
+      if not d then d = city elseif not s1 then s1 = city elseif not s2 then s2 = city break end
+    end
+  end
+  for _, city in ipairs({ d, s1, s2 }) do city.ownerIndex = side2.index end
+  ok(s1.index < s2.index, "two senders, in city order")
+  game.setProduction(g2, s1, 1)
+  game.setProduction(g2, s2, 1)
+  game.vector(g2, s1, d)
+  game.vector(g2, s2, d)
+  local function onRoad(from, turns)
+    local a = rules.armyFromSlot(from.slots[1], false)
+    a.owner, a.homeCity, a.moves = side2.index, from.index, a.maxMoves
+    a.transit = { turns = turns, dest = d.index }
+    return game.addArmy(g2, a)
+  end
+  local late = onRoad(s2, 2)
+  local early = onRoad(s1, 2)
+  road = game.vectorRoad(g2, d, side2)
+  eq(road.after[1], early, "the lower city's army first, though in the higher army slot")
+  eq(road.after[2], late, "then the next city's")
+  local more = {}
+  for i = 1, 4 do more[i] = onRoad(s1, 2) end
+  local due = onRoad(s2, 1)
+  road = game.vectorRoad(g2, d, side2)
+  eq(#road.after, 4, "four at most to a row")
+  eq(road.after[1], more[4], "a city's armies from the top of the army table down")
+  eq(#road.next, 0, "and once a row is full the other takes no more either")
+  ok(due.transit ~= nil, "(though that army is on its way)")
+end
+
+-- A click on the city dialog's map, picking where armies go, means the
+-- side's nearest city or its planted standard, whichever is nearer as the
+-- crow flies -- map_distance, both of them (828e:0651).
+local function testVectorTarget(scenario)
+  print("vectoring, the click: " .. scenario)
+  local g = game.new(DATA, scenario, { seed = 9 })
+  local side = game.begin(g)
+  local cap = side.capital
+  local dx = cap.x < g.map.width / 2 and 1 or -1
+  local dy = cap.y < g.map.height / 2 and 1 or -1
+  local std = g.map.items[side.index + 1]
+  local function plant(x, y) std.status, std.x, std.y, std.planted = 1, x, y, true end
+
+  eq(game.vectorTarget(g, cap.x + 3 * dx, cap.y, side), cap, "with no standard planted, the city")
+  -- a click 3 tiles off the city each way is 4 from it as the crow flies
+  local px, py = cap.x + 3 * dx, cap.y + 3 * dy
+  plant(px + 3 * dx, py)
+  eq(game.vectorTarget(g, px, py, side), game.STANDARD,
+     "a standard 3 off is nearer, though no nearer by the longer axis")
+  -- a click 4 tiles off the city in a line is 4 from it; a standard 3 and 3
+  -- off that click is 4 from it too, and not nearer
+  px, py = cap.x + 4 * dx, cap.y
+  plant(px - 3 * dx, py + 3 * dy)
+  eq(game.vectorTarget(g, px, py, side), cap, "a standard only as near leaves the city")
+  std.planted = nil
+  eq(game.vectorTarget(g, px - 3 * dx, py + 3 * dy, side), cap, "nor does one taken up count")
+end
+
 ------------------------------------------------------------- buying types
 
 local function testBuyProduction(scenario)
@@ -3269,6 +3425,8 @@ for _, s in ipairs(SCENARIOS) do
 end
 testTurnLoop("ERYTHEA")
 testVectoring("ERYTHEA")
+testVectorRoad("ERYTHEA")
+testVectorTarget("ERYTHEA")
 testBuyProduction("ERYTHEA")
 testReports("ERYTHEA")
 testHeroItems("ERYTHEA")

@@ -546,12 +546,11 @@ LAB_1000_010c:
       if (opt_tutorial != 0) {
         if ((DAT_3c04_0134 & 0x10) == 0) {
           for (iVar19 = 0; iVar19 < 8; iVar19 = iVar19 + 1) {
-            local_6 = (code *)CONCAT22(local_6._2_2_,
-                                       (code *)(*DAT_451b_1f02 +
-                                               *(int *)((int)(undefined2 *)&DAT_4125_2b4b +
-                                                       iVar19 * 2 + 1)));
+            pcVar26 = (code *)(*DAT_451b_1f02 +
+                              *(int *)((int)(undefined2 *)&DAT_4125_2b4b + iVar19 * 2 + 1));
+            local_6 = (code *)CONCAT22(local_6._2_2_,pcVar26);
             uStack_8 = ((int *)DAT_451b_1f02)[1] + ((undefined2 *)&DAT_4125_2b5c)[iVar19];
-            puStack_a = (undefined2 *)FUN_828e_044a();
+            puStack_a = (undefined2 *)city_at((int)pcVar26,uStack_8);
             if ((-1 < (int)puStack_a) &&
                (*(char *)((int)puStack_a * 0x41 + 0x1592) != current_player)) {
               DAT_3c04_0134 = DAT_3c04_0134 | 0x10;

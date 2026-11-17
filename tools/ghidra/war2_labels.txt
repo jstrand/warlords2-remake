@@ -339,6 +339,38 @@
 413d:1b3f  func  random_add_production # random map: adds 2d3 production types
 3125:447c  data  armytype_table       # far pointer to the loaded ARMYTYPE records
 
+# Vectoring and the city dialog (Ghidra 7087 = flat 6087, 7204 = 6204,
+# 828e = 728e, 834b = 734b, 7563 = 6563, 6f8c = 5f8c). A city's vector is its
+# record's +0x31 on flag and +0x33/+0x35 destination x, y (-2, -2: the
+# standard); an army on the road has x -1 (to a city) or -2 (the standard),
+# y -1, destination city in +0xf >> 1, and +0x10 'e' then 'f'. See
+# docs/rules.md (Production) and docs/re/ui.md (Vector mode).
+6087:0000  func  city_slot_of_type    | int city_slot_of_type(int city, int type)
+6087:00c8  func  ui_choose_production | void ui_choose_production(int slot)
+6087:00ff  func  city_start_chosen_production # countdown from the chosen type's slot
+6087:0185  func  ui_stop_production   # Stop (202): production, vector and choice cleared
+6087:028b  func  ui_vector_set_destination | void ui_vector_set_destination(int x, int y, int button)
+6087:0410  func  cities_vectoring_to  # (int dest, far list, far count); dest -2 or >= 100: the standard, the current side's cities only. No prototype: Ghidra puts a far pointer after one int 2 bytes out
+6087:050e  func  ui_vector_button     | void ui_vector_button(int n)
+6087:0638  func  ui_vector_help       | void ui_vector_help(int which)
+6087:072e  func  ui_vector_map_click  | void ui_vector_map_click(int x, int y, int button)
+6087:08e4  func  ui_city_dialog_map   # Production/Vector: the plain vector map, or See All
+728e:044a  func  city_at              | int city_at(int x, int y)
+728e:04b5  func  site_at              | int site_at(int x, int y)
+728e:04fa  func  nearest_city         | int nearest_city(int x, int y, int side, int seen_only)
+728e:0651  func  nearest_vector_target | int nearest_vector_target(int x, int y)
+734b:08df  func  draw_vector_map      | void draw_vector_map(int* rect, int city, int filter) # filter -1: room for one more, n: for n more, -2: all
+734b:1817  func  draw_vector_map_all  | void draw_vector_map_all(int* rect, int city) # See All
+734b:1f5f  func  draw_map_figure      | void draw_map_figure(int x, int y, int figure)
+6563:0b47  func  standard_planted_at  # (int side, far x, far y): 1 if its standard lies planted. No prototype, as cities_vectoring_to
+6563:0bd9  func  standard_gone_stop_vectors # first thing city_production_turn does
+5f8c:0bff  func  city_free_tile       | int city_free_tile(int city, int spill, int* x, int* y) # first of the four tiles with room; spill: else 20 random tries nearby
+5f8c:0d4f  func  army_can_arrive      | int army_can_arrive(int type, int x, int y)
+6204:0000  func  city_dialog_show     | void city_dialog_show(int mode, int x, int y)
+6204:03a9  func  city_dialog_buttons  # every control's state, for the mode and the Vector sub-state
+6204:1a9b  func  city_dialog_draw_map # the left half, by mode
+1012:1199  func  map_distance_impl    # map_distance's target: sqrt(dx*dx + dy*dy), truncated
+
 # Movement / pathfinding (Ghidra 1555 = flat 0555)
 0555:000a  func  pathfind             # request: from, to, bonus flags, mode, far ptr to 200 directions
 0555:020e  func  path_single_step

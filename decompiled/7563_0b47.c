@@ -1,5 +1,5 @@
 
-undefined2 __cdecl16far FUN_7563_0b47(int param_1,undefined2 *param_2,undefined2 *param_3)
+undefined2 __cdecl16far standard_planted_at(int param_1,undefined2 *param_2,undefined2 *param_3)
 
 {
   undefined2 uVar1;

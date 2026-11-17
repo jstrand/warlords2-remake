@@ -13,7 +13,8 @@ void __cdecl16far FUN_4976_1520(void)
   FUN_18a9_066e();
   FUN_834b_0000(0);
   auto_ui_quest_reward_allies();
-  FUN_834b_1f5f();
+  draw_map_figure(*(int *)(*(int *)(current_player * 0xc + 0x1107) * 0x16 + -0x7780),
+                  *(int *)(*(int *)(current_player * 0xc + 0x1107) * 0x16 + -0x777e),1);
   FUN_834b_04d3();
   FUN_22bf_0757();
   return;

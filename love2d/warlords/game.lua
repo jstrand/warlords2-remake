@@ -400,6 +400,16 @@ end
 --- kept at home or sent on its way -- the log city_production_turn keeps,
 --- in its order. Returns the built ones.
 local function runProduction(g, side)
+  -- First of all (7563:0bd9): a standard no longer planted -- taken up again,
+  -- say -- takes no more armies. The side's cities sending theirs there stop
+  -- vectoring and build at home again; those already on the road find it gone
+  -- and turn back, below.
+  if not game.standardAt(g, side) then
+    for _, c in ipairs(g.map.cities) do
+      if c.ownerIndex == side.index and c.vectorTo == STANDARD_DEST then c.vectorTo = nil end
+    end
+  end
+
   local arrived, built = {}, {}
   for i = #g.armies, 1, -1 do
     local a = g.armies[i]
@@ -1564,12 +1574,68 @@ function game.vectoredTo(g, dest, side)
   return out
 end
 
+--- What the city dialog's Vector mode shows of the road (7204:06de, mode 3).
+--- `out` and `due` are the city's own armies on their way to where it sends
+--- them -- the one that set off this turn and the one arriving next turn;
+--- `next` and `after` are the armies on their way here, arriving next turn
+--- and the turn after, four at most to a row.
+---
+--- It goes by the vectors as they stand now, not by where each army is
+--- headed. An army still arrives where it was sent (its destination is
+--- fixed as it sets off, 6f8c:0dd7), but it is shown coming here only while
+--- its home city still sends here: send that city elsewhere, or stop it, and
+--- its armies already on the road vanish from this list though they still
+--- come. The cities sending here are taken in city order, each one's armies
+--- from the top of the army table down, and both rows stop as soon as either
+--- holds four. The city's own armies are shown while the vector is on, if
+--- they go where it sends them now -- or to the standard, any of them,
+--- wherever it sends them now; the lowest army slot shows.
+function game.vectorRoad(g, city, side)
+  local road = { next = {}, after = {} }
+  if city.vectorTo then
+    local dest = city.vectorTo >= 0 and city.vectorTo or nil  -- none for the standard
+    for i = #g.armies, 1, -1 do
+      local a = g.armies[i]
+      if a.transit and a.homeCity == city.index and a.owner == side.index
+         and (a.transit.dest == dest or a.transit.dest == STANDARD_DEST) then
+        if a.transit.turns >= TRANSIT_TURNS then road.out = a else road.due = a end
+      end
+    end
+  end
+  for _, src in ipairs(game.vectoredTo(g, city)) do
+    for i = #g.armies, 1, -1 do
+      if #road.next >= 4 or #road.after >= 4 then break end
+      local a = g.armies[i]
+      if a.transit and a.homeCity == src.index and a.transit.dest == city.index
+         and a.owner == side.index then
+        local row = a.transit.turns >= TRANSIT_TURNS and road.after or road.next
+        row[#row + 1] = a
+      end
+    end
+  end
+  return road
+end
+
 --- Where the side's standard is planted, or nil (7563:0b47): its item record
 --- -- number = side -- lying on the ground, and planted there.
 function game.standardAt(g, side)
   local it = g.map.items[side.index + 1]
   if it and it.status == 1 and it.planted and it.x then return it.x, it.y end
   return nil
+end
+
+--- What a click at (x, y) on the city dialog's map means when it picks where
+--- armies go (828e:0651): the side's city nearest the click, or its planted
+--- standard -- game.STANDARD -- when that is strictly nearer, both measured
+--- by map_distance. nil when the side has no city.
+function game.vectorTarget(g, x, y, side)
+  local c = game.nearestCity(g, x, y, side)
+  if not c then return nil end
+  local sx, sy = game.standardAt(g, side)
+  if sx and move.distance(x, y, sx, sy) < move.distance(x, y, c.x, c.y) then
+    return STANDARD_DEST
+  end
+  return c
 end
 
 --- Hero > Plant Flag (7563:09f7): the hero puts its side's standard down,

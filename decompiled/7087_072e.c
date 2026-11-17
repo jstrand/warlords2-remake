@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_7087_072e(undefined2 param_1,undefined2 param_2,int param_3)
+void __cdecl16far ui_vector_map_click(int x,int y,int button)
 
 {
   int iVar1;
@@ -10,14 +10,14 @@ void __cdecl16far FUN_7087_072e(undefined2 param_1,undefined2 param_2,int param_
   undefined1 local_c [8];
   int local_4;
   
-  if ((param_3 == 1) && ((bRam00000417 & 3) != 0)) {
-    FUN_7087_028b(param_1,param_2,1);
+  if ((button == 1) && ((bRam00000417 & 3) != 0)) {
+    ui_vector_set_destination(x,y,1);
     DAT_4125_0e94 = 0;
   }
   else {
-    iVar1 = FUN_828e_0651(param_1,param_2);
-    FUN_7087_0410(iVar1,local_c);
-    FUN_7087_0410(DAT_4125_0e98,local_16);
+    iVar1 = nearest_vector_target(x,y);
+    cities_vectoring_to(iVar1,local_c);
+    cities_vectoring_to(DAT_4125_0e98,local_16);
     if (((DAT_4125_0e94 == 2) &&
         ((((0 < local_e && (local_e + local_4 < 5)) && (local_16[0] != iVar1)) &&
          ((local_16[1] != iVar1 && (local_16[2] != iVar1)))))) && (local_16[3] != iVar1)) {
@@ -34,19 +34,18 @@ void __cdecl16far FUN_7087_072e(undefined2 param_1,undefined2 param_2,int param_
       }
     }
     if (DAT_4125_0e94 == 1) {
-      FUN_7087_028b(param_1,param_2,param_3);
+      ui_vector_set_destination(x,y,button);
     }
     iVar2 = DAT_4125_0e98;
     if ((DAT_4125_0e94 != 1) && (iVar1 < 100)) {
       iVar2 = iVar1;
     }
     DAT_4125_0e94 = 0;
-    auto_tutorial_hook_3
-              (3,*(undefined2 *)(iVar2 * 0x41 + 0x157d),*(undefined2 *)(iVar2 * 0x41 + 0x157f));
-    FUN_7087_08e4();
-    auto_ui_vector_help(0);
-    auto_ui_vector_help(1);
-    FUN_7204_03a9();
+    city_dialog_show(3,*(int *)(iVar2 * 0x41 + 0x157d),*(int *)(iVar2 * 0x41 + 0x157f));
+    ui_city_dialog_map();
+    ui_vector_help(0);
+    ui_vector_help(1);
+    city_dialog_buttons();
   }
   return;
 }

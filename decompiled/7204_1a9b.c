@@ -1,5 +1,5 @@
 
-void __cdecl16far auto_ui_city_info(void)
+void __cdecl16far city_dialog_draw_map(void)
 
 {
   if (LAB_4125_0e92 < 5) {
@@ -13,7 +13,7 @@ void __cdecl16far auto_ui_city_info(void)
       FUN_834b_05e4(0,0,DAT_4125_0e98);
       break;
     case 0x73b29:
-      FUN_7087_08e4();
+      ui_city_dialog_map();
       return;
     }
     FUN_834b_04d3(0,0);

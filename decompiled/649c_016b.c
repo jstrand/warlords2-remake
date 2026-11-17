@@ -10,7 +10,7 @@ int __cdecl16far city_make_ruins(int x,int y)
   int iVar6;
   int iVar7;
   
-  iVar4 = FUN_828e_044a(x,y);
+  iVar4 = city_at(x,y);
   cVar3 = *(char *)(iVar4 * 0x41 + 0x1592) * '\x02';
   iVar7 = *(int *)(iVar4 * 0x41 + 0x157d);
   iVar2 = *(int *)(iVar4 * 0x41 + 0x157f);

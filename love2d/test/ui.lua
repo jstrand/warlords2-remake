@@ -1233,6 +1233,32 @@ if G and G.g then
     try("click the other city again", dialogClick,
         80 + other.x * 2 + 1, 60 + other.y * 2 + 1, 1)
     if G.city ~= other then fail("vector", "a plain click did not move the dialog") end
+
+    -- the standard, planted by hand off the cities: a plain click on it
+    -- leaves the dialog where it is, and while it waits to move the armies
+    -- coming here, a click on it sends them there (7087:072e, 828e:0651)
+    local game = require("warlords.game")
+    local std = G.g.map.items[G.player.index + 1]
+    local keep = { std.status, std.x, std.y, std.planted }
+    local fx, fy
+    for dy = -6, 6 do for dx = -6, 6 do
+      local x, y = other.x + dx, other.y + dy
+      if not fx and x >= 0 and y >= 0 and x < G.g.map.width and y < G.g.map.height
+         and not game.cityAt(G.g, x, y) then fx, fy = x, y end
+    end end
+    std.status, std.x, std.y, std.planted = 1, fx, fy, true
+    try("draw the standard on the vector map", love.draw)
+    try("click the standard", dialogClick, 80 + fx * 2 + 1, 60 + fy * 2 + 1, 1)
+    if G.city ~= other then fail("vector", "a click on the standard moved the dialog") end
+    mine.vectorTo = other.index
+    press(G.cityView, 211, "move the armies coming here")
+    try("click the standard to move them there", dialogClick, 80 + fx * 2 + 1, 60 + fy * 2 + 1, 1)
+    if mine.vectorTo ~= game.STANDARD then fail("vector", "the armies coming here did not move to the standard") end
+    if G.city ~= other then fail("vector", "moving them to the standard moved the dialog") end
+    press(G.cityView, 212, "See All with a city sending to the standard")
+    press(G.cityView, 216, "See All off")
+    std.status, std.x, std.y, std.planted = keep[1], keep[2], keep[3], keep[4]
+
     try("back to our city", function() love.keypressed("escape") G.openCity(mine) end)
     mine.vectorTo = nil
     other.ownerIndex = wasOwner

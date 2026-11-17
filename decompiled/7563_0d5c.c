@@ -20,8 +20,8 @@ void __cdecl16far auto_ui_hero_emerges(void)
   DAT_4125_166a = 1;
   FUN_54f6_0000(2);
   FUN_834b_0000(1,1,0,0);
-  FUN_834b_1f5f(*(undefined2 *)(DAT_451b_058c * 0x41 + 0x157d),
-                *(undefined2 *)(DAT_451b_058c * 0x41 + 0x157f),1);
+  draw_map_figure(*(int *)(DAT_451b_058c * 0x41 + 0x157d),*(int *)(DAT_451b_058c * 0x41 + 0x157f),1)
+  ;
   FUN_834b_04d3(0,0);
   load_hero_name();
   if (local_4 == 1) {

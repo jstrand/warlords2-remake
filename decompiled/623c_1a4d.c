@@ -7,7 +7,7 @@ undefined2 __cdecl16far FUN_623c_1a4d(int param_1,int *param_2)
   
   iVar1 = best_production_for(param_1,3,-1,1);
   if (iVar1 != -1) {
-    iVar1 = FUN_7087_0000(param_1,iVar1);
+    iVar1 = city_slot_of_type(param_1,iVar1);
     *param_2 = iVar1;
     iVar1 = (int)*(char *)(param_1 * 0x41 + *param_2 + 0x159b);
     if (((undefined1 *)&DAT_451b_0669)[*(char *)(param_1 * 0x41 + *param_2 + 0x1593) * 6] == '\x01')

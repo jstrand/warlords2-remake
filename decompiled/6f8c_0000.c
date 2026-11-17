@@ -26,7 +26,7 @@ int __cdecl16far city_production_turn(void)
   
   func_0x0006002d();
   uVar10 = 0x7563;
-  FUN_7563_0bd9();
+  standard_gone_stop_vectors();
   *(undefined1 *)((int)DAT_451b_0504 + 800) = 0;
   iVar6 = army_count;
 LAB_6f8c_04b1:
@@ -55,8 +55,8 @@ LAB_6f8c_04b1:
                   }
                   else {
                     uVar10 = 0x828e;
-                    local_c = FUN_828e_044a(*(undefined2 *)
-                                             ((undefined1 *)&LAB_4125_15b0 + local_4 * 0x41));
+                    local_c = city_at(*(int *)((undefined1 *)&LAB_4125_15b0 + local_4 * 0x41),
+                                      *(int *)(local_4 * 0x41 + 0x15b2));
                     uVar8 = (undefined2)((ulong)DAT_451b_0504 >> 0x10);
                     *(undefined1 *)((int)DAT_451b_0504 + (int)*(char *)((int)DAT_451b_0504 + 800)) =
                          1;
@@ -134,7 +134,7 @@ LAB_6f8c_04b1:
 LAB_6f8c_02b5:
   if (((*(int *)(iVar7 * 0x16 + -0x7780) == -2) && (*(int *)(iVar7 * 0x16 + -0x777e) == -1)) &&
      (*(char *)(iVar7 * 0x16 + -0x7770) == 'f')) {
-    local_e = FUN_7563_0b47(current_player,&local_10);
+    local_e = standard_planted_at(current_player,&local_10);
     uVar10 = 0x1b62;
     armies_at_tile(local_10,local_12,(int *)CONCAT22(unaff_SS,&local_18));
     if (((local_e == 0) || (7 < local_18)) ||

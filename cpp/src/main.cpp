@@ -1917,13 +1917,25 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
   };
   auto mine = game::sideCities(*G.g, *G.player);
   auto building = [](const City* c) { return game::producing(*c) ? 0 : 3; };
+  // The side's planted standard: a figure (834b:1f5f) and a line from each
+  // city sending armies there. The figure is 4125:2cae's 0, dark, (96, 15) --
+  // or 1, white, (96, 0), when the standard is where the armies shown go; then
+  // it is drawn first and the lines go over it.
   auto [sx, sy] = game::standardAt(*G.g, *G.player);
   auto toStandard = [&, sx = sx, sy = sy](const City* c, int colour) {
     palColour(colour);
     linePixels(x + c->x * 2 + 2, y + c->y * 2 + 2, x + sx * 2, y + sy * 2);
   };
+  auto standard = [&, sx = sx, sy = sy](bool lit) {
+    gfx::setColor(1, 1, 1);
+    gfx::draw(G.atransShields, gfx::newQuad(96, lit ? 0 : 15, 16, 15), x + std::max(0, (sx * 2 - 2) / 8 * 8), y + std::max(0, sy * 2 - 6));
+  };
   if (seeAll) {
+    // 834b:1817 notes a city sending to the standard only as it comes to it,
+    // not one it has already marked as another's destination; if any, the
+    // white figure goes down and then a line from every city sending there
     std::set<const City*> done;
+    bool toStd = false;
     for (City* c : mine) {
       if (done.count(c)) continue;
       done.insert(c);
@@ -1937,13 +1949,19 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
         done.insert(dest);
         marker(dest, game::producing(*dest) ? 1 : 5);
         line(dest, c, 7);
-      } else if (c->vectorTo == game::STANDARD && sx != NONE) {
-        toStandard(c, 8);
+      } else if (c->vectorTo == game::STANDARD) {
+        toStd = true;
       }
       for (City* src : incoming) {
         done.insert(src);
         marker(src, 2);
         line(src, c, 8);
+      }
+    }
+    if (sx != NONE) {
+      standard(toStd);
+      if (toStd) {
+        for (City* c : mine) if (c->vectorTo == game::STANDARD) toStandard(c, 8);
       }
     }
     palColour(15);
@@ -1963,20 +1981,21 @@ void front::drawVectorMap(int x, int y, City* city, int filter, bool seeAll) {
       }
     }
     City* dest = city->vectorTo >= 0 ? G.g->map->city(city->vectorTo) : nullptr;
+    bool toStd = city->vectorTo == game::STANDARD;
     if (dest) {
       marker(dest, game::producing(*dest) ? 1 : 5);
       line(city, dest, 7);
-    } else if (city->vectorTo == game::STANDARD && sx != NONE) {
+    } else if (toStd && sx != NONE) {
+      standard(true);
       toStandard(city, 7);
     }
     for (City* src : game::vectoredTo(*G.g, city)) {
       marker(src, 2);
       line(src, city, 8);
     }
-  }
-  if (sx != NONE) {
-    gfx::setColor(1, 1, 1);
-    gfx::draw(G.atransShields, gfx::newQuad(96, 15, 16, 15), x + std::max(0, (sx * 2 - 2) / 8 * 8), y + std::max(0, sy * 2 - 6));
+    if (sx != NONE && !toStd) standard(false);
+  } else if (sx != NONE) {
+    standard(false);
   }
   gfx::setScissor();
 }

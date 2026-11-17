@@ -5,12 +5,13 @@ void __cdecl16far hero_recruit(undefined4 param_1,int param_2)
   int *piVar1;
   int iVar2;
   int iVar3;
+  undefined2 unaff_SS;
   undefined4 local_12;
   undefined2 local_e;
   int local_a;
   int local_8;
   int local_6;
-  undefined2 local_4;
+  int local_4;
   
   local_4 = DAT_451b_058c;
   local_6 = 0;
@@ -22,7 +23,7 @@ void __cdecl16far hero_recruit(undefined4 param_1,int param_2)
   *(int *)(local_6 * 2 + 0x593) = param_2;
   *(byte *)(local_6 + 0x5e3) = *(byte *)(local_6 + 0x5e3) & 0xfc;
   *(byte *)(local_6 + 0x5e3) = *(byte *)(local_6 + 0x5e3) & 3;
-  FUN_6f8c_0bff(local_4,1,&local_8);
+  city_free_tile(local_4,1,(int *)CONCAT22(unaff_SS,&local_8),(int *)CONCAT22(unaff_SS,&local_a));
   piVar1 = (int *)FUN_1b62_0309();
   local_12 = (int *)CONCAT22(param_2,piVar1);
   *local_12 = local_8;

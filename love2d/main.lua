@@ -2301,18 +2301,29 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
   end
   local mine = game.sideCities(G.g, G.player)
   local function building(c) return game.producing(c) and 0 or 3 end
-  -- The side's planted standard: its flag (ATRANS2.PCK's (96, 15), 16x15,
-  -- 834b:1f5f with figure 0), and a line from each city sending armies there
-  -- to the standard's (2x, 2y).
+  -- The side's planted standard: a figure (834b:1f5f), and a line from each
+  -- city sending armies there to the standard's (2x, 2y). The figure is
+  -- 4125:2cae's 0, dark -- ATRANS2.PCK's (96, 15), 16x15 -- or 1, white,
+  -- (96, 0), when the standard is where the armies shown go; then it is
+  -- drawn first and the lines go over it.
   local sx, sy = game.standardAt(G.g, G.player)
   local function toStandard(c, colour)
     local k = G.palette[colour + 1]
     love.graphics.setColor(k[1], k[2], k[3])
     linePixels(x + c.x * 2 + 2, y + c.y * 2 + 2, x + sx * 2, y + sy * 2)
   end
+  local function standard(lit)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(G.atransShields, love.graphics.newQuad(96, lit and 0 or 15, 16, 15, iw, ih),
+      x + math.max(0, math.floor((sx * 2 - 2) / 8) * 8), y + math.max(0, sy * 2 - 6))
+  end
 
   if seeAll then
-    local done = {}
+    -- 834b:1817 notes a city sending to the standard only as it comes to
+    -- it, and not one it has already marked as another's destination; if
+    -- any, the white figure goes down and then a line from every city of
+    -- the side sending there
+    local done, toStd = {}, false
     for _, c in ipairs(mine) do
       if not done[c] then
         done[c] = true
@@ -2326,13 +2337,21 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
           done[dest] = true
           marker(dest, game.producing(dest) and 1 or 5)
           line(dest, c, 7)
-        elseif c.vectorTo == game.STANDARD and sx then
-          toStandard(c, 8)
+        elseif c.vectorTo == game.STANDARD then
+          toStd = true
         end
         for _, src in ipairs(incoming) do
           done[src] = true
           marker(src, 2)
           line(src, c, 8)
+        end
+      end
+    end
+    if sx then
+      standard(toStd)
+      if toStd then
+        for _, c in ipairs(mine) do
+          if c.vectorTo == game.STANDARD then toStandard(c, 8) end
         end
       end
     end
@@ -2355,21 +2374,19 @@ function G.drawVectorMap(x, y, city, filter, seeAll)
       end
     end
     local dest = city.vectorTo and city.vectorTo >= 0 and G.g.map.cities[city.vectorTo + 1]
+    local toStd = city.vectorTo == game.STANDARD
     if dest then
       marker(dest, game.producing(dest) and 1 or 5)
       line(city, dest, 7)
-    elseif city.vectorTo == game.STANDARD and sx then
+    elseif toStd and sx then
+      standard(true)
       toStandard(city, 7)
     end
     for _, src in ipairs(game.vectoredTo(G.g, city)) do
       marker(src, 2)
       line(src, city, 8)
     end
-  end
-  if sx then
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(G.atransShields, love.graphics.newQuad(96, 15, 16, 15, iw, ih),
-      x + math.max(0, math.floor((sx * 2 - 2) / 8) * 8), y + math.max(0, sy * 2 - 6))
+    if sx and not toStd then standard(false) end
   end
   love.graphics.setScissor()
 end

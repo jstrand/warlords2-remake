@@ -48,7 +48,7 @@ void __cdecl16far switchD_7000:2762::caseD_0(void)
         ((*(byte *)(unaff_DI * 0xe0 + unaff_SI * 2 + 1) & 0x20) == 0)))) {
       if (*(int *)(unaff_BP + -4) == 10) {
         FUN_740d_1201();
-        FUN_828e_044a();
+        city_at(unaff_SI,unaff_DI);
       }
       else {
         if (*(int *)(unaff_BP + -4) != 0xb) {
@@ -68,11 +68,11 @@ void __cdecl16far switchD_7000:2762::caseD_0(void)
           pcVar5 = (char *)0x41251058;
           goto code_r0x000743cf;
         }
-        iVar1 = FUN_828e_044a();
+        iVar1 = city_at(unaff_SI,unaff_DI);
         *(int *)(unaff_BP + -8) = iVar1;
         if (iVar1 < 0) {
           FUN_740d_1201();
-          FUN_828e_04b5();
+          site_at(unaff_SI,unaff_DI);
           auto_str_blessings_quests();
           _LAB_4125_1174 = 1;
           return;
@@ -115,12 +115,21 @@ code_r0x000743cf:
     _LAB_4125_1176 = 1;
     break;
   case 0x741d6:
-    FUN_828e_044a();
+    iVar1 = city_at(unaff_SI,unaff_DI);
+    if (iVar1 < 0) {
+      iVar1 = 4;
+    }
+    else {
+LAB_740d_0148:
+      iVar1 = 0;
+    }
     goto LAB_740d_014c;
   case 0x741ec:
-    FUN_828e_044a();
+    iVar1 = city_at(unaff_SI,unaff_DI);
+    if (*(char *)(iVar1 * 0x41 + 0x1592) != current_player) goto LAB_740d_0148;
+    iVar1 = 2;
 LAB_740d_014c:
-    auto_tutorial_hook_3();
+    city_dialog_show(iVar1,unaff_SI,unaff_DI);
     break;
   case 0x74227:
     auto_tutorial_hook_2(0);

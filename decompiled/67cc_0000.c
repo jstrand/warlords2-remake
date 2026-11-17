@@ -35,7 +35,7 @@ void __cdecl16far attack_tile(int x,int y)
     sound_chord();
     return;
   }
-  iVar2 = FUN_828e_044a(x);
+  iVar2 = city_at(x,y);
   uVar5 = *(byte *)(y * 0xe0 + x * 2 + 1) & 0xf;
   if (((opt_diplomacy != 0) && (uVar5 != 0xf)) &&
      (((*(byte *)(current_player * 8 + uVar5 + 0x153b) & 3) == 0 ||
@@ -99,7 +99,7 @@ void __cdecl16far attack_tile(int x,int y)
         pcVar3 = (char *)(*(char *)((int)_DAT_451b_1efe + 10) * 0x14 + 0x223);
       }
       strcpy((char *)0x41254148,(char *)CONCAT22(0x3c04,pcVar3));
-      iVar2 = FUN_828e_044a(x);
+      iVar2 = city_at(x,y);
       strcpy((char *)0x41254134,(char *)CONCAT22(0x3c04,(char *)(iVar2 * 0x41 + 0x1581)));
       if (_DAT_451b_1efe != 0) {
         uVar11 = CONCAT22(0x3c04,*(char *)((int)_DAT_451b_1efe + 10) * 0x14 + 0x223);

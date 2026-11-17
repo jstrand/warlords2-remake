@@ -212,29 +212,18 @@ function drawVector(d) {
   gfx.setColor(1, 1, 1);
   f.draw(game.producing(city) ? fmt(kit.text(S_VECTOR, 1), city.countdown || 0) : "-", 408, 109);
 
-  let out = null, onRoad = null;
-  const next = [], after = [];
-  for (const a of G.g.armies) {
-    if (a.transit && a.owner === G.player.index) {
-      if (a.homeCity === city.index && a.transit.dest === city.vectorTo) {
-        if (a.transit.turns >= 2) out = a; else onRoad = a;
-      }
-      if (a.transit.dest === city.index && a.homeCity !== city.index) {
-        const row = a.transit.turns >= 2 ? after : next;
-        if (row.length < 4) row.push(a);
-      }
-    }
-  }
-  kit.army(out ? out.type : null, owner, 432, 103, 1);
-  kit.army(onRoad ? onRoad.type : null, owner, 472, 103, 1);
+  // the road as the vectors stand (game.vectorRoad)
+  const road = game.vectorRoad(G.g, city, G.player);
+  kit.army(road.out ? road.out.type : null, owner, 432, 103, 1);
+  kit.army(road.due ? road.due.type : null, owner, 472, 103, 1);
 
   gfx.setColor(1, 1, 1);
   kit.right(f, kit.text(S_VECTOR, 2), 392, 155);
   kit.right(f, kit.text(S_VECTOR, 3), 392, 188);
   for (let i = 0; i < 4; i++) {
     const x = 400 + i * 40;
-    kit.army(next[i] ? next[i].type : null, G.player.index, x, 149, 1);
-    kit.army(after[i] ? after[i].type : null, G.player.index, x, 182, 1);
+    kit.army(road.next[i] ? road.next[i].type : null, G.player.index, x, 149, 1);
+    kit.army(road.after[i] ? road.after[i].type : null, G.player.index, x, 182, 1);
   }
 
   gfx.setColor(1, 1, 1);
@@ -411,36 +400,45 @@ export function open(city, mode) {
   };
 
   /** Send what this city builds to the side's city nearest (mx, my), or its
-   *  planted standard if that is nearer (828e:0651). */
+   *  planted standard if that is nearer (828e:0651). The armies already on
+   *  the road keep going where they were sent. */
   d.sendTo = (mx, my) => {
     if (!game.producing(city)) return;
-    const target = game.nearestCity(G.g, mx, my, G.player);
-    if (!target) return;
-    const [sx, sy] = game.standardAt(G.g, G.player);
-    const toStandard = sx != null && Math.max(Math.abs(sx - mx), Math.abs(sy - my))
-                       < Math.max(Math.abs(target.x - mx), Math.abs(target.y - my));
-    if (toStandard) game.vectorToStandard(G.g, city, G.player);
-    else game.vector(G.g, city, target);
+    const target = game.vectorTarget(G.g, mx, my, G.player);
+    if (target === game.STANDARD) game.vectorToStandard(G.g, city, G.player);
+    else if (target) game.vector(G.g, city, target);
   };
 
-  /** A click on the map in Vector mode (7087:072e, 7087:028b). */
+  /** A click on the map in Vector mode (7087:072e, 7087:028b). With Shift it
+   *  sends this city's armies there, whatever the dialog waits for, and stays.
+   *  Otherwise it means the side's city nearest the click, or its planted
+   *  standard if that is nearer (828e:0651): the destination while waiting
+   *  to send; while waiting to move the armies coming here, where every city
+   *  sending them sends them instead -- the standard too -- if it could take
+   *  them all and is not one of them. Then, unless it was a send, the dialog
+   *  moves to the city clicked; a click that meant the standard leaves it. */
   d.mapClick = (mx, my) => {
-    const target = game.nearestCity(G.g, mx, my, G.player);
-    if (!target) return;
-    const shift = keys.isDown("lshift", "rshift");
-    const sub = d.sub;
-    if (shift || sub === 1) {
+    if (keys.isDown("lshift", "rshift")) {
       d.sendTo(mx, my);
-      if (shift) { d.sub = 0; refresh(d); return; }
-    } else if (sub === 2) {
+      d.sub = 0;
+      refresh(d);
+      return;
+    }
+    const target = game.vectorTarget(G.g, mx, my, G.player);
+    if (!target) return;
+    const std = target === game.STANDARD;
+    const sub = d.sub;
+    if (sub === 2) {
       const incoming = game.vectoredTo(G.g, city);
-      const there = game.vectoredTo(G.g, target);
+      const there = std ? game.vectoredTo(G.g, game.STANDARD, G.player) : game.vectoredTo(G.g, target);
       let ok = incoming.length > 0 && incoming.length + there.length <= game.MAX_VECTORED_TO;
       if (incoming.includes(target)) ok = false;
-      if (ok) for (const c of incoming) c.vectorTo = target.index;
+      if (ok) for (const c of incoming) c.vectorTo = std ? game.STANDARD : target.index;
+    } else if (sub === 1) {
+      d.sendTo(mx, my);
     }
     d.sub = 0;
-    if (sub !== 1 && target !== city) {
+    if (sub !== 1 && !std && target !== city) {
       d.switchTo(target, VECTOR);
       return;
     }

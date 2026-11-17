@@ -63,7 +63,7 @@ void __cdecl16far auto_file_random_sgn(void)
     }
     else {
 LAB_4fef_12ea:
-      iVar6 = FUN_828e_04fa(iVar5,y,0xe,0);
+      iVar6 = nearest_city(iVar5,y,0xe,0);
       iVar7 = map_distance(iVar5,y,*(int *)(iVar6 * 0x41 + 0x157d),*(int *)(iVar6 * 0x41 + 0x157f));
       iVar5 = FUN_828e_0b51(iVar5,y,*(undefined2 *)(iVar6 * 0x41 + 0x157d),
                             *(undefined2 *)(iVar6 * 0x41 + 0x157f));

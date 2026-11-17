@@ -1908,14 +1908,27 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
   };
   const mine = game.sideCities(G.g, G.player);
   const building = (c) => (game.producing(c) ? 0 : 3);
+  // The side's planted standard: a figure (834b:1f5f) and a line from each
+  // city sending armies there. The figure is 4125:2cae's 0, dark, (96, 15) --
+  // or 1, white, (96, 0), when the standard is where the armies shown go;
+  // then it is drawn first and the lines go over it.
   const [sx, sy] = game.standardAt(G.g, G.player);
   const toStandard = (c, colour) => {
     gfx.setColor(G.palette[colour]);
     linePixels(x + c.x * 2 + 2, y + c.y * 2 + 2, x + sx * 2, y + sy * 2);
   };
+  const standard = (lit) => {
+    gfx.setColor(1, 1, 1);
+    gfx.draw(G.atransShields, gfx.newQuad(96, lit ? 0 : 15, 16, 15),
+             x + Math.max(0, Math.floor((sx * 2 - 2) / 8) * 8), y + Math.max(0, sy * 2 - 6));
+  };
 
   if (seeAll) {
+    // 834b:1817 notes a city sending to the standard only as it comes to it,
+    // not one it has already marked as another's destination; if any, the
+    // white figure goes down and then a line from every city sending there
     const done = new Set();
+    let toStd = false;
     for (const c of mine) {
       if (!done.has(c)) {
         done.add(c);
@@ -1929,8 +1942,8 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
           done.add(dest);
           marker(dest, game.producing(dest) ? 1 : 5);
           line(dest, c, 7);
-        } else if (c.vectorTo === game.STANDARD && sx != null) {
-          toStandard(c, 8);
+        } else if (c.vectorTo === game.STANDARD) {
+          toStd = true;
         }
         for (const src of incoming) {
           done.add(src);
@@ -1938,6 +1951,10 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
           line(src, c, 8);
         }
       }
+    }
+    if (sx != null) {
+      standard(toStd);
+      if (toStd) for (const c of mine) if (c.vectorTo === game.STANDARD) toStandard(c, 8);
     }
     gfx.setColor(G.palette[15]);
     const bx = x + (city ? city.x : -10) * 2 - 3, by = y + (city ? city.y : -10) * 2 - 2;
@@ -1957,21 +1974,19 @@ G.drawVectorMap = (x, y, city, filter, seeAll) => {
       }
     }
     const dest = city.vectorTo != null && city.vectorTo >= 0 ? G.g.map.cities[city.vectorTo] : null;
+    const toStd = city.vectorTo === game.STANDARD;
     if (dest) {
       marker(dest, game.producing(dest) ? 1 : 5);
       line(city, dest, 7);
-    } else if (city.vectorTo === game.STANDARD && sx != null) {
+    } else if (toStd && sx != null) {
+      standard(true);
       toStandard(city, 7);
     }
     for (const src of game.vectoredTo(G.g, city)) {
       marker(src, 2);
       line(src, city, 8);
     }
-  }
-  if (sx != null) {
-    gfx.setColor(1, 1, 1);
-    gfx.draw(G.atransShields, gfx.newQuad(96, 15, 16, 15),
-             x + Math.max(0, Math.floor((sx * 2 - 2) / 8) * 8), y + Math.max(0, sy * 2 - 6));
+    if (sx != null && !toStd) standard(false);
   }
   gfx.setScissor();
 };

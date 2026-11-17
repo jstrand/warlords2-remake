@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_7204_03a9(void)
+void __cdecl16far city_dialog_buttons(void)
 
 {
   bool bVar1;
@@ -81,7 +81,7 @@ void __cdecl16far FUN_7204_03a9(void)
     FUN_18a9_05f0(0x100d8);
   }
   FUN_18a9_03b3();
-  FUN_7087_0410(DAT_4125_0e98,local_10);
+  cities_vectoring_to(DAT_4125_0e98,local_10);
   bVar1 = *(char *)(DAT_4125_0e98 * 0x41 + 0x15aa) < '\x01';
   if (DAT_4125_0e94 == 0) {
     if (bVar1) {

@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_5e97_038d(undefined2 param_1,undefined2 param_2)
+void __cdecl16far FUN_5e97_038d(int param_1,int param_2)
 
 {
   int *piVar1;
@@ -22,8 +22,7 @@ void __cdecl16far FUN_5e97_038d(undefined2 param_1,undefined2 param_2)
     if ((bVar2) &&
        (((*(int *)(current_player * 0xc + 0x1105) == 4 ||
          (*(int *)(current_player * 0xc + 0x1105) == 5)) &&
-        (iVar3 = FUN_828e_044a(param_1,param_2), *(int *)(current_player * 0xc + 0x1109) == iVar3)))
-       ) {
+        (iVar3 = city_at(param_1,param_2), *(int *)(current_player * 0xc + 0x1109) == iVar3)))) {
       uVar5 = (undefined2)((ulong)DAT_451b_018e >> 0x10);
       iVar4 = (int)DAT_451b_018e;
       piVar1 = (int *)(iVar4 + 0x4a);

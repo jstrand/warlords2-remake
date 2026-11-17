@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_7087_0410(int param_1,undefined4 param_2,int *param_3)
+void __cdecl16far cities_vectoring_to(int param_1,undefined4 param_2,int *param_3)
 
 {
   int iVar1;

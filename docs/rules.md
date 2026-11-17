@@ -159,7 +159,10 @@ with its maximum.
 
 **Production** (`city_production_turn`, `6f8c:0000`):
 
-- First the armies **on the road** move on, from the top of the army table
+- First of all, if the side's standard is **no longer planted** — a hero
+  took it up again — its cities vectoring to the standard stop vectoring
+  (`7563:0bd9`), and build at home from now on.
+- Then the armies **on the road** move on, from the top of the army table
   down. One that arrives needs room on one of its destination's **four
   tiles** — there is no spilling round a full city — and the city must
   still be the side's (`6f8c:0d4f`); otherwise it is sent home, two turns
@@ -178,7 +181,15 @@ with its maximum.
 
 Vectoring itself is free and has no range limit (`vector_city_to`,
 `623c:0f10`); it only sticks while the city is building. A destination of
-`-2` means the side's standard rather than a city.
+`-2` means the side's standard rather than a city. The city keeps its
+destination as map coordinates (`+0x33`, `+0x35`, `-2, -2` for the standard)
+with an on flag (`+0x31`), and an army takes it as it sets off: the
+destination city's number goes into the army (`6f8c:0dd7`, byte `+15`), with x
+`-1` for a city or `-2` for the standard. So **changing a city's vector only
+changes where its next army goes** — the ones already on the road arrive where
+they were sent — and the Vector mode's rows, which go by the vectors as they
+stand, stop showing them coming (`docs/re/ui.md` › Vector mode). An army bound
+for the standard looks for it only when it arrives.
 
 A city counts as **building** only while its countdown is above 0
 (`7204:06de` shows "none" otherwise), even though it keeps its chosen type.

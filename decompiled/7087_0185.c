@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_7087_0185(void)
+void __cdecl16far ui_stop_production(void)
 
 {
   *(undefined1 *)(DAT_4125_0e98 * 0x41 + 0x15aa) = 0;
@@ -11,8 +11,8 @@ void __cdecl16far FUN_7087_0185(void)
   FUN_22bf_07a5();
   FUN_54f6_07e4(0x280000,0x320000);
   auto_ui_city_info();
-  auto_ui_city_info();
-  FUN_7204_03a9();
+  city_dialog_draw_map();
+  city_dialog_buttons();
   FUN_22bf_0757();
   return;
 }

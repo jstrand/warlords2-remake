@@ -345,6 +345,16 @@ static bool deliver(Game& g, Army* army, City& city) {
 // army has its full move (6f8c:0dd7). Whether the city starts the next one
 // is the caller's: a human's do (6f8c:06bd), a computer's wait for its AI.
 static std::vector<Produced> runProduction(Game& g, Side& side) {
+  // First of all (7563:0bd9): a standard no longer planted -- taken up again,
+  // say -- takes no more armies. The side's cities sending theirs there stop
+  // vectoring and build at home again; those already on the road find it
+  // gone and turn back, below.
+  if (standardAt(g, side).first == NONE) {
+    for (auto& c : g.map->cities) {
+      if (c.ownerIndex == side.index && c.vectorTo == STANDARD) c.vectorTo = NONE;
+    }
+  }
+
   std::vector<Produced> arrived, built;
   for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
     Army* a = g.armies[i];
@@ -1240,12 +1250,51 @@ std::vector<City*> vectoredTo(Game& g, const City* dest, const Side* side) {
   return out;
 }
 
+// The cities sending here are taken in city order, each one's armies from the
+// top of the army table down, and both rows stop as soon as either holds
+// four. The city's own armies show while the vector is on, if they go where
+// it sends them now -- or to the standard, any of them; the lowest army slot
+// shows.
+VectorRoad vectorRoad(Game& g, const City& city, const Side& side) {
+  VectorRoad road;
+  if (city.vectorTo != NONE) {
+    int dest = city.vectorTo >= 0 ? city.vectorTo : NONE;   // none for the standard
+    for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
+      Army* a = g.armies[i];
+      if (a->transit && a->homeCity == city.index && a->owner == side.index &&
+          ((dest != NONE && a->transit->dest == dest) || a->transit->dest == STANDARD)) {
+        if (a->transit->turns >= TRANSIT_TURNS) road.out = a;
+        else road.due = a;
+      }
+    }
+  }
+  for (City* src : vectoredTo(g, &city)) {
+    for (int i = (int)g.armies.size() - 1; i >= 0; i--) {
+      if (road.next.size() >= 4 || road.after.size() >= 4) break;
+      Army* a = g.armies[i];
+      if (a->transit && a->homeCity == src->index && a->transit->dest == city.index &&
+          a->owner == side.index) {
+        (a->transit->turns >= TRANSIT_TURNS ? road.after : road.next).push_back(a);
+      }
+    }
+  }
+  return road;
+}
+
 std::pair<int, int> standardAt(const Game& g, const Side& side) {
   if (side.index < (int)g.map->items.size()) {
     const Item& it = g.map->items[side.index];
     if (it.status == 1 && it.planted && it.x != NONE) return {it.x, it.y};
   }
   return {NONE, NONE};
+}
+
+int vectorTarget(Game& g, int x, int y, const Side& side) {
+  City* c = nearestCity(g, x, y, &side);
+  if (!c) return NONE;
+  auto [sx, sy] = standardAt(g, side);
+  if (sx != NONE && move::distance(x, y, sx, sy) < move::distance(x, y, c->x, c->y)) return STANDARD;
+  return c->index;
 }
 
 bool plantFlag(Game& g, Side& side, Army* h) {

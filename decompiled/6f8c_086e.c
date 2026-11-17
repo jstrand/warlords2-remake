@@ -41,7 +41,7 @@ void __cdecl16far FUN_6f8c_086e(int param_1)
         pcVar5 = (char *)0xe77;
       }
       else {
-        FUN_7563_0b47(current_player,local_4);
+        standard_planted_at(current_player,local_4);
         uVar4 = 0x4125;
         iVar1 = 0xe6e;
         pcVar5 = (char *)0xe67;

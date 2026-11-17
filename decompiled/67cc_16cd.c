@@ -23,7 +23,7 @@ void __cdecl16far hero_drop_items(undefined4 param_1,int param_2,int param_3)
     *(int *)(((undefined2 *)&DAT_451b_0c9c)[iVar2] * 0x1d + 0xd02) = param_2;
     *(int *)(((undefined2 *)&DAT_451b_0c9c)[iVar2] * 0x1d + 0xd04) = param_3;
     if (((undefined2 *)&DAT_451b_0c9c)[iVar2] == current_player) {
-      FUN_7087_0410(0xfffe,local_a);
+      cities_vectoring_to(0xfffe,local_a);
       for (iVar1 = 0; iVar1 < local_c; iVar1 = iVar1 + 1) {
         *(undefined2 *)((undefined1 *)&LAB_4125_15ad_1 + local_a[iVar1] * 0x41) = 0;
         *(undefined2 *)((undefined1 *)&LAB_4125_15b0 + local_a[iVar1] * 0x41) = 0xffff;

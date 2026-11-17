@@ -1,11 +1,11 @@
 
-void __cdecl16far FUN_7563_0bd9(void)
+void __cdecl16far standard_gone_stop_vectors(void)
 
 {
   int iVar1;
   undefined1 local_6 [4];
   
-  iVar1 = FUN_7563_0b47(current_player,local_6);
+  iVar1 = standard_planted_at(current_player,local_6);
   if (iVar1 == 0) {
     for (iVar1 = 0; iVar1 < city_count; iVar1 = iVar1 + 1) {
       if (((*(char *)(iVar1 * 0x41 + 0x1592) == current_player) &&

@@ -12,7 +12,7 @@ void __cdecl16far auto_ui_temple(void)
   int local_4;
   
   music_cue(5);
-  local_4 = FUN_828e_04b5(*DAT_451b_1f02,((undefined2 *)DAT_451b_1f02)[1]);
+  local_4 = site_at(*DAT_451b_1f02,((int *)DAT_451b_1f02)[1]);
   FUN_22bf_07a5();
   FUN_54f6_0000();
   FUN_78a8_06ae(0x70002,0x10006);

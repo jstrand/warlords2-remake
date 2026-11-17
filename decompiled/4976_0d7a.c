@@ -196,7 +196,7 @@ LAB_4976_10a0:
     *(int *)(current_player * 0xc + 0x1109) = iStack_6;
     FUN_66d4_0b36(iStack_6,&iStack_8);
     FUN_8611_1298();
-    iVar4 = FUN_828e_04b5(iStack_8,iStack_a);
+    iVar4 = site_at(iStack_8,iStack_a);
     if (-1 < iVar4) {
       puVar1 = (uint *)(iVar4 * 0x1f + 0x82e);
       *puVar1 = *puVar1 | 1 << ((byte)current_player & 0x1f);

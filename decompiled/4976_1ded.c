@@ -205,7 +205,8 @@ LAB_4976_2605:
     if (((iStack_12 == 5) && (*(char *)(iStack_e * 0x41 + 0x1592) == '\x0f')) &&
        ((*(char *)(*(byte *)(*(int *)(iStack_e * 0x41 + 0x157f) * 0xe0 +
                             *(int *)(iStack_e * 0x41 + 0x157d) * 2) + 0x710) != '\n' &&
-        (iVar3 = FUN_828e_044a(*(undefined2 *)(iStack_10 * 0x16 + -0x7780)), iVar3 == iStack_e)))) {
+        (iVar3 = city_at(*(int *)(iStack_10 * 0x16 + -0x7780),*(int *)(iStack_10 * 0x16 + -0x777e)),
+        iVar3 == iStack_e)))) {
       if (local_4 == 0) {
         *(undefined2 *)(current_player * 0xc + 0x1103) = 0;
         iVar5 = is_computer_turn();

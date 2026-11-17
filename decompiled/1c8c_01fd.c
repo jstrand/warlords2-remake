@@ -21,7 +21,7 @@ int __cdecl16far auto_tutorial_hook_2(int param_1,int param_2)
       param_1 = DAT_3c04_0177 + (local_8 + -0x10) / 0x28;
       param_2 = DAT_3c04_0175 + (local_6 + -0x1e) / 0x28;
     }
-    local_4 = move_stack_step(param_1,param_2,0);
+    local_4 = move_stack_step(param_1,param_2);
     uVar4 = (undefined2)((ulong)DAT_451b_1f02 >> 0x10);
     piVar3 = (int *)DAT_451b_1f02;
     if ((piVar3[9] == *DAT_451b_1f02) && (piVar3[1] == piVar3[10])) {
@@ -47,7 +47,7 @@ int __cdecl16far auto_tutorial_hook_2(int param_1,int param_2)
           for (iVar1 = 0; iVar1 < 8; iVar1 = iVar1 + 1) {
             local_6 = *DAT_451b_1f02 + *(int *)((int)(undefined2 *)&DAT_4125_2b4b + iVar1 * 2 + 1);
             local_8 = ((int *)DAT_451b_1f02)[1] + ((undefined2 *)&DAT_4125_2b5c)[iVar1];
-            iVar2 = FUN_828e_044a(local_6,local_8);
+            iVar2 = city_at(local_6,local_8);
             if ((-1 < iVar2) && (*(char *)(iVar2 * 0x41 + 0x1592) != current_player)) {
               DAT_3c04_0134 = DAT_3c04_0134 | 0x10;
               pcVar5 = get_file_string(0x19,4);

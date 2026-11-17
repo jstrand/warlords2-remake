@@ -9,8 +9,7 @@ int __cdecl16far ai_run_assault_group(int group)
   int iVar5;
   undefined2 uVar6;
   
-  iVar2 = FUN_828e_044a(*(undefined2 *)(current_player * 0x14 + 0x193),
-                        *(undefined2 *)(current_player * 0x14 + 0x195));
+  iVar2 = city_at(*(int *)(current_player * 0x14 + 0x193),*(int *)(current_player * 0x14 + 0x195));
   if ((*(char *)(iVar2 * 0x41 + 0x1592) != '\x0f') &&
      (*(char *)(iVar2 * 0x41 + 0x1592) != current_player)) {
     bVar1 = false;

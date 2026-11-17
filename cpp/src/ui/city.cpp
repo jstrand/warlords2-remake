@@ -309,30 +309,17 @@ struct CityDialog : kit::Modal {
     kit::army(b ? b->type : NONE, owner, 368, 103, 1);
     gfx::setColor(1, 1, 1);
     f.draw(w2::game::producing(*city) ? format(kit::text(S_VECTOR, 1), city->countdown) : "-", 408, 109);
-    w2::Army* out = nullptr;
-    w2::Army* onRoad = nullptr;
-    std::vector<w2::Army*> next, after;
-    for (w2::Army* a : G.g->armies) {
-      if (a->transit && a->owner == G.player->index) {
-        if (a->homeCity == city->index && a->transit->dest == city->vectorTo) {
-          if (a->transit->turns >= 2) out = a;
-          else onRoad = a;
-        }
-        if (a->transit->dest == city->index && a->homeCity != city->index) {
-          auto& row = a->transit->turns >= 2 ? after : next;
-          if (row.size() < 4) row.push_back(a);
-        }
-      }
-    }
-    kit::army(out ? out->type : NONE, owner, 432, 103, 1);
-    kit::army(onRoad ? onRoad->type : NONE, owner, 472, 103, 1);
+    // the road as the vectors stand (game::vectorRoad)
+    w2::game::VectorRoad road = w2::game::vectorRoad(*G.g, *city, *G.player);
+    kit::army(road.out ? road.out->type : NONE, owner, 432, 103, 1);
+    kit::army(road.due ? road.due->type : NONE, owner, 472, 103, 1);
     gfx::setColor(1, 1, 1);
     kit::right(f, kit::text(S_VECTOR, 2), 392, 155);
     kit::right(f, kit::text(S_VECTOR, 3), 392, 188);
     for (int i = 0; i < 4; i++) {
       int x = 400 + i * 40;
-      kit::army(i < (int)next.size() ? next[i]->type : NONE, G.player->index, x, 149, 1);
-      kit::army(i < (int)after.size() ? after[i]->type : NONE, G.player->index, x, 182, 1);
+      kit::army(i < (int)road.next.size() ? road.next[i]->type : NONE, G.player->index, x, 149, 1);
+      kit::army(i < (int)road.after.size() ? road.after[i]->type : NONE, G.player->index, x, 182, 1);
     }
     gfx::setColor(1, 1, 1);
     int a0 = sub == 1 ? 2 : 0;
@@ -370,16 +357,13 @@ struct CityDialog : kit::Modal {
   }
 
   // Send what this city builds to the side's city nearest (mx, my), or its
-  // planted standard if that is nearer (828e:0651).
+  // planted standard if that is nearer (828e:0651). The armies already on the
+  // road keep going where they were sent.
   void sendTo(int mx, int my) {
     if (!w2::game::producing(*city)) return;
-    w2::City* target = w2::game::nearestCity(*G.g, mx, my, G.player);
-    if (!target) return;
-    auto [sx, sy] = w2::game::standardAt(*G.g, *G.player);
-    bool toStandard = sx != NONE && std::max(std::abs(sx - mx), std::abs(sy - my)) <
-                                        std::max(std::abs(target->x - mx), std::abs(target->y - my));
-    if (toStandard) w2::game::vectorToStandard(*G.g, *city, *G.player);
-    else w2::game::vector(*G.g, *city, target);
+    int target = w2::game::vectorTarget(*G.g, mx, my, *G.player);
+    if (target == w2::game::STANDARD) w2::game::vectorToStandard(*G.g, *city, *G.player);
+    else if (target != NONE) w2::game::vector(*G.g, *city, G.g->map->city(target));
   }
 
   // A click on the map in Info, City or Production (7204:1afa).
@@ -397,24 +381,36 @@ struct CityDialog : kit::Modal {
     if (target && target != city) switchTo(target, NONE);
   }
 
-  // A click on the map in Vector mode (7087:072e, 7087:028b).
+  // A click on the map in Vector mode (7087:072e, 7087:028b). With Shift it
+  // sends this city's armies there, whatever the dialog waits for, and stays.
+  // Otherwise it means the side's city nearest the click, or its planted
+  // standard if that is nearer (828e:0651): the destination while waiting to
+  // send; while waiting to move the armies coming here, where every city
+  // sending them sends them instead -- the standard too -- if it could take
+  // them all and is not one of them. Then, unless it was a send, the dialog
+  // moves to the city clicked; a click that meant the standard leaves it.
   void mapClick(int mx, int my) {
-    w2::City* target = w2::game::nearestCity(*G.g, mx, my, G.player);
-    if (!target) return;
-    bool shift = keys::isDown({"lshift", "rshift"});
-    int was = sub;
-    if (shift || was == 1) {
+    if (keys::isDown({"lshift", "rshift"})) {
       sendTo(mx, my);
-      if (shift) { sub = 0; refresh(); return; }
-    } else if (was == 2) {
+      sub = 0;
+      refresh();
+      return;
+    }
+    int t = w2::game::vectorTarget(*G.g, mx, my, *G.player);
+    if (t == NONE) return;
+    w2::City* target = t == w2::game::STANDARD ? nullptr : G.g->map->city(t);
+    int was = sub;
+    if (was == 2) {
       auto incoming = w2::game::vectoredTo(*G.g, city);
-      auto there = w2::game::vectoredTo(*G.g, target);
+      auto there = w2::game::vectoredTo(*G.g, target, G.player);
       bool ok = !incoming.empty() && (int)(incoming.size() + there.size()) <= w2::game::MAX_VECTORED_TO;
-      if (std::find(incoming.begin(), incoming.end(), target) != incoming.end()) ok = false;
-      if (ok) for (w2::City* c : incoming) c->vectorTo = target->index;
+      if (target && std::find(incoming.begin(), incoming.end(), target) != incoming.end()) ok = false;
+      if (ok) for (w2::City* c : incoming) c->vectorTo = t;
+    } else if (was == 1) {
+      sendTo(mx, my);
     }
     sub = 0;
-    if (was != 1 && target != city) {
+    if (was != 1 && target && target != city) {
       switchTo(target, VECTOR);
       return;
     }

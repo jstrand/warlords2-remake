@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_834b_1817(int *param_1,int param_2)
+void __cdecl16far draw_vector_map_all(int *rect,int city)
 
 {
   int *piVar1;
@@ -28,15 +28,15 @@ void __cdecl16far FUN_834b_1817(int *param_1,int param_2)
   int local_4;
   
   local_32 = 0;
-  if (param_1 == (int *)0x0) {
+  if (rect == (int *)0x0) {
     __F_SCOPY(0x2a88,0x4125,&local_24,unaff_SS);
     FUN_216d_002e(local_1c);
   }
   else {
-    __F_SCOPY(param_1,local_1c,unaff_SS);
-    uVar6 = (undefined2)((ulong)param_1 >> 0x10);
-    piVar1 = (int *)param_1;
-    local_24 = CONCAT22(piVar1[1] << 1,*param_1 << 1);
+    __F_SCOPY(rect,local_1c,unaff_SS);
+    uVar6 = (undefined2)((ulong)rect >> 0x10);
+    piVar1 = (int *)rect;
+    local_24 = CONCAT22(piVar1[1] << 1,*rect << 1);
     local_20 = CONCAT22(piVar1[3] << 1,piVar1[2] << 1);
   }
   FUN_1997_034a();
@@ -56,7 +56,7 @@ void __cdecl16far FUN_834b_1817(int *param_1,int param_2)
   for (iVar2 = 0; iVar2 < city_count; iVar2 = iVar2 + 1) {
     if ((*(char *)(iVar2 * 0x41 + 0x1592) == current_player) && (local_fa[iVar2] == 0)) {
       local_fa[iVar2] = 1;
-      FUN_7087_0410();
+      cities_vectoring_to();
       if (*(char *)(iVar2 * 0x41 + 0x15aa) < '\x01') {
         local_6 = 3;
       }
@@ -89,16 +89,15 @@ void __cdecl16far FUN_834b_1817(int *param_1,int param_2)
                        *(int *)(local_6 * 8 + 0x2c78) + local_30 * *(int *)(local_6 * 8 + 0x2c7c),
                        *(undefined2 *)(local_6 * 8 + 0x2c7a),*(undefined2 *)(local_6 * 8 + 0x2c7c),
                        0x6795,0x4125,((int)uVar3 >> 3) << 3,local_4,0x576c,0x4125,
-                       *(undefined2 *)(local_6 * 8 + 0x2c76),
-                       *(int *)(local_6 * 8 + 0x2c78) + local_30 * *(int *)(local_6 * 8 + 0x2c7c));
+                       *(undefined2 *)(local_6 * 8 + 0x2c76));
       if ((*(int *)((undefined1 *)&LAB_4125_15ad_1 + iVar2 * 0x41) != 0) &&
          (*(int *)((undefined1 *)&LAB_4125_15b0 + iVar2 * 0x41) == -2)) {
         local_32 = 2;
       }
       if ((*(int *)((undefined1 *)&LAB_4125_15ad_1 + iVar2 * 0x41) != 0) &&
          (*(int *)((undefined1 *)&LAB_4125_15b0 + iVar2 * 0x41) != -2)) {
-        iVar5 = FUN_828e_044a(*(undefined2 *)((undefined1 *)&LAB_4125_15b0 + iVar2 * 0x41),
-                              *(undefined2 *)(iVar2 * 0x41 + 0x15b2));
+        iVar5 = city_at(*(int *)((undefined1 *)&LAB_4125_15b0 + iVar2 * 0x41),
+                        *(int *)(iVar2 * 0x41 + 0x15b2));
         local_fa[iVar5] = 1;
         iVar4 = *(int *)(iVar5 * 0x41 + 0x157d) * 2;
         local_e = *(int *)(iVar5 * 0x41 + 0x157f) * 2;
@@ -143,11 +142,11 @@ void __cdecl16far FUN_834b_1817(int *param_1,int param_2)
       }
     }
   }
-  iVar2 = FUN_7563_0b47();
+  iVar2 = standard_planted_at();
   if ((iVar2 != 0) && (local_32 == 0)) {
     local_32 = 1;
   }
-  if ((iVar2 != 0) && (FUN_834b_1f5f(), local_32 == 2)) {
+  if ((iVar2 != 0) && (draw_map_figure(local_12,local_14,(uint)(local_32 == 2)), local_32 == 2)) {
     for (iVar2 = 0; iVar2 < 100; iVar2 = iVar2 + 1) {
       if (((*(int *)((undefined1 *)&LAB_4125_15ad_1 + iVar2 * 0x41) != 0) &&
           (*(int *)((undefined1 *)&LAB_4125_15b0 + iVar2 * 0x41) == -2)) &&
@@ -163,9 +162,9 @@ void __cdecl16far FUN_834b_1817(int *param_1,int param_2)
       }
     }
   }
-  if (-1 < param_2) {
-    iVar5 = *(int *)(param_2 * 0x41 + 0x157d) * 2;
-    iVar2 = *(int *)(param_2 * 0x41 + 0x157f) * 2;
+  if (-1 < city) {
+    iVar5 = *(int *)(city * 0x41 + 0x157d) * 2;
+    iVar2 = *(int *)(city * 0x41 + 0x157f) * 2;
     local_4 = iVar2 + -1;
     FUN_2012_0bb7(0x6795,0x4125,iVar5 + -3,iVar2 + -2,0xf000b);
     FUN_2012_0bb7(0x6795,0x4125,iVar5 + -3,local_4 + 10,0xf000b);

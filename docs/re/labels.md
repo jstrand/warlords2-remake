@@ -13,6 +13,15 @@ A generated name only replaces a default `FUN_` name or an older `auto_` name, s
 it never overwrites real work. **To confirm an `auto_` name, copy the line into
 `war2_labels.txt` with a proper name** instead of editing the generated file.
 
+A prototype's pointers become 4-byte far pointers, and unless the function
+returns 4 bytes, Ghidra's `__cdecl16far` lays the arguments out and aligns
+them to 4: a pointer at an odd word of the argument list — straight after one
+`int`, say — lands 2 bytes off, and the function and its callers decompile to
+`CONCAT22` junk. Leave such a function without a prototype (as
+`cities_vectoring_to` and `standard_planted_at` are) and say what it takes in
+the comment. A prototype is never taken back by running the script again:
+restore the project (or re-import) to drop one.
+
 ## Regenerating
 
 With the Ghidra GUI closed (the project must not be locked):
@@ -61,13 +70,13 @@ For a fresh import use the command in `docs/formats/exe.md` (it includes
 
 The comment on each generated line shows the evidence.
 
-## Coverage (October 2026)
+## Coverage (November 2026)
 
 | | functions |
 |---|---|
-| hand-named (`war2_labels.txt`) | 433 |
-| generated (`auto_`) | 132 |
-| still `FUN_` | 1013 |
+| hand-named (`war2_labels.txt`) | 458 |
+| generated (`auto_`) | 129 |
+| still `FUN_` | 991 |
 | thunks / fragments | 1 |
 | **total** | **1579** |
 

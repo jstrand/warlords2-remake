@@ -27,13 +27,12 @@ undefined2 __cdecl16far auto_tutorial_hook_5(void)
     if ((DAT_3c04_0134 & 8) == 0) {
       DAT_3c04_0134 = DAT_3c04_0134 | 8;
       pcVar4 = get_file_string(0x19,3);
-      FUN_8065_168d((char *)pcVar4,(int)((ulong)pcVar4 >> 0x10));
+      FUN_8065_168d((char *)pcVar4);
     }
     if ((DAT_3c04_0134 & 0x10) == 0) {
       for (iVar3 = 0; iVar3 < 8; iVar3 = iVar3 + 1) {
-        iVar2 = FUN_828e_044a(*DAT_451b_1f02 +
-                              *(int *)((int)(undefined2 *)&DAT_4125_2b4b + iVar3 * 2 + 1),
-                              ((int *)DAT_451b_1f02)[1] + ((undefined2 *)&DAT_4125_2b5c)[iVar3]);
+        iVar2 = city_at(*DAT_451b_1f02 + *(int *)((int)(undefined2 *)&DAT_4125_2b4b + iVar3 * 2 + 1)
+                        ,((int *)DAT_451b_1f02)[1] + ((undefined2 *)&DAT_4125_2b5c)[iVar3]);
         if ((-1 < iVar2) && (*(char *)(iVar2 * 0x41 + 0x1592) != current_player)) {
           DAT_3c04_0134 = DAT_3c04_0134 | 0x10;
           pcVar4 = get_file_string(0x19,4);

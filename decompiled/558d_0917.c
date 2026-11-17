@@ -12,8 +12,7 @@ void __cdecl16far FUN_558d_0917(void)
   
   local_4 = -1;
   local_6 = (char *)s__x__Use_extended_memory_4125_2703 + 0xd;
-  iVar1 = FUN_828e_044a(*(undefined2 *)(current_player * 0x14 + 0x193),
-                        *(undefined2 *)(current_player * 0x14 + 0x195));
+  iVar1 = city_at(*(int *)(current_player * 0x14 + 0x193),*(int *)(current_player * 0x14 + 0x195));
   iVar4 = city_count;
   while (iVar5 = iVar4 + -1, iVar4 != 0) {
     iVar4 = iVar5;

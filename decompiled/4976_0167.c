@@ -30,7 +30,8 @@ void __cdecl16far auto_ui_no_quest(void)
   FUN_834b_0000(0,0);
   if (bVar1) {
     auto_ui_quest_pillage_gold();
-    FUN_834b_1f5f();
+    draw_map_figure(*(int *)(*(int *)(current_player * 0xc + 0x1107) * 0x16 + -0x7780),
+                    *(int *)(*(int *)(current_player * 0xc + 0x1107) * 0x16 + -0x777e),1);
     FUN_834b_04d3(0);
   }
   FUN_22bf_0757();

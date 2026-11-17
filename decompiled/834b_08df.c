@@ -1,5 +1,5 @@
 
-void __cdecl16far FUN_834b_08df(int *param_1,int param_2,int param_3)
+void __cdecl16far draw_vector_map(int *rect,int city,int filter)
 
 {
   bool bVar1;
@@ -25,15 +25,15 @@ void __cdecl16far FUN_834b_08df(int *param_1,int param_2,int param_3)
   int local_4;
   
   bVar1 = false;
-  if (param_1 == (int *)0x0) {
+  if (rect == (int *)0x0) {
     __F_SCOPY(0x2a88,0x4125,&local_24,unaff_SS);
     FUN_216d_002e(local_1c);
   }
   else {
-    __F_SCOPY(param_1,local_1c,unaff_SS);
-    uVar5 = (undefined2)((ulong)param_1 >> 0x10);
-    piVar3 = (int *)param_1;
-    local_24 = CONCAT22(piVar3[1] << 1,*param_1 << 1);
+    __F_SCOPY(rect,local_1c,unaff_SS);
+    uVar5 = (undefined2)((ulong)rect >> 0x10);
+    piVar3 = (int *)rect;
+    local_24 = CONCAT22(piVar3[1] << 1,*rect << 1);
     local_20 = CONCAT22(piVar3[3] << 1,piVar3[2] << 1);
   }
   FUN_1997_034a();
@@ -50,23 +50,23 @@ void __cdecl16far FUN_834b_08df(int *param_1,int param_2,int param_3)
   local_4 = 0;
   do {
     if (city_count <= local_4) {
-      if (-1 < param_2) {
-        if ((*(int *)((undefined1 *)&LAB_4125_15ad_1 + param_2 * 0x41) != 0) &&
-           (*(int *)((undefined1 *)&LAB_4125_15b0 + param_2 * 0x41) == -2)) {
+      if (-1 < city) {
+        if ((*(int *)((undefined1 *)&LAB_4125_15ad_1 + city * 0x41) != 0) &&
+           (*(int *)((undefined1 *)&LAB_4125_15b0 + city * 0x41) == -2)) {
           bVar1 = true;
-          iVar2 = FUN_7563_0b47();
+          iVar2 = standard_planted_at();
           if (iVar2 != 0) {
             local_a = local_12 << 1;
             local_e = local_14 << 1;
-            FUN_834b_1f5f();
+            draw_map_figure(local_12,local_14,1);
             FUN_24d0_0002();
             FUN_2133_00b8(0x6795,0x4125,local_8,local_c,local_a,local_e,0);
           }
         }
-        if ((*(int *)((undefined1 *)&LAB_4125_15ad_1 + param_2 * 0x41) != 0) &&
-           (*(int *)((undefined1 *)&LAB_4125_15b0 + param_2 * 0x41) != -2)) {
-          iVar2 = FUN_828e_044a(*(undefined2 *)((undefined1 *)&LAB_4125_15b0 + param_2 * 0x41),
-                                *(undefined2 *)(param_2 * 0x41 + 0x15b2));
+        if ((*(int *)((undefined1 *)&LAB_4125_15ad_1 + city * 0x41) != 0) &&
+           (*(int *)((undefined1 *)&LAB_4125_15b0 + city * 0x41) != -2)) {
+          iVar2 = city_at(*(int *)((undefined1 *)&LAB_4125_15b0 + city * 0x41),
+                          *(int *)(city * 0x41 + 0x15b2));
           local_a = *(int *)(iVar2 * 0x41 + 0x157d) * 2;
           uVar4 = local_a - 2;
           local_e = *(int *)(iVar2 * 0x41 + 0x157f) * 2;
@@ -93,7 +93,7 @@ void __cdecl16far FUN_834b_08df(int *param_1,int param_2,int param_3)
           FUN_24d0_0002();
           FUN_2133_00b8(0x6795,0x4125,local_8,local_c,local_a,local_e,0);
         }
-        FUN_7087_0410();
+        cities_vectoring_to();
         for (local_4 = 0; local_4 < local_2e; local_4 = local_4 + 1) {
           local_a = *(int *)(local_2c[local_4] * 0x41 + 0x157d) * 2;
           uVar4 = local_a - 2;
@@ -114,27 +114,27 @@ void __cdecl16far FUN_834b_08df(int *param_1,int param_2,int param_3)
           FUN_2133_00b8();
         }
       }
-      local_10 = FUN_7563_0b47();
+      local_10 = standard_planted_at();
       if ((local_10 != 0) && (!bVar1)) {
-        FUN_834b_1f5f();
+        draw_map_figure(local_a,local_e,0);
       }
       return;
     }
     if (*(char *)(local_4 * 0x41 + 0x1592) == current_player) {
-      if (param_3 == -1) {
-        FUN_7087_0410();
+      if (filter == -1) {
+        cities_vectoring_to();
         iVar2 = local_2e + 1;
 joined_r0x00083ef6:
-        if ((4 < iVar2) && (local_4 != param_2)) goto LAB_834b_0b5d;
+        if ((4 < iVar2) && (local_4 != city)) goto LAB_834b_0b5d;
       }
-      else if (-1 < param_3) {
-        FUN_7087_0410();
-        iVar2 = local_2e + param_3;
+      else if (-1 < filter) {
+        cities_vectoring_to();
+        iVar2 = local_2e + filter;
         goto joined_r0x00083ef6;
       }
       iVar2 = *(int *)(local_4 * 0x41 + 0x157f) * 2;
       local_6 = iVar2 + -1;
-      if ((-1 < param_2) && (param_2 == local_4)) {
+      if ((-1 < city) && (city == local_4)) {
         local_8 = *(int *)(local_4 * 0x41 + 0x157d) * 2 + 2;
         local_c = iVar2 + 2;
       }

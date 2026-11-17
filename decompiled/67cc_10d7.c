@@ -17,8 +17,7 @@ void __cdecl16far FUN_67cc_10d7(int param_1)
   }
   if (iVar2 != 1) {
     FUN_828e_03f9();
-    iVar2 = FUN_828e_044a(*(undefined2 *)(param_1 * 0x14 + 0x193),
-                          *(undefined2 *)(param_1 * 0x14 + 0x195));
+    iVar2 = city_at(*(int *)(param_1 * 0x14 + 0x193),*(int *)(param_1 * 0x14 + 0x195));
     if ((-1 < iVar2) &&
        (*(char *)(*(byte *)(*(int *)(iVar2 * 0x41 + 0x157f) * 0xe0 +
                            *(int *)(iVar2 * 0x41 + 0x157d) * 2) + 0x710) != '\n')) {
@@ -26,8 +25,8 @@ void __cdecl16far FUN_67cc_10d7(int param_1)
     }
     if ((((undefined2 *)&side_city_count)[param_1] != 0) &&
        ((iVar2 < 0 || (*(char *)(iVar2 * 0x41 + 0x1592) != param_1)))) {
-      iVar2 = FUN_828e_04fa(*(undefined2 *)(param_1 * 0x14 + 0x189),
-                            *(undefined2 *)(param_1 * 0x14 + 0x18b),param_1,0);
+      iVar2 = nearest_city(*(int *)(param_1 * 0x14 + 0x189),*(int *)(param_1 * 0x14 + 0x18b),param_1
+                           ,0);
       if (iVar2 < 0) {
         return;
       }

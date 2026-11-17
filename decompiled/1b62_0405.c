@@ -42,13 +42,13 @@ LAB_1b62_048d:
       if ((DAT_3c04_0134 & 8) == 0) {
         DAT_3c04_0134 = DAT_3c04_0134 | 8;
         pcVar6 = get_file_string(0x19,3);
-        FUN_8065_168d((char *)pcVar6,(int)((ulong)pcVar6 >> 0x10));
+        FUN_8065_168d((char *)pcVar6);
       }
       if ((DAT_3c04_0134 & 0x10) == 0) {
         for (iVar2 = 0; iVar2 < 8; iVar2 = iVar2 + 1) {
-          iVar4 = FUN_828e_044a(*DAT_451b_1f02 +
-                                *(int *)((int)(undefined2 *)&DAT_4125_2b4b + iVar2 * 2 + 1),
-                                ((int *)DAT_451b_1f02)[1] + ((undefined2 *)&DAT_4125_2b5c)[iVar2]);
+          iVar4 = city_at(*DAT_451b_1f02 +
+                          *(int *)((int)(undefined2 *)&DAT_4125_2b4b + iVar2 * 2 + 1),
+                          ((int *)DAT_451b_1f02)[1] + ((undefined2 *)&DAT_4125_2b5c)[iVar2]);
           if ((-1 < iVar4) && (*(char *)(iVar4 * 0x41 + 0x1592) != current_player)) {
             DAT_3c04_0134 = DAT_3c04_0134 | 0x10;
             pcVar6 = get_file_string(0x19,4);

@@ -102,11 +102,11 @@ void __cdecl16far sage_offer_knowledge(int choice)
     uVar7 = CONCAT22(0x3c04,iVar5 * 0x1f + 0x815);
     pcVar6 = get_string(0x3e,7);
     sprintf(&DAT_451b_1cd8,pcVar6,uVar7);
-    FUN_6536_15d5((undefined1 *)&DAT_451b_1cd8,0x4125);
-    FUN_828e_0806(iVar5,8);
-    FUN_828e_0868(iVar5,8);
+    FUN_6536_15d5((undefined1 *)&DAT_451b_1cd8);
+    FUN_828e_0806(iVar5);
+    FUN_828e_0868(iVar5);
     FUN_828e_0a3f();
-    FUN_834b_1f5f();
+    draw_map_figure(*_DAT_451b_1efe,((int *)_DAT_451b_1efe)[1],1);
     FUN_834b_04d3(0);
     FUN_54f6_070b(0x1160008,0x1700f0);
     FUN_18a9_03b3();
