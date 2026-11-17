@@ -4,8 +4,9 @@
 -- the nearest site shown to the side -- and seen, with a hidden map -- as the
 -- crow flies (828e:06fd). Dialog 6 over popup 2, with the mode buttons
 -- (193-196) hidden: only Done (192) is left. The map on the left is
--- 834b:05e4's, every site shown to the side marked and this one boxed; the
--- right half is auto_ui_city_info's case 4 (7204:0cdf):
+-- 834b:05e4's, the bare map with no city shields, every site shown to the
+-- side marked and this one boxed; the right half is auto_ui_city_info's
+-- case 4 (7204:0cdf):
 --
 --   the site's name in font 1, centred on (432, 62)
 --   SPECBITS.PCK's 96x63 at (328, 104) -- the temple for a temple, else one
@@ -59,7 +60,8 @@ function M.open(s)
 
   function d.draw()
     kit.popup(R)
-    G.drawStrategicMap(MAP.x, MAP.y)
+    -- 834b:05e4 lays the sites straight on the bare map: no city shields
+    G.drawStrategicMap(MAP.x, MAP.y, nil, true)
     G.drawSiteMarkers(MAP.x, MAP.y, s)
     love.graphics.setColor(1, 1, 1)
     kit.centred(kit.font(1), s.name or "", 432, 62)

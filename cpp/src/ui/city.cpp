@@ -9,8 +9,10 @@
 //   3  Vector      where what it builds goes
 //
 // Modes 1-3 are only for a city of the side's own (7204:03a9). The left half
-// is the strategic map; the right half is auto_ui_city_info (7204:06de), one
-// case per mode, every position out of its data segment (4125:0ea0 on).
+// is the strategic map -- every city's shield in Info and City, the vector
+// map in Production and Vector (7204:1a9b); the right half is
+// auto_ui_city_info (7204:06de), one case per mode, every position out of its
+// data segment (4125:0ea0 on).
 #include <algorithm>
 #include <cstdlib>
 
@@ -281,12 +283,13 @@ struct CityDialog : kit::Modal {
     } else {
       f.draw(text, 456, 110);
     }
+    // the list: only the slots that hold a type, ring and all -- an empty one
+    // leaves the marble bare, where Info draws an empty ring (7204:0ef8)
     const w2::Slot* ch = nullptr;
-    for (int i = 0; i < 4; i++) {
-      bool have = i < (int)city->slots.size();
-      bool mine = have && city->slots[i].type == chosen;
+    for (int i = 0; i < 4 && i < (int)city->slots.size(); i++) {
+      bool mine = city->slots[i].type == chosen;
       if (mine) ch = &city->slots[i];
-      kit::army(have ? city->slots[i].type : NONE, owner, PROD_SLOTS[i][0], PROD_SLOTS[i][1], mine ? G.player->index + 2 : 1);
+      kit::army(city->slots[i].type, owner, PROD_SLOTS[i][0], PROD_SLOTS[i][1], mine ? G.player->index + 2 : 1);
     }
     if (ch) {
       gfx::setColor(1, 1, 1);
@@ -330,13 +333,17 @@ struct CityDialog : kit::Modal {
     f.draw(kit::text(S_HELP2, b0 + 1), 368, 292);
   }
 
+  // The map by mode (7204:1a9b): Info and City the strategic map with every
+  // city's shield, this one boxed; Production and Vector the vector map, every
+  // city of the side marked by whether it is building, with the vectors
+  // (7087:08e4) -- in Production always plain, See All or not.
   void draw() override {
     kit::popup(R);
-    if (mode == VECTOR) {
+    if (mode == VECTOR || mode == PRODUCTION) {
       int filter = NONE;
       if (sub == 1) filter = -1;
       else if (sub == 2) filter = (int)w2::game::vectoredTo(*G.g, city).size();
-      front::drawVectorMap(MAP.x, MAP.y, city, filter, vectorSeeAll && sub == 0);
+      front::drawVectorMap(MAP.x, MAP.y, city, filter, vectorSeeAll && mode == VECTOR && sub == 0);
     } else {
       front::drawStrategicPanel(MAP.x, MAP.y, city);
     }

@@ -9,8 +9,10 @@
 //   3  Vector      where what it builds goes
 //
 // Modes 1-3 are only for a city of the side's own (7204:03a9). The left half
-// is the strategic map; the right half is auto_ui_city_info (7204:06de), one
-// case per mode, every position out of its data segment (4125:0ea0 on).
+// is the strategic map -- every city's shield in Info and City, the vector
+// map in Production and Vector (7204:1a9b); the right half is
+// auto_ui_city_info (7204:06de), one case per mode, every position out of its
+// data segment (4125:0ea0 on).
 
 import * as gfx from "../gfx.js";
 import * as kit from "./kit.js";
@@ -180,12 +182,15 @@ function drawProduction(d) {
     f.draw(text, 456, 110);
   }
 
+  // the list: only the slots that hold a type, ring and all -- an empty one
+  // leaves the marble bare, where Info draws an empty ring (7204:0ef8)
   let chosen = null;
   PROD_SLOTS.forEach((at, i) => {
     const slot = city.slots[i];
-    const mine = slot && slot.type === d.chosen;
+    if (!slot) return;
+    const mine = slot.type === d.chosen;
     if (mine) chosen = slot;
-    kit.army(slot ? slot.type : null, owner, at[0], at[1], mine ? G.player.index + 2 : 1);
+    kit.army(slot.type, owner, at[0], at[1], mine ? G.player.index + 2 : 1);
   });
 
   if (chosen) {
@@ -340,13 +345,17 @@ export function open(city, mode) {
 
   d.build = () => buy.open(city, () => d.setMode(CITY));
 
+  // The map by mode (7204:1a9b): Info and City the strategic map with every
+  // city's shield, this one boxed; Production and Vector the vector map,
+  // every city of the side marked by whether it is building, with the
+  // vectors (7087:08e4) -- in Production always plain, See All or not.
   d.draw = () => {
     kit.popup(R);
-    if (d.mode === VECTOR && G.drawVectorMap) {
+    if ((d.mode === VECTOR || d.mode === PRODUCTION) && G.drawVectorMap) {
       let filter = null;
       if (d.sub === 1) filter = -1;
       else if (d.sub === 2) filter = game.vectoredTo(G.g, city).length;
-      G.drawVectorMap(MAP.x, MAP.y, city, filter, G.vectorSeeAll && d.sub === 0);
+      G.drawVectorMap(MAP.x, MAP.y, city, filter, G.vectorSeeAll && d.mode === VECTOR && d.sub === 0);
     } else if (G.drawStrategicPanel) {
       G.drawStrategicPanel(MAP.x, MAP.y, city);
     }

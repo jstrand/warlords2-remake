@@ -13,7 +13,9 @@
 -- buttons otherwise. Clicking one of your own cities on the map opens it in
 -- Production, any other in Info (740d:0037).
 --
--- The left half is the strategic map at two pixels a tile. The right half is
+-- The left half is the strategic map at two pixels a tile -- with every
+-- city's shield in Info and City, the vector map in Production and Vector
+-- (7204:1a9b, and d.draw below). The right half is
 -- auto_ui_city_info (7204:06de), one case per mode, and every position below
 -- is out of its data segment -- the table at 4125:0ea0 onward. Text is font 2,
 -- CHANCE17, except the city's name at the top, in font 1 and centred on
@@ -217,12 +219,16 @@ local function drawProduction(d)
     f.draw(text, 456, 110)
   end
 
+  -- the list: only the slots that hold a type, ring and all -- an empty one
+  -- leaves the marble bare, where Info draws an empty ring (7204:0ef8)
   local chosen
   for i, at in ipairs(PROD_SLOTS) do
     local slot = city.slots[i]
-    local mine = slot and slot.type == d.chosen
-    if mine then chosen = slot end
-    kit.army(slot and slot.type, owner, at[1], at[2], mine and G.player.index + 2 or 1)
+    if slot then
+      local mine = slot.type == d.chosen
+      if mine then chosen = slot end
+      kit.army(slot.type, owner, at[1], at[2], mine and G.player.index + 2 or 1)
+    end
   end
 
   if chosen then
@@ -402,13 +408,18 @@ function M.open(city, mode)
     buy.open(city, function() d.setMode(M.CITY) end)
   end
 
+  -- The map by mode (7204:1a9b): Info and City the strategic map with every
+  -- city's shield, this one boxed; Production and Vector the vector map,
+  -- every city of the side marked by whether it is building, with the
+  -- vectors (7087:08e4) -- in Production always plain, See All or not.
   function d.draw()
     kit.popup(R)
-    if d.mode == M.VECTOR and G.drawVectorMap then
+    if (d.mode == M.VECTOR or d.mode == M.PRODUCTION) and G.drawVectorMap then
       local filter
       if d.sub == 1 then filter = -1
       elseif d.sub == 2 then filter = #game.vectoredTo(G.g, city) end
-      G.drawVectorMap(MAP.x, MAP.y, city, filter, G.vectorSeeAll and d.sub == 0)
+      G.drawVectorMap(MAP.x, MAP.y, city, filter,
+                      G.vectorSeeAll and d.mode == M.VECTOR and d.sub == 0)
     elseif G.drawStrategicPanel then
       G.drawStrategicPanel(MAP.x, MAP.y, city)
     end

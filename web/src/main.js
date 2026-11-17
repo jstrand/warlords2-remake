@@ -1503,18 +1503,29 @@ function drawMap() {
 }
 
 /** The strategic map as the original paints it anywhere it appears, with
- *  every city it can see as an 8x8 shield (834b:0ed7). `mark` gets a white
- *  box; `owners` is who held each city, for History (834b:12d3). */
-G.drawStrategicMap = (x, y, mark, noCities, owners) => {
+ *  every city it can see as an 8x8 shield (834b:0ed7) -- on a hidden map
+ *  once any of its four tiles is seen. `mark` gets a white box; `owners` is
+ *  who held each city, for History (834b:12d3). `frame`: drawn whole in a
+ *  dialog on a hidden map, where 834b:0000 runs a colour-4 line along the
+ *  top, left and bottom edges before the shields go on. */
+G.drawStrategicMap = (x, y, mark, noCities, owners, frame) => {
   if (!G.stratImage) G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen);
   gfx.setScissor(x, y, 224, 312);
   gfx.setColor(1, 1, 1);
   gfx.draw(G.stratImage, x, y);
+  if (frame) {
+    gfx.setColor(G.palette[4]);
+    gfx.rectangle("fill", x, y, 224, 1);
+    gfx.rectangle("fill", x, y, 1, 312);
+    gfx.rectangle("fill", x, y + 311, 224, 1);
+  }
+  const seen = (c) => game.seen(G.g, G.player, c.x, c.y) || game.seen(G.g, G.player, c.x + 1, c.y)
+    || game.seen(G.g, G.player, c.x, c.y + 1) || game.seen(G.g, G.player, c.x + 1, c.y + 1);
   if (!noCities) {
     G.g.map.cities.forEach((c, i) => {
       const owner = owners ? owners[i] : null;
       const gone = owners ? owner === 0xff : c.razed;
-      if (!gone && game.seen(G.g, G.player, c.x, c.y)) {
+      if (!gone && seen(c)) {
         const side = owners ? owner : (c.ownerIndex ?? 8);
         gfx.draw(G.atransShields, gfx.newQuad(side * 16, 30, 8, 8), x + c.x * 2 - 1, y + c.y * 2 - 1);
       }
@@ -2002,7 +2013,11 @@ G.drawHeroFigure = (x, y, tx, ty, dark) => {
 };
 
 /** The strategic map in the city dialog's left-hand panel, the city marked. */
-G.drawStrategicPanel = (x, y, city) => G.drawStrategicMap(x, y, city);
+// The city dialog's map in Info and City (7204:1a9b: 834b:0000 then
+// 834b:0ed7), the city marked, and on a hidden map the frame 834b:0000 draws
+// in a dialog.
+G.drawStrategicPanel = (x, y, city) =>
+  G.drawStrategicMap(x, y, city, false, null, G.g.map.options.hiddenMap !== 0);
 
 /** The start-of-turn banner: CITY.PCK framed in the side's colour, the frame
  *  painted into the picture (54f6:0000). */

@@ -1499,19 +1499,30 @@ static void drawMap() {
 }
 
 void front::drawStrategicMap(int x, int y, const City* mark, bool noCities, const std::vector<int>* owners, int scroll,
-                             int rows) {
+                             int rows, bool frame) {
   if (!G.stratImage) G.stratImage = screen::strategicImage(*G.screen, *G.g, G.player->index);
   gfx::setScissor(x, y, 224, rows);
   y -= scroll;
   gfx::setColor(1, 1, 1);
   gfx::draw(G.stratImage, x, y);
+  if (frame) {
+    palColour(4);
+    gfx::rectangle(gfx::FILL, x, y, 224, 1);
+    gfx::rectangle(gfx::FILL, x, y, 1, 312);
+    gfx::rectangle(gfx::FILL, x, y + 311, 224, 1);
+  }
   if (!noCities) {
     auto& cities = G.g->map->cities;
+    int me = G.player->index;
+    auto seen = [&](const City& c) {
+      return game::seen(*G.g, me, c.x, c.y) || game::seen(*G.g, me, c.x + 1, c.y) ||
+             game::seen(*G.g, me, c.x, c.y + 1) || game::seen(*G.g, me, c.x + 1, c.y + 1);
+    };
     for (size_t i = 0; i < cities.size(); i++) {
       const City& c = cities[i];
       int owner = owners && i < owners->size() ? (*owners)[i] : NONE;
       bool gone = owners ? owner == 0xff : c.razed;
-      if (!gone && game::seen(*G.g, G.player->index, c.x, c.y)) {
+      if (!gone && seen(c)) {
         int side = owners ? owner : ownerOr8(c.ownerIndex);
         gfx::draw(G.atransShields, gfx::newQuad(side * 16, 30, 8, 8), x + c.x * 2 - 1, y + c.y * 2 - 1);
       }
@@ -2010,7 +2021,11 @@ void front::drawHeroFigure(int x, int y, int tx, int ty, bool dark) {
   gfx::setScissor();
 }
 
-void front::drawStrategicPanel(int x, int y, const City* city) { drawStrategicMap(x, y, city); }
+// The city dialog's map in Info and City (7204:1a9b: 834b:0000 then 834b:0ed7),
+// the city marked, and on a hidden map the frame 834b:0000 draws in a dialog.
+void front::drawStrategicPanel(int x, int y, const City* city) {
+  drawStrategicMap(x, y, city, false, nullptr, 0, 312, G.g->map->options.hiddenMap != 0);
+}
 
 // The start-of-turn banner: CITY.PCK framed in the side's colour, the frame
 // painted into the picture (54f6:0000).

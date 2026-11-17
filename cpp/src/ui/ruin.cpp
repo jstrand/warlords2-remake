@@ -1,8 +1,9 @@
 // View > Ruins (`.`): the city dialog's fifth mode, on a ruin or temple.
 //
 // 7204:0000 with mode 4 at the cursor takes the nearest site shown to the
-// side (828e:06fd). Dialog 6 over popup 2 with only Done (192); the map with
-// every site shown marked and this one boxed; and 7204:0cdf's case 4: the
+// side (828e:06fd). Dialog 6 over popup 2 with only Done (192); the bare map,
+// no city shields, with every site shown marked and this one boxed
+// (834b:05e4); and 7204:0cdf's case 4: the
 // name, SPECBITS.PCK's picture, "Type: ..." and "Explored: ...", the map
 // markers' legend, and the site's three lines of .SPC description.
 #include <cmath>
@@ -25,7 +26,8 @@ struct Ruin : kit::Modal {
   w2::Site* s = nullptr;
   void draw() override {
     kit::popup(R);
-    front::drawStrategicMap(MAP.x, MAP.y);
+    // 834b:05e4 lays the sites straight on the bare map: no city shields
+    front::drawStrategicMap(MAP.x, MAP.y, nullptr, true);
     front::drawSiteMarkers(MAP.x, MAP.y, s);
     gfx::setColor(1, 1, 1);
     kit::centred(kit::font(1), s->name, 432, 62);

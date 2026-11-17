@@ -1765,19 +1765,35 @@ end
 --- the unshifted one where it belongs comes to the same thing. A razed city
 --- has no shield. `mark` gets a white box round its shield, one pixel clear.
 --- `owners`, if given, is who held each city (by position in the list, 0xff
---- for ruins) -- History draws the shields as they were (834b:12d3).
-function G.drawStrategicMap(x, y, mark, noCities, owners)
+--- for ruins) -- History draws the shields as they were (834b:12d3). On a
+--- hidden map a city shows once any one of its four tiles has been seen
+--- (834b:0ed7, 834b:12d3).
+---
+--- `frame`: the map is in a dialog, drawn whole by 834b:0000, and hidden.
+--- Then the original runs a colour-4 line along its top, left and bottom
+--- edges -- not the right -- before the shields go on.
+function G.drawStrategicMap(x, y, mark, noCities, owners, frame)
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
   love.graphics.setScissor(x, y, 224, 312)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.stratImage, x, y)
+  if frame then
+    kit.setPal(4)
+    love.graphics.rectangle("fill", x, y, 224, 1)
+    love.graphics.rectangle("fill", x, y, 1, 312)
+    love.graphics.rectangle("fill", x, y + 311, 224, 1)
+  end
   local w, h = G.atransShields:getDimensions()
+  local function seen(c)
+    return game.seen(G.g, G.player, c.x, c.y) or game.seen(G.g, G.player, c.x + 1, c.y)
+           or game.seen(G.g, G.player, c.x, c.y + 1) or game.seen(G.g, G.player, c.x + 1, c.y + 1)
+  end
   for i, c in ipairs(noCities and {} or G.g.map.cities) do
     local owner = owners and owners[i]
     local gone = owners and owner == 0xff or (not owners and c.razed)
-    if not gone and game.seen(G.g, G.player, c.x, c.y) then
+    if not gone and seen(c) then
       local side = owners and owner or c.ownerIndex or 8
       love.graphics.draw(G.atransShields, love.graphics.newQuad(side * 16, 30, 8, 8, w, h),
                          x + c.x * 2 - 1, y + c.y * 2 - 1)
@@ -2404,10 +2420,11 @@ function G.drawHeroFigure(x, y, tx, ty, dark)
   love.graphics.setScissor()
 end
 
---- The strategic map in a dialog's left-hand panel -- the city dialog's --
---- with the city marked.
+--- The strategic map in a dialog's left-hand panel -- the city dialog's in
+--- Info and City (7204:1a9b: 834b:0000 then 834b:0ed7) -- with the city
+--- marked, and on a hidden map the frame 834b:0000 draws in a dialog.
 function G.drawStrategicPanel(x, y, city)
-  G.drawStrategicMap(x, y, city)
+  G.drawStrategicMap(x, y, city, nil, nil, G.g.map.options.hiddenMap ~= 0)
 end
 
 --- The start-of-turn banner: CITY.PCK framed in the side's colour, with the

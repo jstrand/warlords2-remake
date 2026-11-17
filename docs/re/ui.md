@@ -1272,7 +1272,7 @@ name, font 1 centred on (432, 62) in every mode:
 | Production: the capital's small shield | (312, 110) |
 | Production: `Current:` right-aligned, the army, `%dt` or `-` | (408, 110), (416, 104), (456, 110) |
 | … when vectored: `%dt, then to` and where | (456, 102), (456, 122) |
-| Production: the list; the chosen type on its side's ring | (312, 142) 48 apart |
+| Production: the list, only the slots that hold a type; the chosen type on its side's ring | (312, 142) 48 apart |
 | Production: BIGARMY.PCK, then name, Time, Cost, Strength, Move | (320, 182); x 456, y 182/212/232/252/272 |
 | Vector: `Current:` right-aligned, the army, `%dt` | (360, 109), (368, 103), (408, 109) |
 | Vector: `Next turn:` / `Turn after:` right-aligned | (392, 155), (392, 188) |
@@ -1285,8 +1285,26 @@ outline at (311, 169) 242 × 88, a (4, 2) bevel round it, `CITYBACK.PCK`'s
 240 × 86 at (312, 170), and the city's own four map tiles at (392, 176) 40
 apart.
 
-**The map** is region 6 of area screen 3, and a click on it is `7204:1afa`,
-by mode. In Info and City it moves the dialog, in the same mode, to the city
+Info's list draws all four slots on grey rings, an empty one as a bare ring;
+Production's draws only the slots that hold a type, and an empty one leaves
+the marble bare (`8611:08be` draws the ring whenever it is given one, and the
+army only for a type).
+
+**The map** is drawn by mode (`7204:1a9b`, a jump table at `7204:1af0`):
+
+| mode | map |
+|---|---|
+| 0 Info, 1 City | `834b:0000(1, 1, 0)` and `834b:0ed7`: every city's 8 × 8 owner shield (none for a razed one), the dialog's city in a white box — on a hidden map a city shows once any of its four tiles is seen |
+| 2 Production, 3 Vector | the vector map (`7087:08e4` → `834b:08df`, *Vector mode* below): no shields, a marker on each of the side's cities for whether it is building, the dialog's city in black, its vectors — in Production always plain, See All only in Vector |
+| 4 a site | `834b:05e4`: the sites shown to the side on the bare map — no city shields — this one boxed (*View › Ruins* below) |
+
+`834b:0000` blits into the dialog's panel while a dialog is up
+(`54f6:08bf`), and on a hidden map, drawing the whole map, it first runs a
+colour-4 line along the map's top, left and bottom edges (not the right) —
+so Info and City have that frame, the other modes not.
+
+A click on the map — region 6 of area screen 3 — is `7204:1afa`, by
+mode. In Info and City it moves the dialog, in the same mode, to the city
 nearest the click by `map_distance` (`7204:0000` → `828e:04fa`): any city
 with a tile the side has seen for Info, one of the side's own for City. In
 Production (`7087:028b`) it moves to the nearest of the side's own cities,
@@ -1679,8 +1697,9 @@ that is shown to the side (its bit in the site's mask at +0x1d) and, with a
 hidden map, seen (`828e:06fd`). Dialog 6 with the mode buttons 193–196
 hidden, so only Done (192) is left.
 
-The map is `834b:05e4`'s, which also draws the sage's: every site shown to
-the side, with a hidden map only where seen, gets an `ATRANS2.PCK` 16 × 10 —
+The map is `834b:05e4`'s, which also draws the sage's (`6536:146f`): the bare
+map, with no city shields, on which every site shown to the side, with a
+hidden map only where seen, gets an `ATRANS2.PCK` 16 × 10 —
 (112, 20) a temple, (112, 10) searched (tile flag 0x40), (128, 0) rich
 ("Stronghold", +0x1b), else (112, 0) — at y = 2y − 1 and x = 2x − 1 rounded
 to the nearest multiple of 8; the site asked about gets a white 12 × 10 box
