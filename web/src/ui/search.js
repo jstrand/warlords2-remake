@@ -28,7 +28,9 @@ import * as move from "../warlords/move.js";
 import * as quest from "../warlords/quest.js";
 import * as site from "../warlords/site.js";
 import * as uidata from "../warlords/uidata.js";
-import { fmt } from "../util.js";
+import { fmt, now } from "../util.js";
+
+const OUTLINED = 10 / 18.2;   // the Maps patch shows ten BIOS ticks (6536:0cd6)
 
 const MSG = { x: 144, y: 179, w: 352, h: 64 };  // popup 5
 
@@ -226,13 +228,21 @@ function openSage(r) {
 
   d.draw = () => {
     kit.popup(SAGE);
-    G.drawStrategicMap(SAGE_MAP.x, SAGE_MAP.y);
-    if (!d.target) G.drawSiteMarkers(SAGE_MAP.x, SAGE_MAP.y, r.site);
+    // The map as the sage's routines leave it. First 834b:05e4's: the sites
+    // on the bare map, this one boxed (6536:146f). Items redraws it for the
+    // way to what it names, with no shields (834b:0000(0, 1), 6536:0e85). Maps
+    // outlines the patch it uncovers for ten ticks, then redraws it with the
+    // cities' shields (834b:0000(1, 1), 6536:0cd6), the outline gone.
+    const outlined = !!d.patch && now() < d.patchUntil;
+    const shields = !!d.patch && !outlined;
+    const redrawn = !!d.target || shields;
+    G.drawStrategicMap(SAGE_MAP.x, SAGE_MAP.y, null, !shields, null, redrawn);
+    if (!redrawn) G.drawSiteMarkers(SAGE_MAP.x, SAGE_MAP.y, r.site);
     if (d.target) {
       kit.mapTarget(SAGE_MAP.x, SAGE_MAP.y, h.x, h.y, d.target.x, d.target.y);
       G.drawHeroFigure(SAGE_MAP.x, SAGE_MAP.y, h.x, h.y);
     }
-    if (d.patch) {
+    if (outlined) {
       kit.setPal(15);
       kit.outline(SAGE_MAP.x + 2 * d.patch[0], SAGE_MAP.y + 2 * d.patch[1], 2 * d.patch[2], 2 * d.patch[3]);
     }
@@ -268,6 +278,7 @@ function openSage(r) {
       const tx = Math.floor((x - SAGE_MAP.x) / 2), ty = Math.floor((y - SAGE_MAP.y) / 2);
       if (x >= SAGE_MAP.x && y >= SAGE_MAP.y && x < SAGE_MAP.x + 224 && y < SAGE_MAP.y + 312) {
         d.patch = site.sageMap(G.g, G.player, tx, ty);
+        d.patchUntil = now() + OUTLINED;
         if (G.stratDirty) G.stratDirty();
         finished();
       }

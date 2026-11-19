@@ -138,7 +138,7 @@ function M.open()
     local h = heroes[d.cur]
     local f = kit.font(2)
     kit.popup(R)
-    G.drawStrategicMap(MAP.x, MAP.y, nil, true)
+    G.drawStrategicMap(MAP.x, MAP.y, nil, true, nil, true)
     for i, o in ipairs(heroes) do
       if i ~= d.cur then G.drawHeroFigure(MAP.x, MAP.y, o.x, o.y, true) end
     end

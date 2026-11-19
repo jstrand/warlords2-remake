@@ -145,7 +145,7 @@ export function open(n) {
     if (d.n === report.PRODUCTION) {
       G.drawVectorMap(MAP.x, MAP.y, null, null, true);
     } else {
-      G.drawStrategicMap(MAP.x, MAP.y);
+      G.drawStrategicMap(MAP.x, MAP.y, null, false, null, true);
       if (d.n === report.ARMY) drawArmyBanners();
     }
     gfx.setColor(1, 1, 1);

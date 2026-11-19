@@ -37,7 +37,7 @@ function reward(news, after) {
 
   d.draw = () => {
     kit.popup(R);
-    G.drawStrategicMap(MAP.x, MAP.y, null, true);
+    G.drawStrategicMap(MAP.x, MAP.y, null, true, null, true);
     if (r.kind === "revealed" && r.site && h && h.x != null) kit.mapTarget(MAP.x, MAP.y, h.x, h.y, r.site.x, r.site.y);
     if (h && h.x != null) G.drawHeroFigure(MAP.x, MAP.y, h.x, h.y);
     gfx.setColor(1, 1, 1);

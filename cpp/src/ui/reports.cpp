@@ -138,7 +138,7 @@ struct Reports : kit::Modal {
     if (n == report::PRODUCTION) {
       front::drawVectorMap(MAP_X, MAP_Y, nullptr, w2::NONE, true);
     } else {
-      front::drawStrategicMap(MAP_X, MAP_Y);
+      front::drawStrategicMap(MAP_X, MAP_Y, nullptr, false, nullptr, 0, 312, true);
       if (n == report::ARMY) drawArmyBanners();
     }
     gfx::setColor(1, 1, 1);

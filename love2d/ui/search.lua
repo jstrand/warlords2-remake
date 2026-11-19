@@ -43,6 +43,12 @@ local uidata = require("warlords.uidata")
 
 local M = {}
 
+local OUTLINED = 10 / 18.2   -- the Maps patch shows ten BIOS ticks (6536:0cd6)
+
+local function clock()
+  return love.timer and love.timer.getTime and love.timer.getTime() or 0
+end
+
 --------------------------------------------------------------------- message
 
 local MSG = { x = 144, y = 179, w = 352, h = 64 }  -- popup 5
@@ -256,15 +262,21 @@ local function openSage(r)
 
   function d.draw()
     kit.popup(SAGE)
-    G.drawStrategicMap(SAGE_MAP.x, SAGE_MAP.y)
-    -- 834b:05e4 marks the sites, this one boxed, until Items redraws the
-    -- map for the way to what it names (834b:0000)
-    if not d.target then G.drawSiteMarkers(SAGE_MAP.x, SAGE_MAP.y, r.site) end
+    -- The map as the sage's routines leave it. First 834b:05e4's: the sites
+    -- on the bare map, this one boxed (6536:146f). Items redraws it for the
+    -- way to what it names, with no shields (834b:0000(0, 1), 6536:0e85).
+    -- Maps outlines the patch it uncovers for ten ticks, then redraws it
+    -- with the cities' shields (834b:0000(1, 1), 6536:0cd6), the outline gone.
+    local outlined = d.patch and clock() < d.patchUntil
+    local shields = d.patch ~= nil and not outlined
+    local redrawn = d.target ~= nil or shields
+    G.drawStrategicMap(SAGE_MAP.x, SAGE_MAP.y, nil, not shields, nil, redrawn)
+    if not redrawn then G.drawSiteMarkers(SAGE_MAP.x, SAGE_MAP.y, r.site) end
     if d.target then
       kit.mapTarget(SAGE_MAP.x, SAGE_MAP.y, h.x, h.y, d.target.x, d.target.y)
       G.drawHeroFigure(SAGE_MAP.x, SAGE_MAP.y, h.x, h.y)
     end
-    if d.patch then
+    if outlined then
       kit.setPal(15)
       kit.outline(SAGE_MAP.x + 2 * d.patch[1], SAGE_MAP.y + 2 * d.patch[2],
                   2 * d.patch[3], 2 * d.patch[4])
@@ -302,6 +314,7 @@ local function openSage(r)
       local tx, ty = math.floor((x - SAGE_MAP.x) / 2), math.floor((y - SAGE_MAP.y) / 2)
       if x >= SAGE_MAP.x and y >= SAGE_MAP.y and x < SAGE_MAP.x + 224 and y < SAGE_MAP.y + 312 then
         d.patch = { site.sageMap(G.g, G.player, tx, ty) }
+        d.patchUntil = clock() + OUTLINED
         if G.stratDirty then G.stratDirty() end
         finished()
       end

@@ -159,7 +159,7 @@ struct History : kit::Modal {
   }
   void draw() override {
     kit::popup(R);
-    front::drawStrategicMap(R.x, R.y, nullptr, false, &rec(turn).owners);
+    front::drawStrategicMap(R.x, R.y, nullptr, false, &rec(turn).owners, 0, 312, true);
     gfx::setColor(1, 1, 1);
     kit::centred(kit::font(1), kit::text(0x5b, mode), 432, 64);
     if (mode == EVENTS) drawEvents();

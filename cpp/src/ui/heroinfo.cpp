@@ -104,7 +104,7 @@ struct HeroInfo : kit::Modal {
     w2::Army* h = heroes[cur];
     const Font& f = kit::font(2);
     kit::popup(R);
-    front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true);
+    front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true, nullptr, 0, 312, true);
     for (size_t i = 0; i < heroes.size(); i++)
       if ((int)i != cur) front::drawHeroFigure(MAP_X, MAP_Y, heroes[i]->x, heroes[i]->y, true);
     front::drawHeroFigure(MAP_X, MAP_Y, h->x, h->y);

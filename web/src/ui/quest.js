@@ -123,7 +123,7 @@ export function open() {
 
   d.draw = () => {
     kit.popup(R);
-    G.drawStrategicMap(MAP.x, MAP.y, null, true);
+    G.drawStrategicMap(MAP.x, MAP.y, null, true, null, true);
     gfx.setColor(1, 1, 1);
     kit.centred(kit.font(1), "Quest", 432, 62);                 // 4125:00b4
     if (!q) {
@@ -131,11 +131,11 @@ export function open() {
     } else {
       gfx.draw(G.scrollPic, 304, 95);
       const f = kit.font(2).colours(0, 7);
-      kit.centred(f, `${q.hero.name || ""}'s Quest`, 432, 145);
+      kit.centred(f, `${q.hero.name || ""}'s Quest`, 440, 145);    // 4976:0320: the rule's middle
       kit.setPal(0);
       gfx.rectangle("fill", 360, 165, 160, 1);
       const [lines, tx, ty] = questText(G.g, G.player, q);
-      for (const l of lines) kit.centred(f, l[1], 432, l[0]);
+      for (const l of lines) kit.centred(f, l[1], 440, l[0]);
       mapMarks(tx, ty);
       G.drawHeroFigure(MAP.x, MAP.y, q.hero.x, q.hero.y);
     }

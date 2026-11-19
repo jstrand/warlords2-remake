@@ -127,7 +127,7 @@ struct QuestDialog : kit::Modal {
   }
   void draw() override {
     kit::popup(R);
-    front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true);
+    front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true, nullptr, 0, 312, true);
     gfx::setColor(1, 1, 1);
     kit::centred(kit::font(1), "Quest", 432, 62);                 // 4125:00b4
     if (!q) {
@@ -135,11 +135,11 @@ struct QuestDialog : kit::Modal {
     } else {
       gfx::draw(G.scrollPic, 304, 95);
       const Font& f = kit::font(2).colours(0, 7);
-      kit::centred(f, q->hero->name + "'s Quest", 432, 145);
+      kit::centred(f, q->hero->name + "'s Quest", 440, 145);    // 4976:0320: the rule's middle
       kit::setPal(0);
       gfx::rectangle(gfx::FILL, 360, 165, 160, 1);
       QuestText t = questText(*G.g, *G.player, *q);
-      for (auto& l : t.lines) kit::centred(f, l.second, 432, l.first);
+      for (auto& l : t.lines) kit::centred(f, l.second, 440, l.first);
       mapMarks(t.tx, t.ty);
       front::drawHeroFigure(MAP_X, MAP_Y, q->hero->x, q->hero->y);
     }

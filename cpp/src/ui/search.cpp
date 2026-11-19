@@ -233,6 +233,7 @@ struct Sage : kit::Modal {
   bool hiddenMap = false, pointing = false;
   w2::Site* target = nullptr;
   std::optional<std::array<int, 4>> patch;
+  double patchUntil = 0;   // the patch shows outlined ten BIOS ticks (6536:0cd6)
 
   void offers(bool on) {
     auto& st = v.state;
@@ -252,13 +253,21 @@ struct Sage : kit::Modal {
   }
   void draw() override {
     kit::popup(SAGE);
-    front::drawStrategicMap(SAGE_X, SAGE_Y);
-    if (!target) front::drawSiteMarkers(SAGE_X, SAGE_Y, r->site);
+    // The map as the sage's routines leave it. First 834b:05e4's: the sites on
+    // the bare map, this one boxed (6536:146f). Items redraws it for the way to
+    // what it names, with no shields (834b:0000(0, 1), 6536:0e85). Maps
+    // outlines the patch it uncovers for ten ticks, then redraws it with the
+    // cities' shields (834b:0000(1, 1), 6536:0cd6), the outline gone.
+    bool outlined = patch && kit::now() < patchUntil;
+    bool shields = patch && !outlined;
+    bool redrawn = target != nullptr || shields;
+    front::drawStrategicMap(SAGE_X, SAGE_Y, nullptr, !shields, nullptr, 0, 312, redrawn);
+    if (!redrawn) front::drawSiteMarkers(SAGE_X, SAGE_Y, r->site);
     if (target) {
       kit::mapTarget(SAGE_X, SAGE_Y, h->x, h->y, target->x, target->y);
       front::drawHeroFigure(SAGE_X, SAGE_Y, h->x, h->y);
     }
-    if (patch) {
+    if (outlined) {
       kit::setPal(15);
       kit::outline(SAGE_X + 2 * (*patch)[0], SAGE_Y + 2 * (*patch)[1], 2 * (*patch)[2], 2 * (*patch)[3]);
     }
@@ -297,6 +306,7 @@ struct Sage : kit::Modal {
       int tx = (x - SAGE_X) / 2, ty = (y - SAGE_Y) / 2;
       if (x >= SAGE_X && y >= SAGE_Y && x < SAGE_X + 224 && y < SAGE_Y + 312) {
         patch = w2::site::sageMap(*G.g, *G.player, tx, ty);
+        patchUntil = kit::now() + 10 / 18.2;
         front::stratDirty();
         finished();
       }

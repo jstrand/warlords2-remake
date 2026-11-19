@@ -1769,17 +1769,18 @@ end
 --- hidden map a city shows once any one of its four tiles has been seen
 --- (834b:0ed7, 834b:12d3).
 ---
---- `frame`: the map is in a dialog, drawn whole by 834b:0000, and hidden.
---- Then the original runs a colour-4 line along its top, left and bottom
---- edges -- not the right -- before the shields go on.
-function G.drawStrategicMap(x, y, mark, noCities, owners, frame)
+--- `dialog`: the map is a dialog's, drawn whole by 834b:0000 while the
+--- dialog is up (54f6:08bf). On a hidden map the original then runs a
+--- colour-4 line along its top, left and bottom edges -- not the right --
+--- before the shields go on.
+function G.drawStrategicMap(x, y, mark, noCities, owners, dialog)
   if not G.stratImage then
     G.stratImage = screen.strategicImage(G.screen, G.g, G.player, game.seen)
   end
   love.graphics.setScissor(x, y, 224, 312)
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(G.stratImage, x, y)
-  if frame then
+  if dialog and G.g.map.options.hiddenMap ~= 0 then
     kit.setPal(4)
     love.graphics.rectangle("fill", x, y, 224, 1)
     love.graphics.rectangle("fill", x, y, 1, 312)
@@ -2422,9 +2423,9 @@ end
 
 --- The strategic map in a dialog's left-hand panel -- the city dialog's in
 --- Info and City (7204:1a9b: 834b:0000 then 834b:0ed7) -- with the city
---- marked, and on a hidden map the frame 834b:0000 draws in a dialog.
+--- marked.
 function G.drawStrategicPanel(x, y, city)
-  G.drawStrategicMap(x, y, city, nil, nil, G.g.map.options.hiddenMap ~= 0)
+  G.drawStrategicMap(x, y, city, nil, nil, true)
 end
 
 --- The start-of-turn banner: CITY.PCK framed in the side's colour, with the
@@ -2494,7 +2495,7 @@ local function drawHeroOffer()
 
   -- the whole map at the strategic map's own 2 pixels a tile
   love.graphics.setScissor()
-  G.drawStrategicMap(HERO.MAP.x, HERO.MAP.y)
+  G.drawStrategicMap(HERO.MAP.x, HERO.MAP.y, nil, nil, nil, true)    -- 7563:0d87
   love.graphics.setScissor(R.x, R.y, R.w, R.h)
   love.graphics.setColor(1, 1, 1)
   -- Where the hero would appear (834b:1f5f): ATRANS2.PCK's figure at

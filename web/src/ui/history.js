@@ -168,7 +168,7 @@ export function open(mode) {
 
   d.draw = () => {
     kit.popup(R);
-    G.drawStrategicMap(R.x, R.y, null, false, rec(d.turn).owners);
+    G.drawStrategicMap(R.x, R.y, null, false, rec(d.turn).owners, true);
     gfx.setColor(1, 1, 1);
     kit.centred(kit.font(1), kit.text(0x5b, d.mode), 432, 64);
     if (d.mode === EVENTS) drawEvents(); else drawGraph();

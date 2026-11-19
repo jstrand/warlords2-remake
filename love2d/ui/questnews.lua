@@ -48,7 +48,7 @@ local function reward(news, after)
 
   function d.draw()
     kit.popup(R)
-    G.drawStrategicMap(MAP.x, MAP.y, nil, true)
+    G.drawStrategicMap(MAP.x, MAP.y, nil, true, nil, true)
     if r.kind == "revealed" and r.site and h and h.x then
       kit.mapTarget(MAP.x, MAP.y, h.x, h.y, r.site.x, r.site.y)
     end

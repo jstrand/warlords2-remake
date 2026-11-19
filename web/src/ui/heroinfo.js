@@ -111,7 +111,7 @@ export function open() {
     const h = heroes[d.cur];
     const f = kit.font(2);
     kit.popup(R);
-    G.drawStrategicMap(MAP.x, MAP.y, null, true);
+    G.drawStrategicMap(MAP.x, MAP.y, null, true, null, true);
     heroes.forEach((o, i) => { if (i !== d.cur) G.drawHeroFigure(MAP.x, MAP.y, o.x, o.y, true); });
     G.drawHeroFigure(MAP.x, MAP.y, h.x, h.y);
 

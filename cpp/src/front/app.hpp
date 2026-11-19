@@ -174,12 +174,13 @@ void stratDirty();
  *  city it can see as an 8x8 shield (834b:0ed7) -- on a hidden map once any
  *  of its four tiles is seen. `mark` gets a white box; `owners` is who held
  *  each city, for History (834b:12d3). Only `rows` of it show, from `scroll`
- *  rows down (the main screen's, on a short screen). `frame`: drawn whole in
- *  a dialog on a hidden map, where 834b:0000 runs a colour-4 line along the
- *  top, left and bottom edges before the shields go on. */
+ *  rows down (the main screen's, on a short screen). `dialog`: a dialog's map,
+ *  drawn whole by 834b:0000 while the dialog is up (54f6:08bf) -- on a hidden
+ *  map it runs a colour-4 line along the top, left and bottom edges before
+ *  the shields go on. */
 void drawStrategicMap(int x, int y, const w2::City* mark = nullptr, bool noCities = false,
                       const std::vector<int>* owners = nullptr, int scroll = 0, int rows = 312,
-                      bool frame = false);
+                      bool dialog = false);
 /** Every site shown to the side, marked on a strategic map (834b:05e4). */
 void drawSiteMarkers(int x, int y, const w2::Site* highlight = nullptr);
 /** The map as the city dialog's Vector mode shows it. `filter` hides the

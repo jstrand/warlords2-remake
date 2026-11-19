@@ -1298,10 +1298,27 @@ army only for a type).
 | 2 Production, 3 Vector | the vector map (`7087:08e4` → `834b:08df`, *Vector mode* below): no shields, a marker on each of the side's cities for whether it is building, the dialog's city in black, its vectors — in Production always plain, See All only in Vector |
 | 4 a site | `834b:05e4`: the sites shown to the side on the bare map — no city shields — this one boxed (*View › Ruins* below) |
 
-`834b:0000` blits into the dialog's panel while a dialog is up
-(`54f6:08bf`), and on a hidden map, drawing the whole map, it first runs a
-colour-4 line along the map's top, left and bottom edges (not the right) —
-so Info and City have that frame, the other modes not.
+`834b:0000(shields, force, rect)` blits into the dialog's panel while a
+dialog is up (`54f6:08bf`), and on a hidden map, drawing the whole map, it
+first runs a colour-4 line along the map's top, left and bottom edges (not
+the right) — so Info and City have that frame, the other modes not. The same
+goes for every dialog that draws its map this way; the first argument says
+whether the cities' shields go on:
+
+| dialog | call | shields |
+|---|---|---|
+| city dialog, Info and City (`7204:1a9b`) | (1, 1) | yes |
+| the reports but Production (`6ef3:0030`) | (1, 1) | yes |
+| the hero offer (`7563:0d87`) | (1, 1) | yes |
+| hero info (`6c1b:10ac`) | (0, 1) | no |
+| History (`6d51:0096`), then its own shields (`834b:12d3`) | (0, 0) | as they were |
+| Report › Quest (`4976:0167`) and a quest's reward (`4976:1520`) | (0, 0) | no |
+| the sage, once Items names something (`6536:0e85`) | (0, 1) | no |
+| the sage, once Maps has uncovered a patch (`6536:0cd6`) | (1, 1) | yes |
+
+The vector maps (`834b:08df`, `834b:1817` — the Production report's too) and
+the sites' map (`834b:05e4`) paint their own base over the panel and have no
+frame.
 
 A click on the map — region 6 of area screen 3 — is `7204:1afa`, by
 mode. In Info and City it moves the dialog, in the same mode, to the city
@@ -1588,7 +1605,8 @@ hidden. What the sage says goes on from y = 240, 20 apart, centred on 432.
   says *The %s* / *A huge pile of treasure* / *Powerful allies*, *can be
   found*, *at %s!* (group 62) — the nearest such site for gold and allies —
   marks the site shown to the side, uncovers round it and draws the way
-  there as the Quest screen does, from the hero. Cancel brings the three
+  there as the Quest screen does, from the hero, on the map redrawn without
+  city shields (`834b:0000(0, 1)`). Cancel brings the three
   buttons back.
 - **Money** (`6536:0b1a`): a gem worth `dice(3, 500, 500)`, paid at once,
   *The sage gives you a gem* / *worth %d gp!* (group 59).
@@ -1596,7 +1614,12 @@ hidden. What the sage says goes on from y = 240, 20 apart, centred on 432.
   map is then region 15, and the tile clicked (`6536:0cd6`) has a patch
   uncovered from 9–13 tiles up and left of it (`dice(1, 5, 8)` each way),
   16–25 tiles wide and high (`dice(1, 10, 15)`), kept on the map, every tile
-  of it through `8611:1298`. The patch is outlined in white on the popup's map.
+  of it through `8611:1298`. The patch is outlined in white on the popup's
+  map for ten BIOS ticks (`7ecb:0000(10)`); then the map is redrawn with the
+  cities' shields (`834b:0000(1, 1)`), and the outline is gone.
+
+Until then the sage's map is `834b:05e4`'s, the sites on the bare map
+(*View › Ruins*), with no city shields.
 
 The site's tile is flagged searched either way, so a sage is visited once.
 
@@ -2156,8 +2179,9 @@ last card (`7bab:1ae4`). Only the setup screen and the computer's AI
 map with no city shields: *Quest* (font 1) centred on (432, 62), and with no
 quest — or its hero gone — a random line of group 20 on (432, 134). With one,
 `SCROLL.PCK` blitted through its mask at (304, 95), and on it in font 2, black
-on yellow (`78a8:06ae(2, 0, 7, 1)`), *%s's Quest* on (432, 145), a black rule
-at (360, 165) 160 long, and the quest's lines centred on x = 432 at
+on yellow (`78a8:06ae(2, 0, 7, 1)`), *%s's Quest* on (440, 145), a black rule
+at (360, 165) 160 long, and the quest's lines centred on x = 440 — the rule's
+and the scroll's middle, not the title's 432 — at
 y = 175, 195, 215, 235, 245, 265, 285 as each type uses them (`4976:0320`,
 groups 21-27), with the compass point to the target from `828e:0b51` (the
 eight words at `4125:2b7c`). The map shows an orange (8) line from the hero to

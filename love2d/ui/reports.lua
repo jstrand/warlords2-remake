@@ -185,7 +185,7 @@ function M.open(n)
     if d.n == report.PRODUCTION then
       G.drawVectorMap(MAP.x, MAP.y, nil, nil, true)
     else
-      G.drawStrategicMap(MAP.x, MAP.y)
+      G.drawStrategicMap(MAP.x, MAP.y, nil, nil, nil, true)
       if d.n == report.ARMY then drawArmyBanners() end
     end
     love.graphics.setColor(1, 1, 1)

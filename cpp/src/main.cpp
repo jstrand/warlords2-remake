@@ -1499,13 +1499,13 @@ static void drawMap() {
 }
 
 void front::drawStrategicMap(int x, int y, const City* mark, bool noCities, const std::vector<int>* owners, int scroll,
-                             int rows, bool frame) {
+                             int rows, bool dialog) {
   if (!G.stratImage) G.stratImage = screen::strategicImage(*G.screen, *G.g, G.player->index);
   gfx::setScissor(x, y, 224, rows);
   y -= scroll;
   gfx::setColor(1, 1, 1);
   gfx::draw(G.stratImage, x, y);
-  if (frame) {
+  if (dialog && G.g->map->options.hiddenMap != 0) {
     palColour(4);
     gfx::rectangle(gfx::FILL, x, y, 224, 1);
     gfx::rectangle(gfx::FILL, x, y, 1, 312);
@@ -2022,9 +2022,9 @@ void front::drawHeroFigure(int x, int y, int tx, int ty, bool dark) {
 }
 
 // The city dialog's map in Info and City (7204:1a9b: 834b:0000 then 834b:0ed7),
-// the city marked, and on a hidden map the frame 834b:0000 draws in a dialog.
+// the city marked.
 void front::drawStrategicPanel(int x, int y, const City* city) {
-  drawStrategicMap(x, y, city, false, nullptr, 0, 312, G.g->map->options.hiddenMap != 0);
+  drawStrategicMap(x, y, city, false, nullptr, 0, 312, true);
 }
 
 // The start-of-turn banner: CITY.PCK framed in the side's colour, the frame
@@ -2066,7 +2066,7 @@ static void drawHeroOffer() {
   gfx::setScissor(R.x, R.y, R.w, R.h);
   gfx::draw(G.marble, R.x, R.y);
   gfx::setScissor();
-  front::drawStrategicMap(HERO_MAP_X, HERO_MAP_Y);
+  front::drawStrategicMap(HERO_MAP_X, HERO_MAP_Y, nullptr, false, nullptr, 0, 312, true);    // 7563:0d87
   gfx::setScissor(R.x, R.y, R.w, R.h);
   gfx::setColor(1, 1, 1);
   int fx = std::max(0, (b.city->x * 2 - 2) / 8 * 8);

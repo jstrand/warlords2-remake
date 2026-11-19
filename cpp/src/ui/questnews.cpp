@@ -35,7 +35,7 @@ struct Reward : kit::Modal {
     const w2::Reward& r = *news->reward;
     w2::Army* h = q.hero;
     kit::popup(R);
-    front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true);
+    front::drawStrategicMap(MAP_X, MAP_Y, nullptr, true, nullptr, 0, 312, true);
     if (r.kind == "revealed" && r.site && h && h->x != w2::NONE) kit::mapTarget(MAP_X, MAP_Y, h->x, h->y, r.site->x, r.site->y);
     if (h && h->x != w2::NONE) front::drawHeroFigure(MAP_X, MAP_Y, h->x, h->y);
     gfx::setColor(1, 1, 1);

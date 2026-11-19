@@ -4,9 +4,10 @@
 -- (432, 62), and the strategic map on the left with no city shields. With no
 -- quest -- or a quest whose hero is gone -- one of four lines of group 20,
 -- chosen at random, centred on (432, 134). With one, SCROLL.PCK at (304, 95)
--- and on it, in font 2 black on yellow, "%s's Quest" centred on (432, 145), a
+-- and on it, in font 2 black on yellow, "%s's Quest" centred on (440, 145), a
 -- black rule at (360, 165) 160 long, and the quest's own lines (groups
--- 21-27) centred on x = 432 at the y each type puts them.
+-- 21-27) centred on x = 440 at the y each type puts them -- the middle of
+-- the rule and of the scroll (4976:0320), not the 432 of the title above.
 --
 -- The map shows where to go: an orange line (colour 8) from the hero to the
 -- target, both at (2x - 2, 2y - 2), and at the target a small orange shield
@@ -136,7 +137,7 @@ function M.open()
 
   function d.draw()
     kit.popup(R)
-    G.drawStrategicMap(MAP.x, MAP.y, nil, true)
+    G.drawStrategicMap(MAP.x, MAP.y, nil, true, nil, true)
     love.graphics.setColor(1, 1, 1)
     kit.centred(kit.font(1), "Quest", 432, 62)                 -- 4125:00b4
     if not q then
@@ -144,11 +145,11 @@ function M.open()
     else
       love.graphics.draw(G.scrollPic, 304, 95)
       local f = kit.font(2).colours(0, 7)
-      kit.centred(f, ("%s's Quest"):format(q.hero.name or ""), 432, 145)
+      kit.centred(f, ("%s's Quest"):format(q.hero.name or ""), 440, 145)    -- 4976:0320
       kit.setPal(0)
       love.graphics.rectangle("fill", 360, 165, 160, 1)
       local lines, tx, ty = questText(G.g, G.player, q)
-      for _, l in ipairs(lines) do kit.centred(f, l[2], 432, l[1]) end
+      for _, l in ipairs(lines) do kit.centred(f, l[2], 440, l[1]) end
       mapMarks(tx, ty)
       G.drawHeroFigure(MAP.x, MAP.y, q.hero.x, q.hero.y)
     end

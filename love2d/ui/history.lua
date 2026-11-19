@@ -190,7 +190,7 @@ function M.open(mode)
 
   function d.draw()
     kit.popup(R)
-    G.drawStrategicMap(R.x, R.y, nil, false, recs[d.turn].owners)
+    G.drawStrategicMap(R.x, R.y, nil, false, recs[d.turn].owners, true)
     love.graphics.setColor(1, 1, 1)
     kit.centred(kit.font(1), kit.text(0x5b, d.mode), 432, 64)
     if d.mode == M.EVENTS then drawEvents() else drawGraph() end
