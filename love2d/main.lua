@@ -100,6 +100,9 @@ function love.load(arg)
   arg = arg or {}
   -- the window first: nothing can be drawn, or loaded to draw, before it
   display.openWindow("Warlords II")
+  -- a held arrow key goes on scrolling the view; love.keypressed lets no
+  -- other key repeat
+  love.keyboard.setKeyRepeat(true)
   -- with no scenario named the game opens on its start screens
   G.starting = arg[1] == nil
   local scenario = arg[1] or "ERYTHEA"
@@ -3826,7 +3829,10 @@ function G.menuEnabled(key)
   return live == nil or live()
 end
 
-function love.keypressed(key)
+local ARROWS = { up = true, down = true, left = true, right = true }
+
+function love.keypressed(key, _, isrepeat)
+  if isrepeat and not ARROWS[key] then return end
   if G.busyWalking() then
     if #G.keyBuffer < 15 then G.keyBuffer[#G.keyBuffer + 1] = key end
     return

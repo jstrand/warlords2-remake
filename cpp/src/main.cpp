@@ -3814,8 +3814,9 @@ int main(int argc, char** argv) {
           case SDL_KEYDOWN: {
             std::string k = keys::loveName(e.key.keysym.sym);
             if (k.empty()) break;
-            // the Lua remake leaves LÖVE's key repeat off
-            if (e.key.repeat) break;
+            // a held arrow key goes on scrolling the view, as the browser's
+            // repeat does in the web port; no other key repeats
+            if (e.key.repeat && k != "up" && k != "down" && k != "left" && k != "right") break;
             keys::press(k);
             keypressed(k);
             break;
