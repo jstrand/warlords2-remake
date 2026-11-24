@@ -2683,7 +2683,12 @@ static void mousepressed(int x, int y, int button) {
   }
 }
 
-void front::afterSlotChange() { syncSelection(); }
+void front::afterSlotChange() {
+  syncSelection();
+  // the route is the group's: a slower army in or out of it changes how far
+  // it gets this turn
+  if (!G.walk) refreshRoute();
+}
 
 // Order > Move All (1c8c:04c4): every army of the side with a destination
 // walks there in turn, each walk played out before the next.

@@ -2664,6 +2664,9 @@ const ACTION = {};
 
 function afterSlotChange() {
   syncSelection();
+  // the route is the group's: a slower army in or out of it changes how far
+  // it gets this turn
+  if (!G.walk) refreshRoute();
   say("%d of %d, %d movement", G.selection.stack.length, G.selection.slots.n, slotsMod.moves(G.selection.slots));
 }
 G.afterSlotChange = afterSlotChange;

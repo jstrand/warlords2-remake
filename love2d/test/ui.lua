@@ -86,7 +86,7 @@ love = {
   keyboard = { isDown = function(...)
     for _, k in ipairs({ ... }) do if HELD and HELD[k] then return true end end
     return false
-  end },
+  end, setKeyRepeat = function() end },
   -- the assault plays itself out on the clock, so it needs one
   timer = { getTime = os.clock },
 }
@@ -627,6 +627,11 @@ do
         fail("alt", "Alt and a click did not set the destination")
       elseif not G.route then fail("alt", "the planned route is not drawn")
       else
+        -- a change in the bar's group works the route out again, for the
+        -- armies that are in it now
+        local before = G.route
+        G.afterSlotChange()
+        if G.route == before then fail("alt", "a change of group left the old route drawn") end
         px, py = at(lead.x, lead.y)
         try("alt click the stack", love.mousepressed, px, py, 1)
         try("alt release", love.mousereleased, px, py, 1)

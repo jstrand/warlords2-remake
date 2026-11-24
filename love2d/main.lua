@@ -3267,6 +3267,9 @@ local ACTION = {}
 -- directions of the same switch: group the lot, or break it up again.
 local function afterSlotChange()
   syncSelection()
+  -- the route is the group's: a slower army in or out of it changes how far
+  -- it gets this turn
+  if not G.walk then refreshRoute() end
   say("%d of %d, %d movement", #G.selection.stack, G.selection.slots.n,
       slotsMod.moves(G.selection.slots))
 end
