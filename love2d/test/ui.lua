@@ -1070,6 +1070,19 @@ for _, key in ipairs({ "p", "c", "b", "v", "home", "up", "down", "left", "right"
 end
 try("frame after the keys", love.draw)
 
+-- a quick load goes on with the session's dice, not the ones the save was
+-- made with, so a fight lost after a save is rolled afresh (6ecb:0356)
+if G.g then
+  try("quick save", love.keypressed, "f5")
+  local saved = G.g.rng.state
+  for _ = 1, 3 do G.g.rng:dice(1, 20, 0) end
+  local live = G.g.rng.state
+  try("quick load", love.keypressed, "f9")
+  if G.g.rng.state == saved then fail("load", "the loaded game rolls the dice the save was made with")
+  elseif G.g.rng.state ~= live then fail("load", "the loaded game does not go on with the session's dice")
+  else print("  a quick load rolls on with the session's dice") end
+end
+
 -- open every menu and pick every item in it
 if G and G.menuLayout then
   local menuMod = require("warlords.menu")

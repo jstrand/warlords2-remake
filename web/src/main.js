@@ -1331,6 +1331,10 @@ function openCity(city) {
 G.openCity = (city) => openCity(city);
 
 function takeLoaded(loaded) {
+  // the dice are the session's, not the save's: the original seeds them from
+  // the clock (6ecb:0356) and saves no state for them, so a game loaded again
+  // rolls its fights afresh
+  loaded.rng.state = G.g ? G.g.rng.state : new Rng(Date.now()).state;
   G.g = loaded;
   G.selection = null; G.route = null; G.mapAfterBanner = null;
   stratDirty();

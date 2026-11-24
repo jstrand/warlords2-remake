@@ -1325,6 +1325,10 @@ void front::openCity(City* c) { city::open(c); }
 void front::openQuest() { questui::open(); }
 
 void front::takeLoaded(std::unique_ptr<w2::Game> loaded) {
+  // the dice are the session's, not the save's: the original seeds them from
+  // the clock (6ecb:0356) and saves no state for them, so a game loaded again
+  // rolls its fights afresh
+  loaded->rng.state = G.g ? G.g->rng.state : w2::Rng((double)time(nullptr)).state;
   G.g = std::move(loaded);
   G.selection.reset();
   G.route.reset();

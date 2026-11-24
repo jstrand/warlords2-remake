@@ -1553,6 +1553,10 @@ end
 G.openCity = function(city) openCity(city) end
 
 local function takeLoaded(loaded)
+  -- the dice are the session's, not the save's: the original seeds them from
+  -- the clock (6ecb:0356) and saves no state for them, so a game loaded again
+  -- rolls its fights afresh
+  loaded.rng.state = G.g and G.g.rng.state or require("warlords.rng").new(os.time()).state
   G.g, G.selection, G.route, G.mapAfterBanner = loaded, nil, nil, nil
   stratDirty()
   G.player = loaded.sides[loaded.current]
@@ -1567,10 +1571,7 @@ G.presentVictory = function(city, victor) presentVictory(city, victor) end
 local function loadGame()
   local ok, loaded = pcall(saveMod.read, G.savePath, G.dataDir)
   if not ok then say("Nothing to load.") return end
-  G.g, G.selection, G.route, G.mapAfterBanner = loaded, nil, nil, nil
-  stratDirty()
-  G.player = loaded.sides[loaded.current]
-  centreOn(G.capOf(G.player).x, G.capOf(G.player).y)
+  takeLoaded(loaded)
   say("Loaded: turn %d, %s to play.", loaded.turn, G.player.name)
 end
 
