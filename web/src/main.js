@@ -690,7 +690,7 @@ function select(x, y, pick) {
     }
   }
   const lead = G.selection.stack[0];
-  if (lead && lead.type === armytype.HERO && G.g.map.siteAt && G.g.map.siteAt[y * G.g.map.width + x]) {
+  if (lead && lead.type === armytype.HERO && siteMod.at(G.g, x, y)) {
     moments.push("search");
   }
   tutorial.chain(moments.filter((m) => m));
@@ -3013,8 +3013,7 @@ const L = {
   canSearch: () => {
     const lead = G.selection && G.selection.stack[0];
     if (!lead) return false;
-    const m = G.g.map;
-    const s = m.siteAt ? m.siteAt[lead.y * m.width + lead.x] : null;
+    const s = siteMod.at(G.g, lead.x, lead.y);       // on terrain 11 only
     if (!s || s.searched) return false;
     return lead.type === armytype.HERO || s.type === siteMod.TEMPLE;
   },

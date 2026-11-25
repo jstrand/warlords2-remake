@@ -67,7 +67,7 @@ static void sage(Game& g, Side& side) {
 int searchSite(Game& g, Sel* sel, Army* h, Site& s) {
   if (!(h && alive(g, h) && h->x == s.x && h->y == s.y && h->moves != 0)) return 0;
   Side& side = *g.map->side(h->owner);
-  if (siteOpen(s)) {
+  if (onSite(g, s) && siteOpen(s)) {
     std::vector<Army*> stack = sel ? sel->armies : std::vector<Army*>{h};
     auto r = site::search(g, stack, s.x, s.y, false);
     if (r && r->kind == "sage") sage(g, side);
@@ -111,7 +111,8 @@ int party(Game& g, Side& side, std::vector<Army*> list) {
     for (Army* o : armies(g, side.index)) {
       if (o != hero && isHero(o) && o->aiOrder == ORDER_SITE && o->aiDest == s.index) taken = true;
     }
-    if (!taken && explored(g, side.index, s.x, s.y) && s.content != site::TEMPLE && !s.searched) {
+    if (!taken && explored(g, side.index, s.x, s.y) && onSite(g, s)
+        && s.content != site::TEMPLE && !s.searched) {
       int dd = dist(hero->x, hero->y, s.x, s.y);
       int base = NONE;
       if (dd < 15 && score < 215 - dd) base = 215;

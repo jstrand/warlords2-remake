@@ -97,14 +97,21 @@ export function cityAt(g, x, y) {
   return g.map.cityTile[y * g.map.width + x];
 }
 
-/** The site on (x, y) (828e:04b5). */
+/** The site on (x, y) (828e:04b5), where the tile is a site (terrain 11, as
+ *  every caller has it: 6087:065d, 57ea:177f, 5ad0:15c3). */
 export function siteAt(g, x, y) {
-  return g.map.siteAt ? g.map.siteAt[y * g.map.width + x] : undefined;
+  return siteMod.at(g, x, y) || undefined;
 }
 
 export function terrain(g, x, y) { return scn.terrainAt(g.map, x, y); }
 
 /** A temple, or a ruin nobody has searched. */
+/** Does the site's tile show it -- terrain 11 -- to the side whose turn it
+ *  is (6087:1637, 5ad0:11a6)? A stronghold kept hidden by quests does not. */
+export function onSite(g, s) {
+  return siteMod.at(g, s.x, s.y) === s;
+}
+
 export function siteOpen(s) {
   return s.content === siteMod.TEMPLE || !s.searched;
 }

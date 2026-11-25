@@ -68,7 +68,7 @@ function M.open(tx, ty)
   local owner = armies[1] and armies[1].owner
   local tower = g.towerAt and g.towerAt[ty * g.map.width + tx]
   local city = game.cityAt(g, tx, ty)
-  local site = g.map.siteAt and g.map.siteAt[ty * g.map.width + tx]
+  local site = require("warlords.site").at(g, tx, ty)     -- terrain 11 only (740d:0037)
   local terrain = scn.terrainAt(g.map, tx, ty)
 
   local function side(i) return g.map.sides[(i or 8) + 1] end

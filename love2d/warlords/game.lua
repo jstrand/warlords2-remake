@@ -632,6 +632,7 @@ end
 --- promotions and the hero follow (8cc6:04bd), and the cities build only
 --- once the hero offer is settled (game.humanProduction).
 function game.startTurn(g, side)
+  require("warlords.site").stampTiles(g, side)   -- 8065:2123 -> 66d4:09f2
   comeAshore(g, side)
   game.followCapital(g, side)
   game.tidyExplored(g, side)

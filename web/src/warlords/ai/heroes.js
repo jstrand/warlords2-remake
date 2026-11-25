@@ -17,7 +17,7 @@ function blessed(h, s) {
 function worth(g, side, s, h) {
   const dd = core.dist(s.x, s.y, h.x, h.y);
   const reach = g.turn * 2 + (s.rich ? 15 : 3);
-  return dd < reach && core.explored(g, side.index, s.x, s.y) && core.siteOpen(s);
+  return dd < reach && core.explored(g, side.index, s.x, s.y) && core.onSite(g, s) && core.siteOpen(s);
 }
 
 /** Is an item lying where a hero may take it (6087:1736)? */

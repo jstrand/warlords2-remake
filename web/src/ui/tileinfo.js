@@ -45,7 +45,7 @@ export function open(tx, ty) {
   const owner = armies[0] ? armies[0].owner : undefined;
   const tower = g.towerAt && g.towerAt[ty * g.map.width + tx];
   const city = game.cityAt(g, tx, ty);
-  const site = g.map.siteAt ? g.map.siteAt[ty * g.map.width + tx] : null;
+  const site = siteMod.at(g, tx, ty);     // terrain 11 only (740d:0037)
   const terrain = scn.terrainAt(g.map, tx, ty);
 
   const side = (i) => g.map.sides[i ?? 8];

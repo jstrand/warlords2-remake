@@ -801,8 +801,7 @@ local function select(x, y, pick)
     end
   end
   local lead = G.selection.stack[1]
-  if lead and lead.type == armytype.HERO and G.g.map.siteAt
-     and G.g.map.siteAt[y * G.g.map.width + x] then
+  if lead and lead.type == armytype.HERO and require("warlords.site").at(G.g, x, y) then
     moments[#moments + 1] = "search"
   end
   require("ui.tutorial").chain(moments)
@@ -3736,8 +3735,7 @@ do
   function L.canSearch()
     local lead = G.selection and G.selection.stack[1]
     if not lead then return false end
-    local m = G.g.map
-    local s = m.siteAt and m.siteAt[lead.y * m.width + lead.x]
+    local s = require("warlords.site").at(G.g, lead.x, lead.y)    -- on terrain 11 only
     if not s or s.searched then return false end
     return lead.type == armytype.HERO or s.type == require("warlords.site").TEMPLE
   end

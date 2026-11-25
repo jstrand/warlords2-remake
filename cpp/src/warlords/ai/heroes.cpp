@@ -19,7 +19,7 @@ bool blessed(const Army* h, const Site& s) { return s.templeIndex != NONE && h->
 bool worth(const Game& g, const Side& side, const Site& s, const Army* h) {
   int dd = dist(s.x, s.y, h->x, h->y);
   int reach = g.turn * 2 + (s.rich ? 15 : 3);
-  return dd < reach && explored(g, side.index, s.x, s.y) && siteOpen(s);
+  return dd < reach && explored(g, side.index, s.x, s.y) && onSite(g, s) && siteOpen(s);
 }
 
 // Is an item lying where a hero may take it (6087:1736)?

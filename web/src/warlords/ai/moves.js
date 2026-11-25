@@ -62,7 +62,7 @@ function sage(g, side) {
 export function* searchSite(g, sel, h, s) {
   if (!(h && core.alive(g, h) && h.x === s.x && h.y === s.y && (h.moves || 0) !== 0)) return 0;
   const side = g.map.sides[h.owner];
-  if (core.siteOpen(s)) {
+  if (core.onSite(g, s) && core.siteOpen(s)) {
     const stack = sel ? sel.armies : [h];
     const r = siteMod.search(g, stack, s.x, s.y, false);
     if (r && r.kind === "sage") sage(g, side);
@@ -104,7 +104,8 @@ export function* party(g, side, list) {
     for (const o of core.armies(g, side.index)) {
       if (o !== hero && core.isHero(o) && o.aiOrder === core.ORDER_SITE && o.aiDest === s.index) taken = true;
     }
-    if (!taken && core.explored(g, side.index, s.x, s.y) && s.content !== siteMod.TEMPLE && !s.searched) {
+    if (!taken && core.explored(g, side.index, s.x, s.y) && core.onSite(g, s)
+        && s.content !== siteMod.TEMPLE && !s.searched) {
       const dd = core.dist(hero.x, hero.y, s.x, s.y);
       let base = null;
       if (dd < 15 && score < 215 - dd) base = 215;

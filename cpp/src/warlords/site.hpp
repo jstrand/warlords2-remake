@@ -55,6 +55,20 @@ void fillItemPool(Game& g, int reserved);
 void markRich(Game& g);
 /** Roll what every site holds (setup_random_sites, 66d4:0000). */
 void setup(Game& g);
+// The site art on SCENERY0.PCK: the columned building, the domed temple,
+// the broken columns; tile 9 is bare plain.
+constexpr int TILE_STRONGHOLD = 10, TILE_TEMPLE = 11, TILE_RUIN = 12, TILE_HIDDEN = 9;
+/** Give every site its tile as `side` knows it (66d4:09f2): a temple the
+ *  domed temple, a rich site -- a stronghold -- the columned building, any
+ *  other the ruins. With quests on, a stronghold the side has not been shown
+ *  is bare plain: no site at all to it until a sage or a quest reveals it.
+ *  The map's own art is thrown away; the original runs this at every side's
+ *  turn, on a load and when a site is revealed. */
+void stampTiles(Game& g, const Side& side);
+/** The site on (x, y), if the tile is one: the original looks for a site
+ *  only on terrain 11 (site_search, 6536:0000; 740d:0037; 8065:0519; the
+ *  computer's 6087:065d, 57ea:177f), so a hidden stronghold is not there. */
+Site* at(const Game& g, int x, int y);
 /** Does the hero survive the ruin's guardian (6536:07ad)? 3 more in 100 for
  *  every army on its tile, whoever's. */
 bool survivesGuardian(Game& g, const Army& h, int monsterStrength);

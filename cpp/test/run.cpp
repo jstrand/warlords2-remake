@@ -1869,6 +1869,36 @@ static void testSites(const std::string& scenario) {
   }
   eq(survived, 400, "a strong hero always beats a weak guardian");
   ok(died > 0, "a weak hero sometimes dies to a strong one");
+
+  // each site's tile as the side to play knows it (66d4:09f2)
+  Side& me = *g.sides[0];
+  auto tile = [&](const Site& s) { return scn::tileAt(*g.map, s.x, s.y) % 256; };
+  g.map->options.quests = 1;
+  Site* hidden = nullptr;
+  for (auto& s : g.map->sites) if (!hidden && s.rich && !site::shownTo(s, me)) hidden = &s;
+  if (hidden) hidden->revealed = 0;
+  site::stampTiles(g, me);
+  for (auto& s : g.map->sites) {
+    if (s.content == site::TEMPLE) eq(tile(s), site::TILE_TEMPLE, "a temple is the domed temple");
+    else if (!s.rich) eq(tile(s), site::TILE_RUIN, "a ruin is the broken columns");
+    else if (site::shownTo(s, me)) eq(tile(s), site::TILE_STRONGHOLD, "a stronghold shown is the columned building");
+    else eq(tile(s), site::TILE_HIDDEN, "a stronghold not shown is bare plain");
+  }
+  if (hidden) {
+    eq(scn::terrainAt(*g.map, hidden->x, hidden->y), move::PLAIN, "and plain to walk on");
+    ok(site::at(g, hidden->x, hidden->y) == nullptr, "with no site there");
+    Army* h = addArmy(g, hidden->x, hidden->y, me.index, armytype::HERO, 9, 14, 14);
+    ok(site::search(g, {h}, hidden->x, hidden->y) == nullptr, "nor anything to search");
+    hidden->revealed |= 1 << me.index;
+    site::stampTiles(g, me);
+    eq(tile(*hidden), site::TILE_STRONGHOLD, "revealed, it is the columned building");
+    ok(site::at(g, hidden->x, hidden->y) == hidden, "and a site again");
+  }
+  g.map->options.quests = 0;
+  site::stampTiles(g, me);
+  for (auto& s : g.map->sites) {
+    if (s.rich) eq(tile(s), site::TILE_STRONGHOLD, "with quests off every stronghold shows");
+  }
 }
 
 // A stack that takes a city from the sea is still at sea until its side's

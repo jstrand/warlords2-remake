@@ -280,7 +280,10 @@ export function reward(g, side, q) {
       if (d < bestD) { best = s; bestD = d; }
     }
     best.revealed = (best.revealed || 0) | (1 << side.index);
-    if (!side.computer || side.observe) game.reveal(g, side.index, best.x, best.y, false);
+    if (!side.computer || side.observe) {
+      site.stampTiles(g, side);       // 4976:1c02 -> 66d4:09f2
+      game.reveal(g, side.index, best.x, best.y, false);
+    }
     return { kind: "revealed", site: best };
   }
   if (g.rng.dice(1, 2, 0) === 1) return allies(g.rng.dice(1, 3, 2));

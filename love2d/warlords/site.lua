@@ -233,7 +233,7 @@ end
 function site.search(g, stack, x, y, human)
   local heroMod = require("warlords.hero")
   local history = require("warlords.history")
-  local s = g.map.siteAt and g.map.siteAt[y * g.map.width + x]
+  local s = site.at(g, x, y)
   if not s or s.searched then return nil end
   if not stack[1] or (stack[1].moves or 0) < 1 then return nil end
 
@@ -343,6 +343,42 @@ function site.shownTo(s, side)
 end
 local shownTo = site.shownTo
 
+-- The site art on SCENERY0.PCK: the columned building, the domed temple,
+-- the broken columns; tile 9 is bare plain.
+site.TILE_STRONGHOLD, site.TILE_TEMPLE, site.TILE_RUIN, site.TILE_HIDDEN = 10, 11, 12, 9
+
+--- Give every site its tile as `side` knows it (66d4:09f2): a temple the
+--- domed temple, a rich site -- a stronghold -- the columned building, any
+--- other the ruins. With quests on, a stronghold the side has not been shown
+--- is bare plain: no site at all to it until a sage or a quest reveals it.
+--- The map's own art is thrown away; the original runs this at every side's
+--- turn, on a load and when a site is revealed.
+function site.stampTiles(g, side)
+  local m = g.map
+  local changed = false
+  for _, s in ipairs(m.sites) do
+    local t
+    if s.content == site.TEMPLE then t = site.TILE_TEMPLE
+    elseif not s.rich then t = site.TILE_RUIN
+    elseif shownTo(s, side) or m.options.quests == 0 then t = site.TILE_STRONGHOLD
+    else t = site.TILE_HIDDEN end
+    local i = s.y * scn.MAP_W + s.x + 1
+    local was = m.tiles[i]
+    m.tiles[i] = was - was % 256 + t
+    if m.tiles[i] ~= was then changed = true end
+  end
+  -- the ground under the routes (path_build_cost_grid follows, 8065:2123)
+  if changed then move.invalidate(g) end
+end
+
+--- The site on (x, y), if the tile is one: the original looks for a site
+--- only on terrain 11 (site_search, 6536:0000; 740d:0037; 8065:0519; the
+--- computer's 6087:065d, 57ea:177f), so a hidden stronghold is not there.
+function site.at(g, x, y)
+  if scn.terrainAt(g.map, x, y) ~= move.SITE then return nil end
+  return g.map.siteAt and g.map.siteAt[y * g.map.width + x]
+end
+
 local function unshown(g, side, s, hx, hy)
   return s.rich and not s.searched and not shownTo(s, side)
          and sageDistance(s, hx, hy) < site.SAGE_RANGE
@@ -386,6 +422,7 @@ function site.sageShow(g, side, entry, hx, hy)
   end
   if not found then return nil end
   if not shownTo(found, side) then found.revealed = (found.revealed or 0) + math.floor(2 ^ side.index) end
+  site.stampTiles(g, side)
   require("warlords.game").reveal(g, side.index, found.x, found.y, false)
   return found
 end

@@ -586,7 +586,7 @@ static void select(int x, int y, Army* pick) {
     }
   }
   Army* lead = G.selection->stack.empty() ? nullptr : G.selection->stack[0];
-  if (lead && lead->hero() && !G.g->map->siteAt.empty() && G.g->map->siteAt[y * G.g->map->width + x]) moments.push_back("search");
+  if (lead && lead->hero() && w2::site::at(*G.g, x, y)) moments.push_back("search");
   tutorial::chain(moments);
 }
 void front::selectAt(int x, int y) { select(x, y); }
@@ -3101,7 +3101,7 @@ static bool menuEnabled(const std::string& k) {
   auto canSearch = [&]() {
     if (!selected()) return false;
     Army* lead = G.selection->stack[0];
-    w2::Site* s = g.map->siteAt.empty() ? nullptr : g.map->siteAt[lead->y * g.map->width + lead->x];
+    w2::Site* s = w2::site::at(g, lead->x, lead->y);       // on terrain 11 only
     if (!s || s->searched) return false;
     return lead->hero() || s->type == w2::site::TEMPLE;
   };

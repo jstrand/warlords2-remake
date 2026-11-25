@@ -301,7 +301,10 @@ std::shared_ptr<Reward> reward(Game& g, Side& side, const Quest* q) {
       if (d < bestD) { best = s; bestD = d; }
     }
     best->revealed |= 1 << side.index;
-    if (!side.computer || side.observe) game::reveal(g, side.index, best->x, best->y, false);
+    if (!side.computer || side.observe) {
+      site::stampTiles(g, side);       // 4976:1c02 -> 66d4:09f2
+      game::reveal(g, side.index, best->x, best->y, false);
+    }
     auto r = std::make_shared<Reward>();
     r->kind = "revealed";
     r->site = best;

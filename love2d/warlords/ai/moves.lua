@@ -69,7 +69,7 @@ function moves.searchSite(g, sel, h, s)
   end
   local siteMod = require("warlords.site")
   local side = g.map.sides[h.owner + 1]
-  if core.siteOpen(s) then
+  if core.onSite(g, s) and core.siteOpen(s) then
     local stack = sel and sel.armies or { h }
     local r = siteMod.search(g, stack, s.x, s.y, false)
     if r and r.kind == "sage" then sage(g, side) end
@@ -122,7 +122,7 @@ function moves.party(g, side, list)
         taken = true
       end
     end
-    if not taken and core.explored(g, side.index, s.x, s.y)
+    if not taken and core.explored(g, side.index, s.x, s.y) and core.onSite(g, s)
        and s.content ~= siteMod.TEMPLE and not s.searched then
       local dd = core.dist(hero.x, hero.y, s.x, s.y)
       local base

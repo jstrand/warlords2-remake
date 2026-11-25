@@ -356,7 +356,10 @@ function quest.reward(g, side, q)
       if d < bestD then best, bestD = s, d end
     end
     best.revealed = (best.revealed or 0) + math.floor(2 ^ side.index)
-    if not side.computer or side.observe then gameMod.reveal(g, side.index, best.x, best.y, false) end
+    if not side.computer or side.observe then
+      site.stampTiles(g, side)       -- 4976:1c02 -> 66d4:09f2
+      gameMod.reveal(g, side.index, best.x, best.y, false)
+    end
     return { kind = "revealed", site = best }
   end
 

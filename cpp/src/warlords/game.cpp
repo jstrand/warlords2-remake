@@ -520,6 +520,7 @@ static void turnQuest(Game& g, Side& side) {
 }
 
 bool startTurn(Game& g, Side& side) {
+  site::stampTiles(g, side);           // 8065:2123 -> 66d4:09f2
   comeAshore(g, side);
   followCapital(g, side);
   tidyExplored(g, side.index);

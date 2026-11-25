@@ -122,8 +122,12 @@ int proposal(const Game& g, int a, int b);
 void propose(Game& g, int a, int b, int v);
 /** The city whose footprint covers (x, y). */
 City* cityAt(const Game& g, int x, int y);
-/** The site on (x, y) (828e:04b5). */
+/** The site on (x, y) (828e:04b5), where the tile is a site (terrain 11, as
+ *  every caller has it: 6087:065d, 57ea:177f, 5ad0:15c3). */
 Site* siteAt(const Game& g, int x, int y);
+/** Does the site's tile show it -- terrain 11 -- to the side whose turn it
+ *  is (6087:1637, 5ad0:11a6)? A stronghold kept hidden by quests does not. */
+bool onSite(const Game& g, const Site& s);
 int terrain(const Game& g, int x, int y);
 /** A temple, or a ruin nobody has searched. */
 bool siteOpen(const Site& s);

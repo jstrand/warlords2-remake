@@ -95,9 +95,16 @@ function core.cityAt(g, x, y)
   return g.map.cityTile[y * g.map.width + x]
 end
 
---- The site on (x, y) (828e:04b5).
+--- The site on (x, y) (828e:04b5), where the tile is a site (terrain 11, as
+--- every caller has it: 6087:065d, 57ea:177f, 5ad0:15c3).
 function core.siteAt(g, x, y)
-  return g.map.siteAt and g.map.siteAt[y * g.map.width + x]
+  return require("warlords.site").at(g, x, y)
+end
+
+--- Does the site's tile show it -- terrain 11 -- to the side whose turn it
+--- is (6087:1637, 5ad0:11a6)? A stronghold kept hidden by quests does not.
+function core.onSite(g, s)
+  return require("warlords.site").at(g, s.x, s.y) == s
 end
 
 function core.terrain(g, x, y) return scn.terrainAt(g.map, x, y) end

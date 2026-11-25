@@ -11,6 +11,7 @@
 #include "warlords/move.hpp"
 #include "warlords/randommap.hpp"
 #include "warlords/scn.hpp"
+#include "warlords/site.hpp"
 
 namespace w2::save {
 
@@ -648,6 +649,8 @@ std::unique_ptr<Game> decode(const std::string& text, const std::string& dataDir
   }
 
   g.side = g.current < (int)g.sides.size() ? g.sides[g.current] : nullptr;
+  // the sites' tiles as the side to play knows them (7721:02d3 -> 66d4:09f2)
+  if (g.side) site::stampTiles(g, *g.side);
   // where the side to play stands in the turn order; older saves: the order
   // as it is
   if (state.has("orderAt") && !state["orderAt"].isNull()) {

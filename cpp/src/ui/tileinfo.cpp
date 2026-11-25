@@ -59,7 +59,7 @@ void open(int tx, int ty) {
   int owner = armies.empty() ? w2::NONE : armies[0]->owner;
   bool tower = w2::game::towerAt(g, tx, ty);
   w2::City* city = w2::game::cityAt(g, tx, ty);
-  w2::Site* site = g.map->siteAt.empty() ? nullptr : g.map->siteAt[ty * g.map->width + tx];
+  w2::Site* site = w2::site::at(g, tx, ty);     // terrain 11 only (740d:0037)
   int terrain = w2::scn::terrainAt(*g.map, tx, ty);
   auto colours = [](const w2::Side* s) -> const Font& { return kit::font(2).colours(s->colour, s->edge); };
   auto twoLines = [bx, by](const std::string& a, const std::string& b, bool plainFirst) {

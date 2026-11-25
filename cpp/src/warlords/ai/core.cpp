@@ -53,10 +53,9 @@ void propose(Game& g, int a, int b, int v) {
 
 City* cityAt(const Game& g, int x, int y) { return game::cityAt(g, x, y); }
 
-Site* siteAt(const Game& g, int x, int y) {
-  if (g.map->siteAt.empty() || x < 0 || y < 0 || x >= g.map->width || y >= g.map->height) return nullptr;
-  return g.map->siteAt[y * g.map->width + x];
-}
+Site* siteAt(const Game& g, int x, int y) { return site::at(g, x, y); }
+
+bool onSite(const Game& g, const Site& s) { return site::at(g, s.x, s.y) == &s; }
 
 int terrain(const Game& g, int x, int y) { return scn::terrainAt(*g.map, x, y); }
 

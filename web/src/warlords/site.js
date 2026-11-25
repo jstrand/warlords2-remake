@@ -155,6 +155,42 @@ export function setup(g) {
   for (const s of g.map.sites) g.map.siteAt[s.y * g.map.width + s.x] = s;
 }
 
+// The site art on SCENERY0.PCK: the columned building, the domed temple,
+// the broken columns; tile 9 is bare plain.
+export const TILE_STRONGHOLD = 10, TILE_TEMPLE = 11, TILE_RUIN = 12, TILE_HIDDEN = 9;
+
+/** Give every site its tile as `side` knows it (66d4:09f2): a temple the
+ *  domed temple, a rich site -- a stronghold -- the columned building, any
+ *  other the ruins. With quests on, a stronghold the side has not been shown
+ *  is bare plain: no site at all to it until a sage or a quest reveals it.
+ *  The map's own art is thrown away; the original runs this at every side's
+ *  turn, on a load and when a site is revealed. */
+export function stampTiles(g, side) {
+  const m = g.map;
+  let changed = false;
+  for (const s of m.sites) {
+    let t;
+    if (s.content === TEMPLE) t = TILE_TEMPLE;
+    else if (!s.rich) t = TILE_RUIN;
+    else if (shownTo(s, side) || m.options.quests === 0) t = TILE_STRONGHOLD;
+    else t = TILE_HIDDEN;
+    const i = s.y * m.width + s.x;
+    const was = m.tiles[i];
+    m.tiles[i] = (was & ~0xff) | t;
+    if (m.tiles[i] !== was) changed = true;
+  }
+  // the ground under the routes (path_build_cost_grid follows, 8065:2123)
+  if (changed) move.invalidate(g);
+}
+
+/** The site on (x, y), if the tile is one: the original looks for a site
+ *  only on terrain 11 (site_search, 6536:0000; 740d:0037; 8065:0519; the
+ *  computer's 6087:065d, 57ea:177f), so a hidden stronghold is not there. */
+export function at(g, x, y) {
+  if (scn.terrainAt(g.map, x, y) !== move.SITE) return null;
+  return (g.map.siteAt && g.map.siteAt[y * g.map.width + x]) || null;
+}
+
 function heroIn(stack) {
   return stack.find((a) => a.type === armytype.HERO) || null;
 }
@@ -197,7 +233,7 @@ export function bless(g, s, stack) {
  *  blesses at once. With one, a human chooses at a temple; a found item is
  *  left on the ground for Take to pick up. */
 export function search(g, stack, x, y, human) {
-  const s = g.map.siteAt && g.map.siteAt[y * g.map.width + x];
+  const s = at(g, x, y);
   if (!s || s.searched) return null;
   if (!stack[0] || (stack[0].moves || 0) < 1) return null;
   const h = heroIn(stack);
@@ -325,6 +361,7 @@ export function sageShow(g, side, entry, hx, hy) {
   }
   if (!found) return null;
   if (!shownTo(found, side)) found.revealed = (found.revealed || 0) + (1 << side.index);
+  stampTiles(g, side);
   game.reveal(g, side.index, found.x, found.y, false);
   return found;
 }

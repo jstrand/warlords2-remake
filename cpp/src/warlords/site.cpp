@@ -192,9 +192,33 @@ static const Monster* monsterOf(const Game& g, int i) {
   return &*g.map->monsters[i];
 }
 
+void stampTiles(Game& g, const Side& side) {
+  Map& m = *g.map;
+  bool changed = false;
+  for (auto& s : m.sites) {
+    int t;
+    if (s.content == TEMPLE) t = TILE_TEMPLE;
+    else if (!s.rich) t = TILE_RUIN;
+    else if (shownTo(s, side) || m.options.quests == 0) t = TILE_STRONGHOLD;
+    else t = TILE_HIDDEN;
+    int& tile = m.tiles[s.y * m.width + s.x];
+    int was = tile;
+    tile = (was & ~0xff) | t;
+    if (tile != was) changed = true;
+  }
+  // the ground under the routes (path_build_cost_grid follows, 8065:2123)
+  if (changed) move::invalidate(g);
+}
+
+Site* at(const Game& g, int x, int y) {
+  const Map& m = *g.map;
+  if (m.siteAt.empty() || x < 0 || y < 0 || x >= m.width || y >= m.height) return nullptr;
+  if (scn::terrainAt(m, x, y) != move::SITE) return nullptr;
+  return m.siteAt[y * m.width + x];
+}
+
 std::shared_ptr<SearchResult> search(Game& g, const std::vector<Army*>& stack, int x, int y, bool human) {
-  if (g.map->siteAt.empty() || x < 0 || y < 0) return nullptr;
-  Site* s = g.map->siteAt[y * g.map->width + x];
+  Site* s = at(g, x, y);
   if (!s || s->searched) return nullptr;
   if (stack.empty() || stack[0]->moves < 1) return nullptr;
   Army* h = heroIn(stack);
@@ -332,6 +356,7 @@ Site* sageShow(Game& g, const Side& side, const SageEntry& entry, int hx, int hy
   }
   if (!found) return nullptr;
   if (!shownTo(*found, side)) found->revealed = found->revealed + (1 << side.index);
+  stampTiles(g, side);
   game::reveal(g, side.index, found->x, found->y, false);
   return found;
 }

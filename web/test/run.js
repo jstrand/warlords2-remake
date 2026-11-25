@@ -1621,6 +1621,35 @@ function testSites(scenario) {
   }
   eq(survived, 400, "a strong hero always beats a weak guardian");
   ok(died > 0, "a weak hero sometimes dies to a strong one");
+
+  // each site's tile as the side to play knows it (66d4:09f2)
+  const me = g.sides[0];
+  const tile = (s) => scn.tileAt(g.map, s.x, s.y) % 256;
+  g.map.options.quests = 1;
+  const hidden = g.map.sites.find((s) => s.rich && !site.shownTo(s, me));
+  if (hidden) hidden.revealed = 0;
+  site.stampTiles(g, me);
+  for (const s of g.map.sites) {
+    if (s.content === site.TEMPLE) eq(tile(s), site.TILE_TEMPLE, "a temple is the domed temple");
+    else if (!s.rich) eq(tile(s), site.TILE_RUIN, "a ruin is the broken columns");
+    else if (site.shownTo(s, me)) eq(tile(s), site.TILE_STRONGHOLD, "a stronghold shown is the columned building");
+    else eq(tile(s), site.TILE_HIDDEN, "a stronghold not shown is bare plain");
+  }
+  if (hidden) {
+    eq(scn.terrainAt(g.map, hidden.x, hidden.y), movement.PLAIN, "and plain to walk on");
+    eq(site.at(g, hidden.x, hidden.y), null, "with no site there");
+    const h = { x: hidden.x, y: hidden.y, owner: me.index, type: armytype.HERO, strength: 9, moves: 14, items: [] };
+    eq(site.search(g, [h], hidden.x, hidden.y), null, "nor anything to search");
+    hidden.revealed |= 1 << me.index;
+    site.stampTiles(g, me);
+    eq(tile(hidden), site.TILE_STRONGHOLD, "revealed, it is the columned building");
+    eq(site.at(g, hidden.x, hidden.y), hidden, "and a site again");
+  }
+  g.map.options.quests = 0;
+  site.stampTiles(g, me);
+  for (const s of g.map.sites) {
+    if (s.rich) eq(tile(s), site.TILE_STRONGHOLD, "with quests off every stronghold shows");
+  }
 }
 
 // A step is taken while the walk's cost so far fits in the moves left

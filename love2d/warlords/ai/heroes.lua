@@ -20,7 +20,7 @@ end
 local function worth(g, side, s, h)
   local dd = core.dist(s.x, s.y, h.x, h.y)
   local reach = g.turn * 2 + (s.rich and 15 or 3)
-  return dd < reach and core.explored(g, side.index, s.x, s.y) and core.siteOpen(s)
+  return dd < reach and core.explored(g, side.index, s.x, s.y) and core.onSite(g, s) and core.siteOpen(s)
 end
 
 --- Is an item lying where a hero may take it (6087:1736): on the ground,

@@ -2216,6 +2216,39 @@ local function testSites(scenario)
   end
   eq(survived, 400, "a strong hero always beats a weak guardian")
   ok(died > 0, "a weak hero sometimes dies to a strong one")
+
+  -- each site's tile as the side to play knows it (66d4:09f2)
+  local scn = require("warlords.scn")
+  local me = g.sides[1]
+  local function tile(s) return scn.tileAt(g.map, s.x, s.y) % 256 end
+  g.map.options.quests = 1
+  local hidden
+  for _, s in ipairs(g.map.sites) do
+    if not hidden and s.rich and not siteMod.shownTo(s, me) then hidden = s end
+  end
+  if hidden then hidden.revealed = 0 end
+  siteMod.stampTiles(g, me)
+  for _, s in ipairs(g.map.sites) do
+    if s.content == siteMod.TEMPLE then eq(tile(s), siteMod.TILE_TEMPLE, "a temple is the domed temple")
+    elseif not s.rich then eq(tile(s), siteMod.TILE_RUIN, "a ruin is the broken columns")
+    elseif siteMod.shownTo(s, me) then eq(tile(s), siteMod.TILE_STRONGHOLD, "a stronghold shown is the columned building")
+    else eq(tile(s), siteMod.TILE_HIDDEN, "a stronghold not shown is bare plain") end
+  end
+  if hidden then
+    eq(scn.terrainAt(g.map, hidden.x, hidden.y), movement.PLAIN, "and plain to walk on")
+    eq(siteMod.at(g, hidden.x, hidden.y), nil, "with no site there")
+    local h = { x = hidden.x, y = hidden.y, owner = me.index, type = armytype.HERO, strength = 9, moves = 14, items = {} }
+    eq(siteMod.search(g, { h }, hidden.x, hidden.y), nil, "nor anything to search")
+    hidden.revealed = hidden.revealed + math.floor(2 ^ me.index)
+    siteMod.stampTiles(g, me)
+    eq(tile(hidden), siteMod.TILE_STRONGHOLD, "revealed, it is the columned building")
+    ok(siteMod.at(g, hidden.x, hidden.y) == hidden, "and a site again")
+  end
+  g.map.options.quests = 0
+  siteMod.stampTiles(g, me)
+  for _, s in ipairs(g.map.sites) do
+    if s.rich then eq(tile(s), siteMod.TILE_STRONGHOLD, "with quests off every stronghold shows") end
+  end
 end
 
 ----------------------------------------------------------------- diplomacy

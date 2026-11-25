@@ -436,6 +436,8 @@ function save.decode(text, dataDir)
   end
 
   g.side = g.sides[g.current]
+  -- the sites' tiles as the side to play knows them (7721:02d3 -> 66d4:09f2)
+  if g.side then require("warlords.site").stampTiles(g, g.side) end
   -- where the side to play stands in the turn order; older saves: the order
   -- as it is
   if state.orderAt then

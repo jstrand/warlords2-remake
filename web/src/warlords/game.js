@@ -576,6 +576,7 @@ export function followCapital(g, side) {
  *  promotions and the hero follow (8cc6:04bd), and the cities build only
  *  once the hero offer is settled (humanProduction). */
 export function startTurn(g, side) {
+  site.stampTiles(g, side);           // 8065:2123 -> 66d4:09f2
   comeAshore(g, side);
   followCapital(g, side);
   tidyExplored(g, side);

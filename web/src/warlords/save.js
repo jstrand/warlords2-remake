@@ -10,6 +10,7 @@
 import * as game from "./game.js";
 import * as scn from "./scn.js";
 import * as move from "./move.js";
+import * as site from "./site.js";
 import * as vfs from "../vfs.js";
 import * as randommap from "./randommap.js";
 import { latin1, bytesOf } from "../util.js";
@@ -319,6 +320,8 @@ export function decode(text, dataDir) {
   }
 
   g.side = g.sides[g.current];
+  // the sites' tiles as the side to play knows them (7721:02d3 -> 66d4:09f2)
+  if (g.side) site.stampTiles(g, g.side);
   // where the side to play stands in the turn order; older saves: the order
   // as it is
   g.orderAt = state.orderAt != null ? state.orderAt : g.turnOrder.indexOf(g.side ? g.side.index : 0);
