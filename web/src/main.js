@@ -194,6 +194,7 @@ function load(params) {
   // the screen: its real pixels, the UI's scale, and the map's zoom
   if (prefs.get("4:3") === "on") display.wanted = { w: layoutMod.W, h: layoutMod.H };
   display.crt = prefs.get("crt") === "on";
+  G.siteMarkers = prefs.get("sites") === "on";
   display.chosen = Number(prefs.get("scale")) || null;
   measure();
   G.zoom = Number(prefs.get("zoom")) || display.scale;
@@ -470,12 +471,20 @@ G.toggleCRT = () => {
   prefs.set("crt", display.crt ? "on" : "off");
 };
 
+/** Not the original's: the strategic map beside the view marks every site
+ *  the side knows of, as View > Ruins does (View > Ruin markers, alt-.). */
+G.toggleSiteMarkers = () => {
+  G.siteMarkers = !G.siteMarkers;
+  prefs.set("sites", G.siteMarkers ? "on" : "off");
+};
+
 /** Is this menu item the setting in use? */
 G.menuTicked = (k) => k === "map zoom " + G.zoom || k === "ui scale " + display.scale
   || k === "screen " + G.screenMode()
   || (k === "screen 4:3" && display.wanted != null)
   || (k === "screen fit" && display.wanted == null)
   || (k === "screen crt" && display.crt)
+  || (k === "map sites" && G.siteMarkers)
   || k === "music " + sound.synth();
 
 // ------------------------------------------------------------------ walking
@@ -1573,6 +1582,7 @@ G.drawSiteMarkers = (x, y, highlight) => {
 function drawStrategic() {
   const r = G.stratRect;
   G.drawStrategicMap(r.x, r.y);
+  if (G.siteMarkers) G.drawSiteMarkers(r.x, r.y);
   gfx.setScissor(r.x, r.y, r.w, r.h);
   // the view box (8961:0698): whatever the view covers, to the device pixel
   gfx.setColor(G.palette[15]);
@@ -1708,11 +1718,15 @@ function drawMenuBar() {
       const f = G.font.colours(glyph, lit ? 8 : 15);
       gfx.setColor(1, 1, 1);
       f.draw(r.label, r.x + 3, r.y);
-      if (r.key) f.draw(r.key, r.x + d.keyCol, r.y);
+      const keyedSetting = r.key && menuMod.tickable(r.act);
+      if (keyedSetting) f.draw(r.key, r.x + d.keyCol - G.font.width(r.key.slice(0, -1)), r.y);
+      else if (r.key) f.draw(r.key, r.x + d.keyCol, r.y);
       // the setting in use (not the original's): a diamond in the key column
-      if (G.menuTicked(r.key || r.act)) {
+      if (G.menuTicked(r.act || r.key)) {
         palColour(glyph);
-        const cx = r.x + d.keyCol + 2, cy = r.y + Math.floor(r.h / 2);
+        // a setting with a key has it right after its label
+        const cx = keyedSetting ? r.x + 3 + G.font.width(r.label) + menuMod.TICK_GAP + 2 : r.x + d.keyCol + 2;
+        const cy = r.y + Math.floor(r.h / 2);
         for (let k = -2; k <= 2; k++) {
           const half = 2 - Math.abs(k);
           gfx.rectangle("fill", cx - half, cy + k, half * 2 + 1, 1);
@@ -3003,6 +3017,7 @@ MENU_DOES["screen window"] = () => G.setScreen("window");
 MENU_DOES["screen 4:3"] = () => G.setOriginalSize(true);
 MENU_DOES["screen fit"] = () => G.setOriginalSize(false);
 MENU_DOES["screen crt"] = () => G.toggleCRT();
+MENU_DOES["alt ."] = () => G.toggleSiteMarkers();      // View > Ruin markers
 MENU_DOES["game export"] = () => savegame.exportGame();
 MENU_DOES["game import"] = () => savegame.importGame(takeFromMenu);
 for (const synth of sound.SYNTHS) MENU_DOES["music " + synth] = () => sound.setSynth(synth);

@@ -1121,6 +1121,10 @@ if G and G.menuLayout then
      or not tonumber(prefsMod.get("zoom")) then
     fail("prefs", "the menus' choices were not all written to " .. prefsMod.FILE)
   end
+  -- View > Ruin markers, picked once, is on, ticked and written down
+  if not G.siteMarkers or not G.menuTicked("map sites") or prefsMod.get("sites") ~= "on" then
+    fail("ruin markers", "View > Ruin markers did not turn the markers on")
+  end
   -- the last of View's is Fit available space, after 4:3: the whole screen
   -- again, and it is the one ticked
   if G.layout.w ~= SCREEN_W or G.layout.h ~= SCREEN_H then

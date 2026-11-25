@@ -34,6 +34,10 @@ extern const std::vector<Menu> MENUS;
  *  named for their size on the screen: `mapShrink` times their own. */
 std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI = 0, double mapShrink = 1);
 
+/** Is `act` a setting the menu ticks when in use (not the original's)? */
+bool tickable(const std::string& act);
+constexpr int TICK_GAP = 4;   // between a setting's label and its tick, when it has a key
+
 struct Row {
   std::string label, key, act;
   int x = 0, y = 0, w = 0, h = 0;

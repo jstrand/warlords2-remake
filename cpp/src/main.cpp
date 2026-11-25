@@ -355,6 +355,14 @@ static void toggleCRT() {
   prefs::set("crt", display::d.crt ? "on" : "off");
 }
 
+// Not the original's: the strategic map beside the view marks every site the
+// side knows of, as View > Ruins does (View > Ruin markers, alt-.).
+static bool siteMarkers = false;
+static void toggleSiteMarkers() {
+  siteMarkers = !siteMarkers;
+  prefs::set("sites", siteMarkers ? "on" : "off");
+}
+
 // The interface's scale in use; a short one stays ticked on the start
 // screens, which are drawn as with none chosen.
 static std::string uiScaleKey() {
@@ -367,7 +375,7 @@ static bool menuTicked(const std::string& k) {
   return k == "map zoom " + std::to_string(G.zoom) || k == uiScaleKey() ||
          k == std::string("screen ") + (display::d.windowed ? "window" : "full") ||
          (k == "screen 4:3" && display::d.wanted) || (k == "screen fit" && !display::d.wanted) ||
-         (k == "screen crt" && display::d.crt) ||
+         (k == "screen crt" && display::d.crt) || (k == "map sites" && siteMarkers) ||
          k == "music " + sound::synth();
 }
 
@@ -1543,8 +1551,9 @@ void front::drawStrategicMap(int x, int y, const City* mark, bool noCities, cons
   gfx::setScissor();
 }
 
-void front::drawSiteMarkers(int x, int y, const w2::Site* highlight) {
-  gfx::setScissor(x, y, 224, 312);
+void front::drawSiteMarkers(int x, int y, const w2::Site* highlight, int scroll, int rows) {
+  gfx::setScissor(x, y, 224, rows);
+  y -= scroll;
   for (auto& s : G.g->map->sites) {
     if (!(w2::site::shownTo(s, *G.player) && game::seen(*G.g, G.player->index, s.x, s.y))) continue;
     int sx, sy;
@@ -1582,6 +1591,7 @@ static void drawStrategic() {
   const auto& r = G.stratRect;
   followView();
   front::drawStrategicMap(r.x, r.y, nullptr, false, nullptr, stratScroll, r.h);
+  if (siteMarkers) front::drawSiteMarkers(r.x, r.y, nullptr, stratScroll, r.h);
   gfx::setScissor(r.x, r.y, r.w, r.h);
   // the view box (8961:0698): whatever the view covers, to the device pixel
   palColour(15);
@@ -1721,7 +1731,9 @@ static void drawMenuBar() {
     const Font& f = G.font->colours(glyph, lit ? 8 : 15);
     gfx::setColor(1, 1, 1);
     f.draw(r.label, r.x + 3, r.y);
-    if (!r.key.empty()) f.draw(r.key, r.x + d.keyCol, r.y);
+    bool keyedSetting = !r.key.empty() && menu::tickable(r.act);
+    if (keyedSetting) f.draw(r.key, r.x + d.keyCol - G.font->width(r.key.substr(0, r.key.size() - 1)), r.y);
+    else if (!r.key.empty()) f.draw(r.key, r.x + d.keyCol, r.y);
     // the controller's button that does the same (not the original's)
     if (d.markCol && padmap::hints()) {
       for (const auto& a : padmap::actions()) {
@@ -1731,9 +1743,11 @@ static void drawMenuBar() {
       }
     }
     // the setting in use (not the original's): a diamond in the key column
-    if (menuTicked(k)) {
+    if (menuTicked(r.act.empty() ? k : r.act)) {
       palColour(glyph);
-      int cx = r.x + d.keyCol + 2, cy = r.y + r.h / 2;
+      // a setting with a key has it right after its label
+      int cx = keyedSetting ? r.x + 3 + G.font->width(r.label) + menu::TICK_GAP + 2 : r.x + d.keyCol + 2;
+      int cy = r.y + r.h / 2;
       for (int j = -2; j <= 2; j++) {
         int half = 2 - std::abs(j);
         gfx::rectangle(gfx::FILL, cx - half, cy + j, half * 2 + 1, 1);
@@ -3064,6 +3078,7 @@ static std::map<std::string, std::function<void()>>& menuDoes() {
   M["screen 4:3"] = []() { setOriginalSize(true); };
   M["screen fit"] = []() { setOriginalSize(false); };
   M["screen crt"] = toggleCRT;
+  M["alt ."] = toggleSiteMarkers;      // View > Ruin markers
   for (const char* s : {"fm", "mt32", "sc55"}) {
     std::string synth = s;
     M["music " + synth] = [synth]() { sound::setSynth(synth); };
@@ -3760,6 +3775,7 @@ int main(int argc, char** argv) {
     // the screen: its real pixels, the UI's scale, and the map's zoom
     if (prefs::get("4:3") == "on") display::d.wanted = std::make_pair(layout::W, layout::H);
     display::d.crt = prefs::get("crt") == "on";
+    siteMarkers = prefs::get("sites") == "on";
     display::d.chosen = prefs::get("scale") == "smooth" ? display::SMOOTH : prefs::getInt("scale", 0);
     display::measure();
     G.zoom = prefs::getInt("zoom", display::d.scale);

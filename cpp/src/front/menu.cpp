@@ -50,7 +50,11 @@ std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI, double mapSh
         }
       }
     } else if (m.title == "View") {
-      n.items = m.items;
+      for (const Item& it : m.items) {
+        n.items.push_back(it);
+        // the sites marked on the main screen's map too, a key's toggle
+        if (it.key == ".") n.items.push_back({"Ruin markers", "alt .", "map sites"});
+      }
       n.items.push_back({"-", "", ""});
       for (int z = 1; z <= maxMap; z++) n.items.push_back({"Map " + scaleName(z * mapShrink) + "x", "", "map zoom " + std::to_string(z)});
       n.items.push_back({"-", "", ""});
@@ -75,8 +79,9 @@ std::vector<Menu> withZooms(int maxUI, int maxMap, double smoothUI, double mapSh
 // The settings the menus tick when in use (not the original's): their tick
 // is a diamond 5 pixels wide in the key column.
 static const int TICK_W = 5;
-static bool tickable(const std::string& act) {
-  for (const char* p : {"map zoom ", "ui scale ", "screen ", "music "})
+static const int KEY_GAP = 8;          // between a setting's tick and its key
+bool tickable(const std::string& act) {
+  for (const char* p : {"map zoom ", "map sites", "ui scale ", "screen ", "music "})
     if (act.rfind(p, 0) == 0) return true;
   return false;
 }
@@ -93,7 +98,14 @@ Layout layout(const Font& font, int screenWidth, const std::vector<Menu>& menus,
     for (const Item& it : m.items) {
       if (it.label != "-") {
         int lw = 12 + font.width(it.label);
-        if (!it.key.empty()) {
+        if (!it.key.empty() && tickable(it.act)) {
+          // a setting with a key: its tick right after the label, and the
+          // key's last character in the key column, under the others' keys
+          int head = font.width(it.key.substr(0, it.key.size() - 1));
+          keyCol = std::max(keyCol, lw + TICK_GAP + TICK_W + KEY_GAP + head);
+          keyW = std::max(keyW, font.width(it.key.substr(it.key.size() - 1)));
+          lw = keyCol + keyW;
+        } else if (!it.key.empty()) {
           keyCol = std::max(keyCol, lw + 5);
           keyW = std::max(keyW, font.width(it.key));
           lw = keyCol + keyW;

@@ -62,7 +62,12 @@ export function withZooms(maxUI, maxMap) {
         }
       });
     } else if (m.title === "View") {
-      items = m.items.slice();
+      items = [];
+      for (const it of m.items) {
+        items.push(it);
+        // the sites marked on the main screen's map too, a key's toggle
+        if (it[1] === ".") items.push(["Ruin markers", "alt .", "map sites"]);
+      }
       items.push(["-"]);
       for (let z = 1; z <= maxMap; z++) items.push([`Map ${z}x`, null, "map zoom " + z]);
       items.push(["-"]);
@@ -86,8 +91,10 @@ export const BAR_H = 17;
 // The settings the menus tick when in use (not the original's): their tick
 // is a diamond 5 pixels wide in the key column.
 export const TICK_W = 5;
+const KEY_GAP = 8;          // between a setting's tick and its key
+export const TICK_GAP = 4;  // between a setting's label and its tick
 export function tickable(act) {
-  return !!act && ["map zoom ", "ui scale ", "screen ", "music "].some((p) => act.startsWith(p));
+  return !!act && ["map zoom ", "map sites", "ui scale ", "screen ", "music "].some((p) => act.startsWith(p));
 }
 
 /** Measure the bar and every dropdown for a font (7ae8:0052, 2372:049b). */
@@ -102,7 +109,14 @@ export function layout(font, barHeight, screenWidth, menus) {
       const [label, key] = it;
       if (label !== "-") {
         let lw = 12 + font.width(label);
-        if (key) {
+        if (key && tickable(it[2])) {
+          // a setting with a key: its tick right after the label, and the
+          // key's last character in the key column, under the others' keys
+          const head = font.width(key.slice(0, -1));
+          keyCol = Math.max(keyCol, lw + TICK_GAP + TICK_W + KEY_GAP + head);
+          keyW = Math.max(keyW, font.width(key.slice(-1)));
+          lw = keyCol + keyW;
+        } else if (key) {
           keyCol = Math.max(keyCol, lw + 5);
           keyW = Math.max(keyW, font.width(key));
           lw = keyCol + keyW;

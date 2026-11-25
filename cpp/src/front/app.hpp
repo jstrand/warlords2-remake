@@ -182,7 +182,7 @@ void drawStrategicMap(int x, int y, const w2::City* mark = nullptr, bool noCitie
                       const std::vector<int>* owners = nullptr, int scroll = 0, int rows = 312,
                       bool dialog = false);
 /** Every site shown to the side, marked on a strategic map (834b:05e4). */
-void drawSiteMarkers(int x, int y, const w2::Site* highlight = nullptr);
+void drawSiteMarkers(int x, int y, const w2::Site* highlight = nullptr, int scroll = 0, int rows = 312);
 /** The map as the city dialog's Vector mode shows it. `filter` hides the
  *  cities that could take no more vectors (NONE for no filter). */
 void drawVectorMap(int x, int y, w2::City* city, int filter, bool seeAll);

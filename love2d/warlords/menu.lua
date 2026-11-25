@@ -77,7 +77,11 @@ function menu.withZooms(maxUI, maxMap)
       end
     elseif m.title == "View" then
       items = {}
-      for _, it in ipairs(m.items) do items[#items + 1] = it end
+      for _, it in ipairs(m.items) do
+        items[#items + 1] = it
+        -- the sites marked on the main screen's map too, a key's toggle
+        if it[2] == "." then items[#items + 1] = { "Ruin markers", "alt .", "map sites" } end
+      end
       items[#items + 1] = { "-" }
       for z = 1, maxMap do items[#items + 1] = { ("Map %dx"):format(z), nil, "map zoom " .. z } end
       items[#items + 1] = { "-" }
@@ -112,9 +116,11 @@ menu.BAR_H = 17
 -- The settings the menus tick when in use (not the original's): their tick
 -- is a diamond 5 pixels wide in the key column.
 menu.TICK_W = 5
+local KEY_GAP = 8           -- between a setting's tick and its key
+menu.TICK_GAP = 4           -- between a setting's label and its tick, when it has a key
 function menu.tickable(act)
   if not act then return false end
-  for _, p in ipairs({ "map zoom ", "ui scale ", "screen ", "music " }) do
+  for _, p in ipairs({ "map zoom ", "map sites", "ui scale ", "screen ", "music " }) do
     if act:sub(1, #p) == p then return true end
   end
   return false
@@ -133,7 +139,13 @@ function menu.layout(font, barHeight, screenWidth, menus)
       local label, key = it[1], it[2]
       if label ~= "-" then
         local lw = 12 + font.width(label)
-        if key then
+        if key and menu.tickable(it[3]) then
+          -- a setting with a key: its tick right after the label, and the
+          -- key's last character in the key column, under the others' keys
+          keyCol = math.max(keyCol, lw + menu.TICK_GAP + menu.TICK_W + KEY_GAP + font.width(key:sub(1, -2)))
+          keyW = math.max(keyW, font.width(key:sub(-1)))
+          lw = keyCol + keyW
+        elseif key then
           keyCol = math.max(keyCol, lw + 5)
           keyW = math.max(keyW, font.width(key))
           lw = keyCol + keyW

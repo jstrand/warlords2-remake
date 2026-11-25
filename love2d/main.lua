@@ -255,6 +255,7 @@ function love.load(arg)
   display.install()
   if prefs.get("screen") == "window" then display.setWindowed(true) end
   if prefs.get("4:3") == "on" then display.wanted = { w = layoutMod.W, h = layoutMod.H } end
+  G.siteMarkers = prefs.get("sites") == "on"
   display.chosen = tonumber(prefs.get("scale"))
   display.measure()
   G.zoom = tonumber(prefs.get("zoom")) or display.scale
@@ -536,6 +537,13 @@ function G.setOriginalSize(on)
   prefs.set("4:3", on and "on" or "off")
 end
 
+--- Not the original's: the strategic map beside the view marks every site
+--- the side knows of, as View > Ruins does (View > Ruin markers, alt-.).
+function G.toggleSiteMarkers()
+  G.siteMarkers = not G.siteMarkers
+  prefs.set("sites", G.siteMarkers and "on" or "off")
+end
+
 --- Is this menu item the setting in use? The zoom items are ticked so,
 --- 4:3 or Fit available space, and the synthesizer the music is played on.
 function G.menuTicked(key)
@@ -543,6 +551,7 @@ function G.menuTicked(key)
          or key == "screen " .. G.screenMode()
          or (key == "screen 4:3" and display.wanted ~= nil)
          or (key == "screen fit" and display.wanted == nil)
+         or (key == "map sites" and G.siteMarkers)
          or (G.audio ~= nil and key == "music " .. G.audio.synth())
 end
 G.centreOn = function(x, y) centreOn(x, y) end
@@ -1850,6 +1859,7 @@ end
 local function drawStrategic()
   local r = G.stratRect
   G.drawStrategicMap(r.x, r.y)
+  if G.siteMarkers then G.drawSiteMarkers(r.x, r.y) end
   love.graphics.setScissor(r.x, r.y, r.w, r.h)
   -- The view box (8961:0698): the 9x9 viewport at 2 pixels a tile, as a
   -- white square 18 across with sides two pixels thick. Here it is whatever
@@ -2025,11 +2035,15 @@ local function drawMenuBar()
       local f = G.font.colours(glyph, lit and 8 or 15)
       love.graphics.setColor(1, 1, 1)   -- the separators' black would tint it
       f.draw(r.label, r.x + 3, r.y)
-      if r.key then f.draw(r.key, r.x + d.keyCol, r.y) end
-      -- the zoom in use (not the original's): a diamond in the key column
-      if G.menuTicked(r.key or r.act) then
+      local keyedSetting = r.key and menuMod.tickable(r.act)
+      if keyedSetting then f.draw(r.key, r.x + d.keyCol - G.font.width(r.key:sub(1, -2)), r.y)
+      elseif r.key then f.draw(r.key, r.x + d.keyCol, r.y) end
+      -- the zoom in use (not the original's): a diamond in the key column,
+      -- or right after the label of a setting with a key
+      if G.menuTicked(r.act or r.key) then
         palColour(glyph)
-        local cx, cy = r.x + d.keyCol + 2, r.y + math.floor(r.h / 2)
+        local cx = keyedSetting and r.x + 3 + G.font.width(r.label) + menuMod.TICK_GAP + 2 or r.x + d.keyCol + 2
+        local cy = r.y + math.floor(r.h / 2)
         for k = -2, 2 do
           local half = 2 - math.abs(k)
           love.graphics.rectangle("fill", cx - half, cy + k, half * 2 + 1, 1)
@@ -3806,6 +3820,7 @@ MENU_DOES["screen full"] = function() G.setScreen("full") end
 MENU_DOES["screen window"] = function() G.setScreen("window") end
 MENU_DOES["screen 4:3"] = function() G.setOriginalSize(true) end
 MENU_DOES["screen fit"] = function() G.setOriginalSize(false) end
+MENU_DOES["alt ."] = function() G.toggleSiteMarkers() end      -- View > Ruin markers
 -- Game's music items (not the original's; menu.withZooms)
 for _, synth in ipairs(require("sound").SYNTHS) do
   MENU_DOES["music " .. synth] = function() G.audio.setSynth(synth) end
