@@ -1970,12 +1970,14 @@ local function drawTurnStrip()
     if side and side.alive then alive[#alive + 1] = side end
   end
   local n = #alive
+  -- the box is on the side in play, a computer too (ai_turn, 5db9:0000)
+  local at = G.g.side or G.player
   local turn = ("Turn %d"):format(G.g.turn)
   local f = G.bigFont.colours(0, 15)
   f.draw(turn, (8 - n) * 16 + 508 - f.width(turn), 0)
   for k, side in ipairs(alive) do
     local x = (8 - n + k - 1) * 16 + 512
-    if side == G.player then
+    if side == at then
       palColour(0)
       love.graphics.rectangle("fill", x - 3, 1, 17, 15)
     end

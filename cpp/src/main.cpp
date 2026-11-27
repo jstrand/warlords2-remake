@@ -1669,12 +1669,14 @@ static void drawTurnStrip() {
     if (s && s->alive) alive.push_back(s);
   }
   int n = (int)alive.size();
+  // the box is on the side in play, a computer too (ai_turn, 5db9:0000)
+  Side* at = G.g->side ? G.g->side : G.player;
   std::string turn = w2::fmt("Turn %d", G.g->turn);
   const Font& f = G.bigFont->colours(0, 15);
   f.draw(turn, (8 - n) * 16 + 508 - f.width(turn), 0);
   for (int k = 0; k < n; k++) {
     int x = (8 - n + k) * 16 + 512;
-    if (alive[k] == G.player) {
+    if (alive[k] == at) {
       palColour(0);
       gfx::rectangle(gfx::FILL, x - 3, 1, 17, 15);
     }

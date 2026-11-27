@@ -1655,12 +1655,14 @@ function drawTurnStrip() {
   // in the round's turn order (DS:0x163), so Random Turns reorders them
   const alive = G.g.turnOrder.map((i) => G.g.map.sides[i]).filter((s) => s && s.alive);
   const n = alive.length;
+  // the box is on the side in play, a computer too (ai_turn, 5db9:0000)
+  const at = G.g.side || G.player;
   const turn = fmt("Turn %d", G.g.turn);
   const f = G.bigFont.colours(0, 15);
   f.draw(turn, (8 - n) * 16 + 508 - f.width(turn), 0);
   alive.forEach((side, k) => {
     const x = (8 - n + k) * 16 + 512;
-    if (side === G.player) {
+    if (side === at) {
       palColour(0);
       gfx.rectangle("fill", x - 3, 1, 17, 15);
     }
