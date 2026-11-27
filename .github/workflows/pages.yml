@@ -1,12 +1,11 @@
-# Publish the web port (web/) to GitHub Pages on every push to main.
+# Publish the web port (web/) to GitHub Pages for each tag v*.
 # web/dist.js checks the files' spelling and gathers the site into build/web/.
 
 name: Pages
 
 on:
   push:
-    branches: [main]
-    paths: ["web/**", ".github/workflows/pages.yml"]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

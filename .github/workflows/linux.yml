@@ -1,16 +1,14 @@
 # Build the C++ port for x86_64 Linux (any distribution, the Steam Deck among
-# them) with cpp/linux/build.sh, and keep the archive as the run's artifact.
-# A tag v* also puts it on a GitHub release. The archive is named for the
-# version: warlords2-v0.2-linux-x86_64.tar.gz for a tag, and for a commit
-# after one, git describe's v0.2-3-gabc1234.
+# them) with cpp/linux/build.sh for each tag v*: keep the archive as the
+# run's artifact and put it on the tag's GitHub release. The archive is named
+# for the version: warlords2-v0.2-linux-x86_64.tar.gz for a tag, and for a
+# run started by hand on a commit after one, git describe's v0.2-3-gabc1234.
 
 name: Linux
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-    paths: ["cpp/src/**", "cpp/CMakeLists.txt", "cpp/test/**", "cpp/linux/**", ".github/workflows/linux.yml"]
   workflow_dispatch:
 
 permissions:

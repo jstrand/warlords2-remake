@@ -1,16 +1,15 @@
 # Build the C++ port for x86_64 Windows with cpp/windows/build.sh, in MSYS2's
-# UCRT64 environment, and keep the zip as the run's artifact. A tag v* also
-# puts it on the GitHub release, beside the Linux archive. The zip is named
-# for the version: warlords2-v0.2-windows-x86_64.zip for a tag, and for a
-# commit after one, git describe's v0.2-3-gabc1234.
+# UCRT64 environment, for each tag v*: keep the zip as the run's artifact
+# and put it on the tag's GitHub release, beside the Linux archive. The zip
+# is named for the version: warlords2-v0.2-windows-x86_64.zip for a tag, and
+# for a run started by hand on a commit after one, git describe's
+# v0.2-3-gabc1234.
 
 name: Windows
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-    paths: ["cpp/src/**", "cpp/CMakeLists.txt", "cpp/test/**", "cpp/windows/**", ".github/workflows/windows.yml"]
   workflow_dispatch:
 
 permissions:
