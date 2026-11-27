@@ -1957,15 +1957,17 @@ end
 
 -- Turn and the sides still in it, at the right of the bar (8cc6:0952): the
 -- strip (437, 0) 202x17 is filled white, "Turn %d" is right-aligned in font 2,
--- black, and a 16x14 shield from ATRANS2.PCK stands for each side in play,
--- 16 apart and ending at x = 624; the side whose turn it is sits on a black
--- box.
+-- black, and a 16x14 shield from ATRANS2.PCK stands for each side in play, in
+-- the round's turn order, 16 apart and ending at x = 624; the side whose turn
+-- it is sits on a black box.
 local function drawTurnStrip()
   palColour(15)
   love.graphics.rectangle("fill", 437, 0, 202, 17)
   local alive = {}
-  for _, side in ipairs(G.g.sides) do
-    if side.alive then alive[#alive + 1] = side end
+  -- in the round's turn order (DS:0x163), so Random Turns reorders them
+  for _, i in ipairs(G.g.turnOrder) do
+    local side = G.g.map.sides[i + 1]
+    if side and side.alive then alive[#alive + 1] = side end
   end
   local n = #alive
   local turn = ("Turn %d"):format(G.g.turn)

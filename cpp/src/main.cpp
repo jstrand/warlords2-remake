@@ -1663,7 +1663,11 @@ static void drawTurnStrip() {
   palColour(15);
   gfx::rectangle(gfx::FILL, 437, 0, 202, 17);
   std::vector<Side*> alive;
-  for (Side* s : G.g->sides) if (s->alive) alive.push_back(s);
+  // in the round's turn order (DS:0x163), so Random Turns reorders them
+  for (int i : G.g->turnOrder) {
+    Side* s = G.g->map->side(i);
+    if (s && s->alive) alive.push_back(s);
+  }
   int n = (int)alive.size();
   std::string turn = w2::fmt("Turn %d", G.g->turn);
   const Font& f = G.bigFont->colours(0, 15);

@@ -1652,7 +1652,8 @@ function drawStack(owner, armyType, count, sx, sy) {
 function drawTurnStrip() {
   palColour(15);
   gfx.rectangle("fill", 437, 0, 202, 17);
-  const alive = G.g.sides.filter((s) => s.alive);
+  // in the round's turn order (DS:0x163), so Random Turns reorders them
+  const alive = G.g.turnOrder.map((i) => G.g.map.sides[i]).filter((s) => s && s.alive);
   const n = alive.length;
   const turn = fmt("Turn %d", G.g.turn);
   const f = G.bigFont.colours(0, 15);
